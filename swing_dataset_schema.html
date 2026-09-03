@@ -1,0 +1,741 @@
+<body>
+<title>Swing Dataset Schema</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap">
+<style>
+:root{
+  --bg:#0e1420;
+  --surface:#141c2c;
+  --surface-2:#1a2438;
+  --line:#2a3550;
+  --line-soft:#20293e;
+  --text:#e7ecf7;
+  --text-dim:#a9b4cc;
+  --text-faint:#6f7b98;
+  --accent:#7fd8c8;
+  --accent-soft:#7fd8c822;
+  --amber:#e8b168;
+  --amber-soft:#e8b16822;
+  --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:'IBM Plex Sans',system-ui,sans-serif;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#f6f4ee;
+    --surface:#ffffff;
+    --surface-2:#f0eee6;
+    --line:#dcd7c8;
+    --line-soft:#e7e3d6;
+    --text:#1c2230;
+    --text-dim:#4c5468;
+    --text-faint:#8a8f7f;
+    --accent:#1f8f78;
+    --accent-soft:#1f8f7818;
+    --amber:#b4711f;
+    --amber-soft:#b4711f18;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#f6f4ee;
+  --surface:#ffffff;
+  --surface-2:#f0eee6;
+  --line:#dcd7c8;
+  --line-soft:#e7e3d6;
+  --text:#1c2230;
+  --text-dim:#4c5468;
+  --text-faint:#8a8f7f;
+  --accent:#1f8f78;
+  --accent-soft:#1f8f7818;
+  --amber:#b4711f;
+  --amber-soft:#b4711f18;
+}
+:root[data-theme="dark"]{
+  --bg:#0e1420;
+  --surface:#141c2c;
+  --surface-2:#1a2438;
+  --line:#2a3550;
+  --line-soft:#20293e;
+  --text:#e7ecf7;
+  --text-dim:#a9b4cc;
+  --text-faint:#6f7b98;
+  --accent:#7fd8c8;
+  --accent-soft:#7fd8c822;
+  --amber:#e8b168;
+  --amber-soft:#e8b16822;
+}
+
+*{box-sizing:border-box;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--sans);
+  padding:48px 24px 80px;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:920px;margin:0 auto;}
+
+header{margin-bottom:40px;}
+.eyebrow{
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--accent);
+  margin:0 0 10px;
+}
+h1{
+  font-size:clamp(28px,4vw,38px);
+  font-weight:700;
+  margin:0 0 12px;
+  text-wrap:balance;
+  letter-spacing:-.01em;
+}
+.sub{
+  font-size:15px;
+  line-height:1.6;
+  color:var(--text-dim);
+  max-width:62ch;
+  margin:0;
+}
+
+.legend{
+  display:flex;
+  gap:20px;
+  flex-wrap:wrap;
+  margin-top:24px;
+  padding-top:20px;
+  border-top:1px solid var(--line-soft);
+}
+.legend-item{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  font-family:var(--mono);
+  font-size:12px;
+  color:var(--text-faint);
+}
+.dot{width:8px;height:8px;border-radius:50%;flex:none;}
+.dot.seq{background:var(--accent);}
+.dot.target{background:var(--amber);}
+
+.tree{
+  font-family:var(--mono);
+  font-size:13px;
+  margin:0 0 44px;
+}
+.node{position:relative;}
+.node-row{
+  display:flex;
+  align-items:baseline;
+  gap:10px;
+  padding:9px 0;
+}
+.node-key{color:var(--text);font-weight:600;}
+.node-meta{color:var(--text-faint);font-size:12px;}
+.badge{
+  font-family:var(--mono);
+  font-size:11px;
+  padding:2px 7px;
+  border-radius:3px;
+  border:1px solid var(--line);
+  color:var(--text-dim);
+  white-space:nowrap;
+}
+.badge.accent{color:var(--accent);border-color:var(--accent-soft);background:var(--accent-soft);}
+.badge.amber{color:var(--amber);border-color:var(--amber-soft);background:var(--amber-soft);}
+
+.branch{
+  margin-left:22px;
+  padding-left:22px;
+  border-left:1px solid var(--line);
+}
+.leaf-row{
+  display:flex;
+  align-items:baseline;
+  gap:10px;
+  padding:9px 0;
+  border-bottom:1px solid var(--line-soft);
+}
+.leaf-row:last-child{border-bottom:none;}
+.leaf-key{color:var(--text-dim);min-width:0;}
+
+.branches{display:flex;flex-direction:column;gap:0;}
+
+table{
+  width:100%;
+  border-collapse:collapse;
+  font-family:var(--mono);
+  font-size:12.5px;
+  margin-top:14px;
+}
+caption{
+  text-align:left;
+  font-family:var(--sans);
+  font-size:14px;
+  font-weight:600;
+  color:var(--text);
+  margin-bottom:6px;
+}
+th{
+  text-align:left;
+  font-size:11px;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+  color:var(--text-faint);
+  font-weight:500;
+  padding:8px 12px;
+  border-bottom:1px solid var(--line);
+}
+td{
+  padding:9px 12px;
+  border-bottom:1px solid var(--line-soft);
+  color:var(--text-dim);
+  vertical-align:top;
+}
+td:first-child, th:first-child{padding-left:0;}
+tr td.col-name{color:var(--text);font-weight:500;}
+.tbl-wrap{overflow-x:auto;margin-bottom:36px;}
+
+.tf-heading{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  margin:44px 0 4px;
+}
+.tf-heading h2{
+  font-size:17px;
+  font-weight:700;
+  margin:0;
+  font-family:var(--sans);
+}
+.tf-heading .badge{font-size:12px;}
+.tf-note{
+  font-size:13px;
+  color:var(--text-faint);
+  margin:2px 0 0;
+}
+
+.callout{
+  border:1px solid var(--amber-soft);
+  background:var(--amber-soft);
+  border-radius:6px;
+  padding:16px 18px;
+  margin:20px 0 36px;
+}
+.callout h3{
+  font-size:13px;
+  font-weight:700;
+  color:var(--amber);
+  margin:0 0 8px;
+  text-transform:uppercase;
+  letter-spacing:.03em;
+}
+.callout p{
+  font-size:13.5px;
+  line-height:1.65;
+  color:var(--text-dim);
+  margin:0 0 10px;
+}
+.callout p:last-child{margin-bottom:0;}
+
+.foot{
+  margin-top:56px;
+  padding-top:24px;
+  border-top:1px solid var(--line-soft);
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+  gap:24px;
+}
+.foot-item h3{
+  font-size:12px;
+  text-transform:uppercase;
+  letter-spacing:.05em;
+  color:var(--text-faint);
+  margin:0 0 8px;
+  font-weight:600;
+}
+.foot-item p{
+  font-size:13px;
+  line-height:1.6;
+  color:var(--text-dim);
+  margin:0;
+  font-family:var(--mono);
+}
+
+@media (max-width:640px){
+  .branch{margin-left:10px;padding-left:14px;}
+  table{font-size:11.5px;}
+  th,td{padding:7px 8px;}
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">cryptofarm · ml/swing — proposta dataset · rev. 12</p>
+    <h1>Schema dataset multi-timeframe</h1>
+    <p class="sub">Quattro rami sequenziali (5m → 1h), 24 step fissi per ramo, stesso set di colonne per candela, normalizzate in % o ratio e poi riportate su scala comune. Nessun prezzo assoluto, nessun symbol. Target invariato, finestra di ricerca estremi a 24 barre 15m (±6h).</p>
+    <div class="legend">
+      <span class="legend-item"><span class="dot seq"></span> ramo sequenziale (input GRU)</span>
+      <span class="legend-item"><span class="dot target"></span> target / metadata</span>
+    </div>
+  </header>
+
+  <div class="tree">
+    <div class="node">
+      <div class="node-row">
+        <span class="node-key">swing_multi_tf</span>
+        <span class="node-meta">— dataset root, una riga per bar 5m</span>
+      </div>
+      <div class="branch branches">
+        <p class="tf-note" style="margin:0 0 6px">24 step fissi per ramo, finestra crescente</p>
+        <div class="leaf-row">
+          <span class="leaf-key">ramo_5m</span>
+          <span class="badge accent">seq · 24 step · 2h</span>
+        </div>
+        <div class="leaf-row">
+          <span class="leaf-key">ramo_15m</span>
+          <span class="badge accent">seq · 24 step · 6h</span>
+        </div>
+        <div class="leaf-row">
+          <span class="leaf-key">ramo_30m</span>
+          <span class="badge accent">seq · 24 step · 12h</span>
+        </div>
+        <div class="leaf-row">
+          <span class="leaf-key">ramo_1h</span>
+          <span class="badge accent">seq · 24 step · 24h</span>
+        </div>
+        <div class="leaf-row">
+          <span class="leaf-key">target</span>
+          <span class="badge amber">swing_leg_target</span>
+        </div>
+        <div class="leaf-row">
+          <span class="leaf-key">timestamp</span>
+          <span class="badge amber">chiave, non feature</span>
+        </div>
+        <div class="leaf-row">
+          <span class="leaf-key">symbol</span>
+          <span class="badge amber">chiave di split, non feature</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <h3>Decisione — variante a finestra fissa 6h scartata</h3>
+    <p>La variante con finestra 6h su tutti i rami (72/24/12/6 step) è ridondante: <code>ramo_5m</code> a 72 step e <code>ramo_15m</code> a 24 step coprono lo stesso intervallo, e il secondo è un'aggregazione deterministica del primo — quattro viste della stessa informazione. Resta la variante a 24 step fissi: orizzonti distinti (2h / 6h / 12h / 24h), informazione complementare, tensori uniformi.</p>
+  </div>
+
+  <div class="tf-heading">
+    <h2>ramo_5m · ramo_15m · ramo_30m · ramo_1h</h2>
+  </div>
+  <p class="tf-note">Le stesse colonne su tutti e quattro i rami — nessun indicatore cambia tra timeframe, i parametri sì (dipendono dalla finestra di ricerca estremi). <code>target</code>, <code>timestamp</code> e <code>symbol</code> non sono colonne del tensore. <code>C</code>, <code>O</code>, <code>H</code>, <code>L</code>, <code>V</code> = close, open, high, low, volume della candela; <code>N</code> = finestra derivata da <code>finestra_estremi</code> sul TF del ramo.</p>
+  <p class="tf-note"><strong>Queste 28 sono candidate, non il set finale.</strong> Il set definitivo si ottiene per misura (vedi "Selezione del set di feature"), riducendo per correlazione e importanza. Atteso: 7–12 colonne superstiti.</p>
+  <p class="tf-note"><strong>Tutte causali.</strong> Ogni finestra rolling guarda solo all'indietro rispetto alla barra corrente — mai centrata. L'asimmetria col target è voluta: i pivot vedono il futuro perché sono l'etichetta, le feature no perché sono l'input.</p>
+
+  <div class="tbl-wrap">
+    <table>
+      <caption>candidate per candela — 28 colonne, da ridurre per misura</caption>
+      <thead>
+        <tr><th>#</th><th>colonna</th><th>famiglia</th><th>definizione</th><th>note</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>1</td><td class="col-name">ritorno_pct</td><td>prezzo</td><td>log(C / C₋₁)</td><td>log-ritorno di barra</td></tr>
+        <tr><td>2</td><td class="col-name">ritorno_cum_N</td><td>prezzo</td><td>log(C / C₋ₙ)</td><td>momentum grezzo su N, nessuno smoothing</td></tr>
+        <tr><td>3</td><td class="col-name">range_pct</td><td>volatilità</td><td>(H − L) / C</td><td>escursione istantanea</td></tr>
+        <tr><td>4</td><td class="col-name">body_pct</td><td>prezzo</td><td>(C − O) / C</td><td>corpo della candela, con segno</td></tr>
+        <tr><td>5</td><td class="col-name">upper_wick_pct</td><td>struttura</td><td>(H − max(O,C)) / C</td><td>rifiuto verso l'alto</td></tr>
+        <tr><td>6</td><td class="col-name">lower_wick_pct</td><td>struttura</td><td>(min(O,C) − L) / C</td><td>rifiuto verso il basso</td></tr>
+        <tr><td>7</td><td class="col-name">close_loc_bar</td><td>struttura</td><td>(C − L) / (H − L)</td><td>in [0,1], dove chiude dentro la barra</td></tr>
+        <tr><td>8</td><td class="col-name">pos_in_range</td><td>posizione</td><td>2(C − minL_N)/(maxH_N − minL_N) − 1</td><td>in [−1,+1], allineata al target</td></tr>
+        <tr><td>9</td><td class="col-name">dist_max_pct</td><td>posizione</td><td>log(C / maxH_N)</td><td>≤ 0, distanza dal massimo recente</td></tr>
+        <tr><td>10</td><td class="col-name">dist_min_pct</td><td>posizione</td><td>log(C / minL_N)</td><td>≥ 0, distanza dal minimo recente</td></tr>
+        <tr><td>11</td><td class="col-name">bars_since_max</td><td>posizione</td><td>barre dal maxH_N / N</td><td>in [0,1], età dell'estremo</td></tr>
+        <tr><td>12</td><td class="col-name">bars_since_min</td><td>posizione</td><td>barre dal minL_N / N</td><td>in [0,1]</td></tr>
+        <tr><td>13</td><td class="col-name">range_width_pct</td><td>volatilità</td><td>log(maxH_N / minL_N)</td><td>ampiezza dell'escursione recente</td></tr>
+        <tr><td>14</td><td class="col-name">atr_pct</td><td>volatilità</td><td>ATR_N / C</td><td>smoothing di Wilder</td></tr>
+        <tr><td>15</td><td class="col-name">vol_realizzata</td><td>volatilità</td><td>deviazione_standard(ritorno_pct, N)</td><td></td></tr>
+        <tr><td>16</td><td class="col-name">vol_ratio</td><td>volatilità</td><td>std(ret, N/4) / std(ret, N)</td><td>volatilità in espansione o compressione</td></tr>
+        <tr><td>17</td><td class="col-name">volume_rel</td><td>volume</td><td>V / mediana(V, N)</td><td>ratio, robusto alle code</td></tr>
+        <tr><td>18</td><td class="col-name">volume_signed</td><td>volume</td><td>volume_rel · segno(ritorno_pct)</td><td>flusso direzionale, non cumulato</td></tr>
+        <tr><td>19</td><td class="col-name">volume_trend</td><td>volume</td><td>log(media(V, N/4) / media(V, N))</td><td></td></tr>
+        <tr><td>20</td><td class="col-name">obv_zscore</td><td>volume</td><td>z-score di OBV<sub>N</sub> = Σ<sub>N</sub> V·segno(ritorno_pct), su finestra N</td><td>cumulata <em>rolling</em>, non dall'inizio serie — stazionaria</td></tr>
+        <tr><td>21</td><td class="col-name">vwap_dist_pct</td><td>volume/prezzo</td><td>log(C / VWAP_N)</td><td></td></tr>
+        <tr><td>22</td><td class="col-name">kama_dist_pct</td><td>trend</td><td>log(C / KAMA_N)</td><td></td></tr>
+        <tr><td>23</td><td class="col-name">ema_dist_pct</td><td>trend</td><td>log(C / EMA_N)</td><td></td></tr>
+        <tr><td>24</td><td class="col-name">ema_slope</td><td>trend</td><td>log(EMA_N / EMA_N₋ₖ)</td><td>pendenza del trend</td></tr>
+        <tr><td>25</td><td class="col-name">psar_dist_pct</td><td>trend</td><td>(C − PSAR) / C</td><td>segno = regime</td></tr>
+        <tr><td>26</td><td class="col-name">adx</td><td>forza trend</td><td>ADX_N / 100</td><td>in [0,1]</td></tr>
+        <tr><td>27</td><td class="col-name">tsi</td><td>momentum</td><td>TSI / 100</td><td>in [−1,+1], doppio smoothing</td></tr>
+        <tr><td>28</td><td class="col-name">rsi_centrato</td><td>momentum</td><td>RSI_N / 50 − 1</td><td>in [−1,+1]</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout">
+    <h3>Decisione — scala comune per tutte le feature</h3>
+    <p>"Scala-libero" non significa pronto per una rete. Le colonne in % stanno nell'ordine di 10⁻³–10⁻², ADX in 0–100, TSI in −100…+100, obv_zscore in ~±3: ordini di grandezza incompatibili rallentano la convergenza e sbilanciano l'inizializzazione dei gate della GRU.</p>
+    <p><strong>TSI e ADX — divisione per 100.</strong> Entrambi hanno range noto e fisso per costruzione: ADX ∈ [0, 100] → <code>adx/100</code> ∈ [0, 1]; TSI ∈ [−100, +100] → <code>tsi/100</code> ∈ [−1, +1]. Costante nota, nessuna statistica da stimare, nessun rischio di leakage, trasformazione identica su train e test. Il risultato è un valore in scala percentuale, coerente con le colonne già in %.</p>
+    <p><strong>Le altre colonne.</strong> Non hanno range noto a priori: <code>ritorno_pct</code>, <code>range_pct</code>, <code>atr_pct</code>, <code>kama_dist_pct</code>, <code>psar_dist_pct</code> sono già in % ma con dispersione molto diversa fra loro e fra timeframe; <code>volume_rel</code> è un ratio a coda lunga; <code>obv_zscore</code> è già standardizzato per costruzione. Per queste serve una statistica di scala (robust scaling su quantili, più adatto delle code grasse dei ritorni), stimata <strong>solo sul periodo di train</strong> e applicata invariata a test — mai ricalcolata su tutto il dataset, altrimenti è leakage.</p>
+  </div>
+
+  <div class="tf-heading">
+    <h2>target</h2>
+  </div>
+  <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr><th>colonna</th><th>definizione</th><th>note</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="col-name">swing_leg_target</td>
+          <td>posizione lungo la gamba tra due estremi locali, [-1, +1], con peso_tempo = 0.7</td>
+          <td>estremi su TF 15m, finestra di ricerca = 24 barre (±6h) — valore di partenza, ancora da validare</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout">
+    <h3>Rilevazione estremi — argrelextrema su Close</h3>
+    <p>Si mantiene <code>scipy.signal.argrelextrema</code>, due chiamate sulla stessa serie:</p>
+    <p><code>massimi = argrelextrema(close, np.greater, order=finestra_estremi)</code><br>
+    <code>minimi&nbsp; = argrelextrema(close, np.less,&nbsp; order=finestra_estremi)</code></p>
+    <p><strong>Criterio.</strong> Un punto è estremo se è più alto (o più basso) di tutte le <code>order</code> barre a destra <em>e</em> a sinistra. Nessuna nozione di ampiezza: la selezione è puramente topologica.</p>
+    <p><strong>Serie di input: Close, non High/Low.</strong> Gli estremi si cercano su un'unica serie, i prezzi di chiusura delle candele 15m. (1) Coerenza col target: <code>swing_leg_target</code> misura la posizione lungo una gamba di prezzo, e la gamba va definita sulla stessa serie su cui il modello vede <code>ritorno_pct</code>. (2) Robustezza: wick e spike di liquidazione producono estremi su High/Low che non corrispondono a un livello realmente negoziabile né a un'inversione strutturale. (3) Consistenza dell'alternanza: due serie diverse possono produrre un massimo su High e un minimo su Low nella stessa barra, caso ambiguo che con una serie unica non esiste. (4) Realismo esecutivo: un ordine non si riempie sul minimo assoluto della barra, si riempie vicino al close.</p>
+    <p><strong>Costo.</strong> Le gambe misurate su Close sono più corte di quelle wick-to-wick — l'oracolo di P&amp;L restituirà valori più bassi ma <em>più realistici</em>, quindi il range di <code>finestra_estremi</code> che ne esce è già al netto di quell'illusione.</p>
+    <p>Fusione invariata: massimi e minimi uniti in sequenza alternata per indice; se due massimi si susseguono senza un minimo in mezzo, resta solo il più estremo dei due.</p>
+  </div>
+
+  <div class="callout">
+    <h3>Ampiezza di gamba — convenzione all'indietro</h3>
+    <p><code>argrelextrema</code> restituisce solo indici, nessuna misura di ampiezza. Questa si calcola <strong>dopo la fusione</strong>, e per convenzione guarda al <strong>pivot precedente</strong>: l'ampiezza associata a k è quella della gamba <em>appena conclusa</em> in k, non di quella che da k si apre.</p>
+    <p><code>ampiezza[k] = abs(log(close[pivot_k]) − log(close[pivot_k−1]))</code></p>
+    <p><strong>Primo pivot.</strong> Non ha un pivot precedente: come riferimento si usa il <strong>primo close disponibile</strong> della serie.</p>
+    <p><code>ampiezza[0] = abs(log(close[pivot_0]) − log(close[0]))</code></p>
+    <p>La gamba risultante è troncata: parte dall'inizio dei dati, non da un'inversione reale, quindi la sua ampiezza dipende da dove comincia lo storico e non da una struttura di mercato. Con lo store dal 2017 riguarda un solo pivot per simbolo su decine di migliaia, quindi l'impatto è nullo — ma se in futuro <code>ampiezza[k]</code> verrà usata come criterio di filtro o peso, quel singolo valore va trattato come non rappresentativo.</p>
+    <p><strong>In scala logaritmica.</strong> Una differenza di prezzo grezza non è confrontabile fra asset: 600 su BTC a 60.000 e 0.005 su ADA a 0.50 sono lo stesso movimento (1%) con cinque ordini di grandezza di distanza. Poiché <code>log(b) − log(a) = log(b/a)</code>, sui logaritmi l'ampiezza diventa un rapporto e dipende solo dalla variazione percentuale. Conversione: <code>variazione_pct = exp(ampiezza) − 1</code>; sotto ~10% vale <code>ampiezza ≈ variazione_pct</code>, quindi 0.01 è "almeno l'1%". Una soglia unica vale per tutti i 15 simboli e per tutte le epoche.</p>
+    <p><strong>Perché all'indietro.</strong> Ogni grandezza derivata da un pivot deve essere costruita su informazione già disponibile in quel punto: in k la gamba k−1→k è conclusa e misurabile, quella k→k+1 non esiste ancora. La convenzione all'avanti renderebbe <code>ampiezza[k]</code> inutilizzabile in qualunque contesto causale — filtro, pesatura, diagnostica in produzione — e creerebbe un'asimmetria silenziosa rispetto al resto della pipeline.</p>
+    <p><strong>Precisazione sul target.</strong> <code>swing_leg_target</code> resta per costruzione un'etichetta retrospettiva: interpola tra k e k+1 e quindi <em>vede</em> il pivot futuro. È corretto e inevitabile — è il senso stesso di un'etichetta. La convenzione all'indietro non rende causale il target, rende causale <code>ampiezza[k]</code>, che è cosa diversa e serve altrove: come criterio di filtro o peso, dove usare il futuro sarebbe un errore.</p>
+    <p><strong>Coerenza con l'ipotesi di scarto.</strong> La regola già annotata più sotto — scartare "il target dei bar della gamba precedente" — è esattamente questa convenzione: <code>ampiezza[k]</code> qualifica la gamba che termina in k, quindi la soglia su <code>valori[k]</code> agisce sui bar fra k−1 e k. Con l'indicizzazione all'indietro l'ambiguità su "quale gamba scartare" sparisce.</p>
+    <p><strong>Nota.</strong> Questa è l'ampiezza della gamba tra due pivot adiacenti — non la prominenza topologica, che misurerebbe lo stacco rispetto all'intero contesto circostante e potrebbe estendersi ben oltre una singola gamba. Per il nostro target serve la prima.</p>
+  </div>
+
+  <div class="callout">
+    <h3>finestra_estremi è il parametro primario</h3>
+    <p><strong>Il valore 24 è un'ipotesi di partenza, non una misura.</strong> Si tara come primo step assoluto, massimizzando il P&amp;L netto costi dell'oracolo. Da quel valore discendono: le finestre N di ogni indicatore su ogni ramo, l'ampiezza del purging (via la distribuzione di <code>orizzonte(i)</code>), e la stessa scelta dei 24 step per ramo — tutte da rideterminare una volta fissata la finestra, non prima.</p>
+    <p>Definisce quali oscillazioni contano come "gamba" e quindi cosa il modello deve imparare a riconoscere. Si misura per primo, sul TF di riferimento (15m). Tutti gli altri parametri — finestre di TSI, ATR, ADX, OBV, KAMA, PSAR su ciascun ramo — si derivano da questo valore e dal proprio TF, non da un tuning indipendente: un indicatore va tarato per vedere sullo stesso orizzonte temporale della gamba che il target descrive, non su una convenzione presa da un altro problema.</p>
+    <p><strong>Come misurarla — due passi.</strong> 1) Oracolo: per ogni finestra candidata, simulare un trader che compra su ogni minimo rilevato e vende sul massimo successivo, P&amp;L netto di commissioni. Finestra piccola → tante gambe minuscole erose dai costi; finestra grande → poche gambe pulite ma rare: il range che massimizza il P&amp;L netto è il range di finestre economicamente sensate. 2) Su quel range, misurare l'IC di <code>swing_leg_target</code> (swing_model allenato) per capire quanto la gamba è <em>riconoscibile</em> da un modello causale, non solo profittevole a posteriori — l'oracolo vede il futuro, il modello no.</p>
+  </div>
+
+  <div class="callout">
+    <h3>Smoothing temporale — formula fissata</h3>
+    <p><code>0.7</code> è il coefficiente <code>peso_tempo</code> dell'interpolazione, non un filtro applicato a valle:</p>
+    <p><code>x = 0.7·avanzamento_tempo + 0.3·avanzamento_prezzo</code></p>
+    <p>Il target pesa quindi al 70% l'avanzamento <em>temporale</em> lungo la gamba (quante barre sono passate dal pivot k rispetto alla durata totale della gamba) e al 30% l'avanzamento <em>di prezzo</em> (quanta distanza è stata percorsa rispetto all'escursione totale). Entrambi i termini sono in [0, 1].</p>
+    <p><strong>Nessuna EMA sul target.</strong> Non c'è un secondo passaggio di filtraggio: un'EMA causale introdurrebbe un ritardo e andrebbe documentata con un proprio simbolo. Se in futuro servisse, va aggiunta come step distinto, mai confusa con <code>peso_tempo</code>.</p>
+    <p><strong>Effetto della scelta.</strong> Con peso 0.7 sul tempo il target avanza in modo quasi regolare lungo la gamba anche quando il prezzo si muove a scatti — più liscio e più facile da apprendere, ma meno reattivo a un'accelerazione improvvisa del prezzo. Il valore resta un parametro tarabile.</p>
+  </div>
+
+  <div class="callout">
+    <h3>Forma dell'interpolazione — lineare resta il default</h3>
+    <p><code>x = peso_tempo·avanzamento_tempo + (1−peso_tempo)·avanzamento_prezzo</code>, <code>target(i) = valori[k] + x·(valori[k+1]−valori[k])</code>. Gradiente costante ovunque, nessun bias verso pivot o corpo del movimento, zero parametri di forma da tarare. Le due varianti parabole sotto sono scommesse esplicite su dove il modello deve essere più preciso — da provare solo se la lineare mostra un limite misurato, non a priori.</p>
+    <p><strong>A) ripida agli estremi, piatta a 0</strong> — <code>f(x) = 0.5 + 2(x−0.5)|x−0.5|</code>. Pro: gradiente forte proprio dove serve (vicino a pivot/segnale), plateau centrale tollerante al rumore a metà gamba. Contro: comprime la risoluzione a metà gamba, e vicino ai pivot amplifica il rumore di <code>avanzamento_prezzo</code> proprio dove vorresti che il target fosse affidabile — sensibile a errori nella stima dell'estremo stesso.</p>
+    <p><strong>B) piatta agli estremi, ripida a 0 (ease-in-out)</strong> — <code>f(x) = 2x²</code> se x&lt;0.5 altrimenti <code>1−2(1−x)²</code>. Pro: stabile vicino ai pivot (tollera errori di window/finestra_estremi, coerente col consolidamento tipico prima di un'inversione), buona risoluzione a metà gamba dove il trend è più lineare. Contro: poco gradiente vicino agli estremi, cioè dove interessa di più per un segnale di ingresso/uscita.</p>
+    <p>Da testare in visualizzazione.</p>
+  </div>
+
+  <div class="tbl-wrap">
+    <table>
+      <caption>parametri per indicatore, per ramo — derivati da finestra_estremi, da misurare</caption>
+      <thead>
+        <tr><th>indicatore</th><th>parametro</th><th>5m</th><th>15m</th><th>30m</th><th>1h</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="col-name">tsi</td><td>slow / fast</td><td>da misurare</td><td>da misurare</td><td>da misurare</td><td>da misurare</td></tr>
+        <tr><td class="col-name">atr_pct</td><td>window</td><td>da misurare</td><td>da misurare</td><td>da misurare</td><td>da misurare</td></tr>
+        <tr><td class="col-name">adx</td><td>window</td><td>da misurare</td><td>da misurare</td><td>da misurare</td><td>da misurare</td></tr>
+        <tr><td class="col-name">obv_zscore</td><td>finestra</td><td>da misurare</td><td>da misurare</td><td>da misurare</td><td>da misurare</td></tr>
+        <tr><td class="col-name">kama_dist_pct</td><td>window</td><td>da misurare</td><td>da misurare</td><td>da misurare</td><td>da misurare</td></tr>
+        <tr><td class="col-name">psar_dist_pct</td><td>step / max_step</td><td>da misurare</td><td>da misurare</td><td>da misurare</td><td>da misurare</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="tf-heading">
+    <h2>Split, embargo, allineamento</h2>
+  </div>
+
+  <div class="callout">
+    <h3>Chiave di split — chiarimento</h3>
+    <p>La formulazione precedente ("symbol, usato solo per separare i periodi tra train e test") era ambigua. Le due letture possibili non sono equivalenti:</p>
+    <p><strong>Split per-symbol con periodi diversi — da escludere.</strong> I 15 asset USDT sono fortemente correlati fra loro. Avere BTC in test nello stesso periodo in cui ETH è in train significa valutare il modello su campioni quasi identici a quelli visti in addestramento: leakage cross-sectional, IC di test gonfiato e non replicabile in produzione.</p>
+    <p><strong>Split temporale unico su tutti i simboli — scelta adottata.</strong> Un solo taglio nel tempo, identico per tutti i symbol: tutto ciò che precede la data di taglio è train (dopo purging), tutto ciò che segue è test. <code>symbol</code> resta una colonna del dataframe usata per raggruppare e per costruire le sequenze contigue per asset, ma <strong>non entra mai nel tensore</strong> e non definisce la partizione.</p>
+  </div>
+
+  <div class="callout">
+    <h3>Decisione — purging al posto dell'embargo fisso</h3>
+    <p><strong>Dove sta il leakage.</strong> Non nelle candele: nessun bar è comune ai due periodi, e le feature sono causali. Sta nelle <em>label</em>. <code>swing_leg_target(i)</code> interpola fino al pivot k+1: un bar vicino alla fine del train il cui pivot successivo cade dopo il taglio ha un target che incorpora prezzi del periodo di test. Secondo canale: <code>argrelextrema(order=finestra_estremi)</code> conferma un pivot solo dopo <code>order</code> barre a destra, quindi un pivot a ridosso del taglio è conoscibile solo grazie a barre già oltre.</p>
+    <p><strong>Perché non un embargo fisso.</strong> <code>3 × finestra_estremi</code> presume che l'orizzonte del target sia legato alla finestra di ricerca. Non lo è: la distanza da <code>i</code> al pivot k+1 non è limitata da <code>order</code> — una gamba può durare centinaia di barre. Un embargo a 72 barre lascia quindi leakage residuo sulle gambe lunghe, e allo stesso tempo butta via bar puliti sulle gambe corte.</p>
+    <p><strong>Regola adottata.</strong> Purging esatto: si scarta dal train ogni bar il cui <code>pivot_succ_idx</code> supera l'indice di taglio. Elimina esattamente i bar contaminati, nessuno di più. Con storico crypto corto è la scelta obbligata — l'embargo fisso costerebbe 72 barre per ogni taglio, il purging tipicamente qualche decina.</p>
+    <p><strong>Su ogni confine, non solo train/test.</strong> Il purging si applica a <em>tutti</em> i tagli temporali del protocollo: train→valid, valid→test, e ogni taglio di ogni fold walk-forward. Un valid non purgato contamina l'early stopping e la scelta degli iperparametri, che è leakage indiretto ma con lo stesso effetto sull'IC finale.</p>
+    <p><strong>Coda della serie.</strong> I bar successivi all'ultimo pivot confermato non hanno k+1, quindi target indefinito: <strong>l'ultimo pivot e la coda che lo segue si scartano per tutti gli asset</strong>. Nota: in produzione questa è la condizione permanente del bar corrente — il modello predice proprio dove il target non è ancora calcolabile.</p>
+    <p><strong>Da misurare comunque.</strong> La distribuzione di <code>orizzonte(i) = idx(pivot_{k+1}) − i</code> sul train: dice quanti bar il purging rimuove per ogni taglio, e quanto è dispersa la durata delle gambe — informazione utile a sé per tarare <code>finestra_estremi</code>.</p>
+  </div>
+
+  <div class="foot">
+    <div class="foot-item">
+      <h3>Chiave di split</h3>
+      <p>Taglio temporale unico, uguale per tutti i symbol. symbol serve solo a raggruppare le sequenze, non è colonna del tensore né criterio di partizione.</p>
+    </div>
+    <div class="foot-item">
+      <h3>Purging</h3>
+      <p>Si scartano dal train i soli bar il cui target sconfina oltre il taglio: <code>train = train[pivot_succ_idx &lt; idx_taglio]</code>. Sostituisce l'embargo fisso a 72 barre.</p>
+    </div>
+    <div class="foot-item">
+      <h3>Warm-up</h3>
+      <p>La serie di ogni simbolo inizia quando <em>tutti</em> gli indicatori di <em>tutti</em> i rami sono valorizzati. Train e test non contengono NaN. Copertura temporale comune da valutare sui dati effettivamente disponibili per asset.</p>
+    </div>
+    <div class="foot-item">
+      <h3>Allineamento</h3>
+      <p>Ogni ramo legge solo fino alla candela già chiusa rispetto al bar 5m corrente (mtf.align_to_lower) — niente leakage tra piani.</p>
+    </div>
+    <div class="foot-item">
+      <h3>Normalizzazione</h3>
+      <p>Statistiche di scala stimate solo sul periodo di train, applicate invariate a test.</p>
+    </div>
+  </div>
+
+  <div class="tf-heading">
+    <h2>Forma del tensore</h2>
+  </div>
+  <div class="tbl-wrap">
+    <table>
+      <caption>24 step fissi, finestra crescente</caption>
+      <thead>
+        <tr><th>ramo</th><th>shape</th><th>batch</th><th>timestep</th><th>feature</th><th>copertura</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="col-name">ramo_5m</td><td>(B, 24, F)</td><td>B</td><td>24</td><td>F</td><td>2h</td></tr>
+        <tr><td class="col-name">ramo_15m</td><td>(B, 24, F)</td><td>B</td><td>24</td><td>F</td><td>6h</td></tr>
+        <tr><td class="col-name">ramo_30m</td><td>(B, 24, F)</td><td>B</td><td>24</td><td>F</td><td>12h</td></tr>
+        <tr><td class="col-name">ramo_1h</td><td>(B, 24, F)</td><td>B</td><td>24</td><td>F</td><td>24h</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="tbl-wrap">
+    <table>
+      <caption>flusso encoder → testa</caption>
+      <thead>
+        <tr><th>step</th><th>operazione</th><th>shape in</th><th>shape out</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="col-name">1</td><td>GRU indipendente per ramo (pesi non condivisi tra rami)</td><td>(B, 24, F)</td><td>(B, H)</td></tr>
+        <tr><td class="col-name">2</td><td>concatenazione dei 4 stati finali</td><td>4 × (B, H)</td><td>(B, 4H)</td></tr>
+        <tr><td class="col-name">3</td><td>testa densa + attivazione tanh</td><td>(B, 4H)</td><td>(B, 1)</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="tf-note">H = dimensione dello stato nascosto per ramo, da fissare in fase di tuning (non ancora misurato). Output finale: scalare in [-1, 1], stessa scala di swing_leg_target. F = numero di feature superstiti alla selezione.</p>
+
+  <div class="callout">
+    <h3>Nota architetturale — GRU e pesi condivisi</h3>
+    <p><strong>GRU vs LSTM.</strong> Con 24 step per ramo la scelta è GRU senza riserve: il vantaggio dell'LSTM riguarda dipendenze su centinaia di step, qui inesistenti. La GRU ha ~25% di parametri in meno a parità di stato nascosto (2 gate, nessun cell state separato), il che conta molto su un problema a rapporto segnale/rumore basso come questo.</p>
+    <p><strong>Aperto: pesi condivisi tra rami.</strong> I 4 encoder sono distinti ma operano su input strutturalmente identici — stesse colonne, stessa semantica, solo orizzonte diverso. Variante da testare: un unico encoder GRU condiviso fra i rami, con un embedding di timeframe concatenato allo stato finale di ciascuno. Stessa espressività, circa 4× parametri in meno.</p>
+  </div>
+
+  <div class="tf-heading">
+    <h2>Selezione del set di feature</h2>
+  </div>
+  <p class="tf-note">Procedura per passare dalle 28 candidate al set finale. Tutto si esegue <strong>solo sul periodo di train</strong>, con split temporale e purging — misurare la selezione su dati di test la invalida.</p>
+
+  <div class="tbl-wrap">
+    <table>
+      <caption>passaggi, in ordine</caption>
+      <thead>
+        <tr><th>#</th><th>passaggio</th><th>criterio</th><th>esito</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>1</td><td class="col-name">sanità</td><td>quota di NaN, varianza nulla, code infinite</td><td>si scartano le colonne degeneri prima di misurare qualsiasi altra cosa</td></tr>
+        <tr><td>2</td><td class="col-name">correlazione</td><td>matrice di Spearman fra le 28, per ramo</td><td>si individuano i gruppi ridondanti — Spearman e non Pearson perché è robusto alle code grasse dei ritorni e coglie relazioni monotone non lineari</td></tr>
+        <tr><td>3</td><td class="col-name">clustering</td><td>raggruppamento gerarchico su distanza = 1 − |correlazione|, taglio a 0.2 (≈ |ρ| 0.8)</td><td>da ogni cluster sopravvive una sola colonna: la più semplice e la meno laggata</td></tr>
+        <tr><td>4</td><td class="col-name">importanza</td><td>permutation importance del GBM, misurata su fold di validazione</td><td>ordinamento delle superstiti; le colonne a importanza nulla o negativa escono</td></tr>
+        <tr><td>5</td><td class="col-name">ablazione</td><td>IC out-of-sample del set completo contro il ridotto</td><td>se pareggiano vince il ridotto — meno parametri, meno overfitting</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout">
+    <h3>Tre avvertenze che pesano più della procedura</h3>
+    <p><strong>Permutation, non gain.</strong> Il <em>gain</em> nativo di LightGBM misura quanto un albero ha usato una colonna in training, non quanto quella colonna generalizza: premia le feature ad alta cardinalità e il rumore che l'albero è riuscito a memorizzare. La permutation importance rimescola una colonna alla volta e misura il degrado su dati non visti — è la sola delle due che risponde alla domanda giusta.</p>
+    <p><strong>Le feature correlate si spartiscono l'importanza.</strong> Due colonne quasi identiche appaiono entrambe mediocri anche quando il gruppo che formano è forte: permutandone una, l'altra copre il buco. Per questo il clustering (passo 3) precede l'importanza (passo 4) — e se si vuole valutare un gruppo, va permutato il cluster intero, non la singola colonna.</p>
+    <p><strong>Permutare la sequenza, non i singoli step.</strong> Sulla GRU la permutation importance ha un problema che non ha sul GBM: rimescolare una colonna step per step distrugge la struttura temporale della finestra, quindi il degrado misurato mescola "feature inutile" e "sequenza rotta" — e sovrastima l'importanza di tutto. La permutazione va fatta <em>lungo la dimensione batch</em>: si scambia l'intera sequenza a 24 step di quella feature fra campioni diversi, lasciandola internamente intatta. Così si rompe solo l'associazione con la label, che è ciò che si vuole misurare.</p>
+    <p><strong>Permutare per gruppo.</strong> Vale su entrambi i modelli: si permuta insieme l'intero cluster di colonne correlate (e, sul GBM, tutti i lag e aggregati della stessa feature base). Permutando una colonna alla volta, le gemelle coprono il buco e il gruppo appare mediocre anche quando è forte. Due vincoli: <strong>stesso indice di permutazione</strong> per tutte le colonne del gruppo — con indici diversi si mescolano campioni distinti dentro lo stesso concetto e si creano input impossibili, sovrastimando il degrado; e permutazione <strong>su tutti e 4 i rami insieme</strong> — <code>atr_pct</code> a 5m e a 1h sono la stessa feature a orizzonti diversi, permutarne una sola lascia all'altra il modo di compensare.</p>
+    <p><strong>Split temporale anche qui.</strong> La selezione è essa stessa un modello addestrato sui dati: farla su split casuale significa misurare leakage e portarselo dentro al set finale. Stessa regola del training — taglio temporale unico e purging sulle label che sconfinano.</p>
+  </div>
+
+  <div class="callout">
+    <h3>Cosa aspettarsi dai gruppi</h3>
+    <p><strong>Ridondanze probabili</strong> — <code>atr_pct</code> / <code>range_pct</code> / <code>vol_realizzata</code> misurano volatilità a smoothing diversi; <code>kama_dist_pct</code> / <code>ema_dist_pct</code> / <code>psar_dist_pct</code> sono tutte "distanza da un trend-follower"; <code>tsi</code> / <code>rsi_centrato</code> / <code>ritorno_cum_N</code> sono tutte momentum; <code>volume_rel</code> / <code>obv_zscore</code> / <code>volume_trend</code> si sovrappongono in parte.</p>
+    <p><strong>Perché ci sono comunque.</strong> Una GRU su 24 step può apprendere qualunque filtro lineare della sequenza dei ritorni: gli indicatori con smoothing interno alla finestra di input non aggiungono informazione, aggiungono il proprio ritardo. Restano in lista perché l'ipotesi va <em>misurata</em>, non assunta — ma sono i primi candidati all'uscita.</p>
+    <p><strong>Il gruppo su cui puntare</strong> — le feature 8–12 (<code>pos_in_range</code>, <code>dist_max_pct</code>, <code>dist_min_pct</code>, <code>bars_since_max</code>, <code>bars_since_min</code>) descrivono dove sta il prezzo rispetto agli estremi recenti e da quanto: è la stessa grandezza che <code>swing_leg_target</code> misura, calcolata però solo sul passato. Zero smoothing, zero ritardo. È il gruppo da cui mi aspetto più IC.</p>
+  </div>
+
+  <div class="tf-heading">
+    <h2>Baseline prima dell'implementazione completa</h2>
+  </div>
+  <p class="tf-note">Prima di costruire l'intera pipeline multi-ramo e tunare H, si misura l'IC di modelli semplici sulle stesse feature. Se nessuno supera una soglia minima, il problema è nelle feature o nella definizione della gamba, e nessuna architettura ricorrente lo recupera.</p>
+
+  <div class="callout">
+    <h3>Che cos'è un GBM</h3>
+    <p><strong>Gradient Boosting Machine</strong> — un insieme di alberi decisionali costruiti in sequenza: ogni nuovo albero viene addestrato a predire l'<em>errore residuo</em> lasciato dalla somma di quelli precedenti. La predizione finale è la somma dei contributi di tutti gli alberi. Implementazioni standard: <code>LightGBM</code>, <code>XGBoost</code>, <code>CatBoost</code>.</p>
+    <p><strong>Perché come baseline qui.</strong> (1) Su dati tabellari finanziari con poche centinaia di migliaia di righe batte le reti neurali nella maggior parte dei casi. (2) Allena in minuti su CPU, contro ore su GPU per la GRU: molte più iterazioni di validazione a parità di tempo. (3) Dà <em>feature importance</em> per colonna, quindi dice quali indicatori portano segnale e quali sono rumore — informazione che la GRU non restituisce. (4) Non richiede normalizzazione di scala, quindi è testabile prima ancora di fissare la regola di normalizzazione.</p>
+    <p><strong>Come si applica a un input sequenziale.</strong> Il GBM non accetta tensori 3D: le sequenze vanno <em>appiattite</em>. Due opzioni: (a) usare solo l'ultima candela di ciascun ramo → 4 × F colonne; (b) lag e aggregati per colonna (valore a t, t−1, t−4, media e deviazione sulla finestra) → qualche centinaio di colonne. <strong>Si usa (b).</strong> Con la sola ultima candela il GBM non vede la sequenza, quindi non è un confronto onesto contro la GRU e la feature importance che ne esce penalizza le colonne informative solo in dinamica (<code>bars_since_max</code>, <code>ema_slope</code>).</p>
+  </div>
+
+  <div class="tbl-wrap">
+    <table>
+      <caption>sequenza di validazione — da eseguire in ordine</caption>
+      <thead>
+        <tr><th>#</th><th>modello</th><th>input</th><th>serve a</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>0</td><td class="col-name">oracolo</td><td>estremi da argrelextrema</td><td>fissare il range di finestra_estremi economicamente sensato (P&amp;L netto commissioni)</td></tr>
+        <tr><td>1</td><td class="col-name">regressione lineare</td><td>ultima candela × 4 rami</td><td>limite inferiore assoluto: se l'IC qui non è ~0, c'è un errore di leakage da cercare</td></tr>
+        <tr><td>2</td><td class="col-name">GBM (LightGBM)</td><td>lag e aggregati × 4 rami</td><td>IC di riferimento + feature importance per potare le colonne inutili</td></tr>
+        <tr><td>3</td><td class="col-name">GRU singolo ramo</td><td>(B, 24, F) solo 15m</td><td>verificare che la sequenza aggiunga segnale rispetto alla singola candela</td></tr>
+        <tr><td>4</td><td class="col-name">GRU multi-ramo</td><td>4 × (B, 24, F)</td><td>verificare che il multi-timeframe aggiunga segnale rispetto al ramo singolo</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="tf-note">Criterio di avanzamento: ogni step deve battere il precedente sulle metriche di segnale out-of-sample (vedi sezione seguente). Se lo step 4 non batte lo step 3, il multi-ramo non si giustifica.</p>
+
+  <div class="callout">
+    <h3>Da testare in walk-forward, non su split unico</h3>
+    <p>Lo split temporale unico produce <em>una sola</em> stima dell'IC: un numero senza barra d'errore, con cui non si può dire se lo step 4 batte davvero lo step 3 o se la differenza è rumore.</p>
+    <p><strong>Walk-forward.</strong> train fino a T₁ → test T₁..T₂ → train fino a T₂ → test T₂..T₃ → ecc. N training, N stime, si riporta media e deviazione standard. Purging applicato a ogni taglio. Con 3–5 fold la differenza fra due step diventa valutabile.</p>
+    <p>Costo: N volte il training. Irrilevante sul GBM, pesante sulla GRU — ma con storico crypto corto è l'unico modo di ottenere una stima con incertezza. Lo split unico resta valido solo per i controlli rapidi (step 1, diagnostica di leakage).</p>
+  </div>
+
+  <div class="tf-heading">
+    <h2>Metriche di valutazione del segnale</h2>
+  </div>
+  <p class="tf-note">Si adotta il set di metriche di segnale di qlib. <strong>Nessuna metrica di portafoglio</strong> (annualized return, IR, max drawdown): la valutazione economica passa dal rapporto con l'oracolo, non da un backtest di strategia.</p>
+
+  <div class="tbl-wrap">
+    <table>
+      <caption>quattro metriche, calcolate per data sul cross-section e poi aggregate nel tempo</caption>
+      <thead>
+        <tr><th>metrica</th><th>definizione</th><th>come si legge</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="col-name">IC</td><td>media su t di pearson(pred<sub>t</sub>, target<sub>t</sub>)</td><td>forza lineare del segnale. Sensibile agli outlier: un solo bar estremo può spostarla.</td></tr>
+        <tr><td class="col-name">ICIR</td><td>media(IC<sub>t</sub>) / std(IC<sub>t</sub>)</td><td>stabilità nel tempo, non forza. Un IC 0.05 costante batte un IC 0.08 che oscilla fra +0.3 e −0.2.</td></tr>
+        <tr><td class="col-name">Rank IC</td><td>come IC ma con Spearman</td><td>coglie relazioni monotone non lineari, robusto alle code grasse dei ritorni. È la metrica primaria qui.</td></tr>
+        <tr><td class="col-name">Rank ICIR</td><td>media(RankIC<sub>t</sub>) / std(RankIC<sub>t</sub>)</td><td>stabilità della versione robusta. Il numero da guardare per decidere se un modello è promuovibile.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout">
+    <h3>Avvertenze di lettura</h3>
+    <p><strong>Con 15 simboli l'IC cross-sectional è rumoroso.</strong> Con n=15 per timestamp l'errore standard della correlazione è ≈ 1/√(n−3) ≈ 0.29: i singoli IC<sub>t</sub> sono quasi puro rumore, ed è solo la media su migliaia di date a essere informativa. Per questo l'ICIR conta più dell'IC. In alternativa, o in parallelo, si può calcolare l'<strong>IC time-series per simbolo</strong> (correlazione su tutta la serie di un asset) e poi mediare sui 15: più stabile a universo stretto.</p>
+    <p><strong>Soglia.</strong> Indicativamente Rank IC &gt; 0.02–0.03 out-of-sample per considerare il segnale reale, e Rank ICIR &gt; 0.3. Entrambe da riportare come media ± std sui fold walk-forward e sui seed.</p>
+    <p><strong>Test del beta di mercato — da eseguire dopo il primo GBM.</strong> I 15 pair USDT si muovono in blocco: quando BTC è a metà di una gamba ascendente lo sono spesso anche gli altri, quindi <code>swing_leg_target</code> vale un valore simile su tutti allo stesso istante. Se è così, le 15 serie non sono 15 osservazioni indipendenti ma una sola ripetuta: un Rank IC apparentemente confermato su tutti gli asset poggia su molti meno gradi di libertà di quanti sembri. Misura in due righe — <code>target_res = target − target.groupby(timestamp).transform('mean')</code>, poi Rank IC contro <code>target_res</code>. Se regge, il modello distingue davvero i simboli e il multi-asset porta informazione; se crolla a ~0, il segnale è la fase del mercato nel suo insieme e va confrontato con una baseline addestrata sul solo BTC. Nessuna trasformazione dei dati: è una diagnostica, non un preprocessing.</p>
+    <p><strong>Le stesse metriche a ogni step.</strong> Regressione lineare, GBM, GRU singolo e GRU multi-ramo si confrontano sulle stesse quattro metriche, sugli stessi fold. Cambiare metrica fra uno step e l'altro rende il confronto privo di senso.</p>
+  </div>
+
+  <div class="tf-heading">
+    <h2>Punti aperti — da chiudere prima di scrivere codice</h2>
+  </div>
+  <p class="tf-note">Non sono parametri da tarare: sono scelte che condizionano l'architettura.</p>
+
+  <div class="callout">
+    <h3>1. Funzione di loss — non ancora definita</h3>
+    <p>Il documento specifica target, feature, architettura e metriche, ma non <em>cosa si minimizza</em> durante l'addestramento. Disallineamento da risolvere: la valutazione è in Rank IC (ordinale, scala-invariante), mentre una loss di regressione standard è cardinale — un modello che sbaglia l'ampiezza ma azzecca l'ordine ha MSE pessima e Rank IC ottima.</p>
+    <p><strong>Scelta base — Huber + selezione su Rank IC.</strong> <code>L = 0.5·e²</code> se <code>|e| ≤ δ</code>, <code>δ·(|e| − 0.5δ)</code> altrimenti. Preferita a MSE perché il target ha massa esattamente a ±1 sui pivot, che sono anche i bar meno prevedibili: con MSE il gradiente su quei campioni è ~8× quello di Huber (δ=0.5) e la rete inseguirebbe i punti meno apprendibili. Early stopping e model selection sempre su Rank IC di valid, mai sulla loss.</p>
+    <p><strong>Estensione opzionale — termine di correlazione.</strong> <code>L = huber(p,y) − λ·pearson(p,y)</code>: il primo termine ancora la scala, il secondo premia la correlazione, avvicinando l'objective alla metrica di valutazione. Da valutare solo <em>dopo</em> aver ottenuto un Rank IC stabilmente positivo con λ=0.</p>
+    <p><strong>Scartata per ora — loss su ranking differenziabile</strong> (pairwise, soft-Spearman). Il Rank IC è cross-sectional, quindi la loss dovrebbe confrontare i 15 simboli dello stesso timestamp: con n=15 il cross-section è troppo stretto perché il termine di ranking sia più informativo del rumore che introduce, e il batching per timestamp vincola pesantemente il data loader. Costo O(B²) aggiuntivo.</p>
+  </div>
+
+  <div class="callout">
+    <h3>1b. Sequenza di implementazione della loss</h3>
+    <p><strong>Sul GBM non si implementa il termine di correlazione.</strong> Due ragioni. Tecnica: un objective custom in LightGBM richiede gradiente e hessiana <em>per riga</em>, ma la derivata di Pearson rispetto a <code>p_i</code> dipende da media e deviazione dell'intero vettore — non è separabile per campione, e l'hessiana vera è densa mentre LightGBM accetta solo la diagonale. Metodologica, più importante: il GBM serve a dare un Rank IC di riferimento e la feature importance, quindi deve restare semplice e stabile; con objective diversi il confronto step 2 → step 3 misurerebbe anche la differenza di loss, non solo l'architettura. <strong>GBM: L2 o Huber standard.</strong></p>
+    <p><strong>δ si tara una volta, λ no.</strong> δ è in unità del target: dipende solo dalla distribuzione di <code>swing_leg_target</code>, comune a tutti i modelli, quindi si fissa una volta dopo lo step 0 dell'oracolo (indicativamente 0.3–0.5). λ bilancia le magnitudini di due gradienti e dipende da architettura, learning rate, scala delle attivazioni e soprattutto <strong>batch size</strong> — Pearson su 512 campioni ha varianza molto diversa che su 2048. Nessuno di questi è condiviso fra GBM e GRU, né fra GRU a ramo singolo e a 4 rami.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <caption>quando si fissa cosa</caption>
+        <thead><tr><th>fase</th><th>loss</th><th>λ</th></tr></thead>
+        <tbody>
+          <tr><td>step 0 — oracolo</td><td>—</td><td>misura la distribuzione del target → fissa <strong>δ</strong></td></tr>
+          <tr><td>step 1 — lineare</td><td>MSE</td><td>— (serve solo da controllo di leakage)</td></tr>
+          <tr><td>step 2 — GBM</td><td>L2 / Huber standard</td><td>non implementato</td></tr>
+          <tr><td>step 3 — GRU singolo</td><td>Huber</td><td>λ = 0, fino a Rank IC positivo e stabile</td></tr>
+          <tr><td>step 3b — GRU singolo</td><td>Huber + λ·Pearson</td><td><strong>prima taratura</strong>, sul modello più economico</td></tr>
+          <tr><td>step 4 — GRU multi-ramo</td><td>Huber + λ·Pearson</td><td>ri-verifica su griglia ristretta (λ<sub>3b</sub>, metà, doppio)</td></tr>
+          <tr><td>fase finale</td><td>—</td><td>λ fra gli iperparametri da rifinire</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p><strong>Vincoli sulla taratura di λ.</strong> Fissare il batch size <em>prima</em>: λ e batch size interagiscono, tararli insieme è una griglia 2D non sostenibile. Serve il protocollo multi-seed — il delta di Rank IC fra λ=0.1 e λ=0.3 sarà probabilmente inferiore alla varianza da inizializzazione, quindi griglia di 3–4 valori (0, 0.1, 0.3, 0.5) × almeno 5 seed. <strong>λ=0 deve stare nella griglia</strong> come controllo: se non perde contro gli altri, il termine di correlazione non serve e si elimina un iperparametro dal progetto.</p>
+    <p><strong>Priorità.</strong> λ è un'ottimizzazione di second'ordine. Vengono prima i punti 2 e 3 di questa sezione e un Rank IC positivo con Huber puro: se quel Rank IC è ~0, λ non lo recupera — il problema sarebbe nelle feature o nella definizione della gamba.</p>
+  </div>
+
+  <div class="callout">
+    <h3>2. Saturazione della tanh sui pivot</h3>
+    <p>L'output è <code>tanh</code> e il target vale <strong>esattamente ±1 sui pivot</strong>. La tanh tocca ±1 solo asintoticamente: per predire un pivot servono pre-attivazioni molto grandi, con gradiente che si annulla proprio nei punti di maggior interesse. Opzioni: output lineare senza attivazione, target riscalato a ±0.95, o tanh con guadagno. Da chiudere prima dell'implementazione della testa.</p>
+  </div>
+
+  <div class="callout">
+    <h3>3. Sovrapposizione delle sequenze</h3>
+    <p>Una riga per bar 5m con finestra 24 → campioni consecutivi condividono 23 step su 24. I campioni <em>indipendenti</em> sono circa 1/24 delle righe: i batch non sono i.i.d., i gradienti sono correlati, e valid ed early stopping risultano ottimisti. Serve una decisione su <strong>stride</strong> (1, 4, 12?) o subsampling casuale — compromesso fra volume di dati e indipendenza, delicato con storico corto. Interagisce col punto sull'occupazione di memoria.</p>
+  </div>
+
+  <div class="callout">
+    <h3>4. Volume dati e materializzazione — da riprendere dopo la selezione feature</h3>
+    <p>15 simboli × storico a 5m ≈ 10⁷ righe; con 4 rami × 24 step × F feature in float32 il tensore materializzato è dell'ordine delle decine di GB. Da decidere fra generazione lazy per batch, memmap su disco, o precomputo con stride ampio. Non è un dettaglio implementativo: vincola lo stride del punto 3. <strong>Si rimanda a dopo la scelta definitiva di dataset e feature</strong>, quando F e la copertura temporale sono noti.</p>
+  </div>
+
+  <div class="callout">
+    <h3>5. Regolarizzazione</h3>
+    <p>Non specificata. Con rapporto segnale/rumore basso è determinante: senza, la GRU memorizza il rumore in poche epoche. Da fissare: dropout, weight decay, gradient clipping.</p>
+  </div>
+
+  <div class="tbl-wrap">
+    <table>
+      <caption>iperparametri — valori di partenza, da misurare in fase finale</caption>
+      <thead><tr><th>parametro</th><th>partenza</th><th>nota</th></tr></thead>
+      <tbody>
+        <tr><td class="col-name">H</td><td>32</td><td>con F≈10 e 24 step, oltre 64 overfitta rapidamente</td></tr>
+        <tr><td class="col-name">layer GRU</td><td>1</td><td>2 solo se il singolo satura</td></tr>
+        <tr><td class="col-name">dropout</td><td>0.2</td><td>sull'output dei rami, prima della concat</td></tr>
+        <tr><td class="col-name">weight decay</td><td>1e-4</td><td>via AdamW</td></tr>
+        <tr><td class="col-name">optimizer</td><td>AdamW</td><td>—</td></tr>
+        <tr><td class="col-name">learning rate</td><td>1e-3</td><td>con ReduceLROnPlateau su Rank IC di valid</td></tr>
+        <tr><td class="col-name">batch size</td><td>512–1024</td><td>batch grandi mediano gradienti rumorosi</td></tr>
+        <tr><td class="col-name">grad clip</td><td>1.0</td><td>sulla norma</td></tr>
+        <tr><td class="col-name">early stopping</td><td>patience 10 su Rank IC di valid</td><td>mai sulla loss</td></tr>
+        <tr><td class="col-name">epoche max</td><td>100</td><td>con early stopping raramente raggiunte</td></tr>
+        <tr><td class="col-name">seed</td><td>5 in esplorazione, 10–20 nei confronti finali</td><td>media ± std</td></tr>
+        <tr><td class="col-name">LightGBM</td><td>num_leaves 31, lr 0.05, feature/bagging_fraction 0.8</td><td>early stopping su Rank IC di valid</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="tf-note">Nessuno di questi va tunato all'inizio: si fissano, si misura, si muove un parametro alla volta.</p>
+
+  <div class="callout">
+    <h3>CryptoFarmEvolution — nuovo progetto, da studiare</h3>
+    <p>Questo modello e la sua sperimentazione non restano dentro CryptoFarm: pagina di simulazione dedicata (come <code>simulator.py</code>, ma focalizzata solo su questi modelli multi-tf), dati non più da Binance ma da <strong>Alpaca</strong> (<code>alpaca-py</code>). Repo/progetto separato: <strong>CryptoFarmEvolution</strong>.</p>
+  </div>
+
+  <div class="callout">
+    <h3>Ipotesi — gambe di ampiezza ridotta (rinviata)</h3>
+    <p><strong>Decisione: si parte senza alcuno scarto e senza alcuna pesatura.</strong> Tutte le gambe entrano nel dataset con peso uniforme. L'ipotesi resta documentata per una fase successiva, da attivare solo se misurazioni sull'IC mostrano che le gambe deboli degradano l'apprendimento.</p>
+    <p><strong>L'ipotesi.</strong> <code>valori[k] = tanh(ampiezza[k]/riferimento[k])</code> è già calcolato per ogni pivot dopo la fusione, con <code>ampiezza[k]</code> riferita alla gamba k−1→k. Con <code>riferimento[k]</code> anch'esso relativo (es. ATR% al pivot) il rapporto è adimensionale e la <code>tanh</code> ha lo stesso significato su tutti gli asset. Dove <code>|valori[k]| &lt; soglia</code> (es. 0.7, non misurata), il pivot k sarebbe "rumore" e si scarterebbe (NaN, stessa convenzione già in uso) il target dei bar della gamba precedente, non le singole barre.</p>
+    <p><strong>Punti aperti.</strong> Soglia da misurare. Rischio di shift di distribuzione: il modello non vedrebbe mai gambe deboli in training ma le incontra continuamente in produzione — se si arriverà a intervenire, <em>pesare</em> i campioni per ampiezza è preferibile a scartarli, perché mantiene il segnale e riduce solo il contributo al gradiente. Il dubbio su quale gamba scartare è risolto dalla convenzione all'indietro: <code>ampiezza[k]</code> qualifica la gamba k−1→k, quindi la soglia agisce su quei bar.</p>
+  </div>
+</div>
+
+</body>
