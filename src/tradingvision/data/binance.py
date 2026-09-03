@@ -31,7 +31,10 @@ SYMBOLS = [
 
 BASE = "https://data.binance.vision/data/spot"
 LISTING = "https://s3-ap-northeast-1.amazonaws.com/data.binance.vision"
-STORE = Path("data")
+# Anchored to the repo root, not the working directory: the oracle and the app are launched from
+# wherever, and a relative default turns a wrong CWD into FileNotFoundError instead of data.
+# Assumes an editable install, which is how this project is set up.
+STORE = Path(__file__).resolve().parents[3] / "data"
 WORKERS = 8
 
 # Raw dump layout: no header, 12 columns. We keep the 7 that carry information.
@@ -48,14 +51,15 @@ OHLC = {
 }  # fmt: skip
 
 
-def load(symbol: str, timeframe: str = "5m", interval: str = "5m", store: Path = STORE) -> pd.DataFrame:
-    """Read one symbol from the store, resampled to `timeframe` when coarser than the stored one.
+def load(symbol: str, timeframe: str = "5m", *, stored: str = "5m", store: Path = STORE) -> pd.DataFrame:
+    """Read one symbol at `timeframe`, resampling up from the `stored` files when they differ.
 
-    Bars with no trade in the period are dropped rather than forward filled: a synthetic bar would
-    be an invented price, and the pivot search would treat it as a real level.
+    `load("BTC", "15m")` reads the 5m Parquet and aggregates it. Bars with no trade in the period
+    are dropped rather than forward filled: a synthetic bar would be an invented price, and the
+    pivot search would treat it as a real level.
     """
-    df = pd.read_parquet(store / f"{symbol}USDT-{interval}.parquet")
-    if timeframe == interval:
+    df = pd.read_parquet(store / f"{symbol}USDT-{stored}.parquet")
+    if timeframe == stored:
         return df
     rule = re.sub(r"m$", "min", timeframe)  # pandas wants "15min", not "15m"
     return df.resample(rule).agg(OHLC).dropna(subset=["open"])

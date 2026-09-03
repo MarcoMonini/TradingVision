@@ -23,7 +23,7 @@ def test_legs_are_the_low_to_high_moves():
     s = triangle()
     r = run(s, window=5, fee=0.0)
     assert r["trades"] == 9, r["trades"]  # 10 cycles, the last peak has no following trough
-    assert abs(r["gross_leg_pct"] - 10.0) < 1e-9, r["gross_leg_pct"]
+    assert abs(r["gross_trade_pct"] - 10.0) < 1e-9, r["gross_trade_pct"]
     assert r["win_rate"] == 1.0
 
 
@@ -40,7 +40,7 @@ def test_lag_shifts_both_fills_and_shrinks_the_leg():
     s = triangle()
     # The ramp climbs 1.0 per bar, so k bars of lag buy at 100 + k and sell at 110 - k.
     for k in (0, 1, 2, 3):
-        gross = run(s, window=5, fee=0.0, lag=k)["gross_leg_pct"]
+        gross = run(s, window=5, fee=0.0, lag=k)["gross_trade_pct"]
         assert abs(gross - ((110 - k) / (100 + k) - 1) * 100) < 1e-9, (k, gross)
 
 

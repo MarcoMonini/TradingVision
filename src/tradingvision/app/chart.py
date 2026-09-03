@@ -95,7 +95,7 @@ def main() -> None:
     stats = run(df.close, EXTREMA_WINDOW, FEE, pivots=pivots)
     a, b = st.columns(2)
     a.metric("Oracle net return", f"{stats['net_return'] * 100:,.1f}%", f"{stats['trades']} legs")
-    b.metric("Avg gross leg", f"{stats['gross_leg_pct']:.2f}%", f"{stats['win_rate'] * 100:.0f}% above fees")
+    b.metric("Avg gross leg", f"{stats['gross_trade_pct']:.2f}%", f"{stats['win_rate'] * 100:.0f}% above fees")
 
     st.plotly_chart(chart(df, pivots, fetched[0], "-".join(map(str, fetched))), use_container_width=True, key="chart")
     st.caption(

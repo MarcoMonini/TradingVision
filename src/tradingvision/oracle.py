@@ -18,6 +18,7 @@ Long-only and fully invested per leg: it measures how much a leg is worth, not a
 from __future__ import annotations
 
 import argparse
+from collections.abc import Sequence
 
 import numpy as np
 import pandas as pd
@@ -83,16 +84,24 @@ def run(
         "window": window,
         "lag": lag,
         "trades": len(legs),
-        "skipped": skipped,  # legs dropped because the lagged entry did not precede the exit
+        "skipped": skipped,  # legs dropped because the lagged entry landed past the exit pivot
         "log_per_year": net_log / years if years else float("nan"),
         "net_return": float(np.expm1(net_log)) if net_log < 700 else float("inf"),
-        "gross_leg_pct": float((exits / entries - 1).mean() * 100) if len(legs) else float("nan"),
+        # The trade, not the leg: at lag > 0 the fills sit inside the leg, not on its pivots.
+        "gross_trade_pct": float((exits / entries - 1).mean() * 100) if len(legs) else float("nan"),
         "win_rate": float((legs > 0).mean()) if len(legs) else float("nan"),
         "median_leg_duration": bars_per_leg.median() if len(bars_per_leg) else pd.NaT,
     }
 
 
-def sweep(symbols, timeframe: str, windows: list[int], lags=(0,), fee: float = FEE, start=None) -> pd.DataFrame:
+def sweep(
+    symbols: list[str],
+    timeframe: str,
+    windows: list[int],
+    lags: Sequence[int] = (0,),
+    fee: float = FEE,
+    start: str | None = None,
+) -> pd.DataFrame:
     """One row per (symbol, window, lag), over the local Binance store."""
     rows = []
     for i, symbol in enumerate(symbols, 1):
