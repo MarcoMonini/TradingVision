@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+
+# Tooling
+.serena/
+.ruff_cache/
+.pytest_cache/
+.idea/
+
+# macOS
+.DS_Store
+
+# Oracle sweep output
+oracle*.csv
