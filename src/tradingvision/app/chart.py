@@ -20,7 +20,7 @@ load_candles = st.cache_data(ttl=300, show_spinner="Downloading candles…")(get
 
 @st.cache_data(show_spinner=False)
 def load_pivots(close, window: int):
-    """Cached on (series, window) so the window slider is the only thing that recomputes them."""
+    """Cached on (series, window): the pivots survive every rerun that does not refetch."""
     return find_pivots(close, window)
 
 
@@ -53,8 +53,8 @@ def chart(df, pivots, symbol: str, uirevision: str) -> go.Figure:
         xaxis_rangeslider_visible=False,
         margin=dict(t=30, b=10),
         # Keeps zoom and pan across reruns: Plotly patches the existing figure instead of
-        # remounting it. Changing the value resets the view, which is what we want when the
-        # instrument or the visible range changes, but not when a window/fee slider moves.
+        # remounting it. The value changes only with the fetched series, so the view resets when
+        # the instrument or the period does and survives everything else.
         uirevision=uirevision,
     )
     return fig
@@ -68,15 +68,17 @@ def main() -> None:
     timeframe = st.sidebar.selectbox("Timeframe", list(TIMEFRAMES), index=1)
     days = st.sidebar.slider("History (days)", 1, MAX_DAYS, 30)
 
-    # Fetching is explicit: window and fee only re-render, symbol/timeframe/days need a click.
     request = (symbol, timeframe, days)
     if st.sidebar.button("Fetch candles", type="primary", use_container_width=True):
         st.session_state.fetched = (request, load_candles(*request))
 
-    window = st.sidebar.slider(
-        "Extrema window (bars)", 2, 96, EXTREMA_WINDOW, help="the primary parameter, fixed by measurement"
+    # Not inputs: both were calibrated in oracle.py and changing them here would show pivots the
+    # dataset does not contain.
+    st.sidebar.divider()
+    st.sidebar.caption(
+        f"**Extrema window** &nbsp; {EXTREMA_WINDOW} bars — calibrated, see the spec  \n"
+        f"**Fee** &nbsp; {FEE * 100:.2f}% per side, {FEE * 200:.2f}% round trip — Alpaca taker tier 1"
     )
-    fee = st.sidebar.number_input("Fee per side (%)", 0.0, 1.0, FEE * 100, 0.05, help="Alpaca taker, tier 1") / 100
 
     if "fetched" not in st.session_state:
         st.info("Pick a pair, a timeframe and a period, then press **Fetch candles**.")
@@ -87,10 +89,10 @@ def main() -> None:
     if df.empty:
         st.warning(f"No data for {fetched[0]} on {fetched[1]}.")
         return
-    pivots = load_pivots(df.close, window)
+    pivots = load_pivots(df.close, EXTREMA_WINDOW)
 
     # Oracle: what a perfect-hindsight trader would have made on this window over this period.
-    stats = run(df.close, window, fee, pivots=pivots)
+    stats = run(df.close, EXTREMA_WINDOW, FEE, pivots=pivots)
     a, b = st.columns(2)
     a.metric("Oracle net return", f"{stats['net_return'] * 100:,.1f}%", f"{stats['trades']} legs")
     b.metric("Avg gross leg", f"{stats['gross_leg_pct']:.2f}%", f"{stats['win_rate'] * 100:.0f}% above fees")
@@ -100,7 +102,7 @@ def main() -> None:
         f"{len(df)} candles — {df.index[0]:%Y-%m-%d %H:%M} to {df.index[-1]:%Y-%m-%d %H:%M} UTC · "
         f"{len(pivots)} pivots, median leg {pivots.amplitude.median() * 100:.2f}%"
         if len(pivots)
-        else f"{len(df)} candles — no pivot at window {window}"
+        else f"{len(df)} candles — no pivot at window {EXTREMA_WINDOW}"
     )
 
 
