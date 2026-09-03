@@ -271,9 +271,9 @@ tr td.col-name{color:var(--text);font-weight:500;}
 
 <div class="wrap">
   <header>
-    <p class="eyebrow">cryptofarm · ml/swing — proposta dataset · rev. 12</p>
+    <p class="eyebrow">cryptofarm · ml/swing — proposta dataset · rev. 13 — finestra_estremi misurata e fissata a 24</p>
     <h1>Schema dataset multi-timeframe</h1>
-    <p class="sub">Quattro rami sequenziali (5m → 1h), 24 step fissi per ramo, stesso set di colonne per candela, normalizzate in % o ratio e poi riportate su scala comune. Nessun prezzo assoluto, nessun symbol. Target invariato, finestra di ricerca estremi a 24 barre 15m (±6h).</p>
+    <p class="sub">Quattro rami sequenziali (5m → 1h), 24 step fissi per ramo, stesso set di colonne per candela, normalizzate in % o ratio e poi riportate su scala comune. Nessun prezzo assoluto, nessun symbol. Target invariato, finestra di ricerca estremi <strong>fissata a 24 barre 15m</strong> (±6h) per misura, non per ipotesi. Dati da Binance (20 coppie USDT, 2017→, 14,9M righe a 5m).</p>
     <div class="legend">
       <span class="legend-item"><span class="dot seq"></span> ramo sequenziale (input GRU)</span>
       <span class="legend-item"><span class="dot target"></span> target / metadata</span>
@@ -423,9 +423,40 @@ tr td.col-name{color:var(--text);font-weight:500;}
 
   <div class="callout">
     <h3>finestra_estremi è il parametro primario</h3>
-    <p><strong>Il valore 24 è un'ipotesi di partenza, non una misura.</strong> Si tara come primo step assoluto, massimizzando il P&amp;L netto costi dell'oracolo. Da quel valore discendono: le finestre N di ogni indicatore su ogni ramo, l'ampiezza del purging (via la distribuzione di <code>orizzonte(i)</code>), e la stessa scelta dei 24 step per ramo — tutte da rideterminare una volta fissata la finestra, non prima.</p>
+    <p><strong>Fissata a 24 — misurata, non più assunta.</strong> Vedi "Misura di finestra_estremi" qui sotto per il protocollo e i numeri. Da questo valore discendono: le finestre N di ogni indicatore su ogni ramo, l'ampiezza del purging (via la distribuzione di <code>orizzonte(i)</code>), e la stessa scelta dei 24 step per ramo.</p>
     <p>Definisce quali oscillazioni contano come "gamba" e quindi cosa il modello deve imparare a riconoscere. Si misura per primo, sul TF di riferimento (15m). Tutti gli altri parametri — finestre di TSI, ATR, ADX, OBV, KAMA, PSAR su ciascun ramo — si derivano da questo valore e dal proprio TF, non da un tuning indipendente: un indicatore va tarato per vedere sullo stesso orizzonte temporale della gamba che il target descrive, non su una convenzione presa da un altro problema.</p>
-    <p><strong>Come misurarla — due passi.</strong> 1) Oracolo: per ogni finestra candidata, simulare un trader che compra su ogni minimo rilevato e vende sul massimo successivo, P&amp;L netto di commissioni. Finestra piccola → tante gambe minuscole erose dai costi; finestra grande → poche gambe pulite ma rare: il range che massimizza il P&amp;L netto è il range di finestre economicamente sensate. 2) Su quel range, misurare l'IC di <code>swing_leg_target</code> (swing_model allenato) per capire quanto la gamba è <em>riconoscibile</em> da un modello causale, non solo profittevole a posteriori — l'oracolo vede il futuro, il modello no.</p>
+  </div>
+
+  <div class="callout">
+    <h3>Misura di finestra_estremi — protocollo corretto e risultato</h3>
+    <p><strong>Il criterio originariamente previsto è degenere.</strong> "Massimizzare il P&amp;L netto costi dell'oracolo" non individua una struttura di mercato: individua la finestra più corta in cui la gamba media supera ancora i costi. Misurato su 20 coppie USDT, 15m, dal 2017, con 0,50% di round trip, l'argmax cade a <strong>3 barre</strong> e la gamba mediana all'ottimo vale ~1,06% <em>su tutti e 20 i simboli</em>, con finestre ottime che vanno da 2 a 8. È il rapporto costo/volatilità, non una proprietà degli swing: dove la volatilità è alta il costo viene superato prima, quindi la finestra ottima si accorcia. Corollario: l'ottimo non è stazionario — su BTC scende a 2 nel 2017 (vol 150%) e sale a 12 nel 2023 (vol 43%).</p>
+    <p><strong>La correzione: penalizzare il ritardo di rilevazione.</strong> L'oracolo nudo entra ed esce esattamente sul pivot, cosa che nessun modello causale può fare — un pivot con <code>argrelextrema(order=w)</code> è confermabile solo dopo <em>w</em> barre a destra. Si rimisura entrando ed uscendo <em>L</em> barre dopo il pivot, con L = 1, 2, 3. Il vantaggio delle finestre corte evapora: da L=0 a L=2 la finestra 16 perde il 43% del P&amp;L, la 24 il 35%, e a L=3 l'ordine si inverte.</p>
+    <div class="tbl-wrap">
+      <table>
+        <caption>log P&amp;L per anno, media su 20 simboli, 2023+, 0,50% round trip</caption>
+        <thead>
+          <tr><th>finestra</th><th>L=0</th><th>L=1</th><th>L=2</th><th>L=3</th><th>gambe in utile (L=2)</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>16</td><td>16.1</td><td>11.5</td><td>9.2</td><td>7.6</td><td>79%</td></tr>
+          <tr><td>18</td><td>15.5</td><td>11.3</td><td>9.2</td><td>7.8</td><td>82%</td></tr>
+          <tr><td>20</td><td>14.9</td><td>11.1</td><td>9.2</td><td>7.9</td><td>85%</td></tr>
+          <tr><td>22</td><td>14.5</td><td>10.9</td><td>9.2</td><td>7.9</td><td>87%</td></tr>
+          <tr><td><strong>24</strong></td><td>14.0</td><td>10.7</td><td>9.1</td><td><strong>8.0</strong></td><td><strong>89%</strong></td></tr>
+          <tr><td>26</td><td>13.6</td><td>10.5</td><td>9.0</td><td>7.9</td><td>90%</td></tr>
+          <tr><td>28</td><td>13.3</td><td>10.4</td><td>8.9</td><td>7.9</td><td>91%</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p><strong>Esito: 24.</strong> Ottimo del range a L=3, entro l'1% dell'ottimo a L=2, e miglior tasso di gambe in utile fra i valori equivalenti. Il range difendibile è 20–26; dentro quel range 24 è il più robusto rispetto all'ipotesi sull'errore del modello. Caratteristiche della gamba risultante, mediane sui 20 simboli sul periodo 2023+: <strong>ampiezza mediana 3,63%</strong>, primo quartile 2,29% (margine 4,6× sul costo), durata mediana 8h50m, <strong>~344 gambe/anno</strong> per simbolo, commissioni pari al 13,8% della gamba mediana.</p>
+    <p><strong>Cosa resta da misurare.</strong> Il ritardo L è un proxy grezzo dell'errore del modello: penalizza il timing ma non la direzione. Il secondo passo previsto resta valido e necessario — misurare l'IC di <code>swing_leg_target</code> sul range 20–26 per sapere quanto una gamba da 24 barre è <em>riconoscibile</em> da un modello causale, non solo profittevole a posteriori.</p>
+  </div>
+
+  <div class="callout">
+    <h3>Fonte dati — Binance, non Alpaca</h3>
+    <p>Lo storico di Alpaca sui crypto <strong>parte dal 2021-01-01</strong>: gli endpoint <code>v1beta3</code> distribuiscono i dati del venue di Alpaca stesso, nato allora. Non è una restrizione di piano. In più il 2023 è bucato dai delisting successivi alle cause SEC — SOL ha un buco di 417 giorni, e la copertura 5m di quell'anno crolla al 39% su BCH, 21% su BAT, 15% su YFI.</p>
+    <p>Il dataset ML si costruisce quindi dai dump pubblici di <code>data.binance.vision</code>: ZIP statici su S3, nessuna chiave, nessun rate limit, coppie USDT — le stesse che questo documento assumeva. <strong>20 coppie con almeno 70 mesi di storico 5m e zero mesi mancanti</strong>, da 2017-08 (BTC, ETH) a ieri, per <strong>14,9M righe</strong>. Alpaca resta la fonte live e il venue di esecuzione, e le sue commissioni (0,25% taker tier 1, 0,50% round trip) sono quelle usate in tutte le misure di costo.</p>
+    <p>Due trappole nei dump, entrambe gestite in <code>tradingvision.data.binance</code>: <code>open_time</code> è passato da millisecondi a microsecondi nel corso del 2025 senza marcatore di versione, e alcuni file hanno una riga di header. L'unità si deduce per file dall'ordine di grandezza.</p>
   </div>
 
   <div class="callout">
@@ -480,7 +511,8 @@ tr td.col-name{color:var(--text);font-weight:500;}
     <p><strong>Regola adottata.</strong> Purging esatto: si scarta dal train ogni bar il cui <code>pivot_succ_idx</code> supera l'indice di taglio. Elimina esattamente i bar contaminati, nessuno di più. Con storico crypto corto è la scelta obbligata — l'embargo fisso costerebbe 72 barre per ogni taglio, il purging tipicamente qualche decina.</p>
     <p><strong>Su ogni confine, non solo train/test.</strong> Il purging si applica a <em>tutti</em> i tagli temporali del protocollo: train→valid, valid→test, e ogni taglio di ogni fold walk-forward. Un valid non purgato contamina l'early stopping e la scelta degli iperparametri, che è leakage indiretto ma con lo stesso effetto sull'IC finale.</p>
     <p><strong>Coda della serie.</strong> I bar successivi all'ultimo pivot confermato non hanno k+1, quindi target indefinito: <strong>l'ultimo pivot e la coda che lo segue si scartano per tutti gli asset</strong>. Nota: in produzione questa è la condizione permanente del bar corrente — il modello predice proprio dove il target non è ancora calcolabile.</p>
-    <p><strong>Da misurare comunque.</strong> La distribuzione di <code>orizzonte(i) = idx(pivot_{k+1}) − i</code> sul train: dice quanti bar il purging rimuove per ogni taglio, e quanto è dispersa la durata delle gambe — informazione utile a sé per tarare <code>finestra_estremi</code>.</p>
+    <p><strong>Misurata.</strong> Distribuzione di <code>orizzonte(i) = idx(pivot_{k+1}) − i</code> con <code>finestra_estremi = 24</code>, 20 simboli, 2023+, in barre da 15m — mediana sui simboli: <strong>p50 28, p95 124, p99 202, p99.9 314</strong>, massimo 389 (754 sul simbolo peggiore, cioè 7,9 giorni).</p>
+    <p>Conferma quantitativa del rifiuto dell'embargo fisso: <strong>72 barre coprono solo circa il p87</strong> della distribuzione, quindi un embargo a <code>3 × finestra_estremi</code> lascerebbe leakage sul 13% dei bar al confine. Il purging esatto costa in media 28 barre per taglio ("qualche decina", come previsto) ma la coda è lunga — la sua ampiezza effettiva va riportata per fold, non assunta.</p>
   </div>
 
   <div class="foot">

@@ -1,9 +1,0 @@
-Metadata-Version: 2.4
-Name: tradingvision
-Version: 0.1.0
-Summary: Visualizzazione e analisi di candele crypto (dati Alpaca).
-Requires-Python: >=3.12
-Requires-Dist: pandas==2.3.1
-Requires-Dist: alpaca-py==0.42.0
-Requires-Dist: streamlit==1.47.1
-Requires-Dist: plotly==6.2.0
