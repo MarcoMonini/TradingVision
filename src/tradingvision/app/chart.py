@@ -1,4 +1,4 @@
-"""Pagina Streamlit: scarica le candele di una coppia crypto e le disegna.
+"""Streamlit page: download the candles of a crypto pair and draw them with their pivots.
 
     streamlit run src/tradingvision/app/chart.py
 """
@@ -8,38 +8,100 @@ import streamlit as st
 from plotly.subplots import make_subplots
 
 from tradingvision.data.candles import SYMBOLS, TIMEFRAMES, get_candles
+from tradingvision.data.pivots import find_pivots
+from tradingvision.oracle import FEE, run
 
-carica_candele = st.cache_data(ttl=300)(get_candles)
+MAX_DAYS = 365
+
+# Downloads only happen on an explicit click, and only for a (symbol, timeframe, days) triplet
+# that is not already cached.
+load_candles = st.cache_data(ttl=300, show_spinner="Downloading candles…")(get_candles)
 
 
-def grafico(df, symbol: str) -> go.Figure:
+@st.cache_data(show_spinner=False)
+def load_pivots(close, window: int):
+    """Cached on (series, window) so the window slider is the only thing that recomputes them."""
+    return find_pivots(close, window)
+
+
+def chart(df, pivots, symbol: str, uirevision: str) -> go.Figure:
     fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.75, 0.25], vertical_spacing=0.02)
     fig.add_trace(
         go.Candlestick(x=df.index, open=df.open, high=df.high, low=df.low, close=df.close, name=symbol), row=1, col=1
     )
+    for kind, color, position in ((1, "#e74c3c", "top center"), (-1, "#2ecc71", "bottom center")):
+        p = pivots[pivots.kind == kind]
+        fig.add_trace(
+            go.Scatter(
+                x=p.index,
+                y=p.close,
+                mode="markers+text",
+                marker=dict(size=8, color=color, symbol="circle"),
+                text=[f"{a * 100:.1f}%" for a in p.amplitude],
+                textposition=position,
+                textfont=dict(size=9, color=color),
+                name="pivot",
+                hovertemplate="%{x}<br>%{y}<extra></extra>",
+            ),
+            row=1,
+            col=1,
+        )
     fig.add_trace(go.Bar(x=df.index, y=df.volume, name="volume", marker_color="#888"), row=2, col=1)
-    fig.update_layout(height=700, showlegend=False, xaxis_rangeslider_visible=False, margin=dict(t=30, b=10))
+    fig.update_layout(
+        height=700,
+        showlegend=False,
+        xaxis_rangeslider_visible=False,
+        margin=dict(t=30, b=10),
+        # Keeps zoom and pan across reruns: Plotly patches the existing figure instead of
+        # remounting it. Changing the value resets the view, which is what we want when the
+        # instrument or the visible range changes, but not when a window/fee slider moves.
+        uirevision=uirevision,
+    )
     return fig
 
 
 def main() -> None:
-    st.set_page_config(page_title="TradingVision", layout="wide")
+    st.set_page_config(page_title="Trading Vision", layout="wide")
     st.title("TradingVision")
 
-    col_s, col_t, col_g = st.columns(3)
-    symbol = col_s.selectbox("Coppia", SYMBOLS)
-    timeframe = col_t.selectbox("Timeframe", list(TIMEFRAMES), index=2)
-    days = col_g.slider("Giorni di storico", 1, 365, 30)
+    symbol = st.sidebar.selectbox("Pair", SYMBOLS)
+    timeframe = st.sidebar.selectbox("Timeframe", list(TIMEFRAMES), index=1)
+    days = st.sidebar.slider("History (days)", 1, MAX_DAYS, 30)
 
-    df = carica_candele(symbol, timeframe, days)
-    if df.empty:
-        st.warning(f"Nessun dato per {symbol} su {timeframe}.")
+    # Fetching is explicit: window and fee only re-render, symbol/timeframe/days need a click.
+    request = (symbol, timeframe, days)
+    if st.sidebar.button("Fetch candles", type="primary", use_container_width=True):
+        st.session_state.fetched = (request, load_candles(*request))
+
+    window = st.sidebar.slider("Extrema window (bars)", 2, 96, 24, help="argrelextrema order — the primary parameter")
+    fee = st.sidebar.number_input("Fee per side (%)", 0.0, 1.0, FEE * 100, 0.05, help="Alpaca taker, tier 1") / 100
+
+    if "fetched" not in st.session_state:
+        st.info("Pick a pair, a timeframe and a period, then press **Fetch candles**.")
         return
+    fetched, df = st.session_state.fetched
+    if fetched != request:
+        st.warning(f"Showing {fetched[0]} {fetched[1]}, {fetched[2]}d — press **Fetch candles** to load the new one.")
+    if df.empty:
+        st.warning(f"No data for {fetched[0]} on {fetched[1]}.")
+        return
+    pivots = load_pivots(df.close, window)
 
-    st.plotly_chart(grafico(df, symbol), use_container_width=True)
-    st.caption(f"{len(df)} candele — da {df.index[0]:%Y-%m-%d %H:%M} a {df.index[-1]:%Y-%m-%d %H:%M} UTC")
-    with st.expander("Dati"):
-        st.dataframe(df.tail(200), use_container_width=True)
+    # Oracle: what a perfect-hindsight trader would have made on this window over this period.
+    stats = run(df.close, window, fee, pivots=pivots)
+    a, b = st.columns(2)
+    a.metric("Oracle net return", f"{stats['net_return'] * 100:,.1f}%", f"{stats['trades']} legs")
+    b.metric("Avg gross leg", f"{stats['gross_leg_pct']:.2f}%", f"{stats['win_rate'] * 100:.0f}% above fees")
+
+    st.plotly_chart(
+        chart(df, pivots, fetched[0], "-".join(map(str, fetched))), use_container_width=True, key="chart"
+    )
+    st.caption(
+        f"{len(df)} candles — {df.index[0]:%Y-%m-%d %H:%M} to {df.index[-1]:%Y-%m-%d %H:%M} UTC · "
+        f"{len(pivots)} pivots, median leg {pivots.amplitude.median() * 100:.2f}%"
+        if len(pivots)
+        else f"{len(df)} candles — no pivot at window {window}"
+    )
 
 
 main()

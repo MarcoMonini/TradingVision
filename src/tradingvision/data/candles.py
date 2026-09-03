@@ -1,7 +1,7 @@
-"""Candele crypto da Alpaca.
+"""Crypto candles from Alpaca.
 
-L'endpoint crypto e' pubblico: `CryptoHistoricalDataClient` senza credenziali funziona, quindi
-niente chiavi da configurare per la sola lettura dello storico.
+The crypto endpoint is public: `CryptoHistoricalDataClient` works without credentials, so reading
+historical data needs no API keys.
 """
 
 from __future__ import annotations
@@ -27,9 +27,9 @@ _client = CryptoHistoricalDataClient()
 
 
 def get_candles(symbol: str, timeframe: str, days: int) -> pd.DataFrame:
-    """OHLCV indicizzato per timestamp UTC, dalle ultime `days` giornate a oggi.
+    """OHLCV indexed by UTC timestamp, from the last `days` days up to now.
 
-    DataFrame vuoto se Alpaca non ha dati per la coppia richiesta.
+    Empty DataFrame when Alpaca has no data for the requested pair.
     """
     bars = _client.get_crypto_bars(
         CryptoBarsRequest(
@@ -40,5 +40,5 @@ def get_candles(symbol: str, timeframe: str, days: int) -> pd.DataFrame:
     ).df
     if bars.empty:
         return bars
-    # L'indice e' (symbol, timestamp): con un simbolo solo il primo livello e' rumore.
+    # The index is (symbol, timestamp): with a single symbol the first level is noise.
     return bars.droplevel("symbol").sort_index()
