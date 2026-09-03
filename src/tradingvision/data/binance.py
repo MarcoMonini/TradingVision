@@ -71,6 +71,8 @@ def _keys(prefix: str) -> list[str]:
 def _to_utc(open_time: pd.Series) -> pd.DatetimeIndex:
     """Binance switched open_time from milliseconds to microseconds during 2025, without warning
     and without a version marker, so the unit is inferred per file from the magnitude."""
+    if open_time.empty:
+        return pd.DatetimeIndex([], tz="UTC")
     unit = "us" if open_time.iloc[0] > 1e14 else "ms"
     return pd.to_datetime(open_time, unit=unit, utc=True)
 

@@ -50,11 +50,27 @@ def run(
     `window` bars after the fact, so lag 0 and lag 1 are both unattainable by construction.
     """
     piv = find_pivots(close, window) if pivots is None else pivots
-    # Positional, because a lagged fill has no pivot to index by.
-    pos = close.index.get_indexer(piv.index) + lag
-    kind, px = piv.kind.to_numpy()[pos < len(close)], close.to_numpy()[pos[pos < len(close)]]
-    opened = kind[:-1] == -1  # each low is closed by the next pivot, always a high after the merge
+    # Positional, because a lagged fill has no pivot to index by. get_indexer answers -1 for a
+    # label it cannot find, which would silently read the wrong bar, so mismatched pivots have to
+    # fail loudly: passing a frame built on another slice is an easy mistake and a plausible
+    # wrong number is worse than a crash.
+    at = close.index.get_indexer(piv.index)
+    if (at < 0).any():
+        raise ValueError("pivots do not belong to this close series")
+
+    pos = at + lag
+    inside = pos < len(close)
+    kind, pos, at = piv.kind.to_numpy()[inside], pos[inside], at[inside]
+    px = close.to_numpy()[pos]
+    # Each low is closed by the next pivot, always a high after the merge. Both fills shift by the
+    # same lag, so the exit always follows the entry — but when two pivots sit closer together than
+    # `lag` (0.24% of pairs at window 24) the entry lands past the exit pivot, and the trade covers
+    # a stretch that no longer overlaps the leg at all. A model that detected the low that late
+    # would not take the trade, so neither does the oracle.
+    live = pos[:-1] < at[1:]
+    opened = (kind[:-1] == -1) & live
     entries, exits = pd.Series(px[:-1][opened]), pd.Series(px[1:][opened])
+    skipped = int(((kind[:-1] == -1) & ~live).sum())
     # Fees are charged on the credited side of each fill, so they compound with the price ratio
     # rather than subtracting from the return.
     legs = ((exits / entries) * (1 - fee) ** 2 - 1).dropna()
@@ -67,6 +83,7 @@ def run(
         "window": window,
         "lag": lag,
         "trades": len(legs),
+        "skipped": skipped,  # legs dropped because the lagged entry did not precede the exit
         "log_per_year": net_log / years if years else float("nan"),
         "net_return": float(np.expm1(net_log)) if net_log < 700 else float("inf"),
         "gross_leg_pct": float((exits / entries - 1).mean() * 100) if len(legs) else float("nan"),
