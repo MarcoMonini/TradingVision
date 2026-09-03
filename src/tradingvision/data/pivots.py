@@ -13,6 +13,13 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+# Bars of the 15m reference timeframe. Measured, not assumed: the bare oracle P&L criterion is
+# degenerate (it keeps favouring shorter windows until the average leg stops clearing costs, which
+# is a cost/volatility ratio and not market structure), so windows are scored on an oracle
+# penalised by a detection lag of 1-3 bars. 24 is the optimum of the 16-28 range at lag 3, within
+# 1% of the optimum at lag 2, and has the best share of profitable legs. See the HTML spec.
+EXTREMA_WINDOW = 24
+
 
 def _rolling_extreme(s: pd.Series, window: int, *, reverse: bool, high: bool) -> pd.Series:
     """Extreme of the `window` bars on one side of each bar, excluding the bar itself."""
@@ -22,7 +29,7 @@ def _rolling_extreme(s: pd.Series, window: int, *, reverse: bool, high: bool) ->
     return out.iloc[::-1] if reverse else out
 
 
-def find_pivots(close: pd.Series, window: int) -> pd.DataFrame:
+def find_pivots(close: pd.Series, window: int = EXTREMA_WINDOW) -> pd.DataFrame:
     """Alternating high/low pivots with the amplitude of the leg ending on each one.
 
     Columns: `kind` (+1 high, -1 low), `close`, `amplitude` (absolute log return of the leg

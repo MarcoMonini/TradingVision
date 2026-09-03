@@ -15,3 +15,6 @@ __pycache__/
 
 # Oracle sweep output
 oracle*.csv
+
+# Market data store (root only: src/tradingvision/data/ is a package)
+/data/

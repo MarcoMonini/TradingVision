@@ -1,6 +1,6 @@
 """Streamlit page: download the candles of a crypto pair and draw them with their pivots.
 
-    streamlit run src/tradingvision/app/chart.py
+streamlit run src/tradingvision/app/chart.py
 """
 
 import plotly.graph_objects as go
@@ -8,7 +8,7 @@ import streamlit as st
 from plotly.subplots import make_subplots
 
 from tradingvision.data.candles import SYMBOLS, TIMEFRAMES, get_candles
-from tradingvision.data.pivots import find_pivots
+from tradingvision.data.pivots import EXTREMA_WINDOW, find_pivots
 from tradingvision.oracle import FEE, run
 
 MAX_DAYS = 365
@@ -73,7 +73,9 @@ def main() -> None:
     if st.sidebar.button("Fetch candles", type="primary", use_container_width=True):
         st.session_state.fetched = (request, load_candles(*request))
 
-    window = st.sidebar.slider("Extrema window (bars)", 2, 96, 24, help="argrelextrema order — the primary parameter")
+    window = st.sidebar.slider(
+        "Extrema window (bars)", 2, 96, EXTREMA_WINDOW, help="the primary parameter, fixed by measurement"
+    )
     fee = st.sidebar.number_input("Fee per side (%)", 0.0, 1.0, FEE * 100, 0.05, help="Alpaca taker, tier 1") / 100
 
     if "fetched" not in st.session_state:
@@ -93,9 +95,7 @@ def main() -> None:
     a.metric("Oracle net return", f"{stats['net_return'] * 100:,.1f}%", f"{stats['trades']} legs")
     b.metric("Avg gross leg", f"{stats['gross_leg_pct']:.2f}%", f"{stats['win_rate'] * 100:.0f}% above fees")
 
-    st.plotly_chart(
-        chart(df, pivots, fetched[0], "-".join(map(str, fetched))), use_container_width=True, key="chart"
-    )
+    st.plotly_chart(chart(df, pivots, fetched[0], "-".join(map(str, fetched))), use_container_width=True, key="chart")
     st.caption(
         f"{len(df)} candles — {df.index[0]:%Y-%m-%d %H:%M} to {df.index[-1]:%Y-%m-%d %H:%M} UTC · "
         f"{len(pivots)} pivots, median leg {pivots.amplitude.median() * 100:.2f}%"

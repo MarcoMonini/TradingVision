@@ -1,12 +1,16 @@
-"""Step 0 of the validation sequence: calibrate `extrema_window`.
+"""Step 0 of the validation sequence: calibrate `extrema_window`, the parameter every other window
+in the project derives from.
 
-The oracle is a trader with perfect hindsight: it buys the close of every pivot low and sells the
-close of the next pivot high. A small window yields many tiny legs eaten by fees, a large one
-yields few clean but rare legs — the window range that maximises net P&L is the range of
-economically meaningful legs, and everything else in the project (indicator windows, purging
-width, steps per branch) is derived from it.
+The oracle buys the close of every pivot low and sells the close of the next pivot high, net of
+fees. Scored on hindsight alone the answer is degenerate — see `run` — so windows are compared
+across detection lags, and the window that survives a lag of 2-3 bars is the one a causal model
+could plausibly trade. That measurement fixed `EXTREMA_WINDOW` at 24; re-run it when the fee
+assumption changes or the volatility regime moves, because the answer tracks both.
 
-    python -m tradingvision.oracle --symbols BTC/USD ETH/USD --days 365 --windows 6 12 24 48
+    python -m tradingvision.oracle --start 2023-01-01 --csv oracle.csv
+
+Reads the local Binance store, so run `python -m tradingvision.data.binance` first. Fees are
+Alpaca's, the venue where the model would actually execute.
 
 Long-only and fully invested per leg: it measures how much a leg is worth, not a strategy.
 """
@@ -15,46 +19,73 @@ from __future__ import annotations
 
 import argparse
 
+import numpy as np
 import pandas as pd
 
-from tradingvision.data.candles import SYMBOLS, get_candles
-from tradingvision.data.pivots import find_pivots
+from tradingvision.data.binance import SYMBOLS, load
+from tradingvision.data.pivots import EXTREMA_WINDOW, find_pivots
 
 # Alpaca crypto taker fee, tier 1 (30d volume under $100k). Maker is 0.15%, but the oracle enters
 # and exits at the close of a pivot bar, which is a taker fill. Round trip costs 2x.
 FEE = 0.0025
 
 
-def run(close: pd.Series, window: int, fee: float = FEE, pivots: pd.DataFrame | None = None) -> dict:
-    """Net P&L of the perfect-hindsight trader over one close series.
+def run(
+    close: pd.Series,
+    window: int = EXTREMA_WINDOW,
+    fee: float = FEE,
+    pivots: pd.DataFrame | None = None,
+    lag: int = 0,
+) -> dict:
+    """Net P&L of the hindsight trader over one close series.
 
     `pivots` skips the detection when the caller already has it for this window.
+
+    `lag` fills the trade that many bars after the pivot instead of on it, which is what makes the
+    measure usable for choosing a window: at lag 0 the P&L rises monotonically as the window
+    shrinks, until the average leg stops clearing costs. That optimum is a cost/volatility ratio,
+    not market structure — it lands on the same ~1% median leg on every symbol, at windows from 2
+    to 8 bars. Charging a detection lag is what separates legs a causal model could actually hold
+    from legs that only exist to a perfect predictor, and a pivot is anyway only confirmable
+    `window` bars after the fact, so lag 0 and lag 1 are both unattainable by construction.
     """
     piv = find_pivots(close, window) if pivots is None else pivots
-    lows = piv[piv.kind == -1]
-    # Each low is closed by the next pivot, which after the merge is always a high.
-    exits = piv.close.shift(-1).reindex(lows.index)
-    legs = (exits / lows.close - 1 - 2 * fee).dropna()
+    # Positional, because a lagged fill has no pivot to index by.
+    pos = close.index.get_indexer(piv.index) + lag
+    kind, px = piv.kind.to_numpy()[pos < len(close)], close.to_numpy()[pos[pos < len(close)]]
+    opened = kind[:-1] == -1  # each low is closed by the next pivot, always a high after the merge
+    entries, exits = pd.Series(px[:-1][opened]), pd.Series(px[1:][opened])
+    # Fees are charged on the credited side of each fill, so they compound with the price ratio
+    # rather than subtracting from the return.
+    legs = ((exits / entries) * (1 - fee) ** 2 - 1).dropna()
     bars_per_leg = pd.Series(piv.index).diff().dropna()
+    years = (close.index[-1] - close.index[0]) / pd.Timedelta(365.25, "D")
+    # Compounded over several years the perfect-hindsight return overflows, so the comparable
+    # figure across symbols and history lengths is the log P&L per year.
+    net_log = float(np.log1p(legs).sum())
     return {
         "window": window,
+        "lag": lag,
         "trades": len(legs),
-        "net_return": float((1 + legs).prod() - 1),
-        "gross_leg_pct": float((exits / lows.close - 1).mean() * 100) if len(legs) else float("nan"),
+        "log_per_year": net_log / years if years else float("nan"),
+        "net_return": float(np.expm1(net_log)) if net_log < 700 else float("inf"),
+        "gross_leg_pct": float((exits / entries - 1).mean() * 100) if len(legs) else float("nan"),
         "win_rate": float((legs > 0).mean()) if len(legs) else float("nan"),
         "median_leg_duration": bars_per_leg.median() if len(bars_per_leg) else pd.NaT,
     }
 
 
-def sweep(symbols: list[str], timeframe: str, days: int, windows: list[int], fee: float = FEE) -> pd.DataFrame:
-    """One row per (symbol, window). Symbols with no data are skipped."""
+def sweep(symbols, timeframe: str, windows: list[int], lags=(0,), fee: float = FEE, start=None) -> pd.DataFrame:
+    """One row per (symbol, window, lag), over the local Binance store."""
     rows = []
-    for symbol in symbols:
-        df = get_candles(symbol, timeframe, days)
-        if df.empty:
-            print(f"skipped {symbol}: no data")
-            continue
-        rows += [{"symbol": symbol, **run(df.close, w, fee)} for w in windows]
+    for i, symbol in enumerate(symbols, 1):
+        close = load(symbol, timeframe).close
+        if start:
+            close = close.loc[start:]
+        for w in windows:
+            piv = find_pivots(close, w)
+            rows += [{"symbol": symbol, **run(close, w, fee, piv, lag)} for lag in lags]
+        print(f"[{i}/{len(symbols)}] {symbol} — {len(close):,} bars", flush=True)
     return pd.DataFrame(rows)
 
 
@@ -62,24 +93,28 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--symbols", nargs="+", default=SYMBOLS)
     ap.add_argument("--timeframe", default="15m", help="reference timeframe for the target")
-    ap.add_argument("--days", type=int, default=365)
-    ap.add_argument("--windows", type=int, nargs="+", default=[4, 6, 8, 12, 16, 24, 32, 48, 64])
-    ap.add_argument("--fee", type=float, default=FEE, help="fee per side, e.g. 0.001 = 10 bps")
+    ap.add_argument("--start", help="ISO date, to restrict the panel to an aligned period")
+    ap.add_argument("--windows", type=int, nargs="+", default=[16, 18, 20, 22, 24, 26, 28])
+    ap.add_argument("--fee", type=float, default=FEE, help="fee per side, e.g. 0.0025 = 25 bps")
+    ap.add_argument("--lag", type=int, nargs="+", default=[0, 1, 2, 3], help="detection lag in bars")
     ap.add_argument("--csv", help="write the per-symbol results here")
     args = ap.parse_args()
 
-    res = sweep(args.symbols, args.timeframe, args.days, args.windows, args.fee)
-    if res.empty:
-        print("no data")
-        return
+    res = sweep(args.symbols, args.timeframe, args.windows, args.lag, args.fee, args.start)
     if args.csv:
         res.to_csv(args.csv, index=False)
 
-    print(res.to_string(index=False))
-    print("\nmean over symbols:")
-    agg = res.groupby("window")[["trades", "net_return", "gross_leg_pct", "win_rate"]].mean()
-    print(agg.to_string())
-    print(f"\nbest window by mean net return: {agg.net_return.idxmax()}")
+    print(f"\n{args.timeframe} bars, {args.fee * 200:.2f}% round trip — mean over {len(args.symbols)} symbols")
+    for name, values in (("log P&L per year", "log_per_year"), ("share of profitable legs", "win_rate")):
+        print(f"\n{name}, by window (rows) and detection lag (columns):")
+        print(res.pivot_table(index="window", columns="lag", values=values).round(3).to_string())
+    # A single argmax is not meaningful here: at a realistic lag the top of the range is flat to
+    # well under a percent, so report the plateau and let the tie break on the share of legs that
+    # still pay, which rises monotonically with the window.
+    real = res[res.lag >= 2].pivot_table(index="window", values=["log_per_year", "win_rate"])
+    flat = real[real.log_per_year >= 0.99 * real.log_per_year.max()]
+    print(f"\nat a realistic detection lag (>=2 bars), windows within 1% of the best: {list(flat.index)}")
+    print(f"  of those, the best share of profitable legs: {flat.win_rate.idxmax()}  (fixed: {EXTREMA_WINDOW})")
 
 
 if __name__ == "__main__":
