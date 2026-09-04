@@ -280,7 +280,7 @@ h2.sec{
 
 <div class="wrap">
   <header>
-    <p class="eyebrow">cryptofarm · ml/swing — schema dataset · rev. 15 — target predittivo, step 1 misurato</p>
+    <p class="eyebrow">cryptofarm · ml/swing — schema dataset · rev. 16 — step 2 misurato, GBM walk-forward</p>
     <h1>Schema dataset multi-timeframe</h1>
     <p class="sub">Quattro rami sequenziali (5m → 1h), 24 step fissi per ramo, stesso set di colonne e stessi parametri su ogni ramo. Nessun prezzo assoluto, nessun symbol nel tensore. Target = escursione che resta prima della fine della gamba, in unità di volatilità nota. Dati da Binance: 20 coppie USDT, 2017→, 14,9M righe a 5m.</p>
     <div class="legend">
@@ -311,6 +311,11 @@ h2.sec{
         <tr><td class="col-name">dataset multi-ramo su griglia 5m</td><td class="status-done">implementato · verificato</td><td><code>dataset</code></td></tr>
         <tr><td class="col-name">metriche di segnale</td><td class="status-done">implementate</td><td><code>metrics</code></td></tr>
         <tr><td class="col-name">step 1 — regressione lineare</td><td class="status-done">eseguito</td><td><code>linear</code>, sezione validazione</td></tr>
+        <tr><td class="col-name">walk-forward, 4 fold espansivi</td><td class="status-done">implementato</td><td><code>split.walk_forward</code></td></tr>
+        <tr><td class="col-name">appiattimento (b) — lag e aggregati</td><td class="status-done">implementato</td><td><code>dataset.lagged</code>, 560 colonne</td></tr>
+        <tr><td class="col-name">step 2 — GBM</td><td class="status-done">eseguito</td><td><code>gbm</code>, sezione validazione</td></tr>
+        <tr><td class="col-name">test del beta di mercato</td><td class="status-done">superato — segnale non di sola fase</td><td>sezione validazione</td></tr>
+        <tr><td class="col-name">segno negativo sotto le 24 barre</td><td class="status-open">confermato · irrisolto dal GBM</td><td>punti aperti, punto 4</td></tr>
         <tr><td class="col-name">stride, materializzazione, regolarizzazione</td><td class="status-open">aperti</td><td>punti aperti</td></tr>
       </tbody>
     </table>
@@ -756,6 +761,70 @@ h2.sec{
     <p>Costo: N volte il training. Irrilevante sul GBM, pesante sulla GRU — ma con storico crypto corto è l'unico modo di ottenere una stima con incertezza. Lo split unico resta valido solo per i controlli rapidi (step 1, diagnostica di leakage).</p>
   </div>
 
+
+  <div class="callout">
+    <h3>Cosa ha detto lo step 2 — il GBM</h3>
+    <p>LightGBM sui parametri di partenza della tabella, Huber δ = 2.1, appiattimento (b): 28 colonne per ramo diventano 140 (valore a t, t−1, t−4, media e deviazione sulla finestra di 24 passi del ramo stesso), 560 in totale. 642.961 righe, stride 12, quattro fold espansivi dal 2025-06 — il primo taglio coincide con lo split unico dello step 1, così i due step sono confrontabili sullo stesso periodo. Nessuna normalizzazione: il GBM non la richiede, e questo lo rende misurabile prima ancora che la regola sia fissata.</p>
+    <div class="tbl-wrap">
+      <table>
+        <caption>walk-forward, quattro fold</caption>
+        <thead><tr><th>fold</th><th>train</th><th>test</th><th>alberi</th><th>IC</th><th>Rank IC</th><th>Rank ICIR</th></tr></thead>
+        <tbody>
+          <tr><td>1 · 2025-06→09</td><td>423.093</td><td>55.041</td><td>48</td><td>0.199</td><td>0.150</td><td>0.569</td></tr>
+          <tr><td>2 · 2025-09→2026-01</td><td>478.118</td><td>55.040</td><td>6</td><td>0.203</td><td>0.160</td><td>0.594</td></tr>
+          <tr><td>3 · 2026-01→05</td><td>533.153</td><td>55.019</td><td>66</td><td>0.192</td><td>0.139</td><td>0.511</td></tr>
+          <tr><td>4 · 2026-05→09</td><td>588.238</td><td>54.584</td><td>76</td><td>0.202</td><td>0.174</td><td>0.636</td></tr>
+          <tr><td class="col-name">media ± std</td><td>—</td><td>—</td><td>—</td><td>0.199 ± 0.005</td><td class="col-name">0.156 ± 0.015</td><td class="col-name">0.578 ± 0.053</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p><strong>In aggregato batte lo step 1, e con una barra d'errore.</strong> Rank IC 0.156 ± 0.015 contro 0.124, Rank ICIR 0.578 ± 0.053 contro 0.28. Il guadagno sull'IC è modesto — un quarto — ma il raddoppio dell'ICIR non lo è: il segnale del GBM è molto più stabile nel tempo di quello del lineare, ed è l'ICIR la metrica su cui si decide una promozione. <strong>La nuova soglia da battere per lo step 3 è 0.156 / 0.58</strong>, non 0.124 / 0.28.</p>
+
+    <p><strong>Il test del beta di mercato è superato, e questo chiude un punto aperto.</strong> Rank IC contro il target privato della sua media cross-sectional: <strong>0.156</strong>, contro 0.156 sul target grezzo. Invariato alla terza cifra. Il segnale non è la fase del mercato replicata su venti serie: il modello distingue davvero i simboli, l'input multi-asset porta informazione e non serve la baseline sul solo BTC prevista come alternativa. È il risultato più solido dello step.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <caption>Rank IC di test per distanza dal pivot successivo, aggregato sui quattro fold</caption>
+        <thead><tr><th>barre al pivot successivo</th><th>bar di test</th><th>step 1</th><th>step 2</th><th>Δ</th></tr></thead>
+        <tbody>
+          <tr><td>0–6</td><td>8.567</td><td>−0.083</td><td>−0.064</td><td>+0.019</td></tr>
+          <tr><td>6–12</td><td>8.464</td><td>−0.076</td><td>−0.085</td><td>−0.009</td></tr>
+          <tr><td>12–24</td><td>16.893</td><td>−0.083</td><td>−0.098</td><td>−0.015</td></tr>
+          <tr><td>24–48</td><td>31.924</td><td>−0.041</td><td>−0.034</td><td>+0.007</td></tr>
+          <tr><td>48–96</td><td>49.783</td><td>+0.017</td><td>+0.028</td><td>+0.011</td></tr>
+          <tr><td>96–192</td><td>55.052</td><td>+0.022</td><td>+0.041</td><td>+0.019</td></tr>
+          <tr><td>oltre 192</td><td>49.001</td><td>+0.022</td><td>+0.059</td><td>+0.037</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p><strong>Il problema vero non è stato risolto.</strong> Tutto il guadagno sta nelle fasce lontane: oltre 192 barre il Rank IC quasi triplica (+0.022 → +0.059), e sotto le 24 barre il segno resta negativo — <em>peggiorato</em> nella fascia 12–24, da −0.083 a −0.098. Vale quindi alla lettera l'avvertenza scritta dopo lo step 1: il GBM ha alzato l'aggregato senza toccare la banda in cui servirebbe un'uscita. Il modello è diventato più bravo a dire "questa gamba è appena cominciata" e non ha imparato nulla sul dire "questa gamba sta finendo".</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <caption>feature importance per indicatore, quota del gain totale — le 140 colonne di ciascun ramo ricondotte all'indicatore di origine</caption>
+        <thead><tr><th>indicatore</th><th>quota</th><th></th><th>indicatore</th><th>quota</th></tr></thead>
+        <tbody>
+          <tr><td class="col-name">close_position_in_window</td><td>0.373</td><td></td><td>distance_from_window_high_pct</td><td>0.010</td></tr>
+          <tr><td class="col-name">distance_from_vwap_pct</td><td>0.363</td><td></td><td>age_of_window_high</td><td>0.009</td></tr>
+          <tr><td class="col-name">rsi_centered</td><td>0.133</td><td></td><td>distance_from_window_low_pct</td><td>0.007</td></tr>
+          <tr><td class="col-name">distance_from_kama_pct</td><td>0.041</td><td></td><td>lower_wick_pct</td><td>0.007</td></tr>
+          <tr><td colspan="5" class="tf-note">le tre prime valgono l'87% del gain; le restanti 24 colonne si dividono il 5%</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p><strong>Il modello è, in sostanza, una sola partizione grossolana.</strong> Tre colonne — tutte della famiglia "dove sono dentro il range" — valgono l'87% del gain. E il numero che lo dice meglio di ogni importance: passando i round di boosting da 1 a 300 su tutti e quattro i fold, <strong>un singolo albero segna già 0.150</strong> di Rank IC di test in media, contro 0.157 dell'ensemble completo e 0.124 del lineare dello step 1. Il boosting aggiunge 0.007 sopra un unico taglio non lineare. Con 560 colonne a disposizione, di cui la maggior parte dinamiche, il GBM ne usa tre statiche.</p>
+    <p><strong>Nota sull'early stopping.</strong> Il numero di alberi in tabella oscilla fra 6 e 76 e non è una quantità significativa: misurata su tutti i fold, la Rank IC di validazione è piatta entro 0.001–0.004 fra il round 6 e il round 100, quindi l'argmax dentro quel plateau lo decide il rumore. Fermarsi al fondo del plateau invece che al centro costa al massimo 0.0065 di Rank IC di test, contro una deviazione fra fold di 0.015; alzare la patience non aiuta, sul fold 2 i due round candidati differiscono di 6e−5. Oltre i 100 round il calo è invece reale e consistente su ogni fold, in validazione come in test, ed è quello che l'early stopping serve a intercettare.</p>
+  </div>
+
+  <div class="callout">
+    <h3>Conclusioni per gli step 3 e 4</h3>
+    <p><strong>1. L'indiziato è il set di feature, non l'architettura.</strong> Il GBM aveva i lag e gli aggregati di 24 passi su quattro orizzonti e non li ha usati: <code>age_of_window_high</code> pesa 0.009, <code>ema_slope</code> è fuori dai primi quindici. Erano esattamente le colonne che l'appiattimento (b) doveva rendere visibili, e la dinamica non ha portato niente. Una GRU legge la stessa sequenza delle stesse 28 colonne: se l'informazione su "la gamba sta finendo" non è dentro quelle colonne, la GRU riprodurrà lo stesso profilo per fascia a costo molto più alto. La spiegazione alternativa — che l'informazione ci sia ma solo in una dinamica che alberi su colonne appiattite non compongono — resta aperta ed è precisamente ciò che lo step 3 metterebbe alla prova. Ma va messa alla prova sapendo che è la seconda ipotesi, non la prima.</p>
+    <p><strong>2. Prima dello step 3 conviene un controllo da poche ore.</strong> Misurare il Rank IC di ogni singola colonna, ristretto alle sole barre sotto le 24 dal pivot. Se nessuna delle 28 supera il rumore su quella banda, il problema è di feature e nessuna architettura lo risolve: si passa al punto 7 dei punti aperti (taratura dei parametri per ramo) e a feature di esaurimento — divergenza, climax di volume, asimmetria dei wick agli estremi — invece che di momentum. Se qualcuna regge, l'informazione c'è e non viene composta, e lo step 3 ha una domanda precisa a cui rispondere. Costa una frazione di un training GPU e decide dove spendere il prossimo mese.</p>
+    <p><strong>3. La selezione delle feature va fatta ora, non dopo.</strong> La sezione prevede 7–12 sopravvissute su 28. Il GBM ne usa tre, e ha appena fornito gratis la misura di importanza che serviva a decidere. Entrare nello step 3 con 28 colonne quando tre spiegano l'87% del segnale significa dare alla GRU 25 canali di rumore su cui distribuire capacità e weight decay.</p>
+    <p><strong>4. Il multi-asset è confermato, il multi-ramo no.</strong> Il beta di mercato superato chiude la questione dell'universo: le venti serie portano informazione indipendente. Sui rami non si è invece imparato nulla, perché l'importance non è stata scomposta per timeframe — è la misura da aggiungere alla prossima esecuzione, ed è il pre-test naturale del criterio "se lo step 4 non batte lo step 3, il multi-ramo non si giustifica". Se il gain è concentrato su un solo ramo, lo step 4 è già in salita prima di cominciare.</p>
+    <p><strong>5. Il criterio di promozione per lo step 3.</strong> Rank IC &gt; 0.156 e Rank ICIR &gt; 0.58 sugli stessi quattro fold, <em>e</em> un miglioramento visibile nelle fasce sotto le 48 barre. Il primo da solo non basta: lo step 2 lo ha superato spostando solo le fasce lontane, ed è il caso che l'avvertenza dello step 1 aveva già dichiarato inutile.</p>
+  </div>
+
   <h2 class="sec">Metriche di segnale</h2>
   <p class="lead">Si adotta il set di metriche di segnale di qlib. <strong>Nessuna metrica di portafoglio</strong> (annualized return, IR, max drawdown): la valutazione economica passa dal rapporto con l'oracolo, non da un backtest di strategia.</p>
 
@@ -775,8 +844,8 @@ h2.sec{
   <div class="callout">
     <h3>Avvertenze di lettura</h3>
     <p><strong>Con 20 simboli l'IC cross-sectional è rumoroso.</strong> Con n=20 per timestamp l'errore standard della correlazione è ≈ 1/√(n−3) ≈ 0.24: i singoli IC<sub>t</sub> sono quasi puro rumore, ed è solo la media su migliaia di date a essere informativa. Per questo l'ICIR conta più dell'IC. In alternativa, o in parallelo, si può calcolare l'<strong>IC time-series per simbolo</strong> (correlazione su tutta la serie di un asset) e poi mediare: più stabile a universo stretto.</p>
-    <p><strong>Soglia.</strong> Indicativamente Rank IC &gt; 0.02–0.03 out-of-sample per considerare il segnale reale, e Rank ICIR &gt; 0.3. Entrambe da riportare come media ± std sui fold walk-forward e sui seed. <strong>Sono soglie di esistenza, non di promozione:</strong> lo step 1 misura già 0.124 / 0.28, quindi un modello che si ferma lì non ha aggiunto niente a una regressione lineare su singola candela.</p>
-    <p><strong>Test del beta di mercato — dopo il primo GBM.</strong> I 20 pair USDT si muovono in blocco: quando BTC è a metà di una gamba ascendente lo sono spesso anche gli altri, quindi il target vale un valore simile su tutti allo stesso istante. Se è così, le 20 serie non sono 20 osservazioni indipendenti ma una sola ripetuta, e un Rank IC apparentemente confermato su tutti gli asset poggia su molti meno gradi di libertà di quanti sembri. Misura in due righe — <code>target_res = target − target.groupby(timestamp).transform('mean')</code>, poi Rank IC contro <code>target_res</code>. Se regge, il modello distingue davvero i simboli e il multi-asset porta informazione; se crolla a ~0, il segnale è la fase del mercato nel suo insieme e va confrontato con una baseline addestrata sul solo BTC. È una diagnostica, non un preprocessing.</p>
+    <p><strong>Soglia.</strong> Indicativamente Rank IC &gt; 0.02–0.03 out-of-sample per considerare il segnale reale, e Rank ICIR &gt; 0.3. Entrambe da riportare come media ± std sui fold walk-forward e sui seed. <strong>Sono soglie di esistenza, non di promozione:</strong> lo step 1 misura già 0.124 / 0.28 e lo step 2 misura 0.156 / 0.58, quindi la soglia corrente per lo step 3 è quest'ultima — e va superata anche nelle fasce vicine al pivot, non solo in aggregato.</p>
+    <p><strong>Test del beta di mercato — dopo il primo GBM.</strong> I 20 pair USDT si muovono in blocco: quando BTC è a metà di una gamba ascendente lo sono spesso anche gli altri, quindi il target vale un valore simile su tutti allo stesso istante. Se è così, le 20 serie non sono 20 osservazioni indipendenti ma una sola ripetuta, e un Rank IC apparentemente confermato su tutti gli asset poggia su molti meno gradi di libertà di quanti sembri. Misura in due righe — <code>target_res = target − target.groupby(timestamp).transform('mean')</code>, poi Rank IC contro <code>target_res</code>. Se regge, il modello distingue davvero i simboli e il multi-asset porta informazione; se crolla a ~0, il segnale è la fase del mercato nel suo insieme e va confrontato con una baseline addestrata sul solo BTC. È una diagnostica, non un preprocessing.  <strong>Eseguito sullo step 2: superato</strong> — 0.156 contro 0.156, invariato. Il segnale non è la fase di mercato e la baseline sul solo BTC non serve.</p>
     <p><strong>Le stesse metriche a ogni step.</strong> Regressione lineare, GBM, GRU singolo e GRU multi-ramo si confrontano sulle stesse quattro metriche, sugli stessi fold. Cambiare metrica fra uno step e l'altro rende il confronto privo di senso.</p>
   </div>
 
@@ -797,7 +866,7 @@ h2.sec{
         <tr><td class="col-name">early stopping</td><td>patience 10 su Rank IC di valid</td><td>mai sulla loss</td></tr>
         <tr><td class="col-name">epoche max</td><td>100</td><td>con early stopping raramente raggiunte</td></tr>
         <tr><td class="col-name">seed</td><td>5 in esplorazione, 10–20 nei confronti finali</td><td>media ± std</td></tr>
-        <tr><td class="col-name">LightGBM</td><td>num_leaves 31, lr 0.05, feature/bagging_fraction 0.8</td><td>early stopping su Rank IC di valid</td></tr>
+        <tr><td class="col-name">LightGBM</td><td>num_leaves 31, lr 0.05, feature/bagging_fraction 0.8</td><td>early stopping su Rank IC di valid, patience 50 round (la patience 10 in tabella è un numero da epoche, non da alberi); valid = ultimo 20% del train di ogni fold, purgato. Eseguito: il numero di alberi non è identificabile, vedi la nota nello step 2</td></tr>
       </tbody>
     </table>
   </div>
@@ -823,7 +892,7 @@ h2.sec{
 
   <div class="callout">
     <h3>4. Il segno negativo vicino al pivot</h3>
-    <p>Allo step 1 il Rank IC è <strong>negativo sotto le 24 barre</strong> dal pivot successivo (−0.08): dove serve l'uscita, un lineare su singola candela sbaglia direzione. Da capire se è una proprietà delle feature — momentum che per costruzione dice "continua" — o della definizione di gamba, e se GBM e GRU lo correggono o lo ereditano. È la prima cosa da guardare allo step 2, prima dell'aggregato.</p>
+    <p>Allo step 1 il Rank IC è <strong>negativo sotto le 24 barre</strong> dal pivot successivo (−0.08): dove serve l'uscita, un lineare su singola candela sbaglia direzione. Da capire se è una proprietà delle feature — momentum che per costruzione dice "continua" — o della definizione di gamba, e se GBM e GRU lo correggono o lo ereditano. È la prima cosa da guardare allo step 2, prima dell'aggregato. <strong>Step 2: ereditato, non corretto</strong> — il GBM resta a −0.064 / −0.085 / −0.098 sulle tre fasce sotto le 24 barre, peggio dello step 1 su 12–24, mentre triplica il Rank IC oltre le 192 barre. Avendo avuto a disposizione lag e aggregati e non avendoli usati, l'indiziato si sposta sulle feature. Il controllo che decide è nelle conclusioni dello step 2, punto 2: Rank IC per singola colonna ristretto alla banda 0–24.</p>
 
     <h3>5. Pesi condivisi fra rami</h3>
     <p>I 4 encoder sono distinti ma operano su input strutturalmente identici — stesse colonne, stessa semantica, stessi parametri, solo orizzonte diverso. Variante da testare: un unico encoder GRU condiviso fra i rami, con un embedding di timeframe concatenato allo stato finale di ciascuno. Stessa espressività, circa 4× parametri in meno. Da valutare solo dopo lo step 4.</p>
