@@ -10,7 +10,7 @@ import runpy
 
 import pytest
 
-from tradingvision import linear
+from tradingvision import dataset, linear
 
 SELF_CHECKED = [
     "tradingvision.data.pivots",
@@ -25,6 +25,11 @@ SELF_CHECKED = [
 @pytest.mark.parametrize("module", SELF_CHECKED)
 def test_module_selfcheck(module):
     runpy.run_module(module, run_name="__main__")
+
+
+def test_dataset_selfcheck():
+    """Same reason as `linear`: the module's `__main__` builds from the real store."""
+    dataset._selfcheck()
 
 
 def test_linear_selfcheck():
