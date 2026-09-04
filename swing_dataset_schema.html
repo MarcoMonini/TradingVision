@@ -280,7 +280,7 @@ h2.sec{
 
 <div class="wrap">
   <header>
-    <p class="eyebrow">cryptofarm · ml/swing — schema dataset · rev. 16 — step 2 misurato, GBM walk-forward</p>
+    <p class="eyebrow">cryptofarm · ml/swing — schema dataset · rev. 17 — step 2 chiuso, selezione eseguita: 28 → 12</p>
     <h1>Schema dataset multi-timeframe</h1>
     <p class="sub">Quattro rami sequenziali (5m → 1h), 24 step fissi per ramo, stesso set di colonne e stessi parametri su ogni ramo. Nessun prezzo assoluto, nessun symbol nel tensore. Target = escursione che resta prima della fine della gamba, in unità di volatilità nota. Dati da Binance: 20 coppie USDT, 2017→, 14,9M righe a 5m.</p>
     <div class="legend">
@@ -314,7 +314,7 @@ h2.sec{
         <tr><td class="col-name">walk-forward, 4 fold espansivi</td><td class="status-done">implementato</td><td><code>split.walk_forward</code></td></tr>
         <tr><td class="col-name">appiattimento (b) — lag e aggregati</td><td class="status-done">implementato</td><td><code>dataset.lagged</code>, 560 colonne</td></tr>
         <tr><td class="col-name">step 2 — GBM, baseline e metriche</td><td class="status-done">eseguito</td><td><code>gbm</code>, sezione validazione</td></tr>
-        <tr><td class="col-name">step 2 — selezione delle feature (5 passi)</td><td class="status-open">da eseguire — è la seconda metà dello step</td><td>sezione selezione</td></tr>
+        <tr><td class="col-name">step 2 — selezione delle feature (5 passi)</td><td class="status-done">eseguita — 28 candidate → 12 indicatori</td><td>sezione selezione</td></tr>
         <tr><td class="col-name">test del beta di mercato</td><td class="status-done">superato — segnale non di sola fase</td><td>sezione validazione</td></tr>
         <tr><td class="col-name">segno negativo sotto le 24 barre</td><td class="status-open">confermato · irrisolto dal GBM</td><td>punti aperti, punto 4</td></tr>
         <tr><td class="col-name">stride, materializzazione, regolarizzazione</td><td class="status-open">aperti</td><td>punti aperti</td></tr>
@@ -482,7 +482,7 @@ h2.sec{
 
   <h2 class="sec">Feature</h2>
   <p class="lead">Le stesse colonne e <strong>gli stessi parametri</strong> su tutti e quattro i rami: i parametri sono espressi in barre del ramo, non in ore, quindi non cambiano da un timeframe all'altro. <code>target</code>, <code>timestamp</code> e <code>symbol</code> non sono colonne del tensore. <code>C</code>, <code>O</code>, <code>H</code>, <code>L</code>, <code>V</code> = close, open, high, low, volume della candela; <code>N = finestra_estremi = 24</code> barre del ramo.</p>
-  <p class="tf-note"><strong>Queste 28 sono candidate, non il set finale.</strong> Il set definitivo si ottiene per misura (vedi "Selezione del set di feature"), riducendo per correlazione e importanza. Atteso: 7–12 colonne superstiti.</p>
+  <p class="tf-note"><strong>Queste 28 sono candidate, non il set finale.</strong> Il set definitivo si ottiene per misura (vedi "Selezione del set di feature"), riducendo per correlazione e importanza. Atteso: 7–12 colonne superstiti. <strong>Eseguito: ne restano 12</strong> — vedi "Cosa ha detto la selezione".</p>
   <p class="tf-note"><strong>Tutte causali.</strong> Ogni finestra rolling guarda solo all'indietro rispetto alla barra corrente — mai centrata. L'asimmetria col target è voluta: i pivot vedono il futuro perché sono l'etichetta, le feature no perché sono l'input.</p>
 
   <div class="tbl-wrap">
@@ -718,7 +718,7 @@ h2.sec{
       <tbody>
         <tr><td>0</td><td class="col-name">oracolo</td><td>estremi da argrelextrema</td><td>fissare finestra_estremi e la distribuzione del target (→ δ)</td><td class="status-done">fatto</td></tr>
         <tr><td>1</td><td class="col-name">regressione lineare</td><td>ultima candela × 4 rami</td><td>limite inferiore e diagnostica di leakage. <strong>Rank IC 0.124</strong> (ICIR 0.28) sul target predittivo, 20 simboli 2023+, taglio 2025-06</td><td class="status-done">fatto</td></tr>
-        <tr><td>2</td><td class="col-name">GBM (LightGBM)</td><td>lag e aggregati × 4 rami</td><td>IC di riferimento + feature importance per potare le colonne inutili</td><td class="status-open">prossimo</td></tr>
+        <tr><td>2</td><td class="col-name">GBM (LightGBM)</td><td>lag e aggregati × 4 rami</td><td>IC di riferimento + feature importance per potare le colonne inutili. <strong>Rank IC 0.156</strong> (ICIR 0.58) su 4 fold walk-forward; selezione <strong>28 → 12</strong> indicatori</td><td class="status-done">fatto</td></tr>
         <tr><td>3</td><td class="col-name">GRU singolo ramo</td><td>(B, 24, F) solo 15m</td><td>verificare che la sequenza aggiunga segnale rispetto alla singola candela</td><td class="status-open">—</td></tr>
         <tr><td>4</td><td class="col-name">GRU multi-ramo</td><td>4 × (B, 24, F)</td><td>verificare che il multi-timeframe aggiunga segnale rispetto al ramo singolo</td><td class="status-open">—</td></tr>
       </tbody>
@@ -813,18 +813,78 @@ h2.sec{
         </tbody>
       </table>
     </div>
-    <p><strong>Attenzione a come si legge questa tabella.</strong> È il <code>gain</code> nativo di LightGBM, cioè esattamente la metrica che la sezione "Selezione del set di feature" rifiuta per nome: misura quanto un albero ha usato una colonna <em>in training</em>, non quanto quella colonna generalizza, e premia il rumore che l'albero è riuscito a memorizzare. Serve a farsi un'idea, non a decidere. Il passo 4 della selezione richiede la <strong>permutation importance su fold di validazione</strong>, permutata per cluster e su tutti e quattro i rami insieme — e non è ancora stata eseguita.</p>
+    <p><strong>Attenzione a come si legge questa tabella.</strong> È il <code>gain</code> nativo di LightGBM, cioè esattamente la metrica che la sezione "Selezione del set di feature" rifiuta per nome: misura quanto un albero ha usato una colonna <em>in training</em>, non quanto quella colonna generalizza, e premia il rumore che l'albero è riuscito a memorizzare. Serve a farsi un'idea, non a decidere. Il passo 4 della selezione richiede la <strong>permutation importance su fold di validazione</strong>, permutata per cluster e su tutti e quattro i rami insieme: è stata eseguita, sta più sotto, e <em>corregge questa tabella</em> — le prime tre voci qui sono tre nomi diversi dello stesso concetto.</p>
     <p><strong>Il modello è, in sostanza, una sola partizione grossolana.</strong> Tre colonne — tutte della famiglia "dove sono dentro il range" — valgono l'87% del gain. E il numero che lo dice meglio di ogni importance: passando i round di boosting da 1 a 300 su tutti e quattro i fold, <strong>un singolo albero segna già 0.150</strong> di Rank IC di test in media, contro 0.157 dell'ensemble completo e 0.124 del lineare dello step 1. Il boosting aggiunge 0.007 sopra un unico taglio non lineare. Con 560 colonne a disposizione, di cui la maggior parte dinamiche, il GBM ne usa tre statiche.</p>
     <p><strong>Nota sull'early stopping.</strong> Il numero di alberi in tabella oscilla fra 6 e 76 e non è una quantità significativa: misurata su tutti i fold, la Rank IC di validazione è piatta entro 0.001–0.004 fra il round 6 e il round 100, quindi l'argmax dentro quel plateau lo decide il rumore. Fermarsi al fondo del plateau invece che al centro costa al massimo 0.0065 di Rank IC di test, contro una deviazione fra fold di 0.015; alzare la patience non aiuta, sul fold 2 i due round candidati differiscono di 6e−5. Oltre i 100 round il calo è invece reale e consistente su ogni fold, in validazione come in test, ed è quello che l'early stopping serve a intercettare.</p>
   </div>
 
   <div class="callout">
+    <h3>Cosa ha detto la selezione — da 28 candidate a 12</h3>
+    <p class="lead">I cinque passi eseguiti nell'ordine previsto, tutti sul solo periodo di train (423.093 righe fino al 2025-06), sul dataset appiattito dello step 2. Modulo <code>tradingvision.selection</code>.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <caption>i cinque passi e il loro esito</caption>
+        <thead><tr><th>#</th><th>passaggio</th><th>esito</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td class="col-name">sanità</td><td><strong>560 colonne su 560</strong> utilizzabili: nessun NaN residuo, nessun infinito oltre soglia, nessuna varianza nulla. Passo a vuoto — che è la risposta, non un motivo per saltarlo.</td></tr>
+          <tr><td>2</td><td class="col-name">Spearman per ramo</td><td><strong>28 coppie</strong> a |ρ| ≥ 0.8. I quattro rami concordano entro ~0.01 su quasi tutte: la ridondanza è una proprietà degli indicatori, non del timeframe.</td></tr>
+          <tr><td>3</td><td class="col-name">clustering a 0.2</td><td><strong>19 cluster</strong>, quattro con più di un membro. Sopravvive il meno laggato di ciascuno.</td></tr>
+          <tr><td>4</td><td class="col-name">permutation importance</td><td><strong>12 gruppi su 19</strong> battono il pavimento di rumore. Un solo gruppo vale 0.130 su 0.149 di baseline.</td></tr>
+          <tr><td>5</td><td class="col-name">ablazione</td><td>Rank IC <strong>0.1560 ± 0.0150</strong> col set completo contro <strong>0.1531 ± 0.0166</strong> col ridotto. Pareggio, quindi <strong>vince il ridotto</strong>.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p><strong>Passo 2 — cosa era stato previsto e cosa no.</strong> Le ridondanze attese ci sono tutte: <code>average_true_range_pct</code> / <code>realized_volatility</code> / <code>window_range_pct</code> (volatilità a smoothing diversi), <code>distance_from_kama_pct</code> / <code>distance_from_ema_pct</code> / <code>distance_from_vwap_pct</code> (distanza da un trend-follower), <code>tsi_momentum</code> / <code>rsi_centered</code> / <code>cum_log_return_window</code> / <code>ema_slope</code> (momentum). Due previsioni cadono: <code>distance_from_psar_pct</code> è <em>indipendente</em> dagli altri trend-follower — il segno-regime è un'altra grandezza — e i tre volumetrici non si sovrappongono affatto. In compenso ne emerge una non prevista: <code>log_return</code> / <code>candle_body_pct</code> a 0.987 e <code>signed_volume</code> a 0.85, cioè la candela singola descritta tre volte.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <caption>passo 3 — i quattro cluster non banali e chi sopravvive (in grassetto)</caption>
+        <thead><tr><th>membri</th><th>superstite, e perché</th></tr></thead>
+        <tbody>
+          <tr><td><strong>window_range_pct</strong>, realized_volatility, average_true_range_pct</td><td>l'unico senza smoothing ricorsivo sopra la finestra</td></tr>
+          <tr><td><strong>close_position_in_window</strong>, distance_from_vwap_pct, distance_from_ema_pct</td><td>N di finestra pieno contro N più un filtro ricorsivo</td></tr>
+          <tr><td><strong>ema_slope</strong>, rsi_centered, distance_from_kama_pct, tsi_momentum</td><td>KAMA è adattivo, TSI ha due smoothing in cascata</td></tr>
+          <tr><td><strong>candle_body_pct</strong>, log_return, signed_volume</td><td>la sola candela corrente, nessun ritardo</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="tf-note">Il criterio "la più semplice e la meno laggata" non è deducibile dal codice, quindi è scritto: un <em>lag efficace</em> per candidata, in barre del ramo, con l'ordine della tabella delle 28 come spareggio. È un giudizio, ed è la prima manopola da girare se un cluster tiene la colonna sbagliata.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <caption>passo 4 — permutation importance per gruppo, in punti di Rank IC di validazione (baseline 0.1493, 84.535 righe)</caption>
+        <thead><tr><th>gruppo</th><th>importanza</th><th>σ</th><th></th><th>gruppo</th><th>importanza</th><th>σ</th></tr></thead>
+        <tbody>
+          <tr><td class="col-name">close_position_in_window</td><td><strong>0.12956</strong></td><td>0.00344</td><td></td><td class="col-name">age_of_window_low</td><td>0.00056</td><td>0.00028</td></tr>
+          <tr><td class="col-name">ema_slope</td><td>0.00403</td><td>0.00130</td><td></td><td class="col-name">log_volume_vs_median</td><td>0.00032</td><td>0.00027</td></tr>
+          <tr><td class="col-name">candle_body_pct</td><td>0.00361</td><td>0.00064</td><td></td><td class="col-name">close_position_in_bar</td><td>0.00015</td><td>0.00010</td></tr>
+          <tr><td class="col-name">distance_from_window_low_pct</td><td>0.00234</td><td>0.00025</td><td></td><td class="col-name">volatility_expansion</td><td>0.00009</td><td>0.00016</td></tr>
+          <tr><td class="col-name">cum_log_return_window</td><td>0.00207</td><td>0.00088</td><td></td><td class="col-name">adx_trend_strength</td><td>0.00007</td><td>0.00021</td></tr>
+          <tr><td class="col-name">age_of_window_high</td><td>0.00180</td><td>0.00058</td><td></td><td class="col-name">window_range_pct</td><td>0.00001</td><td>0.00015</td></tr>
+          <tr><td class="col-name">lower_wick_pct</td><td>0.00163</td><td>0.00045</td><td></td><td class="col-name"><em>shadow (rumore puro)</em></td><td><em>0.00000</em></td><td><em>0.00000</em></td></tr>
+          <tr><td class="col-name">bar_range_pct</td><td>0.00126</td><td>0.00096</td><td></td><td class="col-name">on_balance_volume_zscore</td><td>−0.00002</td><td>0.00012</td></tr>
+          <tr><td class="col-name">distance_from_window_high_pct</td><td>0.00081</td><td>0.00041</td><td></td><td class="col-name">upper_wick_pct</td><td>−0.00002</td><td>0.00004</td></tr>
+          <tr><td colspan="7" class="tf-note">gruppo = i 20 collassati di un indicatore: valore, lag1, lag4, media, deviazione, per tutti e quattro i rami. Fuori anche <code>volume_trend</code> (−0.00003) e <code>distance_from_psar_pct</code> (−0.00052)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p><strong>Due cose che la specifica lasciava aperte, e come sono state chiuse.</strong> Primo, il <em>linkage</em>: con quello singolo basta una catena di coppie ridondanti a tenere insieme un cluster, e su questi dati |ρ| 0.85 fra a e b e fra b e c avrebbe fatto collassare tutto il blocco trend+momentum in un gruppo solo attraverso coppie che stanno a 0.3. Si usa il <em>complete linkage</em>, che chiede che <em>ogni</em> coppia dentro il cluster superi la soglia — che è ciò che significa dire che il gruppo è ridondante. Secondo, "importanza nulla" non si può leggere come "importanza ≤ 0": permutare qualunque colonna su cui il modello splitta aggiunge rumore alla predizione e abbassa la Rank IC, che quella colonna porti segnale o no, e la abbassa di più quanto più il gruppo è largo. Il pavimento va quindi <em>misurato</em>: un gruppo di rumore puro della stessa larghezza degli altri, addestrato insieme a loro e permutato allo stesso modo. Un gruppo sopravvive se batte quel null di più della somma delle due dispersioni. Sui dati veri il modello non ha splittato <em>nemmeno una volta</em> sulle colonne fantasma, il che dice qualcosa di rassicurante sul setup a 380 colonne.</p>
+
+    <p><strong>La permutation corregge la tabella del gain, non la conferma.</strong> Il gain metteva ai primi tre posti <code>close_position_in_window</code> (0.373), <code>distance_from_vwap_pct</code> (0.363) e <code>rsi_centered</code> (0.133). Il passo 2 mostra che le prime due stanno a |ρ| 0.921 e le altre due sono nello stesso cluster: erano <em>tre nomi della stessa informazione</em>, e il gain l'ha divisa fra loro perché conta gli split, non la generalizzazione. Permutando il concetto intero — tutti i lag, tutti gli aggregati, tutti e quattro i rami insieme — l'informazione torna dove sta: <code>close_position_in_window</code> da sola vale <strong>0.130 su 0.149</strong>, e nessun altro gruppo arriva a 0.005. Il titolo dello step 2 ("tre colonne valgono l'87%") era giusto per caso; la sua composizione era sbagliata.</p>
+
+    <p><strong>Il set finale — 12 indicatori, 240 colonne invece di 560.</strong> In ordine di importanza: <code>close_position_in_window</code>, <code>ema_slope</code>, <code>candle_body_pct</code>, <code>distance_from_window_low_pct</code>, <code>cum_log_return_window</code>, <code>age_of_window_high</code>, <code>lower_wick_pct</code>, <code>bar_range_pct</code>, <code>distance_from_window_high_pct</code>, <code>age_of_window_low</code>, <code>log_volume_vs_median</code>, <code>close_position_in_bar</code>. La scommessa dichiarata nella sezione — "il gruppo su cui puntare sono le feature 8–12" — è vinta e con un margine più netto del previsto: quattro delle cinque sono dentro, e la prima di quelle cinque vale da sola l'87% del segnale. Delle sette famiglie ne sopravvivono cinque: <strong>volatilità</strong> resta con il solo <code>bar_range_pct</code>, <strong>trend</strong> con il solo <code>ema_slope</code>, <strong>momentum</strong> sparisce del tutto (ADX, TSI e RSI escono tutti), e del <strong>volume</strong> resta una colonna su cinque.</p>
+  </div>
+
+  <div class="callout">
     <h3>Conclusioni per gli step 3 e 4</h3>
-    <p><strong>1. L'indiziato è il set di feature, non l'architettura.</strong> Il GBM aveva i lag e gli aggregati di 24 passi su quattro orizzonti e non li ha usati: <code>age_of_window_high</code> pesa 0.009, <code>ema_slope</code> è fuori dai primi quindici. Erano esattamente le colonne che l'appiattimento (b) doveva rendere visibili, e la dinamica non ha portato niente. Una GRU legge la stessa sequenza delle stesse 28 colonne: se l'informazione su "la gamba sta finendo" non è dentro quelle colonne, la GRU riprodurrà lo stesso profilo per fascia a costo molto più alto. La spiegazione alternativa — che l'informazione ci sia ma solo in una dinamica che alberi su colonne appiattite non compongono — resta aperta ed è precisamente ciò che lo step 3 metterebbe alla prova. Ma va messa alla prova sapendo che è la seconda ipotesi, non la prima.</p>
+    <p><strong>1. L'indiziato è il set di feature, non l'architettura.</strong> Il GBM aveva i lag e gli aggregati di 24 passi su quattro orizzonti e non li ha usati: misurata come si deve, la permutation dà 0.0040 a <code>ema_slope</code> e 0.0018 a <code>age_of_window_high</code>, contro 0.1296 di una posizione statica. Erano esattamente le colonne che l'appiattimento (b) doveva rendere visibili, e la dinamica non ha portato niente. Una GRU legge la stessa sequenza delle stesse 28 colonne: se l'informazione su "la gamba sta finendo" non è dentro quelle colonne, la GRU riprodurrà lo stesso profilo per fascia a costo molto più alto. La spiegazione alternativa — che l'informazione ci sia ma solo in una dinamica che alberi su colonne appiattite non compongono — resta aperta ed è precisamente ciò che lo step 3 metterebbe alla prova. Ma va messa alla prova sapendo che è la seconda ipotesi, non la prima.</p>
     <p><strong>2. Prima dello step 3 conviene un controllo da poche ore.</strong> Misurare il Rank IC di ogni singola colonna, ristretto alle sole barre sotto le 24 dal pivot. Se nessuna delle 28 supera il rumore su quella banda, il problema è di feature e nessuna architettura lo risolve: si passa al punto 7 dei punti aperti (taratura dei parametri per ramo) e a feature di esaurimento — divergenza, climax di volume, asimmetria dei wick agli estremi — invece che di momentum. Se qualcuna regge, l'informazione c'è e non viene composta, e lo step 3 ha una domanda precisa a cui rispondere. Costa una frazione di un training GPU e decide dove spendere il prossimo mese.</p>
-    <p><strong>3. La selezione delle feature va fatta ora, non dopo.</strong> La sezione prevede 7–12 sopravvissute su 28. Il GBM indica tre colonne dominanti, ma lo fa col gain, che non è il criterio: la selezione va completata nei suoi cinque passi — sanità, Spearman per ramo, clustering a 0.2, permutation importance per cluster, ablazione — tutti sul solo periodo di train. È il lavoro che manca allo step 2, non un lavoro dello step 3. Entrare nello step 3 con 28 colonne quando tre spiegano l'87% del segnale significa dare alla GRU 25 canali di rumore su cui distribuire capacità e weight decay.</p>
-    <p><strong>4. Il multi-asset è confermato, il multi-ramo no.</strong> Il beta di mercato superato chiude la questione dell'universo: le venti serie portano informazione indipendente. Sui rami non si è invece imparato nulla, perché l'importance non è stata scomposta per timeframe — è la misura da aggiungere alla prossima esecuzione, ed è il pre-test naturale del criterio "se lo step 4 non batte lo step 3, il multi-ramo non si giustifica". Se il gain è concentrato su un solo ramo, lo step 4 è già in salita prima di cominciare.</p>
-    <p><strong>5. Il criterio di promozione per lo step 3.</strong> Rank IC &gt; 0.156 e Rank ICIR &gt; 0.58 sugli stessi quattro fold, <em>e</em> un miglioramento visibile nelle fasce sotto le 48 barre. Il primo da solo non basta: lo step 2 lo ha superato spostando solo le fasce lontane, ed è il caso che l'avvertenza dello step 1 aveva già dichiarato inutile.</p>
+    <p><strong>3. Lo step 3 parte da 12 indicatori, non da 28.</strong> La selezione è eseguita e sta dentro le 7–12 previste: il tensore dello step 3 è <code>(B, 24, 12)</code> per ramo, non <code>(B, 24, 28)</code>, e l'ablazione dice che quelle 16 uscite non costano segnale — 0.0029 di Rank IC contro una dispersione fra fold di 0.0150. È meno della metà della capacità e del weight decay da distribuire, a parità di misura. Con una riserva onesta: la selezione è stata fatta <em>col GBM</em>, e una colonna inutile a un albero su feature appiattite non è necessariamente inutile a una ricorrente che legge la sequenza. Le sette scartate restano nel codice e la lista è un parametro, non una cancellazione — se lo step 3 fallisce col set ridotto, rifarlo col completo è una riga.</p>
+    <p><strong>4. Il multi-asset è confermato, il multi-ramo no.</strong> Il beta di mercato superato chiude la questione dell'universo: le venti serie portano informazione indipendente. Sui rami non si è invece imparato nulla, e la selezione non poteva dirlo: il passo 4 permuta i quattro rami <em>insieme</em> per costruzione, altrimenti ognuno copre il buco dell'altro. Serve una misura apposta — permutare un ramo alla volta di <code>close_position_in_window</code>, che è l'unico gruppo con abbastanza importanza perché la differenza si veda. È il pre-test naturale del criterio "se lo step 4 non batte lo step 3, il multi-ramo non si giustifica": se i 0.130 stanno su un ramo solo, lo step 4 è in salita prima di cominciare. Unico indizio finora, e debole: al passo 2 i quattro rami concordano entro 0.01 su quasi tutte le correlazioni, cioè si assomigliano più di quanto la scelta di N in barre volesse.</p>
+    <p><strong>5. Il criterio di promozione per lo step 3.</strong> Rank IC &gt; 0.156 e Rank ICIR &gt; 0.58 sugli stessi quattro fold, <em>e</em> un miglioramento visibile nelle fasce sotto le 48 barre. La soglia resta quella del set completo e non lo 0.1531 del ridotto: lo step 3 deve battere il meglio che lo step 2 ha prodotto, non la versione potata di cui eredita l'input. Il primo da solo non basta: lo step 2 lo ha superato spostando solo le fasce lontane, ed è il caso che l'avvertenza dello step 1 aveva già dichiarato inutile.</p>
   </div>
 
   <h2 class="sec">Metriche di segnale</h2>
