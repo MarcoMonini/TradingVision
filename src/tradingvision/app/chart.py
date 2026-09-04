@@ -9,6 +9,7 @@ from plotly.subplots import make_subplots
 
 from tradingvision.data.candles import SYMBOLS, TIMEFRAMES, get_candles
 from tradingvision.data.pivots import EXTREMA_WINDOW, find_pivots
+from tradingvision.features import COLUMNS, FAMILIES, features
 from tradingvision.oracle import FEE, run
 
 MAX_DAYS = 365
@@ -24,10 +25,33 @@ def load_pivots(close, window: int):
     return find_pivots(close, window)
 
 
-def chart(df, pivots, symbol: str, uirevision: str) -> go.Figure:
-    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.75, 0.25], vertical_spacing=0.02)
+@st.cache_data(show_spinner="Computing features…")
+def load_features(df, window: int):
+    """Cached on (frame, window): picking different columns to draw does not recompute them."""
+    return features(df, window)
+
+
+def chart(df, pivots, feats, symbol: str, uirevision: str) -> go.Figure:
+    # One row per family, never one for all of them: adx sits in [0, 1] and ritorno_pct around
+    # 1e-3, so sharing an axis would flatten the second into the zero line.
+    groups = [(fam, [c for c in cols if c in feats.columns]) for fam, cols in FAMILIES.items()]
+    groups = [g for g in groups if g[1]]
+    rows = 2 + len(groups)
+    heights = [0.75, 0.25] if not groups else [0.5, 0.1] + [0.4 / len(groups)] * len(groups)
+    fig = make_subplots(
+        rows=rows,
+        cols=1,
+        shared_xaxes=True,
+        row_heights=heights,
+        vertical_spacing=0.02,
+        subplot_titles=["", ""] + [f for f, _ in groups],
+    )
     fig.add_trace(
-        go.Candlestick(x=df.index, open=df.open, high=df.high, low=df.low, close=df.close, name=symbol), row=1, col=1
+        go.Candlestick(
+            x=df.index, open=df.open, high=df.high, low=df.low, close=df.close, name=symbol, showlegend=False
+        ),
+        row=1,
+        col=1,
     )
     for kind, color, position in ((1, "#e74c3c", "top center"), (-1, "#2ecc71", "bottom center")):
         p = pivots[pivots.kind == kind]
@@ -41,15 +65,25 @@ def chart(df, pivots, symbol: str, uirevision: str) -> go.Figure:
                 textposition=position,
                 textfont=dict(size=9, color=color),
                 name="pivot",
+                showlegend=False,
                 hovertemplate="%{x}<br>%{y}<extra></extra>",
             ),
             row=1,
             col=1,
         )
-    fig.add_trace(go.Bar(x=df.index, y=df.volume, name="volume", marker_color="#888"), row=2, col=1)
+    fig.add_trace(go.Bar(x=df.index, y=df.volume, name="volume", marker_color="#888", showlegend=False), row=2, col=1)
+    for row, (_, cols) in enumerate(groups, start=3):
+        for col in cols:
+            fig.add_trace(
+                go.Scatter(x=feats.index, y=feats[col], mode="lines", name=col, line=dict(width=1), showlegend=True),
+                row=row,
+                col=1,
+            )
+    fig.update_annotations(font_size=11, x=0, xanchor="left")
     fig.update_layout(
-        height=700,
-        showlegend=False,
+        height=700 + 160 * len(groups),
+        legend=dict(orientation="h", y=-0.05, font=dict(size=10)),
+        showlegend=bool(groups),
         xaxis_rangeslider_visible=False,
         margin=dict(t=30, b=10),
         # Keeps zoom and pan across reruns: Plotly patches the existing figure instead of
@@ -72,6 +106,10 @@ def main() -> None:
     if st.sidebar.button("Fetch candles", type="primary", use_container_width=True):
         st.session_state.fetched = (request, load_candles(*request))
 
+    # The feature windows all derive from the extrema window, so they follow it rather than being
+    # tuned here; the per-branch values are still to be measured.
+    picked = st.sidebar.multiselect("Features", COLUMNS, default=list(FAMILIES["position"]))
+
     # Not inputs: both were calibrated in oracle.py and changing them here would show pivots the
     # dataset does not contain.
     st.sidebar.divider()
@@ -90,6 +128,7 @@ def main() -> None:
         st.warning(f"No data for {fetched[0]} on {fetched[1]}.")
         return
     pivots = load_pivots(df.close, EXTREMA_WINDOW)
+    feats = load_features(df, EXTREMA_WINDOW)[picked]
 
     # Oracle: what a perfect-hindsight trader would have made on this window over this period.
     stats = run(df.close, EXTREMA_WINDOW, FEE, pivots=pivots)
@@ -97,7 +136,13 @@ def main() -> None:
     a.metric("Oracle net return", f"{stats['net_return'] * 100:,.1f}%", f"{stats['trades']} legs")
     b.metric("Avg gross leg", f"{stats['gross_trade_pct']:.2f}%", f"{stats['win_rate'] * 100:.0f}% above fees")
 
-    st.plotly_chart(chart(df, pivots, fetched[0], "-".join(map(str, fetched))), use_container_width=True, key="chart")
+    st.plotly_chart(
+        chart(df, pivots, feats, fetched[0], "-".join(map(str, fetched))), use_container_width=True, key="chart"
+    )
+    if picked:
+        # The raw numbers behind the lines, warm-up rows included so their extent is visible.
+        with st.expander(f"{len(picked)} feature columns"):
+            st.dataframe(feats, use_container_width=True)
     st.caption(
         f"{len(df)} candles — {df.index[0]:%Y-%m-%d %H:%M} to {df.index[-1]:%Y-%m-%d %H:%M} UTC · "
         f"{len(pivots)} pivots, median leg {pivots.amplitude.median() * 100:.2f}%"
