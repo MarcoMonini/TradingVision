@@ -56,5 +56,7 @@ def test_a_branch_column_only_changes_when_its_bar_closes():
 def test_symbol_frame_carries_the_purging_horizon():
     df = symbol_frame("BTC", start="2025-06")
     assert df.next_pivot.min() >= df.index.min(), "a bar's next pivot cannot precede it"
-    assert df.swing_leg_target.between(-1.05, 1.05).all()
+    # Volatility units, not price units: the typical leg is a few sigma of a 24-bar walk. The
+    # tail is long (a leg can run for hundreds of bars) so this is a sanity bound, not a claim.
+    assert df.target.abs().median() < 10, "the label should be O(1) sigma"
     assert not df.isna().any().any(), "warm-up and the undefined tail must be dropped"

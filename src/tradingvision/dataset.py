@@ -16,6 +16,9 @@ Pivots follow the same rule. They are extrema of the 15m close (the spec's defin
 unchanged), so a pivot on the 15m bar 09:45 is a price realised at 10:00 and lands on the 5m bar
 09:55. The target is then interpolated over 5m bars between two pivots.
 
+The label is `remaining_excursion` and the column is called `target`, so swapping the label again
+costs one line here instead of a rename across the pipeline.
+
 `next_pivot` travels with the data because purging is exact, not a fixed embargo: the split drops
 every train bar whose next pivot falls beyond the cut, and that horizon is unbounded (p99 is 202
 bars, the maximum measured 754).
@@ -27,7 +30,7 @@ import pandas as pd
 
 from tradingvision.data import binance
 from tradingvision.data.pivots import EXTREMA_WINDOW, find_pivots
-from tradingvision.data.target import swing_leg_target
+from tradingvision.data.target import remaining_excursion
 from tradingvision.features import features
 
 BRANCHES = ("5m", "15m", "30m", "1h")
@@ -62,7 +65,7 @@ def symbol_frame(symbol: str, start: str | None = None, n: int = EXTREMA_WINDOW)
     pivots = pivots[pivots.index.isin(idx)]
 
     out = pd.concat([branch(binance.load(symbol, tf), tf, idx, n) for tf in BRANCHES], axis=1)
-    out["swing_leg_target"] = swing_leg_target(bars.close, pivots, n)
+    out["target"] = remaining_excursion(bars.close, pivots, n)
     # Timestamp of the pivot that closes each bar's leg — the bar itself when it is a pivot.
     out["next_pivot"] = pd.Series(pivots.index, index=pivots.index).reindex(idx, method="bfill")
     return out.dropna()

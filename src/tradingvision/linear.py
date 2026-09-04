@@ -24,7 +24,7 @@ from tradingvision import metrics, normalize, split
 from tradingvision.data.binance import STORE
 from tradingvision.dataset import build
 
-LABELS = ["swing_leg_target", "next_pivot"]
+LABELS = ["target", "next_pivot"]
 CACHE = STORE / "step1.parquet"
 
 
@@ -46,7 +46,7 @@ def fit_predict(df: pd.DataFrame, cut: str) -> tuple[pd.DataFrame, pd.DataFrame,
     stats = normalize.fit(train[cols])  # train only: refitting on the whole frame is leakage
     x_train, x_test = normalize.apply(train[cols], stats), normalize.apply(test[cols], stats)
 
-    coef = ols(x_train, train.swing_leg_target)
+    coef = ols(x_train, train.target)
     return train, test, predict(x_train, coef), predict(x_test, coef)
 
 
@@ -54,8 +54,8 @@ def run(df: pd.DataFrame, cut: str) -> pd.DataFrame:
     """The four signal metrics on both sides of the cut."""
     train, test, p_train, p_test = fit_predict(df, cut)
     rows = {
-        "train": metrics.signal(p_train, train.swing_leg_target),
-        "test": metrics.signal(p_test, test.swing_leg_target),
+        "train": metrics.signal(p_train, train.target),
+        "test": metrics.signal(p_test, test.target),
     }
     out = pd.DataFrame(rows).T
     out.insert(0, "bars", [len(train), len(test)])
@@ -83,7 +83,7 @@ def by_horizon(df: pd.DataFrame, cut: str, bins: list[int] = HORIZON_BINS) -> pd
     bucket = pd.cut(horizon, bins, right=False)
     rows = {}
     for b, rows_in in test.groupby(bucket, observed=True).groups.items():
-        per_date = metrics.by_date(pred.loc[rows_in], test.swing_leg_target.loc[rows_in], rank=True).dropna()
+        per_date = metrics.by_date(pred.loc[rows_in], test.target.loc[rows_in], rank=True).dropna()
         rows[str(b)] = {"bars": len(rows_in), "dates": len(per_date), "rank_ic": per_date.mean()}
     return pd.DataFrame(rows).T
 
@@ -95,13 +95,13 @@ def _selfcheck() -> None:
     idx = pd.MultiIndex.from_product([pd.date_range("2024", periods=400, freq="h", tz="UTC"), list("abcde")])
     x = pd.DataFrame(rng.normal(size=(len(idx), 3)), index=idx, columns=["a", "b", "c"])
     df = x.assign(
-        swing_leg_target=x.a - 2 * x.b + rng.normal(0, 0.1, len(idx)),
+        target=x.a - 2 * x.b + rng.normal(0, 0.1, len(idx)),
         next_pivot=idx.get_level_values(0),
     )
     m = run(df, "2024-01-10")
     assert m.loc["test", "rank_ic"] > 0.9, m
     # Pure noise as a label: the fit finds nothing out of sample.
-    noise = df.assign(swing_leg_target=rng.normal(size=len(idx)))
+    noise = df.assign(target=rng.normal(size=len(idx)))
     assert abs(run(noise, "2024-01-10").loc["test", "rank_ic"]) < 0.1
 
     # The horizon split keeps every test bar and puts each one in the bucket of its own distance.
