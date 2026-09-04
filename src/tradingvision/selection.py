@@ -17,7 +17,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from tradingvision import gbm, split
+from tradingvision import dataset, gbm, split
 from tradingvision.dataset import cached
 
 # Share of a column that may be NaN or infinite before the column stops being usable at all. Not
@@ -51,6 +51,49 @@ def sanity(x: pd.DataFrame, max_unusable: float = MAX_UNUSABLE) -> pd.DataFrame:
     return report
 
 
+def spearman(x: pd.DataFrame) -> pd.DataFrame:
+    """Pearson on the ranks, which is what Spearman is — computed this way so scipy stays out of
+    it, the same trick `metrics.by_date` uses."""
+    return x.rank().corr()
+
+
+def branch_columns(columns: list[str], tf: str) -> dict[str, str]:
+    """The 28 value-at-t columns of one branch, indicator name -> column name.
+
+    The lags and the window statistics are deliberately left out here: pass 2 asks which
+    *indicators* say the same thing, and `log_return_lag1` correlating with `log_return` answers a
+    question nobody asked. They come back in pass 4, where the whole group is permuted at once.
+    """
+    return {c[: -len(tf) - 1]: c for c in columns if c.endswith(f"_{tf}") and gbm.base_feature(c) == c[: -len(tf) - 1]}
+
+
+def per_branch(train: pd.DataFrame, branches: tuple[str, ...] = dataset.BRANCHES) -> dict[str, pd.DataFrame]:
+    """Pass 2 — one Spearman matrix per branch, indexed by indicator so the four are comparable."""
+    out = {}
+    for tf in branches:
+        names = branch_columns(list(train.columns), tf)
+        m = spearman(train[list(names.values())])
+        out[tf] = m.set_axis(list(names), axis=0).set_axis(list(names), axis=1)
+    return out
+
+
+def mean_abs(matrices: dict[str, pd.DataFrame]) -> pd.DataFrame:
+    """|rho| averaged over the branches.
+
+    The four matrices share an index, so this is one number per pair of indicators. It is what
+    pass 3 clusters on, and the reason is pass 4: the permutation is done on all four branches at
+    once, so the surviving set is a set of indicators and not a set of (indicator, branch) pairs.
+    A pair that is redundant on 5m and independent on 1h lands in the middle and is kept.
+    """
+    return sum(m.abs() for m in matrices.values()) / len(matrices)
+
+
+def redundant(rho: pd.DataFrame, threshold: float = 0.8) -> pd.Series:
+    """The pairs above the threshold, once each, strongest first."""
+    upper = rho.where(np.triu(np.ones(rho.shape, dtype=bool), 1)).stack()
+    return upper[upper >= threshold].sort_values(ascending=False)
+
+
 def _selfcheck() -> None:
     n = 1000
     rng = np.random.default_rng(0)
@@ -70,6 +113,21 @@ def _selfcheck() -> None:
     assert 0.9 < report.loc["some_inf_5m", "std"] < 1.1, report
     assert report.loc["many_inf_5m", ["nan", "infinite"]].tolist() == [0.0, 0.5]
 
+    # Spearman and not Pearson is the point of pass 2: a monotone but strongly curved relation is
+    # a perfect 1 on the ranks and visibly less on the levels, and fat-tailed returns are exactly
+    # where the two part company.
+    a = pd.Series(rng.normal(size=n))
+    curved = pd.DataFrame({"a_5m": a, "b_5m": np.exp(3 * a), "c_5m": rng.normal(size=n)})
+    rho = spearman(curved)
+    assert rho.loc["a_5m", "b_5m"] > 0.999 and curved.corr().loc["a_5m", "b_5m"] < 0.8
+    assert abs(rho.loc["a_5m", "c_5m"]) < 0.1
+
+    # Two branches, and the averaging keeps the pair labels aligned rather than re-sorting them.
+    frame = curved.join(curved.rename(columns=lambda c: c.replace("_5m", "_1h")))
+    mats = per_branch(frame, ("5m", "1h"))
+    assert list(mats["1h"].index) == ["a", "b", "c"] and set(mats) == {"5m", "1h"}
+    assert redundant(mean_abs(mats)).index.tolist() == [("a", "b")]
+
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
@@ -77,6 +135,7 @@ def main() -> None:
     ap.add_argument("--test-start", default="2025-06", help="everything before this is the train period")
     ap.add_argument("--stride", type=int, default=12)
     ap.add_argument("--cache", type=Path, default=gbm.CACHE)
+    ap.add_argument("--threshold", type=float, default=0.8, help="|rho| above which two indicators are redundant")
     args = ap.parse_args()
 
     _selfcheck()
@@ -90,6 +149,13 @@ def main() -> None:
     if len(dropped):
         print("\ndropped\n")
         print(dropped.round(6).to_string())
+
+    matrices = per_branch(train[report[report.keep].index.tolist()])
+    rho = mean_abs(matrices)
+    pairs = redundant(rho, args.threshold)
+    print(f"\npass 2 — Spearman per branch: {len(pairs)} pairs at |rho| >= {args.threshold}\n")
+    spread = pd.DataFrame({tf: m.abs().stack()[pairs.index] for tf, m in matrices.items()})
+    print(spread.assign(mean=pairs).round(3).to_string())
 
 
 if __name__ == "__main__":
