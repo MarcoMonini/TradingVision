@@ -1,5 +1,11 @@
 """Streamlit page: download the candles of a crypto pair and draw them with their pivots and
-the swing leg target and the feature columns computed on them.
+the label and the feature columns computed on them.
+
+Two labels can be drawn, and the choice is the open question of the project rather than a display
+option: `remaining_excursion` is what the model is asked to predict, `swing_leg_target` is the
+retrospective description a linear model on point-in-time features already reproduces (Rank IC
+0.38). Reading them on the same legs is the fastest way to see the difference — the old one ramps
+across each leg, the new one collapses to zero at every pivot and says how much is left.
 
 streamlit run src/tradingvision/app/chart.py
 """
@@ -10,7 +16,7 @@ from plotly.subplots import make_subplots
 
 from tradingvision.data.candles import SYMBOLS, TIMEFRAMES, get_candles
 from tradingvision.data.pivots import EXTREMA_WINDOW, find_pivots
-from tradingvision.data.target import SMOOTHING, leg_significance, swing_leg_target
+from tradingvision.data.target import SMOOTHING, leg_significance, remaining_excursion, swing_leg_target
 from tradingvision.features import COLUMNS, FAMILIES, LABELS, features
 from tradingvision.normalize import CLIP, SCALE, apply, fit
 from tradingvision.oracle import FEE, run
@@ -28,10 +34,19 @@ def load_pivots(close, window: int):
     return find_pivots(close, window)
 
 
+# The two labels, keyed by the name shown in the sidebar. `PREDICTIVE` is the default and the one
+# the dataset carries.
+PREDICTIVE = "remaining excursion (predictive)"
+RETROSPECTIVE = "swing leg position (retrospective)"
+
+
 @st.cache_data(show_spinner=False)
-def load_target(close, window: int, smoothing: float, significance: bool):
+def load_target(close, window: int, label: str, smoothing: float, significance: bool):
     """Recomputed when a target control moves; the pivots underneath come from their own cache."""
-    return swing_leg_target(close, load_pivots(close, window), smoothing=smoothing, significance=significance)
+    pivots = load_pivots(close, window)
+    if label == PREDICTIVE:
+        return remaining_excursion(close, pivots, window)
+    return swing_leg_target(close, pivots, smoothing=smoothing, significance=significance)
 
 
 @st.cache_data(show_spinner=False)
@@ -48,7 +63,9 @@ def load_features(df, window: int, columns: tuple[str, ...]):
     return features(df, window)[list(columns)]
 
 
-def chart(df, pivots, target, significance, feats, symbol: str, uirevision: str, normalized=False) -> go.Figure:
+def chart(
+    df, pivots, target, significance, feats, symbol: str, uirevision: str, normalized=False, bounded=True
+) -> go.Figure:
     # Price, then the label under it on the same x: the target is only readable against the leg it
     # describes. Volume next, it is context rather than subject, and the features under everything.
     # One row per family, never one for all of them: adx_trend_strength sits in [0, 1] and
@@ -78,7 +95,7 @@ def chart(df, pivots, target, significance, feats, symbol: str, uirevision: str,
             y=target,
             mode="lines",
             line=dict(width=1.5, color="#3498db"),
-            name="swing_leg_target",
+            name="target",
             showlegend=False,
             connectgaps=False,  # the unlabelled head and tail must read as gaps, not as a line
             hovertemplate="%{x}<br>target %{y:.2f}<extra></extra>",
@@ -136,10 +153,20 @@ def chart(df, pivots, target, significance, feats, symbol: str, uirevision: str,
         if normalized:
             fig.update_yaxes(range=[-CLIP * SCALE * 1.1, CLIP * SCALE * 1.1], row=row, col=1)
     fig.update_annotations(font_size=11, x=0, xanchor="left")
-    fig.update_yaxes(title_text="target", range=[-1.3, 1.3], zeroline=True, zerolinecolor="#bbb", row=2, col=1)
-    # The ceiling the pivots would reach unweighted: the gap to it is the significance discount.
-    for y in (-1, 1):
-        fig.add_hline(y=y, line=dict(width=1, dash="dot", color="#bbb"), row=2, col=1)
+    # The retrospective label lives in [-1, +1] and is read against that ceiling; the predictive
+    # one is in sigma of a 24-bar walk, unbounded and fat-tailed, so it gets a free axis.
+    fig.update_yaxes(
+        title_text="target" if bounded else "target (sigma)",
+        range=[-1.3, 1.3] if bounded else None,
+        zeroline=True,
+        zerolinecolor="#bbb",
+        row=2,
+        col=1,
+    )
+    if bounded:
+        # The ceiling the pivots would reach unweighted: the gap to it is the significance discount.
+        for y in (-1, 1):
+            fig.add_hline(y=y, line=dict(width=1, dash="dot", color="#bbb"), row=2, col=1)
     fig.update_layout(
         height=800 + 150 * len(groups),
         legend=dict(orientation="h", y=-0.05, font=dict(size=10)),
@@ -161,11 +188,18 @@ def main() -> None:
     symbol = st.sidebar.selectbox("Pair", SYMBOLS)
     timeframe = st.sidebar.selectbox("Timeframe", list(TIMEFRAMES), index=1)
     days = st.sidebar.slider("History (days)", 1, MAX_DAYS, 30)
-    # Unlike the window and the fee, this one is explicitly a tunable: 0.7 is a starting value.
-    # 1.0 is a pure time ramp between pivots, 0.0 follows price alone.
-    smoothing = st.sidebar.slider("Target smoothing (time weight)", 0.0, 1.0, SMOOTHING, 0.05)
-    # Off shows the flat +/-1 labelling, which is what the weighting is meant to be read against.
-    significance = st.sidebar.toggle("Weight pivots by leg significance", value=True)
+    label = st.sidebar.radio("Label", [PREDICTIVE, RETROSPECTIVE], help="what the model is asked to output")
+    # Both controls shape the retrospective label only: the predictive one has no blend to weight
+    # (a degenerate leg goes nowhere, so it scores near zero by itself).
+    retrospective = label == RETROSPECTIVE
+    smoothing = SMOOTHING
+    significance = True
+    if retrospective:
+        # Unlike the window and the fee, this one is explicitly a tunable: 0.7 is a starting value.
+        # 1.0 is a pure time ramp between pivots, 0.0 follows price alone.
+        smoothing = st.sidebar.slider("Target smoothing (time weight)", 0.0, 1.0, SMOOTHING, 0.05)
+        # Off shows the flat +/-1 labelling, which the weighting is meant to be read against.
+        significance = st.sidebar.toggle("Weight pivots by leg significance", value=True)
     # The feature windows all derive from the extrema window, so they follow it rather than being
     # tuned here; the per-branch values are still to be measured.
     picked = st.sidebar.multiselect("Features", COLUMNS, default=COLUMNS, format_func=LABELS.get)
@@ -193,7 +227,7 @@ def main() -> None:
         st.warning(f"No data for {fetched[0]} on {fetched[1]}.")
         return
     pivots = load_pivots(df.close, EXTREMA_WINDOW)
-    target = load_target(df.close, EXTREMA_WINDOW, smoothing, significance)
+    target = load_target(df.close, EXTREMA_WINDOW, label, smoothing, significance)
     strength = load_significance(df.close, EXTREMA_WINDOW)
     feats = load_features(df, EXTREMA_WINDOW, tuple(COLUMNS))[picked]
     if normalized and len(feats.columns):
@@ -209,7 +243,7 @@ def main() -> None:
     b.metric("Avg gross leg", f"{stats['gross_trade_pct']:.2f}%", f"{stats['win_rate'] * 100:.0f}% above fees")
 
     st.plotly_chart(
-        chart(df, pivots, target, strength, feats, fetched[0], "-".join(map(str, fetched)), normalized),
+        chart(df, pivots, target, strength, feats, fetched[0], "-".join(map(str, fetched)), normalized, retrospective),
         use_container_width=True,
         key="chart",
     )
@@ -217,9 +251,14 @@ def main() -> None:
         f"{len(df)} candles — {df.index[0]:%Y-%m-%d %H:%M} to {df.index[-1]:%Y-%m-%d %H:%M} UTC · "
         f"{len(pivots)} pivots, median leg {pivots.amplitude.median() * 100:.2f}% · "
         f"{target.notna().sum()} labelled bars ({target.isna().sum()} unlabelled: head and tail) · "
-        f"smoothing {smoothing:.2f} time / {1 - smoothing:.2f} price · "
-        f"median leg significance {strength.median():.2f}, "
-        f"{(strength < 1).mean() * 100:.0f}% of legs below chance"
+        + (
+            f"smoothing {smoothing:.2f} time / {1 - smoothing:.2f} price · "
+            f"median leg significance {strength.median():.2f}, "
+            f"{(strength < 1).mean() * 100:.0f}% of legs below chance"
+            if retrospective
+            else f"median |target| {target.abs().median():.2f} sigma, "
+            f"99th percentile {target.abs().quantile(0.99):.1f} sigma"
+        )
         if len(pivots)
         else f"{len(df)} candles — no pivot at window {EXTREMA_WINDOW}"
     )
