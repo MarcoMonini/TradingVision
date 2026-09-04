@@ -1,4 +1,5 @@
-"""Streamlit page: download the candles of a crypto pair and draw them with their pivots.
+"""Streamlit page: download the candles of a crypto pair and draw them with their pivots and
+the swing leg target and the feature columns computed on them.
 
 streamlit run src/tradingvision/app/chart.py
 """
@@ -9,6 +10,7 @@ from plotly.subplots import make_subplots
 
 from tradingvision.data.candles import SYMBOLS, TIMEFRAMES, get_candles
 from tradingvision.data.pivots import EXTREMA_WINDOW, find_pivots
+from tradingvision.data.target import SMOOTHING, leg_significance, swing_leg_target
 from tradingvision.features import COLUMNS, FAMILIES, LABELS, features
 from tradingvision.normalize import CLIP, SCALE, apply, fit
 from tradingvision.oracle import FEE, run
@@ -26,6 +28,18 @@ def load_pivots(close, window: int):
     return find_pivots(close, window)
 
 
+@st.cache_data(show_spinner=False)
+def load_target(close, window: int, smoothing: float, significance: bool):
+    """Recomputed when a target control moves; the pivots underneath come from their own cache."""
+    return swing_leg_target(close, load_pivots(close, window), smoothing=smoothing, significance=significance)
+
+
+@st.cache_data(show_spinner=False)
+def load_significance(close, window: int):
+    """The raw ratio behind the weighting, shown next to each pivot."""
+    return leg_significance(close, load_pivots(close, window))
+
+
 @st.cache_data(show_spinner="Computing features…")
 def load_features(df, window: int, columns: tuple[str, ...]):
     """Cached on (frame, window, columns): picking different columns to draw does not recompute
@@ -34,22 +48,22 @@ def load_features(df, window: int, columns: tuple[str, ...]):
     return features(df, window)[list(columns)]
 
 
-def chart(df, pivots, feats, symbol: str, uirevision: str, normalized: bool = False) -> go.Figure:
+def chart(df, pivots, target, significance, feats, symbol: str, uirevision: str, normalized=False) -> go.Figure:
+    # Price, then the label under it on the same x: the target is only readable against the leg it
+    # describes. Volume next, it is context rather than subject, and the features under everything.
     # One row per family, never one for all of them: adx_trend_strength sits in [0, 1] and
     # log_return around 1e-3, so sharing an axis would flatten the second into the zero line.
     groups = [(fam, [c for c in cols if c in feats.columns]) for fam, cols in FAMILIES.items()]
     groups = [g for g in groups if g[1]]
-    rows = 2 + len(groups)
-    # Weights, normalised by Plotly: with all seven families open a fixed 50% for the candles
-    # would squeeze every feature row into a line.
-    heights = [3, 1] + [1.5] * len(groups)
     fig = make_subplots(
-        rows=rows,
+        rows=3 + len(groups),
         cols=1,
         shared_xaxes=True,
-        row_heights=heights,
+        # Weights, normalised by Plotly: with all seven families open a fixed share for the candles
+        # would squeeze every feature row into a line.
+        row_heights=[3, 1.5, 1] + [1.5] * len(groups),
         vertical_spacing=0.02,
-        subplot_titles=["", ""] + [f.title() for f, _ in groups],
+        subplot_titles=["", "", ""] + [f.title() for f, _ in groups],
     )
     fig.add_trace(
         go.Candlestick(
@@ -58,8 +72,41 @@ def chart(df, pivots, feats, symbol: str, uirevision: str, normalized: bool = Fa
         row=1,
         col=1,
     )
+    fig.add_trace(
+        go.Scatter(
+            x=target.index,
+            y=target,
+            mode="lines",
+            line=dict(width=1.5, color="#3498db"),
+            name="swing_leg_target",
+            showlegend=False,
+            connectgaps=False,  # the unlabelled head and tail must read as gaps, not as a line
+            hovertemplate="%{x}<br>target %{y:.2f}<extra></extra>",
+        ),
+        row=2,
+        col=1,
+    )
     for kind, color, position in ((1, "#e74c3c", "top center"), (-1, "#2ecc71", "bottom center")):
         p = pivots[pivots.kind == kind]
+        # The same pivots on the label axis, where they sit at exactly +/-1 by construction.
+        fig.add_trace(
+            go.Scatter(
+                x=p.index,
+                y=target.reindex(p.index),
+                marker=dict(size=7, color=color, symbol="circle"),
+                mode="markers+text",
+                # The leg's significance next to the pivot it scored: 1 is a leg worth what the
+                # volatility alone would have produced, and the value shown above is tanh of it.
+                text=[f"{v:.1f}" for v in significance.reindex(p.index)],
+                textposition=position,
+                textfont=dict(size=9, color=color),
+                name="pivot",
+                showlegend=False,
+                hovertemplate="%{x}<br>target %{y:.2f}<extra></extra>",
+            ),
+            row=2,
+            col=1,
+        )
         fig.add_trace(
             go.Scatter(
                 x=p.index,
@@ -76,8 +123,8 @@ def chart(df, pivots, feats, symbol: str, uirevision: str, normalized: bool = Fa
             row=1,
             col=1,
         )
-    fig.add_trace(go.Bar(x=df.index, y=df.volume, name="volume", marker_color="#888", showlegend=False), row=2, col=1)
-    for row, (_, cols) in enumerate(groups, start=3):
+    fig.add_trace(go.Bar(x=df.index, y=df.volume, name="volume", marker_color="#888", showlegend=False), row=3, col=1)
+    for row, (_, cols) in enumerate(groups, start=4):
         for col in cols:
             fig.add_trace(
                 go.Scatter(x=feats.index, y=feats[col], mode="lines", name=LABELS[col], line=dict(width=1)),
@@ -89,8 +136,12 @@ def chart(df, pivots, feats, symbol: str, uirevision: str, normalized: bool = Fa
         if normalized:
             fig.update_yaxes(range=[-CLIP * SCALE * 1.1, CLIP * SCALE * 1.1], row=row, col=1)
     fig.update_annotations(font_size=11, x=0, xanchor="left")
+    fig.update_yaxes(title_text="target", range=[-1.3, 1.3], zeroline=True, zerolinecolor="#bbb", row=2, col=1)
+    # The ceiling the pivots would reach unweighted: the gap to it is the significance discount.
+    for y in (-1, 1):
+        fig.add_hline(y=y, line=dict(width=1, dash="dot", color="#bbb"), row=2, col=1)
     fig.update_layout(
-        height=560 + 150 * len(groups),
+        height=800 + 150 * len(groups),
         legend=dict(orientation="h", y=-0.05, font=dict(size=10)),
         showlegend=bool(groups),
         xaxis_rangeslider_visible=False,
@@ -110,15 +161,19 @@ def main() -> None:
     symbol = st.sidebar.selectbox("Pair", SYMBOLS)
     timeframe = st.sidebar.selectbox("Timeframe", list(TIMEFRAMES), index=1)
     days = st.sidebar.slider("History (days)", 1, MAX_DAYS, 30)
-
-    request = (symbol, timeframe, days)
-    if st.sidebar.button("Fetch candles", type="primary", use_container_width=True):
-        st.session_state.fetched = (request, load_candles(*request))
-
+    # Unlike the window and the fee, this one is explicitly a tunable: 0.7 is a starting value.
+    # 1.0 is a pure time ramp between pivots, 0.0 follows price alone.
+    smoothing = st.sidebar.slider("Target smoothing (time weight)", 0.0, 1.0, SMOOTHING, 0.05)
+    # Off shows the flat +/-1 labelling, which is what the weighting is meant to be read against.
+    significance = st.sidebar.toggle("Weight pivots by leg significance", value=True)
     # The feature windows all derive from the extrema window, so they follow it rather than being
     # tuned here; the per-branch values are still to be measured.
     picked = st.sidebar.multiselect("Features", COLUMNS, default=COLUMNS, format_func=LABELS.get)
     normalized = st.sidebar.toggle("Normalized", value=True, help="clip((x - median) / IQR, ±5) × 0.1")
+
+    request = (symbol, timeframe, days)
+    if st.sidebar.button("Fetch candles", type="primary", use_container_width=True):
+        st.session_state.fetched = (request, load_candles(*request))
 
     # Not inputs: both were calibrated in oracle.py and changing them here would show pivots the
     # dataset does not contain.
@@ -138,6 +193,8 @@ def main() -> None:
         st.warning(f"No data for {fetched[0]} on {fetched[1]}.")
         return
     pivots = load_pivots(df.close, EXTREMA_WINDOW)
+    target = load_target(df.close, EXTREMA_WINDOW, smoothing, significance)
+    strength = load_significance(df.close, EXTREMA_WINDOW)
     feats = load_features(df, EXTREMA_WINDOW, tuple(COLUMNS))[picked]
     if normalized and len(feats.columns):
         # Fitted on the window on screen, which is what a chart can do and not what the dataset
@@ -152,13 +209,17 @@ def main() -> None:
     b.metric("Avg gross leg", f"{stats['gross_trade_pct']:.2f}%", f"{stats['win_rate'] * 100:.0f}% above fees")
 
     st.plotly_chart(
-        chart(df, pivots, feats, fetched[0], "-".join(map(str, fetched)), normalized),
+        chart(df, pivots, target, strength, feats, fetched[0], "-".join(map(str, fetched)), normalized),
         use_container_width=True,
         key="chart",
     )
     st.caption(
         f"{len(df)} candles — {df.index[0]:%Y-%m-%d %H:%M} to {df.index[-1]:%Y-%m-%d %H:%M} UTC · "
-        f"{len(pivots)} pivots, median leg {pivots.amplitude.median() * 100:.2f}%"
+        f"{len(pivots)} pivots, median leg {pivots.amplitude.median() * 100:.2f}% · "
+        f"{target.notna().sum()} labelled bars ({target.isna().sum()} unlabelled: head and tail) · "
+        f"smoothing {smoothing:.2f} time / {1 - smoothing:.2f} price · "
+        f"median leg significance {strength.median():.2f}, "
+        f"{(strength < 1).mean() * 100:.0f}% of legs below chance"
         if len(pivots)
         else f"{len(df)} candles — no pivot at window {EXTREMA_WINDOW}"
     )
