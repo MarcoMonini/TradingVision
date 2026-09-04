@@ -131,6 +131,63 @@ def swing_leg_target(
     return out
 
 
+def remaining_excursion(
+    close: pd.Series,
+    pivots: pd.DataFrame | None = None,
+    window: int = EXTREMA_WINDOW,
+    horizon: int = EXTREMA_WINDOW,
+    lookback: int = SIGNIFICANCE_LOOKBACK,
+) -> pd.Series:
+    """The predictive label: how far the price still has to travel before the leg ends.
+
+        y(i) = log(close[pivot_successivo] / close[i]) / (sigma_i * sqrt(horizon))
+
+    Numerator entirely in the future, denominator entirely in the past. That asymmetry is the
+    whole point. `swing_leg_target` is dominated by `(i - inizio) / (fine - inizio)`, whose
+    numerator is already known at `i` and whose denominator is nearly constant across the
+    cross-section — so a linear model on point-in-time features reproduces it (Rank IC 0.38 out of
+    sample, flat at every distance from the pivot, which rules out a pipeline fault). It measures
+    where the bar is, not where the price is going. This one cannot be read off the past.
+
+    Sign and magnitude both carry meaning: positive when the leg ends on a high (there is still a
+    rise to capture), negative when it ends on a low, zero on the pivot itself. In units of a
+    `horizon`-bar random walk at the volatility measured at `i` — so it compares across symbols
+    and regimes, and reads as the P&L of holding to the pivot, in units of risk.
+
+    No significance weighting here, and no tanh: a degenerate leg goes nowhere, so it scores near
+    zero on its own. The correction `swing_leg_target` needs is built into the quantity.
+
+    Unbounded and fat-tailed, unlike the old label — the Huber delta of 0.4 was measured on that
+    distribution and does not carry over; on this one it is 2.1.
+
+    Both defaults are counted in bars *of the series passed in*, and the dataset passes the 5m one
+    while the legs are defined on 15m. So `horizon = 24` is the 2h walk the excursion is measured
+    against, not the 6h of a 24-bar 15m window, and `lookback = 96` is 8h of volatility rather
+    than the day it means on the 15m grid. Neither number is wrong here — a shorter volatility
+    window tracks the regime the bar is actually in, and the reference horizon only sets the unit
+    — but they are not the constants their own docstrings describe, and delta = 2.1 was measured
+    with exactly these. Changing either one means measuring delta again.
+    """
+    piv = find_pivots(close, window) if pivots is None else pivots
+    out = pd.Series(np.nan, index=close.index, name="remaining_excursion")
+    if piv.empty:
+        return out
+
+    at = close.index.get_indexer(piv.index)
+    if (at < 0).any():
+        raise ValueError("pivots do not belong to this close series")
+
+    # Bars up to the last confirmed pivot; past it there is no next pivot and no label, which is
+    # the permanent condition of the current bar in production. `side="left"` makes a pivot bar
+    # its own next pivot, so the label is exactly 0 there.
+    i = np.arange(at[-1] + 1)
+    nxt = at[np.searchsorted(at, i, side="left")]
+    c = close.to_numpy()
+    scale = bar_sigma(close, lookback).to_numpy()[i] * np.sqrt(horizon)
+    out.iloc[i] = np.log(c[nxt] / c[i]) / scale
+    return out
+
+
 if __name__ == "__main__":
     # Triangle wave: peaks every 20 bars, troughs halfway between. Price is piecewise linear in
     # time, so both advancements agree and the label is a clean ramp.
@@ -171,8 +228,22 @@ if __name__ == "__main__":
     # tanh is already flat at the top, which is exactly the compression it is there to provide.
     assert abs(dw.iloc[-1]) < abs(at_pivots.iloc[-1]) / 2, "a collapsed leg must lose most of its value"
 
+    # The predictive label on the same wave: zero on every pivot, and shrinking along each leg
+    # since the distance left to travel only decreases.
+    rem = remaining_excursion(x, piv, lookback=50)
+    assert np.allclose(rem.loc[piv.index].dropna(), 0, atol=1e-12), "no distance left at a pivot"
+    assert rem.iloc[last + 1 :].isna().all(), "no label past the last pivot"
+    up = rem.iloc[last - 9 : last + 1].dropna()  # the leg closing on the final pivot
+    assert (up.diff().dropna() * np.sign(up.iloc[0]) < 0).all(), "the excursion left shrinks along a leg"
+    assert np.sign(up.iloc[0]) == piv.kind.iloc[-1], "the sign is the direction towards the next pivot"
+    # Not each other's mirror image, even on a wave this regular: the old label ramps once from
+    # pivot to pivot, the new one resets at every pivot. Different shapes, not opposite signs.
+    both = pd.DataFrame({"old": weighted, "new": rem}).dropna()
+    assert abs(both.old.corr(both.new)) < 0.5
+
     flat = pd.Series([1.0] * 600, index=pd.RangeIndex(600))
     assert swing_leg_target(flat, window=5).isna().all(), "no pivots, no label"
+    assert remaining_excursion(flat, window=5).isna().all()
     print(
         f"ok — {weighted.notna().sum()} labelled bars, pivot values |{at_pivots.abs().min():.3f}|"
         f"..|{at_pivots.abs().max():.3f}|, collapsed leg {abs(dw.iloc[-1]):.3f}"
