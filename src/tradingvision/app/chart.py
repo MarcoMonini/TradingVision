@@ -26,9 +26,11 @@ def load_pivots(close, window: int):
 
 
 @st.cache_data(show_spinner="Computing features…")
-def load_features(df, window: int):
-    """Cached on (frame, window): picking different columns to draw does not recompute them."""
-    return features(df, window)
+def load_features(df, window: int, columns: tuple[str, ...]):
+    """Cached on (frame, window, columns): picking different columns to draw does not recompute
+    them, and renaming or adding one re-keys the cache — Streamlit keys on this wrapper's source,
+    which does not change when `features` does, so a running app would serve the old schema."""
+    return features(df, window)[list(columns)]
 
 
 def chart(df, pivots, feats, symbol: str, uirevision: str) -> go.Figure:
@@ -130,7 +132,7 @@ def main() -> None:
         st.warning(f"No data for {fetched[0]} on {fetched[1]}.")
         return
     pivots = load_pivots(df.close, EXTREMA_WINDOW)
-    feats = load_features(df, EXTREMA_WINDOW)[picked]
+    feats = load_features(df, EXTREMA_WINDOW, tuple(COLUMNS))[picked]
 
     # Oracle: what a perfect-hindsight trader would have made on this window over this period.
     stats = run(df.close, EXTREMA_WINDOW, FEE, pivots=pivots)
