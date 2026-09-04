@@ -57,6 +57,38 @@ FAMILIES: dict[str, tuple[str, ...]] = {
 }
 COLUMNS = [c for cols in FAMILIES.values() for c in cols]
 
+# Chart labels: the identifier is what the dataset carries, this is what a reader sees on a plot.
+LABELS = {
+    "log_return": "Log Return",
+    "cum_log_return_window": "Cumulative Log Return (N)",
+    "candle_body_pct": "Candle Body (%)",
+    "bar_range_pct": "Bar Range (%)",
+    "window_range_pct": "Window Range (%)",
+    "average_true_range_pct": "Average True Range (%)",
+    "realized_volatility": "Realized Volatility",
+    "volatility_expansion": "Volatility Expansion",
+    "upper_wick_pct": "Upper Wick (%)",
+    "lower_wick_pct": "Lower Wick (%)",
+    "close_position_in_bar": "Close Position in Bar",
+    "close_position_in_window": "Close Position in Window",
+    "distance_from_window_high_pct": "Distance from Window High (%)",
+    "distance_from_window_low_pct": "Distance from Window Low (%)",
+    "age_of_window_high": "Age of Window High",
+    "age_of_window_low": "Age of Window Low",
+    "volume_vs_median": "Volume vs Median",
+    "signed_volume": "Signed Volume",
+    "volume_trend": "Volume Trend",
+    "on_balance_volume_zscore": "On-Balance Volume (z-score)",
+    "distance_from_vwap_pct": "Distance from VWAP (%)",
+    "distance_from_kama_pct": "Distance from KAMA (%)",
+    "distance_from_ema_pct": "Distance from EMA (%)",
+    "ema_slope": "EMA Slope",
+    "distance_from_psar_pct": "Distance from PSAR (%)",
+    "adx_trend_strength": "ADX Trend Strength",
+    "tsi_momentum": "TSI Momentum",
+    "rsi_centered": "RSI (centered)",
+}
+
 
 def _bars_since(s: pd.Series, n: int, *, high: bool) -> pd.Series:
     """Age of the window extreme, in [0, 1]: 0 on the bar that set it, 1 at the far end."""
@@ -137,6 +169,7 @@ if __name__ == "__main__":
     )
     out = features(df)
     assert list(out.columns) == COLUMNS and len(COLUMNS) == 28, "28 columns, spec order"
+    assert list(LABELS) == COLUMNS, "every column needs a chart label"
     tail = out.iloc[EXTREMA_WINDOW * 4 :]
     assert tail.notna().all().all(), f"NaN past warm-up: {tail.columns[tail.isna().any()].tolist()}"
     assert np.isfinite(tail.to_numpy()).all(), "infinities"

@@ -9,7 +9,7 @@ from plotly.subplots import make_subplots
 
 from tradingvision.data.candles import SYMBOLS, TIMEFRAMES, get_candles
 from tradingvision.data.pivots import EXTREMA_WINDOW, find_pivots
-from tradingvision.features import COLUMNS, FAMILIES, features
+from tradingvision.features import COLUMNS, FAMILIES, LABELS, features
 from tradingvision.oracle import FEE, run
 
 MAX_DAYS = 365
@@ -48,7 +48,7 @@ def chart(df, pivots, feats, symbol: str, uirevision: str) -> go.Figure:
         shared_xaxes=True,
         row_heights=heights,
         vertical_spacing=0.02,
-        subplot_titles=["", ""] + [f for f, _ in groups],
+        subplot_titles=["", ""] + [f.title() for f, _ in groups],
     )
     fig.add_trace(
         go.Candlestick(
@@ -79,7 +79,7 @@ def chart(df, pivots, feats, symbol: str, uirevision: str) -> go.Figure:
     for row, (_, cols) in enumerate(groups, start=3):
         for col in cols:
             fig.add_trace(
-                go.Scatter(x=feats.index, y=feats[col], mode="lines", name=col, line=dict(width=1), showlegend=True),
+                go.Scatter(x=feats.index, y=feats[col], mode="lines", name=LABELS[col], line=dict(width=1)),
                 row=row,
                 col=1,
             )
@@ -112,7 +112,7 @@ def main() -> None:
 
     # The feature windows all derive from the extrema window, so they follow it rather than being
     # tuned here; the per-branch values are still to be measured.
-    picked = st.sidebar.multiselect("Features", COLUMNS, default=COLUMNS)
+    picked = st.sidebar.multiselect("Features", COLUMNS, default=COLUMNS, format_func=LABELS.get)
 
     # Not inputs: both were calibrated in oracle.py and changing them here would show pivots the
     # dataset does not contain.
