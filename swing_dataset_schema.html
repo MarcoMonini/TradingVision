@@ -695,14 +695,14 @@ tr td.col-name{color:var(--text);font-weight:500;}
   <div class="callout">
     <h3>1b. Sequenza di implementazione della loss</h3>
     <p><strong>Sul GBM non si implementa il termine di correlazione.</strong> Due ragioni. Tecnica: un objective custom in LightGBM richiede gradiente e hessiana <em>per riga</em>, ma la derivata di Pearson rispetto a <code>p_i</code> dipende da media e deviazione dell'intero vettore — non è separabile per campione, e l'hessiana vera è densa mentre LightGBM accetta solo la diagonale. Metodologica, più importante: il GBM serve a dare un Rank IC di riferimento e la feature importance, quindi deve restare semplice e stabile; con objective diversi il confronto step 2 → step 3 misurerebbe anche la differenza di loss, non solo l'architettura. <strong>GBM: L2 o Huber standard.</strong></p>
-    <p><strong>δ si tara una volta, λ no.</strong> δ è in unità del target: dipende solo dalla distribuzione di <code>swing_leg_target</code>, comune a tutti i modelli, quindi si fissa una volta dopo lo step 0 dell'oracolo (indicativamente 0.3–0.5). λ bilancia le magnitudini di due gradienti e dipende da architettura, learning rate, scala delle attivazioni e soprattutto <strong>batch size</strong> — Pearson su 512 campioni ha varianza molto diversa che su 2048. Nessuno di questi è condiviso fra GBM e GRU, né fra GRU a ramo singolo e a 4 rami.</p>
+    <p><strong>δ si tara una volta, λ no.</strong> δ è in unità del target: dipende solo dalla distribuzione di <code>swing_leg_target</code>, comune a tutti i modelli, quindi si fissa una volta dopo lo step 0 dell'oracolo. <strong>Misurato: δ = 0.4</strong> — vedi sotto. λ bilancia le magnitudini di due gradienti e dipende da architettura, learning rate, scala delle attivazioni e soprattutto <strong>batch size</strong> — Pearson su 512 campioni ha varianza molto diversa che su 2048. Nessuno di questi è condiviso fra GBM e GRU, né fra GRU a ramo singolo e a 4 rami.</p>
 
     <div class="tbl-wrap">
       <table>
         <caption>quando si fissa cosa</caption>
         <thead><tr><th>fase</th><th>loss</th><th>λ</th></tr></thead>
         <tbody>
-          <tr><td>step 0 — oracolo</td><td>—</td><td>misura la distribuzione del target → fissa <strong>δ</strong></td></tr>
+          <tr><td>step 0 — oracolo</td><td>—</td><td>distribuzione del target misurata → <strong>δ = 0.4</strong></td></tr>
           <tr><td>step 1 — lineare</td><td>MSE</td><td>— (serve solo da controllo di leakage)</td></tr>
           <tr><td>step 2 — GBM</td><td>L2 / Huber standard</td><td>non implementato</td></tr>
           <tr><td>step 3 — GRU singolo</td><td>Huber</td><td>λ = 0, fino a Rank IC positivo e stabile</td></tr>
@@ -712,6 +712,10 @@ tr td.col-name{color:var(--text);font-weight:500;}
         </tbody>
       </table>
     </div>
+
+    <p><strong>δ = 0.4, misurato su 4.96 M barre / 20 simboli.</strong> <code>swing_leg_target</code> è simmetrico e centrato (media 0.002, σ = 0.477) e quasi uniforme sull'intervallo: i quantili di |target| sono 0.19 / 0.38 / 0.60 / 0.76 al 25° / 50° / 75° / 90° percentile, e solo il 2.3% delle barre supera 0.9 in valore assoluto — la ponderazione per significatività comprime le code, il 99° percentile sta a 0.908 e non a 1.</p>
+    <p><strong>Perché 0.4 e non un valore qualsiasi in 0.3–0.5.</strong> 0.4 è la mediana di |target|: nel caso pessimo di un modello senza segnale, che predice ~0, metà dei residui cade nel ramo quadratico e metà in quello lineare. Man mano che il modello impara i residui si restringono sotto δ e la Huber degrada da sola verso la MSE, che è il comportamento voluto — δ frena l'inizio dell'addestramento, non la fine.</p>
+    <p><strong>Nota: qui la Huber non serve per la robustezza.</strong> Il target è limitato per costruzione e non ha code pesanti, quindi non ci sono outlier di label da attenuare. δ regola la scala del gradiente sui residui grandi, cioè sulle gambe che il modello sbaglia in pieno (predice +0.8 dove il vero è −0.8): senza δ quelle poche barre dominerebbero il batch. È la ragione per cui δ non va alzato verso 1 — a quel punto la loss è MSE pura.</p>
 
     <p><strong>Vincoli sulla taratura di λ.</strong> Fissare il batch size <em>prima</em>: λ e batch size interagiscono, tararli insieme è una griglia 2D non sostenibile. Serve il protocollo multi-seed — il delta di Rank IC fra λ=0.1 e λ=0.3 sarà probabilmente inferiore alla varianza da inizializzazione, quindi griglia di 3–4 valori (0, 0.1, 0.3, 0.5) × almeno 5 seed. <strong>λ=0 deve stare nella griglia</strong> come controllo: se non perde contro gli altri, il termine di correlazione non serve e si elimina un iperparametro dal progetto.</p>
     <p><strong>Priorità.</strong> λ è un'ottimizzazione di second'ordine. Vengono prima i punti 2 e 3 di questa sezione e un Rank IC positivo con Huber puro: se quel Rank IC è ~0, λ non lo recupera — il problema sarebbe nelle feature o nella definizione della gamba.</p>
