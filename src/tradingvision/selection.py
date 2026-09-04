@@ -226,6 +226,31 @@ def permutation_importance(
     return baseline, pd.DataFrame(rows).T.sort_values("importance", ascending=False)
 
 
+def ablate(df: pd.DataFrame, keep: list[str], start: str, folds: int = 4) -> pd.DataFrame:
+    """Pass 5 — the full set against the reduced one, walk-forward on the same test folds.
+
+    Out-of-sample, and for once deliberately so: passes 1 to 4 never look past the train boundary
+    because they choose, and this one only checks a choice already made. It is the same walk-forward
+    as step 2, so the "full" row here is step 2's own number and the comparison is like for like.
+    """
+    reduced = df[sum(groups_of(gbm.columns(df), keep).values(), []) + linear.META]
+    rows = {}
+    for name, frame in {"full": df, "reduced": reduced}.items():
+        out = gbm.run(frame, start, folds)["folds"]
+        rows[(name, "mean")], rows[(name, "std")] = out.loc["mean"], out.loc["std"]
+    return pd.DataFrame(rows).T
+
+
+def prefers_reduced(table: pd.DataFrame, metric: str = "rank_ic") -> bool:
+    """The spec's rule: "se pareggiano vince il ridotto".
+
+    A draw is read against the fold-to-fold dispersion, because that is the only scale on which
+    these four numbers have a meaning — a gap smaller than the spread between folds is not a gap.
+    """
+    gap = table.loc[("full", "mean"), metric] - table.loc[("reduced", "mean"), metric]
+    return gap <= table.loc[("full", "std"), metric]
+
+
 SHADOW = "shadow"
 
 
@@ -341,6 +366,14 @@ def _selfcheck() -> None:
     _, alone = permutation_importance(model, valid, {"a_5m": ["a_5m"], "a_lag1_5m": ["a_lag1_5m"]})
     assert alone.importance.sum() < report.importance["a"], (alone, report)
 
+    # Pass 5. Dropping `c`, which the label ignores, cannot cost out-of-sample Rank IC — so the
+    # reduced set wins, and the rule that a draw goes to it is what makes that a win and not a tie.
+    table = ablate(frame, ["a"], "2024-01-10", folds=2)
+    assert list(table.index) == [("full", "mean"), ("full", "std"), ("reduced", "mean"), ("reduced", "std")]
+    assert prefers_reduced(table), table
+    # And it is not a rubber stamp: drop the column the label is made of and the full set wins.
+    assert not prefers_reduced(ablate(frame, ["c"], "2024-01-10", folds=2)), "dropping the signal must show"
+
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
@@ -351,6 +384,7 @@ def main() -> None:
     ap.add_argument("--threshold", type=float, default=0.8, help="|rho| above which two indicators are redundant")
     ap.add_argument("--cut", type=float, default=CUT, help="clustering cut on distance = 1 - |rho|")
     ap.add_argument("--permutations", type=int, default=PERMUTATIONS, help="draws per group in pass 4")
+    ap.add_argument("--folds", type=int, default=4, help="walk-forward folds for the ablation")
     args = ap.parse_args()
 
     _selfcheck()
@@ -389,6 +423,14 @@ def main() -> None:
     print(f"\npass 4 — permutation importance on {len(valid):,} validation rows, Rank IC {base:.4f}")
     print(f"{len(keeps)} of {len(report)} groups clear their own noise floor\n")
     print(report.round(5).to_string())
+
+    print(
+        f"\npass 5 — ablation, {len(keeps)} indicators against all {len(kept)}, walk-forward from {args.test_start}\n"
+    )
+    table = ablate(df, keeps, args.test_start, args.folds)
+    print(table.round(4).to_string())
+    print(f"\nreduced set {'wins' if prefers_reduced(table) else 'loses'} — {len(keeps)} of 28 candidates\n")
+    print("\n".join(f"  {n}" for n in keeps))
 
 
 if __name__ == "__main__":
