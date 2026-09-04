@@ -303,9 +303,10 @@ h2.sec{
         <tr><td class="col-name">oracolo (step 0)</td><td class="status-done">eseguito</td><td><code>oracle</code></td></tr>
         <tr><td class="col-name">δ = 0.4 della Huber</td><td class="status-done">misurato</td><td>sezione loss</td></tr>
         <tr><td class="col-name">testa densa lineare</td><td class="status-done">chiuso</td><td>sezione architettura</td></tr>
-        <tr><td class="col-name">28 feature candidate</td><td class="status-open">definite · da implementare</td><td><code>features</code> — da scrivere</td></tr>
+        <tr><td class="col-name">28 feature candidate</td><td class="status-done">definite · implementate</td><td><code>features</code></td></tr>
+        <tr><td class="col-name">normalizzazione delle feature</td><td class="status-done">misurata · implementata</td><td><code>normalize</code></td></tr>
         <tr><td class="col-name">parametri indicatori per ramo</td><td class="status-open">ipotesi fissata · da validare</td><td>sezione feature</td></tr>
-        <tr><td class="col-name">split, purging, normalizzazione</td><td class="status-open">regole chiuse · da implementare</td><td>sezione split</td></tr>
+        <tr><td class="col-name">split e purging</td><td class="status-open">regole chiuse · da implementare</td><td>sezione split</td></tr>
         <tr><td class="col-name">stride, materializzazione, regolarizzazione</td><td class="status-open">aperti</td><td>punti aperti</td></tr>
       </tbody>
     </table>
@@ -366,7 +367,7 @@ h2.sec{
     <p><code>massimi = argrelextrema(close, np.greater, order=finestra_estremi)</code><br>
     <code>minimi&nbsp; = argrelextrema(close, np.less,&nbsp; order=finestra_estremi)</code></p>
     <p><strong>Criterio.</strong> Un punto è estremo se è più alto (o più basso) di tutte le <code>order</code> barre a destra <em>e</em> a sinistra. Nessuna nozione di ampiezza: la selezione è puramente topologica. Massimi e minimi vengono poi fusi in sequenza alternata per indice; se due massimi si susseguono senza un minimo in mezzo, resta solo il più estremo dei due.</p>
-    <p><strong>Serie di input: Close, non High/Low.</strong> (1) Coerenza col target: <code>swing_leg_target</code> misura la posizione lungo una gamba di prezzo, e la gamba va definita sulla stessa serie su cui il modello vede <code>ritorno_pct</code>. (2) Robustezza: wick e spike di liquidazione producono estremi su High/Low che non corrispondono a un livello realmente negoziabile né a un'inversione strutturale. (3) Consistenza dell'alternanza: due serie diverse possono produrre un massimo su High e un minimo su Low nella stessa barra, caso ambiguo che con una serie unica non esiste. (4) Realismo esecutivo: un ordine non si riempie sul minimo assoluto della barra, si riempie vicino al close.</p>
+    <p><strong>Serie di input: Close, non High/Low.</strong> (1) Coerenza col target: <code>swing_leg_target</code> misura la posizione lungo una gamba di prezzo, e la gamba va definita sulla stessa serie su cui il modello vede <code>log_return</code>. (2) Robustezza: wick e spike di liquidazione producono estremi su High/Low che non corrispondono a un livello realmente negoziabile né a un'inversione strutturale. (3) Consistenza dell'alternanza: due serie diverse possono produrre un massimo su High e un minimo su Low nella stessa barra, caso ambiguo che con una serie unica non esiste. (4) Realismo esecutivo: un ordine non si riempie sul minimo assoluto della barra, si riempie vicino al close.</p>
     <p><strong>Costo.</strong> Le gambe misurate su Close sono più corte di quelle wick-to-wick: l'oracolo restituisce valori più bassi ma più realistici, quindi il valore di <code>finestra_estremi</code> che ne esce è già al netto di quell'illusione.</p>
   </div>
 
@@ -455,34 +456,34 @@ h2.sec{
         <tr><th>#</th><th>colonna</th><th>famiglia</th><th>definizione</th><th>note</th></tr>
       </thead>
       <tbody>
-        <tr><td>1</td><td class="col-name">ritorno_pct</td><td>prezzo</td><td>log(C / C₋₁)</td><td>log-ritorno di barra</td></tr>
-        <tr><td>2</td><td class="col-name">ritorno_cum_N</td><td>prezzo</td><td>log(C / C₋ₙ)</td><td>momentum grezzo su N, nessuno smoothing</td></tr>
-        <tr><td>3</td><td class="col-name">range_pct</td><td>volatilità</td><td>(H − L) / C</td><td>escursione istantanea</td></tr>
-        <tr><td>4</td><td class="col-name">body_pct</td><td>prezzo</td><td>(C − O) / C</td><td>corpo della candela, con segno</td></tr>
+        <tr><td>1</td><td class="col-name">log_return</td><td>prezzo</td><td>log(C / C₋₁)</td><td>log-ritorno di barra</td></tr>
+        <tr><td>2</td><td class="col-name">cum_log_return_window</td><td>prezzo</td><td>log(C / C₋ₙ)</td><td>momentum grezzo su N, nessuno smoothing</td></tr>
+        <tr><td>3</td><td class="col-name">bar_range_pct</td><td>volatilità</td><td>(H − L) / C</td><td>escursione istantanea</td></tr>
+        <tr><td>4</td><td class="col-name">candle_body_pct</td><td>prezzo</td><td>(C − O) / C</td><td>corpo della candela, con segno</td></tr>
         <tr><td>5</td><td class="col-name">upper_wick_pct</td><td>struttura</td><td>(H − max(O,C)) / C</td><td>rifiuto verso l'alto</td></tr>
         <tr><td>6</td><td class="col-name">lower_wick_pct</td><td>struttura</td><td>(min(O,C) − L) / C</td><td>rifiuto verso il basso</td></tr>
-        <tr><td>7</td><td class="col-name">close_loc_bar</td><td>struttura</td><td>(C − L) / (H − L)</td><td>in [0,1], dove chiude dentro la barra</td></tr>
-        <tr><td>8</td><td class="col-name">pos_in_range</td><td>posizione</td><td>2(C − minL_N)/(maxH_N − minL_N) − 1</td><td>in [−1,+1], allineata al target</td></tr>
-        <tr><td>9</td><td class="col-name">dist_max_pct</td><td>posizione</td><td>log(C / maxH_N)</td><td>≤ 0, distanza dal massimo recente</td></tr>
-        <tr><td>10</td><td class="col-name">dist_min_pct</td><td>posizione</td><td>log(C / minL_N)</td><td>≥ 0, distanza dal minimo recente</td></tr>
-        <tr><td>11</td><td class="col-name">bars_since_max</td><td>posizione</td><td>barre dal maxH_N / N</td><td>in [0,1], età dell'estremo</td></tr>
-        <tr><td>12</td><td class="col-name">bars_since_min</td><td>posizione</td><td>barre dal minL_N / N</td><td>in [0,1]</td></tr>
-        <tr><td>13</td><td class="col-name">range_width_pct</td><td>volatilità</td><td>log(maxH_N / minL_N)</td><td>ampiezza dell'escursione recente</td></tr>
-        <tr><td>14</td><td class="col-name">atr_pct</td><td>volatilità</td><td>ATR_N / C</td><td>smoothing di Wilder</td></tr>
-        <tr><td>15</td><td class="col-name">vol_realizzata</td><td>volatilità</td><td>deviazione_standard(ritorno_pct, N)</td><td></td></tr>
-        <tr><td>16</td><td class="col-name">vol_ratio</td><td>volatilità</td><td>std(ret, N/4) / std(ret, N)</td><td>volatilità in espansione o compressione</td></tr>
-        <tr><td>17</td><td class="col-name">volume_rel</td><td>volume</td><td>V / mediana(V, N)</td><td>ratio, robusto alle code</td></tr>
-        <tr><td>18</td><td class="col-name">volume_signed</td><td>volume</td><td>volume_rel · segno(ritorno_pct)</td><td>flusso direzionale, non cumulato</td></tr>
+        <tr><td>7</td><td class="col-name">close_position_in_bar</td><td>struttura</td><td>(C − L) / (H − L)</td><td>in [0,1], dove chiude dentro la barra</td></tr>
+        <tr><td>8</td><td class="col-name">close_position_in_window</td><td>posizione</td><td>2(C − minL_N)/(maxH_N − minL_N) − 1</td><td>in [−1,+1], allineata al target</td></tr>
+        <tr><td>9</td><td class="col-name">distance_from_window_high_pct</td><td>posizione</td><td>log(C / maxH_N)</td><td>≤ 0, distanza dal massimo recente</td></tr>
+        <tr><td>10</td><td class="col-name">distance_from_window_low_pct</td><td>posizione</td><td>log(C / minL_N)</td><td>≥ 0, distanza dal minimo recente</td></tr>
+        <tr><td>11</td><td class="col-name">age_of_window_high</td><td>posizione</td><td>barre dal maxH_N / N</td><td>in [0,1], età dell'estremo</td></tr>
+        <tr><td>12</td><td class="col-name">age_of_window_low</td><td>posizione</td><td>barre dal minL_N / N</td><td>in [0,1]</td></tr>
+        <tr><td>13</td><td class="col-name">window_range_pct</td><td>volatilità</td><td>log(maxH_N / minL_N)</td><td>ampiezza dell'escursione recente</td></tr>
+        <tr><td>14</td><td class="col-name">average_true_range_pct</td><td>volatilità</td><td>ATR_N / C</td><td>smoothing di Wilder</td></tr>
+        <tr><td>15</td><td class="col-name">realized_volatility</td><td>volatilità</td><td>deviazione_standard(log_return, N)</td><td></td></tr>
+        <tr><td>16</td><td class="col-name">volatility_expansion</td><td>volatilità</td><td>std(ret, N/4) / std(ret, N)</td><td>volatilità in espansione o compressione</td></tr>
+        <tr><td>17</td><td class="col-name">log_volume_vs_median</td><td>volume</td><td>log(V / mediana(V, N))</td><td>in log: il ratio grezzo ha skew 15 e coda solo a destra</td></tr>
+        <tr><td>18</td><td class="col-name">signed_volume</td><td>volume</td><td>log1p(V / mediana(V, N)) · segno(log_return)</td><td>flusso direzionale, non cumulato</td></tr>
         <tr><td>19</td><td class="col-name">volume_trend</td><td>volume</td><td>log(media(V, N/4) / media(V, N))</td><td></td></tr>
-        <tr><td>20</td><td class="col-name">obv_zscore</td><td>volume</td><td>z-score di OBV<sub>N</sub> = Σ<sub>N</sub> V·segno(ritorno_pct), su finestra N</td><td>cumulata <em>rolling</em>, non dall'inizio serie — stazionaria</td></tr>
-        <tr><td>21</td><td class="col-name">vwap_dist_pct</td><td>volume/prezzo</td><td>log(C / VWAP_N)</td><td></td></tr>
-        <tr><td>22</td><td class="col-name">kama_dist_pct</td><td>trend</td><td>log(C / KAMA_N)</td><td></td></tr>
-        <tr><td>23</td><td class="col-name">ema_dist_pct</td><td>trend</td><td>log(C / EMA_N)</td><td></td></tr>
+        <tr><td>20</td><td class="col-name">on_balance_volume_zscore</td><td>volume</td><td>z-score di OBV<sub>N</sub> = Σ<sub>N</sub> V·segno(log_return), su finestra N</td><td>cumulata <em>rolling</em>, non dall'inizio serie — stazionaria</td></tr>
+        <tr><td>21</td><td class="col-name">distance_from_vwap_pct</td><td>volume/prezzo</td><td>log(C / VWAP_N)</td><td></td></tr>
+        <tr><td>22</td><td class="col-name">distance_from_kama_pct</td><td>trend</td><td>log(C / KAMA_N)</td><td></td></tr>
+        <tr><td>23</td><td class="col-name">distance_from_ema_pct</td><td>trend</td><td>log(C / EMA_N)</td><td></td></tr>
         <tr><td>24</td><td class="col-name">ema_slope</td><td>trend</td><td>log(EMA_N / EMA_N₋ₖ)</td><td>pendenza del trend, k = N/4</td></tr>
-        <tr><td>25</td><td class="col-name">psar_dist_pct</td><td>trend</td><td>(C − PSAR) / C</td><td>segno = regime</td></tr>
-        <tr><td>26</td><td class="col-name">adx</td><td>forza trend</td><td>ADX_N / 100</td><td>in [0,1]</td></tr>
-        <tr><td>27</td><td class="col-name">tsi</td><td>momentum</td><td>TSI / 100</td><td>in [−1,+1], doppio smoothing</td></tr>
-        <tr><td>28</td><td class="col-name">rsi_centrato</td><td>momentum</td><td>RSI_N / 50 − 1</td><td>in [−1,+1]</td></tr>
+        <tr><td>25</td><td class="col-name">distance_from_psar_pct</td><td>trend</td><td>(C − PSAR) / C</td><td>segno = regime</td></tr>
+        <tr><td>26</td><td class="col-name">adx_trend_strength</td><td>forza trend</td><td>ADX_N / 100</td><td>in [0,1]</td></tr>
+        <tr><td>27</td><td class="col-name">tsi_momentum</td><td>momentum</td><td>TSI / 100</td><td>in [−1,+1], doppio smoothing</td></tr>
+        <tr><td>28</td><td class="col-name">rsi_centered</td><td>momentum</td><td>RSI_N / 50 − 1</td><td>in [−1,+1]</td></tr>
       </tbody>
     </table>
   </div>
@@ -497,13 +498,13 @@ h2.sec{
         <thead><tr><th>indicatore</th><th>parametro</th><th>valore</th><th>derivazione</th></tr></thead>
         <tbody>
           <tr><td class="col-name">famiglia N (2, 8–13, 15, 17, 20, 21, 23)</td><td>finestra</td><td>24</td><td>= finestra_estremi</td></tr>
-          <tr><td class="col-name">atr_pct</td><td>window</td><td>24</td><td>= N</td></tr>
-          <tr><td class="col-name">adx</td><td>window</td><td>24</td><td>= N</td></tr>
-          <tr><td class="col-name">rsi_centrato</td><td>window</td><td>24</td><td>= N</td></tr>
-          <tr><td class="col-name">kama_dist_pct</td><td>window (fast 2, slow 30)</td><td>24</td><td>= N; fast/slow sono costanti EMA, non finestre</td></tr>
-          <tr><td class="col-name">tsi</td><td>slow / fast</td><td>24 / 12</td><td>= N, N/2 — cade quasi sul classico 25/13</td></tr>
-          <tr><td class="col-name">vol_ratio, volume_trend, ema_slope</td><td>sotto-finestra</td><td>6</td><td>= N/4</td></tr>
-          <tr><td class="col-name">psar_dist_pct</td><td>step / max_step</td><td>0.02 / 0.2</td><td><strong>non derivabile</strong> — vedi sotto</td></tr>
+          <tr><td class="col-name">average_true_range_pct</td><td>window</td><td>24</td><td>= N</td></tr>
+          <tr><td class="col-name">adx_trend_strength</td><td>window</td><td>24</td><td>= N</td></tr>
+          <tr><td class="col-name">rsi_centered</td><td>window</td><td>24</td><td>= N</td></tr>
+          <tr><td class="col-name">distance_from_kama_pct</td><td>window (fast 2, slow 30)</td><td>24</td><td>= N; fast/slow sono costanti EMA, non finestre</td></tr>
+          <tr><td class="col-name">tsi_momentum</td><td>slow / fast</td><td>24 / 12</td><td>= N, N/2 — cade quasi sul classico 25/13</td></tr>
+          <tr><td class="col-name">volatility_expansion, volume_trend, ema_slope</td><td>sotto-finestra</td><td>6</td><td>= N/4</td></tr>
+          <tr><td class="col-name">distance_from_psar_pct</td><td>step / max_step</td><td>0.02 / 0.2</td><td><strong>non derivabile</strong> — vedi sotto</td></tr>
         </tbody>
       </table>
     </div>
@@ -513,9 +514,18 @@ h2.sec{
 
   <div class="callout">
     <h3>Scala comune per tutte le feature</h3>
-    <p>"Scala-libero" non significa pronto per una rete. Le colonne in % stanno nell'ordine di 10⁻³–10⁻², ADX in 0–100, TSI in −100…+100, <code>obv_zscore</code> in ~±3: ordini di grandezza incompatibili rallentano la convergenza e sbilanciano l'inizializzazione dei gate della GRU.</p>
-    <p><strong>TSI e ADX — divisione per 100.</strong> Entrambi hanno range noto e fisso per costruzione: ADX ∈ [0, 100] → <code>adx/100</code> ∈ [0, 1]; TSI ∈ [−100, +100] → <code>tsi/100</code> ∈ [−1, +1]. Costante nota, nessuna statistica da stimare, nessun rischio di leakage, trasformazione identica su train e test.</p>
-    <p><strong>Le altre colonne.</strong> Non hanno range noto a priori: <code>ritorno_pct</code>, <code>range_pct</code>, <code>atr_pct</code>, <code>kama_dist_pct</code>, <code>psar_dist_pct</code> sono già in % ma con dispersione molto diversa fra loro e fra timeframe; <code>volume_rel</code> è un ratio a coda lunga; <code>obv_zscore</code> è già standardizzato per costruzione. Per queste serve una statistica di scala — robust scaling su quantili, più adatto delle code grasse dei ritorni — stimata <strong>solo sul periodo di train</strong> e applicata invariata a test. Mai ricalcolata su tutto il dataset: sarebbe leakage.</p>
+    <p>"Scala-libero" non significa pronto per una rete. Le colonne in % stanno nell'ordine di 10⁻³–10⁻², ADX in 0–100, TSI in −100…+100, <code>on_balance_volume_zscore</code> in ~±3: ordini di grandezza incompatibili rallentano la convergenza e sbilanciano l'inizializzazione dei gate della GRU.</p>
+    <p><strong>TSI e ADX — divisione per 100.</strong> Entrambi hanno range noto e fisso per costruzione: ADX ∈ [0, 100] → <code>adx_trend_strength/100</code> ∈ [0, 1]; TSI ∈ [−100, +100] → <code>tsi_momentum/100</code> ∈ [−1, +1]. Costante nota, nessuna statistica da stimare, nessun rischio di leakage, trasformazione identica su train e test.</p>
+    <p><strong>Le altre colonne.</strong> Non hanno range noto a priori: <code>log_return</code>, <code>bar_range_pct</code>, <code>average_true_range_pct</code>, <code>distance_from_kama_pct</code>, <code>distance_from_psar_pct</code> sono già in % ma con dispersione molto diversa fra loro e fra timeframe; <code>log_volume_vs_median</code> è un ratio a coda lunga, preso in log a monte; <code>on_balance_volume_zscore</code> è già standardizzato per costruzione. Per queste serve una statistica di scala — robust scaling su quantili, più adatto delle code grasse dei ritorni — stimata <strong>solo sul periodo di train</strong> e applicata invariata a test. Mai ricalcolata su tutto il dataset: sarebbe leakage.</p>
+  </div>
+
+  <div class="callout">
+    <h3>Normalizzazione — formula fissata e misurata <span class="status-done">chiuso · implementato</span></h3>
+    <p><strong>La formula.</strong> <code>z = clip((x − mediana) / IQR, ±5) × 0.1</code>, statistiche stimate <strong>solo sul periodo di train</strong> e applicate invariate a validazione, test e live. Implementata in <code>tradingvision.normalize</code>: <code>fit(train)</code> restituisce centro e scala per colonna, <code>apply(x, stats)</code> non legge mai il frame a cui è applicata.</p>
+    <p><strong>Perché serve il clip.</strong> Misurato su 8 simboli, 15m, train 2023–24 e test 2025+ (1,03M righe): le 28 colonne grezze coprono <strong>3,2 ordini di grandezza</strong> — wick e log-ritorni a IQR 10⁻³, le limitate a 10⁰. Il quantile scaling da solo normalizza il corpo della distribuzione e lascia outlier fino a <strong>380 IQR</strong> fuori campione, che sui gate della GRU pesano quanto tutto il resto. Con <code>CLIP = 5</code> si tronca lo 0,46% dei valori (1,13% sulla colonna peggiore, <code>lower_wick_pct</code>) e il risultato è limitato a ±0,5.</p>
+    <p><strong>Esito.</strong> IQR esattamente 0,1 su tutte e 28 in train, 0,093–0,111 in test, cioè 0,08 decadi di spread contro le 3,2 di partenza. La trasformazione è monotona per colonna, quindi le correlazioni di Spearman del passo 2 della selezione restano intatte. <code>CLIP</code> è un compromesso esplicito: a 3 tronca il 2,0%, a 8 solo lo 0,15% ma gli estremi risalgono a 0,8.</p>
+    <p><strong>Anche le colonne già limitate passano di qui.</strong> L'argomento della sezione precedente — range noto, nessuna statistica da stimare, nessun leakage — resta corretto, ma fra loro hanno comunque 1,2 decadi di spread (<code>adx_trend_strength</code> a IQR 0,12 contro <code>on_balance_volume_zscore</code> a 2,10). Tenerle fuori ricrea in piccolo il problema che la normalizzazione risolve.</p>
+    <p><strong>Alternative scartate, misurate.</strong> <code>tanh</code> sullo span p1–p99: limitata a ±1 ma lascia 0,8 decadi di spread residuo e satura esattamente a 1,0, cioè gradiente nullo sugli estremi. Rank-uniform: perfettamente uniforme, ma sostituisce la grandezza col percentile e rompe il rapporto fra colonne parenti (<code>average_true_range_pct</code> contro <code>realized_volatility</code>).</p>
   </div>
 
   <h2 class="sec">Split, allineamento, leakage</h2>
@@ -646,16 +656,16 @@ h2.sec{
   <div class="callout">
     <h3>Quattro avvertenze che pesano più della procedura</h3>
     <p><strong>Permutation, non gain.</strong> Il <em>gain</em> nativo di LightGBM misura quanto un albero ha usato una colonna in training, non quanto quella colonna generalizza: premia le feature ad alta cardinalità e il rumore che l'albero è riuscito a memorizzare. La permutation importance rimescola una colonna alla volta e misura il degrado su dati non visti — è la sola delle due che risponde alla domanda giusta.</p>
-    <p><strong>Permutare per gruppo, non per colonna.</strong> Due colonne quasi identiche appaiono entrambe mediocri anche quando il gruppo che formano è forte: permutandone una, l'altra copre il buco. Per questo il clustering (passo 3) precede l'importanza (passo 4), e si permuta l'intero cluster — sul GBM anche tutti i lag e aggregati della stessa feature base. Due vincoli: <strong>stesso indice di permutazione</strong> per tutte le colonne del gruppo, altrimenti si mescolano campioni distinti dentro lo stesso concetto e si creano input impossibili, sovrastimando il degrado; e permutazione <strong>su tutti e 4 i rami insieme</strong> — <code>atr_pct</code> a 5m e a 1h sono la stessa feature a orizzonti diversi, permutarne una sola lascia all'altra il modo di compensare.</p>
+    <p><strong>Permutare per gruppo, non per colonna.</strong> Due colonne quasi identiche appaiono entrambe mediocri anche quando il gruppo che formano è forte: permutandone una, l'altra copre il buco. Per questo il clustering (passo 3) precede l'importanza (passo 4), e si permuta l'intero cluster — sul GBM anche tutti i lag e aggregati della stessa feature base. Due vincoli: <strong>stesso indice di permutazione</strong> per tutte le colonne del gruppo, altrimenti si mescolano campioni distinti dentro lo stesso concetto e si creano input impossibili, sovrastimando il degrado; e permutazione <strong>su tutti e 4 i rami insieme</strong> — <code>average_true_range_pct</code> a 5m e a 1h sono la stessa feature a orizzonti diversi, permutarne una sola lascia all'altra il modo di compensare.</p>
     <p><strong>Sulla GRU, permutare la sequenza e non i singoli step.</strong> Rimescolare una colonna step per step distrugge la struttura temporale della finestra, quindi il degrado misurato mescola "feature inutile" e "sequenza rotta", e sovrastima l'importanza di tutto. La permutazione va fatta <em>lungo la dimensione batch</em>: si scambia l'intera sequenza a 24 step di quella feature fra campioni diversi, lasciandola internamente intatta. Così si rompe solo l'associazione con la label, che è ciò che si vuole misurare.</p>
     <p><strong>Split temporale anche qui.</strong> La selezione è essa stessa un modello addestrato sui dati: farla su split casuale significa misurare leakage e portarselo dentro al set finale. Stessa regola del training — taglio unico e purging sulle label che sconfinano.</p>
   </div>
 
   <div class="callout">
     <h3>Cosa aspettarsi dai gruppi</h3>
-    <p><strong>Ridondanze probabili</strong> — <code>atr_pct</code> / <code>range_pct</code> / <code>vol_realizzata</code> misurano volatilità a smoothing diversi; <code>kama_dist_pct</code> / <code>ema_dist_pct</code> / <code>psar_dist_pct</code> sono tutte "distanza da un trend-follower"; <code>tsi</code> / <code>rsi_centrato</code> / <code>ritorno_cum_N</code> sono tutte momentum; <code>volume_rel</code> / <code>obv_zscore</code> / <code>volume_trend</code> si sovrappongono in parte.</p>
+    <p><strong>Ridondanze probabili</strong> — <code>average_true_range_pct</code> / <code>bar_range_pct</code> / <code>realized_volatility</code> misurano volatilità a smoothing diversi; <code>distance_from_kama_pct</code> / <code>distance_from_ema_pct</code> / <code>distance_from_psar_pct</code> sono tutte "distanza da un trend-follower"; <code>tsi_momentum</code> / <code>rsi_centered</code> / <code>cum_log_return_window</code> sono tutte momentum; <code>log_volume_vs_median</code> / <code>on_balance_volume_zscore</code> / <code>volume_trend</code> si sovrappongono in parte.</p>
     <p><strong>Perché ci sono comunque.</strong> Una GRU su 24 step può apprendere qualunque filtro lineare della sequenza dei ritorni: gli indicatori con smoothing interno alla finestra di input non aggiungono informazione, aggiungono il proprio ritardo. Restano in lista perché l'ipotesi va <em>misurata</em>, non assunta — ma sono i primi candidati all'uscita, e sono gli stessi le cui costanti non vale la pena tarare in anticipo.</p>
-    <p><strong>Il gruppo su cui puntare</strong> — le feature 8–12 (<code>pos_in_range</code>, <code>dist_max_pct</code>, <code>dist_min_pct</code>, <code>bars_since_max</code>, <code>bars_since_min</code>) descrivono dove sta il prezzo rispetto agli estremi recenti e da quanto: è la stessa grandezza che <code>swing_leg_target</code> misura, calcolata però solo sul passato. Zero smoothing, zero ritardo. È il gruppo da cui aspettarsi più IC.</p>
+    <p><strong>Il gruppo su cui puntare</strong> — le feature 8–12 (<code>close_position_in_window</code>, <code>distance_from_window_high_pct</code>, <code>distance_from_window_low_pct</code>, <code>age_of_window_high</code>, <code>age_of_window_low</code>) descrivono dove sta il prezzo rispetto agli estremi recenti e da quanto: è la stessa grandezza che <code>swing_leg_target</code> misura, calcolata però solo sul passato. Zero smoothing, zero ritardo. È il gruppo da cui aspettarsi più IC.</p>
   </div>
 
   <h2 class="sec">Validazione</h2>
@@ -680,7 +690,7 @@ h2.sec{
     <h3>Che cos'è un GBM, e perché come baseline</h3>
     <p><strong>Gradient Boosting Machine</strong> — un insieme di alberi decisionali costruiti in sequenza: ogni nuovo albero viene addestrato a predire l'<em>errore residuo</em> lasciato dalla somma dei precedenti. La predizione finale è la somma dei contributi di tutti gli alberi. Implementazioni standard: <code>LightGBM</code>, <code>XGBoost</code>, <code>CatBoost</code>.</p>
     <p><strong>Perché qui.</strong> (1) Su dati tabellari finanziari con poche centinaia di migliaia di righe batte le reti neurali nella maggior parte dei casi. (2) Allena in minuti su CPU, contro ore su GPU per la GRU: molte più iterazioni di validazione a parità di tempo. (3) Dà feature importance per colonna, quindi dice quali indicatori portano segnale — informazione che la GRU non restituisce. (4) Non richiede normalizzazione di scala, quindi è testabile prima ancora di fissare la regola di normalizzazione.</p>
-    <p><strong>Come si applica a un input sequenziale.</strong> Il GBM non accetta tensori 3D: le sequenze vanno appiattite. Due opzioni — (a) solo l'ultima candela di ciascun ramo → 4 × F colonne; (b) lag e aggregati per colonna (valore a t, t−1, t−4, media e deviazione sulla finestra) → qualche centinaio di colonne. <strong>Si usa (b).</strong> Con la sola ultima candela il GBM non vede la sequenza, quindi non è un confronto onesto contro la GRU, e la feature importance che ne esce penalizza le colonne informative solo in dinamica (<code>bars_since_max</code>, <code>ema_slope</code>).</p>
+    <p><strong>Come si applica a un input sequenziale.</strong> Il GBM non accetta tensori 3D: le sequenze vanno appiattite. Due opzioni — (a) solo l'ultima candela di ciascun ramo → 4 × F colonne; (b) lag e aggregati per colonna (valore a t, t−1, t−4, media e deviazione sulla finestra) → qualche centinaio di colonne. <strong>Si usa (b).</strong> Con la sola ultima candela il GBM non vede la sequenza, quindi non è un confronto onesto contro la GRU, e la feature importance che ne esce penalizza le colonne informative solo in dinamica (<code>age_of_window_high</code>, <code>ema_slope</code>).</p>
   </div>
 
   <div class="callout">
