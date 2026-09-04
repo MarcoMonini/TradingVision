@@ -1206,6 +1206,7 @@ dependencies = [
     { name = "alpaca-py" },
     { name = "pandas" },
     { name = "plotly" },
+    { name = "requests" },
     { name = "streamlit" },
     { name = "ta" },
 ]
@@ -1222,6 +1223,7 @@ requires-dist = [
     { name = "alpaca-py", specifier = "==0.42.0" },
     { name = "pandas", specifier = "==2.3.1" },
     { name = "plotly", specifier = "==6.2.0" },
+    { name = "requests", specifier = "==2.34.2" },
     { name = "streamlit", specifier = "==1.47.1" },
     { name = "ta", specifier = "==0.11.0" },
 ]
