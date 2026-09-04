@@ -461,9 +461,11 @@ tr td.col-name{color:var(--text);font-weight:500;}
 
   <div class="callout">
     <h3>Smoothing temporale — formula fissata</h3>
-    <p><code>0.7</code> è il coefficiente <code>peso_tempo</code> dell'interpolazione, non un filtro applicato a valle:</p>
-    <p><code>x = 0.7·avanzamento_tempo + 0.3·avanzamento_prezzo</code></p>
-    <p>Il target pesa quindi al 70% l'avanzamento <em>temporale</em> lungo la gamba (quante barre sono passate dal pivot k rispetto alla durata totale della gamba) e al 30% l'avanzamento <em>di prezzo</em> (quanta distanza è stata percorsa rispetto all'escursione totale). Entrambi i termini sono in [0, 1].</p>
+    <p><code>0.7</code> è il coefficiente <code>peso_tempo</code> dell'interpolazione — <code>smoothing</code> nel codice, esposto come slider nell'app — non un filtro applicato a valle:</p>
+    <p><code>x = smoothing·avanzamento_tempo + (1−smoothing)·avanzamento_prezzo</code></p>
+    <p>Il target pesa quindi al 70% l'avanzamento <em>temporale</em> lungo la gamba (quante barre sono passate dal pivot k rispetto alla durata totale della gamba) e al 30% l'avanzamento <em>di prezzo</em> (quanta distanza è stata percorsa rispetto all'escursione totale).</p>
+    <p><strong>L'avanzamento di prezzo va clippato a [0, 1], quello temporale no.</strong> Il tempo ci sta per costruzione. Il prezzo no, ed è un errore che questo documento ha portato a lungo: i pivot sono estremi locali di una finestra di 24 barre, non gli estremi della gamba, quindi una barra intermedia può scambiare oltre l'uno o l'altro pivot senza essere a sua volta un pivot — le servirebbero 24 barre libere da entrambi i lati. Misurato su 4 simboli, 15m: <strong>l'1.0% delle barre e il 3.1% delle gambe</strong> escono da [0, 1], con estremi osservati a −16 e +28. Senza clip il target sfonderebbe [−1, +1] proprio dove il prezzo è più rumoroso.</p>
+    <p><strong>Cosa il clip non risolve.</strong> Sulle gambe sane — l'86% dei casi fuori range — lo sconfinamento è minimo (mediana 0.16 di avanzamento, cioè meno di 0.10 sul target) e il clip è la lettura corretta: quella barra <em>è</em> davvero all'estremo della gamba. Il residuo è un'altra popolazione: gambe a escursione quasi nulla, dove i due pivot distano pochi punti base e il target ramp da +1 a −1 su rumore puro. Quelle non sono un problema di aritmetica ma di validità dell'etichetta, e sono trattate dalla pesatura per significatività qui sotto — non dal clip.</p>
     <p><strong>Nessuna EMA sul target.</strong> Non c'è un secondo passaggio di filtraggio: un'EMA causale introdurrebbe un ritardo e andrebbe documentata con un proprio simbolo. Se in futuro servisse, va aggiunta come step distinto, mai confusa con <code>peso_tempo</code>.</p>
     <p><strong>Effetto della scelta.</strong> Con peso 0.7 sul tempo il target avanza in modo quasi regolare lungo la gamba anche quando il prezzo si muove a scatti — più liscio e più facile da apprendere, ma meno reattivo a un'accelerazione improvvisa del prezzo. Il valore resta un parametro tarabile.</p>
   </div>
@@ -564,11 +566,11 @@ tr td.col-name{color:var(--text);font-weight:500;}
       <tbody>
         <tr><td class="col-name">1</td><td>GRU indipendente per ramo (pesi non condivisi tra rami)</td><td>(B, 24, F)</td><td>(B, H)</td></tr>
         <tr><td class="col-name">2</td><td>concatenazione dei 4 stati finali</td><td>4 × (B, H)</td><td>(B, 4H)</td></tr>
-        <tr><td class="col-name">3</td><td>testa densa + attivazione tanh</td><td>(B, 4H)</td><td>(B, 1)</td></tr>
+        <tr><td class="col-name">3</td><td>testa densa lineare (nessuna attivazione in uscita)</td><td>(B, 4H)</td><td>(B, 1)</td></tr>
       </tbody>
     </table>
   </div>
-  <p class="tf-note">H = dimensione dello stato nascosto per ramo, da fissare in fase di tuning (non ancora misurato). Output finale: scalare in [-1, 1], stessa scala di swing_leg_target. F = numero di feature superstiti alla selezione.</p>
+  <p class="tf-note">H = dimensione dello stato nascosto per ramo, da fissare in fase di tuning (non ancora misurato). Output finale: scalare non limitato, addestrato sulla scala di swing_leg_target (vedi punto 2 dei punti aperti). F = numero di feature superstiti alla selezione.</p>
 
   <div class="callout">
     <h3>Nota architetturale — GRU e pesi condivisi</h3>
@@ -716,8 +718,10 @@ tr td.col-name{color:var(--text);font-weight:500;}
   </div>
 
   <div class="callout">
-    <h3>2. Saturazione della tanh sui pivot</h3>
-    <p>L'output è <code>tanh</code> e il target vale <strong>esattamente ±1 sui pivot</strong>. La tanh tocca ±1 solo asintoticamente: per predire un pivot servono pre-attivazioni molto grandi, con gradiente che si annulla proprio nei punti di maggior interesse. Opzioni: output lineare senza attivazione, target riscalato a ±0.95, o tanh con guadagno. Da chiudere prima dell'implementazione della testa.</p>
+    <h3>2. Saturazione della tanh sui pivot — chiuso, testa lineare</h3>
+    <p><strong>Decisione: l'attivazione <code>tanh</code> in uscita si elimina.</strong> La testa è un denso lineare. Il problema: il target valeva allora esattamente ±1 sui pivot (oggi non più, vedi la pesatura per significatività) e la tanh tocca ±1 solo asintoticamente, quindi il gradiente si annullava proprio nei punti di maggior interesse. Le alternative scartate erano riscalare il target (±0.9 o ±0.95 — una costante arbitraria che entra in tutte le metriche di scala e conserva comunque un gradiente ridotto: 1−y² vale 0.19 a 0.9 e 0.10 a 0.95) e la tanh con guadagno (un iperparametro in più per risolvere qualcosa che togliere l'attivazione elimina).</p>
+    <p><strong>Perché il bound non serve.</strong> Nessuna metrica del documento lo richiede: Rank IC è invariante per trasformazioni monotone, IC per trasformazioni lineari. E l'uscita resta comunque limitata per costruzione: lo stato nascosto della GRU sta in [−1, 1] (combinazione convessa), quindi <code>w·h + b</code> è limitata da ‖w‖₁ + |b|, una costante che dipende solo dai pesi e non dall'input — non c'è input anomalo che possa farla esplodere. In più il segnale di addestramento spinge da solo l'uscita nel range dei target. Il residuo realistico è un lieve sforamento sui pivot più riconoscibili, che è informazione utile: l'ordinamento fra "pivot molto probabile" e "pivot probabile" sopravvive invece di essere schiacciato contro l'asintoto.</p>
+    <p><strong>Conseguenze.</strong> Nessun clip, né in training né in produzione, salvo esigenze di presentazione. L'Huber (punto 1) copre il tetto sull'errore singolo che la tanh forniva — con MSE pura andrebbe riconsiderato. Se in futuro la testa diventasse a due strati, l'attivazione va rimessa <strong>fra</strong> i due strati, mai in uscita. L'inizializzazione dell'ultimo strato va standard (bias a 0, pesi piccoli) così l'uscita parte vicino a 0, centro della distribuzione del target.</p>
   </div>
 
   <div class="callout">
@@ -763,10 +767,29 @@ tr td.col-name{color:var(--text);font-weight:500;}
   </div>
 
   <div class="callout">
-    <h3>Ipotesi — gambe di ampiezza ridotta (rinviata)</h3>
-    <p><strong>Decisione: si parte senza alcuno scarto e senza alcuna pesatura.</strong> Tutte le gambe entrano nel dataset con peso uniforme. L'ipotesi resta documentata per una fase successiva, da attivare solo se misurazioni sull'IC mostrano che le gambe deboli degradano l'apprendimento.</p>
-    <p><strong>L'ipotesi.</strong> <code>valori[k] = tanh(ampiezza[k]/riferimento[k])</code> è già calcolato per ogni pivot dopo la fusione, con <code>ampiezza[k]</code> riferita alla gamba k−1→k. Con <code>riferimento[k]</code> anch'esso relativo (es. ATR% al pivot) il rapporto è adimensionale e la <code>tanh</code> ha lo stesso significato su tutti gli asset. Dove <code>|valori[k]| &lt; soglia</code> (es. 0.7, non misurata), il pivot k sarebbe "rumore" e si scarterebbe (NaN, stessa convenzione già in uso) il target dei bar della gamba precedente, non le singole barre.</p>
-    <p><strong>Punti aperti.</strong> Soglia da misurare. Rischio di shift di distribuzione: il modello non vedrebbe mai gambe deboli in training ma le incontra continuamente in produzione — se si arriverà a intervenire, <em>pesare</em> i campioni per ampiezza è preferibile a scartarli, perché mantiene il segnale e riduce solo il contributo al gradiente. Il dubbio su quale gamba scartare è risolto dalla convenzione all'indietro: <code>ampiezza[k]</code> qualifica la gamba k−1→k, quindi la soglia agisce su quei bar.</p>
+    <h3>Gambe di ampiezza ridotta — attivata, con <code>riferimento[k]</code> misurato</h3>
+    <p><strong>Decisione: i pivot sono pesati per la significatività della gamba che chiudono, non valgono ±1 piatti.</strong> Implementata in <code>tradingvision.data.target</code>, calibrata in <code>tradingvision.reference</code>.</p>
+    <p><code>valori[k] = kind[k] · tanh( ampiezza[k] / (σ · √durata[k]) )</code></p>
+    <p><strong>Perché non è più rinviata.</strong> La motivazione originale era una scommessa — "le gambe deboli degradano l'apprendimento", da verificare sull'IC. Quella misurata è più forte e non richiede di aspettare: su una gamba a escursione quasi nulla l'etichetta non è debole, è <em>falsa</em>. Il pivot minimo può chiudere <em>sopra</em> il massimo che lo precede (caso reale su BTC 15m: massimo a 69416.37, minimo 94 barre dopo a 69482.00, con il prezzo che nel mezzo oscilla fra 68356 e 71228) e il target scende da +1 a −1 mentre il prezzo sale. Non è un caso di scuola: 1.3% delle gambe su 101.541 misurate.</p>
+    <p><strong><code>riferimento[k]</code> = σ·√durata, non l'ATR.</strong> σ è la deviazione standard dei log-return su 96 barre — <code>4 × finestra_estremi</code>, derivata come tutti gli altri parametri e non scelta a parte. Il rapporto legge "quanto si è mosso il prezzo rispetto a quanto si sarebbe mosso per caso nel tempo che la gamba ha impiegato". Confronto su 20 simboli, 101.541 gambe, 2017–2026, con due criteri: <em>invarianza</em> (una soglia fissata sul pooled al 5% deve colpire il 5% in ogni simbolo e in ogni anno) e <em>discriminazione</em> (deve pescare le gambe rotte, definite in modo indipendente come quelle il cui avanzamento di prezzo esce da [0,1] di oltre 0.5).</p>
+    <div class="tbl-wrap">
+      <table>
+        <caption>candidati per riferimento[k] — 20 simboli, 101.541 gambe, 15m</caption>
+        <thead><tr><th>candidato</th><th>spread mediane (log)<br>per simbolo</th><th>per anno</th><th>recall gambe rotte</th><th>percentile della rotta mediana</th></tr></thead>
+        <tbody>
+          <tr><td class="col-name">nessuno (soglia % fissa)</td><td>0.25</td><td>0.24</td><td>39.8%</td><td>8.9</td></tr>
+          <tr><td class="col-name">ATR% (96 barre)</td><td>0.06</td><td>0.08</td><td>53.6%</td><td>3.8</td></tr>
+          <tr><td class="col-name">ATR% (24 barre)</td><td>0.05</td><td>0.06</td><td>57.0%</td><td>2.5</td></tr>
+          <tr><td class="col-name">σ·√durata</td><td>0.03</td><td>0.04</td><td><strong>85.1%</strong></td><td><strong>0.9</strong></td></tr>
+          <tr><td class="col-name">mediana gambe recenti</td><td>0.01</td><td>0.01</td><td>49.1%</td><td>5.4</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>L'ATR misura quanto il prezzo si muove <em>in una barra</em>, quindi una gamba lunga accumula più unità di ATR di una corta a parità di ampiezza: il rapporto confonde "gamba grande" con "gamba lenta". Il <code>√durata</code> toglie esattamente quel termine, ed è il motivo per cui vince — le gambe degeneri sono lunghe e piatte.</p>
+    <p><strong>La mediana delle gambe recenti va scartata benché vinca l'invarianza.</strong> Normalizzare sulle gambe precedenti dà invarianza perfetta per costruzione, ma si adatta anche al regime sbagliato: in una fase piatta dove <em>tutte</em> le gambe sono rumore la mediana scende con loro e nessuna viene più segnalata. Si vede nel recall, 49%. È il caso in cui l'invarianza da sola avrebbe scelto il candidato peggiore — ed è la ragione per cui i criteri sono due.</p>
+    <p><strong>Nessuna costante di scala, nessuna soglia.</strong> Il rapporto è già O(1) — mediana di panel 1.6 — quindi la <code>tanh</code> si applica nuda e non introduce parametri. La gamba mediana tiene un pivot a 0.92, la gamba rotta mediana scende a 0.39, e su BTC 15m il valore assoluto mediano di un pivot è 0.88. Non c'è più una soglia da tarare né uno scarto: l'attenuazione è continua, quindi cade anche il rischio di shift di distribuzione annotato in origine — il modello continua a vedere le gambe deboli, con un'etichetta che dice quanto valgono.</p>
+    <p><strong>La pesatura è per pivot, non per gamba.</strong> Un pivot è condiviso dalla gamba che finisce su di lui e da quella che riparte, e deve essere un numero solo: pesare per gamba renderebbe il target discontinuo proprio sul pivot. Conseguenza da tenere presente: una gamba debole non sta piatta a 0, decade dal valore del pivot precedente verso ~0 — "eravamo su un massimo, poi non è successo niente di significativo". La convenzione all'indietro fa il resto, <code>ampiezza[k]</code> qualifica la gamba k−1→k e quindi il pivot k.</p>
+    <p><strong>Costo.</strong> NaN sui pivot non valutabili — il primo della serie e quelli finché la finestra di volatilità non si è riempita — che si propaga alle due gambe che li toccano: su 3000 barre di BTC sono 44 barre in meno, in testa alla serie.</p>
   </div>
 </div>
 
