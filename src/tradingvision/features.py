@@ -46,7 +46,7 @@ FAMILIES: dict[str, tuple[str, ...]] = {
         "age_of_window_low",
     ),
     "volume": (
-        "volume_vs_median",
+        "log_volume_vs_median",
         "signed_volume",
         "volume_trend",
         "on_balance_volume_zscore",
@@ -75,7 +75,7 @@ LABELS = {
     "distance_from_window_low_pct": "Distance from Window Low (%)",
     "age_of_window_high": "Age of Window High",
     "age_of_window_low": "Age of Window Low",
-    "volume_vs_median": "Volume vs Median",
+    "log_volume_vs_median": "Log Volume vs Median",
     "signed_volume": "Signed Volume",
     "volume_trend": "Volume Trend",
     "on_balance_volume_zscore": "On-Balance Volume (z-score)",
@@ -109,6 +109,7 @@ def features(df: pd.DataFrame, n: int = EXTREMA_WINDOW) -> pd.DataFrame:
     bar_range = (h - low).replace(0, np.nan)
     ema = c.ewm(span=n, adjust=False).mean()
     obv = (v * np.sign(ret)).rolling(n).sum()
+    volume_rel = v / v.rolling(n).median()
 
     f = {
         "log_return": ret,
@@ -129,7 +130,10 @@ def features(df: pd.DataFrame, n: int = EXTREMA_WINDOW) -> pd.DataFrame:
         "average_true_range_pct": AverageTrueRange(h, low, c, window=n).average_true_range() / c,
         "realized_volatility": ret.rolling(n).std(),
         "volatility_expansion": ret.rolling(short).std() / ret.rolling(n).std(),
-        "volume_vs_median": v / v.rolling(n).median(),
+        # In log: the raw ratio is one-sided with a very long right tail (skew 15 on the store),
+        # so a quantile scaler has to clip 2.4% of it against 0.02% for the log. The floor only
+        # bites on bars with no trade at all, five per symbol in 2023+, where the ratio is 0.
+        "log_volume_vs_median": np.log(volume_rel.clip(lower=1e-6)),
         "volume_trend": np.log(v.rolling(short).mean() / v.rolling(n).mean()),
         # Rolling, not cumulated from the start of the series: a running total is not stationary.
         "on_balance_volume_zscore": (obv - obv.rolling(n).mean()) / obv.rolling(n).std(),
@@ -151,7 +155,9 @@ def features(df: pd.DataFrame, n: int = EXTREMA_WINDOW) -> pd.DataFrame:
         "tsi_momentum": TSIIndicator(c, window_slow=n, window_fast=short).tsi() / 100,
         "rsi_centered": RSIIndicator(c, window=n).rsi() / 50 - 1,
     }
-    f["signed_volume"] = f["volume_vs_median"] * np.sign(ret)
+    # log1p, not the log above: the magnitude has to stay non-negative or the sign of the column
+    # stops meaning the direction of the bar.
+    f["signed_volume"] = np.sign(ret) * np.log1p(volume_rel)
     return pd.DataFrame(f)[COLUMNS]
 
 
