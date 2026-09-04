@@ -19,7 +19,7 @@ import pandas as pd
 from scipy.cluster.hierarchy import fcluster, linkage
 from scipy.spatial.distance import squareform
 
-from tradingvision import dataset, features, gbm, split
+from tradingvision import dataset, features, gbm, linear, metrics, split
 from tradingvision.dataset import cached
 
 # Share of a column that may be NaN or infinite before the column stops being usable at all. Not
@@ -165,6 +165,97 @@ def survivors(labels: pd.Series) -> pd.Series:
     return chosen.sort_values(key=lambda s: s.map(SIMPLICITY.__getitem__))
 
 
+# Rounds for the importance model, fixed instead of early-stopped. Step 2 measured the validation
+# Rank IC to be flat within 0.001-0.004 over every round from 6 to 100, so nothing is lost by
+# fixing it — and it buys the one thing that matters here: the validation slice stays untouched by
+# training, so permuting it measures generalisation and not a set the model has already been
+# steered towards.
+IMPORTANCE_ROUNDS = 60
+# Draws per group. The spread over them is the noise floor that decides which importances are
+# "nulla o negativa" in the spec's sense: one draw cannot tell a small effect from no effect.
+PERMUTATIONS = 5
+
+
+def groups_of(columns: list[str], names: list[str]) -> dict[str, list[str]]:
+    """Indicator -> every flattened column of it: value at t, both lags, both window statistics,
+    on all four branches. This is the unit pass 4 permutes.
+
+    Both of the spec's constraints live in this shape. Permuting `close_position_in_window_5m`
+    alone leaves its own lag and its 1h twin in place to fill the hole, and the column reads as
+    worthless when the concept is not; the 20 columns move together or the measurement is wrong.
+    """
+    out: dict[str, list[str]] = {n: [] for n in names}
+    for c in columns:
+        if (base := gbm.base_feature(c)) in out:
+            out[base].append(c)
+    return out
+
+
+def _rank_ic(model, x: np.ndarray, index: pd.MultiIndex, target: pd.Series) -> float:
+    return metrics.by_date(pd.Series(model.predict(x), index=index), target, rank=True).dropna().mean()
+
+
+def permutation_importance(
+    model, valid: pd.DataFrame, groups: dict[str, list[str]], repeats: int = PERMUTATIONS, seed: int = 0
+) -> tuple[float, pd.DataFrame]:
+    """Pass 4 — how much validation Rank IC each group is worth, and the unpermuted score.
+
+    One shared permutation index per group, as the spec requires: drawing a separate one per
+    column would pair the 5m value of one bar with the 1h value of another, an input the world
+    cannot produce, and the degradation would measure the impossibility rather than the group.
+
+    The frame is permuted in place and restored, because a copy of the validation slice per group
+    is a few hundred megabytes twenty times over for no reason.
+    """
+    cols = model.feature_name()
+    x = valid[cols].to_numpy(dtype=np.float32, copy=True)
+    at = {c: i for i, c in enumerate(cols)}
+    baseline = _rank_ic(model, x, valid.index, valid.target)
+    rng = np.random.default_rng(seed)
+
+    rows = {}
+    for name, group in groups.items():
+        pos = [at[c] for c in group]
+        saved = x[:, pos].copy()
+        drops = []
+        for _ in range(repeats):
+            x[:, pos] = saved[rng.permutation(len(x))]  # one index for the whole group
+            drops.append(baseline - _rank_ic(model, x, valid.index, valid.target))
+        x[:, pos] = saved
+        rows[name] = {"columns": len(group), "importance": np.mean(drops), "std": np.std(drops, ddof=1)}
+    return baseline, pd.DataFrame(rows).T.sort_values("importance", ascending=False)
+
+
+SHADOW = "shadow"
+
+
+def with_shadow(df: pd.DataFrame, groups: dict[str, list[str]], seed: int = 0) -> tuple[pd.DataFrame, dict]:
+    """`df` plus a group of pure noise shaped exactly like every real group — pass 4's null.
+
+    "Importanza nulla" cannot be read as "importance <= 0", and this is why: permuting any column
+    the model actually splits on adds noise to the prediction and lowers the Rank IC, whether or
+    not the column carries signal. A useless group therefore scores comfortably above zero, and
+    scores higher the more columns it has. So the floor is measured rather than assumed — a group
+    of the same width, containing nothing, trained alongside the rest and permuted the same way.
+    """
+    width = max(len(g) for g in groups.values())
+    rng = np.random.default_rng(seed)
+    names = [f"{SHADOW}{i:02d}_5m" for i in range(width)]
+    noise = pd.DataFrame(rng.normal(size=(len(df), width)).astype("float32"), index=df.index, columns=names)
+    return df.join(noise), dict(groups, **{SHADOW: names})
+
+
+def important(report: pd.DataFrame, floor: str = SHADOW) -> list[str]:
+    """The groups that beat the null by more than the two scatters together. The rest exit.
+
+    Both sides are estimates over a handful of draws, so comparing the two means alone would let
+    a group through on the strength of one lucky permutation.
+    """
+    null, spread = report.importance[floor], report["std"][floor]
+    gap = report.importance - null
+    return [n for n in report.index if n != floor and gap[n] > report["std"][n] + spread]
+
+
 def _selfcheck() -> None:
     n = 1000
     rng = np.random.default_rng(0)
@@ -217,6 +308,39 @@ def _selfcheck() -> None:
     # Same effective lag, so the spec table's order decides — and it lists the body before the wick.
     assert representative(["upper_wick_pct", "candle_body_pct"]) == "candle_body_pct"
 
+    # Pass 4, and the claim that justifies permuting a whole group at once: `a` is duplicated as
+    # its own lag, so each copy alone looks worthless while the pair carries the whole signal.
+    idx = pd.MultiIndex.from_product([pd.date_range("2024", periods=400, freq="h", tz="UTC"), list("abcde")])
+    # Two noisy readings of the same latent, which is what a column and its own lag are: neither
+    # alone tells the model much the other cannot, and together they carry the whole signal.
+    latent = rng.normal(size=len(idx))
+    frame = pd.DataFrame(
+        {
+            "a_5m": latent + rng.normal(0, 0.5, len(idx)),
+            "a_lag1_5m": latent + rng.normal(0, 0.5, len(idx)),
+            "c_5m": rng.normal(size=len(idx)),
+        },
+        index=idx,
+    ).assign(target=latent + rng.normal(0, 0.3, len(idx)), next_pivot=idx.get_level_values(0))
+
+    grouped = groups_of(["a_5m", "a_lag1_5m", "c_5m"], ["a", "c"])
+    assert grouped == {"a": ["a_5m", "a_lag1_5m"], "c": ["c_5m"]}
+
+    frame, grouped = with_shadow(frame, grouped)
+    inner, valid = split.temporal_fraction(frame, 0.3)
+    model = gbm.fit(inner, valid, IMPORTANCE_ROUNDS)
+    base, report = permutation_importance(model, valid, grouped)
+    assert base > 0.5, base
+    # The null is measured and then excluded from its own verdict: only `a` beats a group of the
+    # same width containing nothing at all, and the shadow never appears among the survivors.
+    assert important(report) == ["a"], report
+    assert report.importance["a"] > 10 * (report.importance[SHADOW] + report["std"][SHADOW]), report
+
+    # And the constraint that shapes the grouping: permuted one at a time, each column has the
+    # other to fall back on, so the two individual scores do not add up to the group's.
+    _, alone = permutation_importance(model, valid, {"a_5m": ["a_5m"], "a_lag1_5m": ["a_lag1_5m"]})
+    assert alone.importance.sum() < report.importance["a"], (alone, report)
+
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
@@ -226,6 +350,7 @@ def main() -> None:
     ap.add_argument("--cache", type=Path, default=gbm.CACHE)
     ap.add_argument("--threshold", type=float, default=0.8, help="|rho| above which two indicators are redundant")
     ap.add_argument("--cut", type=float, default=CUT, help="clustering cut on distance = 1 - |rho|")
+    ap.add_argument("--permutations", type=int, default=PERMUTATIONS, help="draws per group in pass 4")
     args = ap.parse_args()
 
     _selfcheck()
@@ -252,6 +377,18 @@ def main() -> None:
     print(f"\npass 3 — clustering at {args.cut}: {len(kept)} of {len(labels)} indicators survive\n")
     grouped = labels.groupby(labels).apply(lambda g: ", ".join(sorted(g.index, key=SIMPLICITY.__getitem__)))
     print(pd.DataFrame({"survivor": kept, "cluster": grouped}).to_string(index=False))
+
+    # Only the survivors, so the model cannot lean on a correlate that pass 3 already removed —
+    # and every flattened variant of them, because pass 4 permutes the whole concept at once.
+    groups = groups_of(gbm.columns(train), kept.tolist())
+    framed, groups = with_shadow(train[sum(groups.values(), []) + linear.META], groups)
+    inner, valid = split.temporal_fraction(framed, gbm.VALID_FRACTION)
+    model = gbm.fit(inner, valid, IMPORTANCE_ROUNDS)
+    base, report = permutation_importance(model, valid, groups, args.permutations)
+    keeps = important(report)
+    print(f"\npass 4 — permutation importance on {len(valid):,} validation rows, Rank IC {base:.4f}")
+    print(f"{len(keeps)} of {len(report)} groups clear their own noise floor\n")
+    print(report.round(5).to_string())
 
 
 if __name__ == "__main__":
