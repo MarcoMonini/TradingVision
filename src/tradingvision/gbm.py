@@ -32,7 +32,7 @@ import pandas as pd
 
 from tradingvision import linear, metrics, split
 from tradingvision.data.binance import STORE
-from tradingvision.dataset import build
+from tradingvision.dataset import cached
 
 CACHE = STORE / "step2.parquet"
 
@@ -56,6 +56,20 @@ PARAMS = {
 ROUNDS = 2000
 # In boosting rounds, not epochs. The spec's patience of 10 is a GRU number, and an epoch moves
 # the model much further than a tree at a learning rate of 0.05 does.
+#
+# The stopping round it reports is not a meaningful quantity, and the first run's spread of 6 to
+# 76 trees across four folds is not instability worth chasing. Measured on all four, the
+# validation Rank IC is flat to within 0.001-0.004 over every round from 6 to 100, so the argmax
+# inside that plateau is decided by noise; stopping at the low end instead of the middle costs at
+# most 0.0065 of test Rank IC against a fold-to-fold standard deviation of 0.015. Raising the
+# patience does not help — on fold 2 the round-6 and round-60 scores differ by 6e-5. Past 100
+# rounds the decline is real and consistent on every fold, on validation and test alike, which is
+# what early stopping is here to catch.
+#
+# The reading that matters from that sweep is elsewhere: a *single* tree already scores a test
+# Rank IC of 0.150 averaged over the folds, against 0.157 for the whole ensemble and 0.124 for
+# step 1's least squares. Boosting adds 0.007 on top of one coarse partition. With 560 columns
+# available, that is the shape of the result — not the tree count.
 PATIENCE = 50
 # Tail of each fold's train period held out for early stopping, purged like every other boundary.
 VALID_FRACTION = 0.2
@@ -191,11 +205,9 @@ def main() -> None:
     args = ap.parse_args()
 
     _selfcheck()
-    if args.cache.exists():
-        df = pd.read_parquet(args.cache)
-    else:
-        df = build(start=args.start, stride=args.stride, lags=True)
-        df.to_parquet(args.cache)
+    # Half an hour to build and 600 MB on disk, so it is reused — with the parameters recorded
+    # beside it, because a silently reused file built at another stride is an irreproducible metric.
+    df = cached(args.cache, start=args.start, stride=args.stride, lags=True)
     print(f"{len(df):,} rows, {len(columns(df))} columns, {args.folds} folds from {args.test_start}\n")
 
     out = run(df, args.test_start, args.folds)

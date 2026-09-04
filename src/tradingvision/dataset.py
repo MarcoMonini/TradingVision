@@ -36,6 +36,9 @@ bars, the maximum measured 754).
 
 from __future__ import annotations
 
+import json
+import tempfile
+from pathlib import Path
 from typing import Callable
 
 import pandas as pd
@@ -147,6 +150,30 @@ def build(
     return pd.concat(frames, names=["symbol"]).swaplevel().sort_index()
 
 
+def cached(path: Path, **params) -> pd.DataFrame:
+    """`build(**params)`, materialised next to a JSON stamp of the arguments that produced it.
+
+    A built dataset takes about half an hour and 600 MB, so it is reused across runs — and a
+    reused file that was built with a different stride, window or lag setting is the kind of
+    mistake that shows up as a metric nobody can reproduce. So the parameters travel with the
+    parquet and a mismatch stops the run instead of quietly answering the wrong question.
+    """
+    stamp = path.with_suffix(".json")
+    # `LAGS` travels too: it is not an argument, and changing it changes every column in the file.
+    written = dict(params, symbols=sorted(params.get("symbols") or binance.SYMBOLS), lags_at=list(LAGS))
+    if path.exists():
+        if not stamp.exists():
+            raise SystemExit(f"{path} has no {stamp.name} recording how it was built — delete it and rebuild")
+        if (was := json.loads(stamp.read_text())) != written:
+            raise SystemExit(f"{path} was built with {was}, not {written} — delete it or pass another --cache")
+        return pd.read_parquet(path)
+
+    df = build(**params)
+    df.to_parquet(path)
+    stamp.write_text(json.dumps(written, indent=2, sort_keys=True))
+    return df
+
+
 def _selfcheck() -> None:
     """`lagged` widens without looking forward — the one thing that would quietly invent signal."""
     f = pd.DataFrame(
@@ -162,6 +189,25 @@ def _selfcheck() -> None:
     assert out.a_lag4.iloc[:4].isna().all(), "no value before the fourth bar"
     # Causality: truncating the future leaves every past row untouched.
     assert lagged(f.iloc[:50], n=4).iloc[49].equals(out.iloc[49])
+
+    # The cache refuses a file built with other parameters instead of answering the wrong question.
+    with tempfile.TemporaryDirectory() as d:
+        path = Path(d) / "x.parquet"
+        pd.DataFrame({"target": [1.0]}).to_parquet(path)
+        for wrong in (dict(stride=12, symbols=["BTC"]),):  # no stamp yet: unreadable provenance
+            try:
+                cached(path, **wrong)
+            except SystemExit:
+                break
+            raise AssertionError("a cache with no stamp has to stop the run")
+        path.with_suffix(".json").write_text(json.dumps(dict(stride=12, symbols=["BTC"], lags_at=list(LAGS))))
+        assert len(cached(path, stride=12, symbols=["BTC"])) == 1, "a matching stamp reads the file back"
+        for wrong in (dict(stride=6, symbols=["BTC"]), dict(stride=12, symbols=["ETH"])):
+            try:
+                cached(path, **wrong)
+            except SystemExit:
+                continue
+            raise AssertionError(f"a cache built with other parameters has to stop the run: {wrong}")
 
 
 if __name__ == "__main__":
