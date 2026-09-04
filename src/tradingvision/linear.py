@@ -39,21 +39,53 @@ def predict(x: pd.DataFrame, coef: np.ndarray) -> pd.Series:
     return pd.Series(x.to_numpy() @ coef[:-1] + coef[-1], index=x.index)
 
 
-def run(df: pd.DataFrame, cut: str) -> pd.DataFrame:
-    """Fit on train, report the four signal metrics on both sides of the cut."""
+def fit_predict(df: pd.DataFrame, cut: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
+    """Fit on the purged train side of `cut`, predict on both sides."""
     train, test = split.temporal(df, cut)
     cols = [c for c in df.columns if c not in LABELS]
     stats = normalize.fit(train[cols])  # train only: refitting on the whole frame is leakage
     x_train, x_test = normalize.apply(train[cols], stats), normalize.apply(test[cols], stats)
 
     coef = ols(x_train, train.swing_leg_target)
+    return train, test, predict(x_train, coef), predict(x_test, coef)
+
+
+def run(df: pd.DataFrame, cut: str) -> pd.DataFrame:
+    """The four signal metrics on both sides of the cut."""
+    train, test, p_train, p_test = fit_predict(df, cut)
     rows = {
-        "train": metrics.signal(predict(x_train, coef), train.swing_leg_target),
-        "test": metrics.signal(predict(x_test, coef), test.swing_leg_target),
+        "train": metrics.signal(p_train, train.swing_leg_target),
+        "test": metrics.signal(p_test, test.swing_leg_target),
     }
     out = pd.DataFrame(rows).T
     out.insert(0, "bars", [len(train), len(test)])
     return out
+
+
+# Bars to the next pivot, in 5m steps. The last bucket is open: the horizon is unbounded, p99 is
+# 202 bars and the maximum measured 754.
+HORIZON_BINS = [0, 6, 12, 24, 48, 96, 192, 10**6]
+
+
+def by_horizon(df: pd.DataFrame, cut: str, bins: list[int] = HORIZON_BINS) -> pd.DataFrame:
+    """Test Rank IC split by how far the next pivot is — the discriminator between the two
+    readings of a high step-1 IC.
+
+    A structural overlap between the label and the causal features (the target is a position
+    between two extrema, `close_position_in_window` is the same formula on a past window) sits at
+    every distance. Residual leakage does not: an alignment or purging fault shows up on the bars
+    whose pivot is imminent, because those are the ones whose label is nearly fixed by prices the
+    features can already see. A flat profile clears the pipeline; a spike on the near buckets is a
+    bug to find.
+    """
+    _, test, _, pred = fit_predict(df, cut)
+    horizon = (test.next_pivot - test.index.get_level_values(0)) // pd.Timedelta(minutes=5)
+    bucket = pd.cut(horizon, bins, right=False)
+    rows = {}
+    for b, rows_in in test.groupby(bucket, observed=True).groups.items():
+        per_date = metrics.by_date(pred.loc[rows_in], test.swing_leg_target.loc[rows_in], rank=True).dropna()
+        rows[str(b)] = {"bars": len(rows_in), "dates": len(per_date), "rank_ic": per_date.mean()}
+    return pd.DataFrame(rows).T
 
 
 def _selfcheck() -> None:
@@ -72,6 +104,12 @@ def _selfcheck() -> None:
     noise = df.assign(swing_leg_target=rng.normal(size=len(idx)))
     assert abs(run(noise, "2024-01-10").loc["test", "rank_ic"]) < 0.1
 
+    # The horizon split keeps every test bar and puts each one in the bucket of its own distance.
+    far = df.assign(next_pivot=idx.get_level_values(0) + pd.Timedelta(hours=3))
+    h = by_horizon(far, "2024-01-10", bins=[0, 12, 24, 10**6])
+    assert h.bars.sum() == len(split.temporal(far, "2024-01-10")[1])
+    assert h.index.tolist() == ["[24, 1000000)"], h  # 3h at a 12-bar hour is 36 bars
+
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
@@ -79,6 +117,7 @@ def main() -> None:
     ap.add_argument("--cut", default="2025-06", help="train before, test after")
     ap.add_argument("--stride", type=int, default=12, help="5m bars between samples, 12 = hourly")
     ap.add_argument("--cache", type=Path, default=CACHE, help="built dataset, reused when present")
+    ap.add_argument("--horizon", action="store_true", help="also split the test Rank IC by distance to the next pivot")
     args = ap.parse_args()
 
     _selfcheck()
@@ -89,6 +128,9 @@ def main() -> None:
         df.to_parquet(args.cache)
     print(f"{len(df):,} rows, {df.index.get_level_values(1).nunique()} symbols, cut at {args.cut}\n")
     print(run(df, args.cut).round(4).to_string())
+    if args.horizon:
+        print("\ntest Rank IC by bars to the next pivot\n")
+        print(by_horizon(df, args.cut).round(4).to_string())
 
 
 if __name__ == "__main__":
