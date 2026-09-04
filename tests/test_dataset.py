@@ -6,8 +6,8 @@ the truncated run would have nothing to read there and the values would differ."
 import numpy as np
 import pandas as pd
 
-from tradingvision.dataset import BRANCHES, branch, symbol_frame
 from tradingvision.data.binance import OHLC
+from tradingvision.dataset import BRANCHES, branch, symbol_frame
 
 
 def synthetic(bars: int = 3000, seed: int = 0) -> pd.DataFrame:
