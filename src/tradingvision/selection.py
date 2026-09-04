@@ -226,6 +226,39 @@ def permutation_importance(
     return baseline, pd.DataFrame(rows).T.sort_values("importance", ascending=False)
 
 
+# What the five passes returned, on the stamped `data/step2.parquet`, train period to 2025-06.
+# In descending permutation importance. This is the module's output: `main()` measures it, this
+# records it, and step 3 reads it from here instead of re-running an hour of clustering.
+#
+# It is a measurement and not a decision carved in stone. It was made *with a GBM*, and a column
+# an ensemble of trees cannot use on flattened inputs is not necessarily a column a recurrent net
+# cannot use on the sequence. The seven that went out are still in `features.COLUMNS`, and going
+# back to the full set is one argument, not a rebuild.
+SELECTED = [
+    "close_position_in_window",
+    "ema_slope",
+    "candle_body_pct",
+    "distance_from_window_low_pct",
+    "cum_log_return_window",
+    "age_of_window_high",
+    "lower_wick_pct",
+    "bar_range_pct",
+    "distance_from_window_high_pct",
+    "age_of_window_low",
+    "log_volume_vs_median",
+    "close_position_in_bar",
+]
+
+
+def select(df: pd.DataFrame, keep: list[str] = SELECTED) -> pd.DataFrame:
+    """`df` restricted to the selected indicators, label and pivot column kept.
+
+    Every flattened variant of a chosen indicator comes along — value, lags, window statistics,
+    all four branches — because the selection chose concepts and not columns.
+    """
+    return df[sum(groups_of(gbm.columns(df), keep).values(), []) + linear.META]
+
+
 def ablate(df: pd.DataFrame, keep: list[str], start: str, folds: int = 4) -> pd.DataFrame:
     """Pass 5 — the full set against the reduced one, walk-forward on the same test folds.
 
@@ -316,6 +349,9 @@ def _selfcheck() -> None:
     assert redundant(mean_abs(mats)).index.tolist() == [("a", "b")]
 
     assert set(SIMPLICITY) == set(features.COLUMNS), "every candidate needs a place in the tie-break"
+    assert len(SELECTED) == 12 and not set(SELECTED) - set(features.COLUMNS), SELECTED
+    kept = select(pd.DataFrame(columns=["close_position_in_window_5m", "adx_trend_strength_1h", *linear.META]))
+    assert list(kept.columns) == ["close_position_in_window_5m", *linear.META]
 
     # Complete linkage, and the reason for it: a-b and b-c are redundant, a-c is not. Single
     # linkage would chain the three into one cluster on the strength of b alone.
