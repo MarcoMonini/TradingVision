@@ -302,7 +302,7 @@ h2.sec{
         <tr><td class="col-name">swing_leg_target</td><td class="status-open">sostituito — non predittivo</td><td>sezione target</td></tr>
         <tr><td class="col-name">riferimento[k] = σ·√durata</td><td class="status-done">misurato · implementato</td><td><code>reference</code></td></tr>
         <tr><td class="col-name">oracolo (step 0)</td><td class="status-done">eseguito</td><td><code>oracle</code></td></tr>
-        <tr><td class="col-name">δ della Huber</td><td class="status-open">da rimisurare sul nuovo target</td><td>sezione loss</td></tr>
+        <tr><td class="col-name">δ = 2.1 della Huber</td><td class="status-done">rimisurato sul nuovo target</td><td>sezione loss</td></tr>
         <tr><td class="col-name">testa densa lineare</td><td class="status-done">chiuso</td><td>sezione architettura</td></tr>
         <tr><td class="col-name">28 feature candidate</td><td class="status-done">definite · implementate</td><td><code>features</code></td></tr>
         <tr><td class="col-name">normalizzazione delle feature</td><td class="status-done">misurata · implementata</td><td><code>normalize</code></td></tr>
@@ -388,7 +388,7 @@ h2.sec{
     <p>Quattro quinti del segnale evaporano quando lo si misura su ciò che accade davvero. <strong>Non a zero però: 0.075 è piccolo, non nullo</strong> — il vecchio target conteneva un residuo di informazione reale, sovrastimato cinque volte dalla metrica con cui lo si misurava. E chiedere direttamente la cosa giusta rende di più: 0.124 contro 0.075, stesse feature, stesso modello.</p>
     <p><strong>Dove cade l'errore.</strong> Due barre indistinguibili alle feature — stesso tempo trascorso, stessa distanza percorsa — ricevono etichette diverse a seconda di quanto durerà la gamba: alla barra 25 di una gamba da 30 l'etichetta è 0.83, di una da 300 è 0.08. Il modello emette un valore intermedio per entrambe, e sbaglia sistematicamente sulle <em>gambe lunghe</em>, cioè quelle da cui viene il profitto.</p>
     <p><strong>Cosa sparisce col cambio.</strong> <code>smoothing</code> e il termine di avanzamento prezzo non esistono più. La pesatura per significatività nemmeno: una gamba degenere non va da nessuna parte, quindi vale già ~0 di suo — la correzione è incorporata nella grandezza invece di essere applicata sopra. Restano invariati pivot, <code>finestra_estremi</code>, feature, split, purging e metriche.</p>
-    <p><strong>Cosa cambia in conseguenza.</strong> Il target non è più limitato in [−1, +1]: misurato sul dataset ha σ ≈ 5 e 99° percentile intorno a 12 σ. <strong>δ = 0.4 decade</strong> (era la mediana di |target| della vecchia distribuzione) e va rimisurato. Il punto aperto sulla forma dell'interpolazione si estingue: non c'è più interpolazione.</p>
+    <p><strong>Cosa cambia in conseguenza.</strong> Il target non è più limitato in [−1, +1]: misurato sul train ha σ = 5.22 e 99° percentile a 19.6. <strong>δ = 0.4 decade</strong> (era la mediana di |target| della vecchia distribuzione): rimisurato con lo stesso criterio vale <strong>2.1</strong>. Il punto aperto sulla forma dell'interpolazione si estingue: non c'è più interpolazione.</p>
   </div>
 
   <div class="callout">
@@ -633,13 +633,15 @@ h2.sec{
   <p class="lead">Disallineamento da tenere presente: la valutazione è in Rank IC (ordinale, scala-invariante), mentre una loss di regressione è cardinale — un modello che sbaglia l'ampiezza ma azzecca l'ordine ha MSE pessima e Rank IC ottima. La scelta gestisce il disallineamento, non lo elimina.</p>
 
   <div class="callout">
-    <h3>Huber con δ da rimisurare, selezione su Rank IC</h3>
-    <p><strong>δ = 0.4 non vale più.</strong> Era la mediana di <code>|swing_leg_target|</code>, misurata su una distribuzione simmetrica, centrata e quasi uniforme in [−1, +1]. <code>remaining_excursion</code> è illimitato e a code grasse (σ ≈ 5, 99° percentile ~12 σ), quindi δ va rimisurato con lo stesso criterio — la mediana di |target| — sulla nuova distribuzione. Il paragrafo che segue resta valido come metodo, non come valore.</p>
+    <h3>Huber con δ = 2.1, selezione su Rank IC</h3>
+    <p><strong>δ = 2.1, rimisurato sul nuovo target</strong> — 423.155 bar del solo periodo di <em>train</em> (20 simboli, 2023 → 2025-06, un campione all'ora). Stesso criterio di prima, la mediana di |target|; cambia solo la distribuzione su cui si misura. Il vecchio 0.4 era la mediana di <code>|swing_leg_target|</code>, un'etichetta limitata in [−1, +1]: non è trasportabile.</p>
     <p><strong>Un effetto collaterale positivo.</strong> Sul vecchio target l'Huber non serviva per robustezza (l'etichetta era limitata per costruzione, senza outlier da attenuare) ed era solo un regolatore di scala del gradiente. Sul nuovo le code sono reali — una gamba lunga vale decine di σ — quindi la Huber fa il lavoro per cui esiste.</p>
     <p><code>L = 0.5·e²</code> se <code>|e| ≤ δ</code>, <code>δ·(|e| − 0.5δ)</code> altrimenti. Early stopping e model selection sempre su Rank IC di valid, <strong>mai sulla loss</strong>.</p>
-    <p><strong>δ = 0.4, misurato su 4,96 M barre / 20 simboli.</strong> <code>swing_leg_target</code> è simmetrico e centrato (media 0.002, σ = 0.477) e quasi uniforme sull'intervallo: i quantili di |target| valgono 0.19 / 0.38 / 0.60 / 0.76 al 25° / 50° / 75° / 90° percentile, e solo il 2.3% delle barre supera 0.9 in valore assoluto — la pesatura per significatività comprime le code, il 99° percentile sta a 0.908 e non a 1.</p>
-    <p><strong>Perché proprio 0.4.</strong> È la mediana di |target|: nel caso pessimo di un modello senza segnale, che predice ~0, metà dei residui cade nel ramo quadratico e metà in quello lineare. Man mano che il modello impara i residui si restringono sotto δ e la Huber degrada da sola verso la MSE, che è il comportamento voluto — δ frena l'inizio dell'addestramento, non la fine.</p>
-    <p><strong>Qui la Huber non serve per la robustezza.</strong> Il target è limitato per costruzione e non ha code pesanti, quindi non ci sono outlier di label da attenuare. δ regola la scala del gradiente sui residui grandi, cioè sulle gambe che il modello sbaglia in pieno (predice +0.8 dove il vero è −0.8): senza δ quelle poche barre dominerebbero il batch. È la ragione per cui δ non va alzato verso 1 — a quel punto la loss è MSE pura.</p>
+    <p><strong>La distribuzione misurata.</strong> <code>remaining_excursion</code> resta simmetrico e centrato (media −0.11, asimmetria 0.01) ma è largo undici volte tanto: σ = 5.22, e i quantili di |target| valgono <strong>1.09 / 2.11 / 3.97 / 6.95</strong> al 25° / 50° / 75° / 90° percentile, con il 99° a <strong>19.6</strong>. Il 35% delle barre supera 3 in valore assoluto. Sono le code che l'etichetta vecchia non aveva.</p>
+    <p><strong>Misurato sul train, non sull'intero dataset.</strong> δ è un iperparametro: tararlo su dati che includono il test è la stessa fuga che il purging esiste per chiudere. In pratica qui non cambierebbe il valore — la mediana sul dataset completo è 2.12 contro 2.11 — ma l'asimmetria sì (0.43 contro 0.01), segno che il periodo di test ha una direzionalità sua. Ragione in più per non guardarlo.</p>
+    <p><strong>δ vive nelle unità del target.</strong> Il target è in σ di un cammino casuale a 24 barre; se quella normalizzazione cambia — per esempio passando alla variante <code>σ·√(fine − i)</code> — δ va rifatto, non riscalato a occhio.</p>
+    <p><strong>Perché proprio la mediana.</strong> Nel caso pessimo di un modello senza segnale, che predice ~0, metà dei residui cade nel ramo quadratico e metà in quello lineare. Man mano che il modello impara i residui si restringono sotto δ e la Huber degrada da sola verso la MSE, che è il comportamento voluto — δ frena l'inizio dell'addestramento, non la fine.</p>
+    <p><strong>Ora la Huber serve anche per la robustezza.</strong> Col vecchio target, limitato per costruzione, non c'erano outlier di label da attenuare e δ era solo un regolatore di scala del gradiente. Col nuovo le code sono reali: il 99° percentile di |target| sta a 19.6, quasi dieci volte δ, e senza troncamento del gradiente quelle barre dominerebbero il batch. Vale ancora la ragione per cui δ non va alzato: portandolo verso σ la loss torna MSE pura.</p>
   </div>
 
   <div class="callout">
@@ -656,7 +658,7 @@ h2.sec{
       <caption>quando si fissa cosa</caption>
       <thead><tr><th>fase</th><th>loss</th><th>λ</th></tr></thead>
       <tbody>
-        <tr><td>step 0 — oracolo</td><td>—</td><td>distribuzione del target misurata → <strong>δ = 0.4</strong></td></tr>
+        <tr><td>step 0 — oracolo</td><td>—</td><td>distribuzione del target misurata → <strong>δ = 2.1</strong></td></tr>
         <tr><td>step 1 — lineare</td><td>MSE</td><td>— (solo controllo di leakage)</td></tr>
         <tr><td>step 2 — GBM</td><td>L2 / Huber standard</td><td>non implementato</td></tr>
         <tr><td>step 3 — GRU singolo</td><td>Huber</td><td>λ = 0, fino a Rank IC positivo e stabile</td></tr>
