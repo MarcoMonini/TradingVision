@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: tradingvision-chart
+    runtime: docker
+    plan: free  # 512 MB / spins down after 15 min idle; bump to 1c-2g if 365-day charts OOM
+    healthCheckPath: /_stcore/health
+    autoDeployTrigger: commit
