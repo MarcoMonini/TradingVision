@@ -10,6 +10,7 @@ from plotly.subplots import make_subplots
 from tradingvision.data.candles import SYMBOLS, TIMEFRAMES, get_candles
 from tradingvision.data.pivots import EXTREMA_WINDOW, find_pivots
 from tradingvision.features import COLUMNS, FAMILIES, LABELS, features
+from tradingvision.normalize import CLIP, SCALE, apply, fit
 from tradingvision.oracle import FEE, run
 
 MAX_DAYS = 365
@@ -33,7 +34,7 @@ def load_features(df, window: int, columns: tuple[str, ...]):
     return features(df, window)[list(columns)]
 
 
-def chart(df, pivots, feats, symbol: str, uirevision: str) -> go.Figure:
+def chart(df, pivots, feats, symbol: str, uirevision: str, normalized: bool = False) -> go.Figure:
     # One row per family, never one for all of them: adx_trend_strength sits in [0, 1] and
     # log_return around 1e-3, so sharing an axis would flatten the second into the zero line.
     groups = [(fam, [c for c in cols if c in feats.columns]) for fam, cols in FAMILIES.items()]
@@ -83,6 +84,10 @@ def chart(df, pivots, feats, symbol: str, uirevision: str) -> go.Figure:
                 row=row,
                 col=1,
             )
+        # Same range on every feature row: the point of normalising is that the rows compare, and
+        # an axis fitted to each row would hide it.
+        if normalized:
+            fig.update_yaxes(range=[-CLIP * SCALE * 1.1, CLIP * SCALE * 1.1], row=row, col=1)
     fig.update_annotations(font_size=11, x=0, xanchor="left")
     fig.update_layout(
         height=560 + 150 * len(groups),
@@ -113,6 +118,7 @@ def main() -> None:
     # The feature windows all derive from the extrema window, so they follow it rather than being
     # tuned here; the per-branch values are still to be measured.
     picked = st.sidebar.multiselect("Features", COLUMNS, default=COLUMNS, format_func=LABELS.get)
+    normalized = st.sidebar.toggle("Normalized", value=True, help="clip((x - median) / IQR, ±5) × 0.1")
 
     # Not inputs: both were calibrated in oracle.py and changing them here would show pivots the
     # dataset does not contain.
@@ -133,6 +139,11 @@ def main() -> None:
         return
     pivots = load_pivots(df.close, EXTREMA_WINDOW)
     feats = load_features(df, EXTREMA_WINDOW, tuple(COLUMNS))[picked]
+    if normalized and len(feats.columns):
+        # Fitted on the window on screen, which is what a chart can do and not what the dataset
+        # does: there the statistics come from the train period alone.
+        alive = feats.columns[(feats.quantile(0.75) - feats.quantile(0.25)) > 0]
+        feats = apply(feats[alive], fit(feats[alive]))
 
     # Oracle: what a perfect-hindsight trader would have made on this window over this period.
     stats = run(df.close, EXTREMA_WINDOW, FEE, pivots=pivots)
@@ -141,7 +152,9 @@ def main() -> None:
     b.metric("Avg gross leg", f"{stats['gross_trade_pct']:.2f}%", f"{stats['win_rate'] * 100:.0f}% above fees")
 
     st.plotly_chart(
-        chart(df, pivots, feats, fetched[0], "-".join(map(str, fetched))), use_container_width=True, key="chart"
+        chart(df, pivots, feats, fetched[0], "-".join(map(str, fetched)), normalized),
+        use_container_width=True,
+        key="chart",
     )
     st.caption(
         f"{len(df)} candles — {df.index[0]:%Y-%m-%d %H:%M} to {df.index[-1]:%Y-%m-%d %H:%M} UTC · "
