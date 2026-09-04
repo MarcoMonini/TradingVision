@@ -106,7 +106,7 @@ def features(df: pd.DataFrame, n: int = EXTREMA_WINDOW) -> pd.DataFrame:
 
     ret = np.log(c / c.shift())
     max_h, min_l = h.rolling(n).max(), low.rolling(n).min()
-    bar_range = (h - low).replace(0, np.nan)  # a bar with no range has no location inside it
+    bar_range = (h - low).replace(0, np.nan)
     ema = c.ewm(span=n, adjust=False).mean()
     obv = (v * np.sign(ret)).rolling(n).sum()
 
@@ -117,7 +117,9 @@ def features(df: pd.DataFrame, n: int = EXTREMA_WINDOW) -> pd.DataFrame:
         "candle_body_pct": (c - o) / c,
         "upper_wick_pct": (h - np.maximum(o, c)) / c,
         "lower_wick_pct": (np.minimum(o, c) - low) / c,
-        "close_position_in_bar": (c - low) / bar_range,
+        # A bar with no range has no location inside it; 0.5 is the neutral answer, and leaving a
+        # NaN would punch holes in the middle of the series (40 bars per million on the store).
+        "close_position_in_bar": ((c - low) / bar_range).fillna(0.5),
         "close_position_in_window": 2 * (c - min_l) / (max_h - min_l) - 1,
         "distance_from_window_high_pct": np.log(c / max_h),
         "distance_from_window_low_pct": np.log(c / min_l),
@@ -177,6 +179,9 @@ if __name__ == "__main__":
     assert tail.distance_from_window_high_pct.le(1e-12).all() and tail.distance_from_window_low_pct.ge(-1e-12).all()
     assert tail.age_of_window_high.between(0, 1).all() and tail.adx_trend_strength.between(0, 1).all()
     assert tail.rsi_centered.between(-1, 1).all() and tail.tsi_momentum.between(-1, 1).all()
+    flat = df.copy()
+    flat.loc[flat.index[300], ["open", "high", "low"]] = flat.close.iloc[300]
+    assert features(flat).close_position_in_bar.iloc[300] == 0.5, "a zero-range bar has no location"
     # Causality: a feature must not move when a later bar changes.
     cut = 300
     assert np.allclose(features(df.iloc[:cut]).iloc[-1].to_numpy(), out.iloc[cut - 1].to_numpy(), equal_nan=True)
