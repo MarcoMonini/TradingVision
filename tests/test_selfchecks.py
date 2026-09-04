@@ -10,7 +10,7 @@ import runpy
 
 import pytest
 
-from tradingvision import dataset, linear
+from tradingvision import dataset, gbm, linear
 
 SELF_CHECKED = [
     "tradingvision.data.pivots",
@@ -36,3 +36,7 @@ def test_linear_selfcheck():
     """`linear` keeps its checks in a function because its `__main__` is the real run, which
     needs the dataset."""
     linear._selfcheck()
+
+
+def test_gbm_selfcheck():
+    gbm._selfcheck()
