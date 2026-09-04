@@ -32,12 +32,14 @@ def load_features(df, window: int):
 
 
 def chart(df, pivots, feats, symbol: str, uirevision: str) -> go.Figure:
-    # One row per family, never one for all of them: adx sits in [0, 1] and ritorno_pct around
-    # 1e-3, so sharing an axis would flatten the second into the zero line.
+    # One row per family, never one for all of them: adx_trend_strength sits in [0, 1] and
+    # log_return around 1e-3, so sharing an axis would flatten the second into the zero line.
     groups = [(fam, [c for c in cols if c in feats.columns]) for fam, cols in FAMILIES.items()]
     groups = [g for g in groups if g[1]]
     rows = 2 + len(groups)
-    heights = [0.75, 0.25] if not groups else [0.5, 0.1] + [0.4 / len(groups)] * len(groups)
+    # Weights, normalised by Plotly: with all seven families open a fixed 50% for the candles
+    # would squeeze every feature row into a line.
+    heights = [3, 1] + [1.5] * len(groups)
     fig = make_subplots(
         rows=rows,
         cols=1,
@@ -81,7 +83,7 @@ def chart(df, pivots, feats, symbol: str, uirevision: str) -> go.Figure:
             )
     fig.update_annotations(font_size=11, x=0, xanchor="left")
     fig.update_layout(
-        height=700 + 160 * len(groups),
+        height=560 + 150 * len(groups),
         legend=dict(orientation="h", y=-0.05, font=dict(size=10)),
         showlegend=bool(groups),
         xaxis_rangeslider_visible=False,
@@ -108,7 +110,7 @@ def main() -> None:
 
     # The feature windows all derive from the extrema window, so they follow it rather than being
     # tuned here; the per-branch values are still to be measured.
-    picked = st.sidebar.multiselect("Features", COLUMNS, default=list(FAMILIES["position"]))
+    picked = st.sidebar.multiselect("Features", COLUMNS, default=COLUMNS)
 
     # Not inputs: both were calibrated in oracle.py and changing them here would show pivots the
     # dataset does not contain.
@@ -139,10 +141,6 @@ def main() -> None:
     st.plotly_chart(
         chart(df, pivots, feats, fetched[0], "-".join(map(str, fetched))), use_container_width=True, key="chart"
     )
-    if picked:
-        # The raw numbers behind the lines, warm-up rows included so their extent is visible.
-        with st.expander(f"{len(picked)} feature columns"):
-            st.dataframe(feats, use_container_width=True)
     st.caption(
         f"{len(df)} candles — {df.index[0]:%Y-%m-%d %H:%M} to {df.index[-1]:%Y-%m-%d %H:%M} UTC · "
         f"{len(pivots)} pivots, median leg {pivots.amplitude.median() * 100:.2f}%"
