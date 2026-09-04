@@ -53,7 +53,12 @@ def branch(bars: pd.DataFrame, tf: str, index: pd.DatetimeIndex, n: int = EXTREM
     return f.reindex(index, method="ffill").add_suffix(f"_{tf}")
 
 
-def symbol_frame(symbol: str, start: str | None = None, n: int = EXTREMA_WINDOW) -> pd.DataFrame:
+# The label. It is an argument rather than a hard call so the comparison against the
+# retrospective `swing_leg_target` it replaced can be rebuilt from scratch (see `crosscheck`).
+LABEL = remaining_excursion
+
+
+def symbol_frame(symbol: str, start: str | None = None, n: int = EXTREMA_WINDOW, label=LABEL) -> pd.DataFrame:
     """Branches, target and purging horizon for one symbol, warm-up rows dropped."""
     bars = binance.load(symbol, BASE_TF)
     if start is not None:
@@ -65,7 +70,7 @@ def symbol_frame(symbol: str, start: str | None = None, n: int = EXTREMA_WINDOW)
     pivots = pivots[pivots.index.isin(idx)]
 
     out = pd.concat([branch(binance.load(symbol, tf), tf, idx, n) for tf in BRANCHES], axis=1)
-    out["target"] = remaining_excursion(bars.close, pivots, n)
+    out["target"] = label(bars.close, pivots, n)
     # Timestamp of the pivot that closes each bar's leg — the bar itself when it is a pivot.
     out["next_pivot"] = pd.Series(pivots.index, index=pivots.index).reindex(idx, method="bfill")
     return out.dropna()
@@ -76,6 +81,7 @@ def build(
     start: str | None = "2023",
     stride: int = 12,
     n: int = EXTREMA_WINDOW,
+    label=LABEL,
 ) -> pd.DataFrame:
     """Every symbol stacked on a (timestamp, symbol) index.
 
@@ -86,7 +92,7 @@ def build(
     symbols = binance.SYMBOLS if symbols is None else symbols
     frames = {}
     for s in symbols:
-        f = symbol_frame(s, start, n)
+        f = symbol_frame(s, start, n, label)
         if start is not None:
             f = f.loc[pd.Timestamp(start, tz="UTC") :]
         frames[s] = f.iloc[::stride]
