@@ -158,7 +158,15 @@ def remaining_excursion(
     zero on its own. The correction `swing_leg_target` needs is built into the quantity.
 
     Unbounded and fat-tailed, unlike the old label — the Huber delta of 0.4 was measured on that
-    distribution and does not carry over.
+    distribution and does not carry over; on this one it is 2.1.
+
+    Both defaults are counted in bars *of the series passed in*, and the dataset passes the 5m one
+    while the legs are defined on 15m. So `horizon = 24` is the 2h walk the excursion is measured
+    against, not the 6h of a 24-bar 15m window, and `lookback = 96` is 8h of volatility rather
+    than the day it means on the 15m grid. Neither number is wrong here — a shorter volatility
+    window tracks the regime the bar is actually in, and the reference horizon only sets the unit
+    — but they are not the constants their own docstrings describe, and delta = 2.1 was measured
+    with exactly these. Changing either one means measuring delta again.
     """
     piv = find_pivots(close, window) if pivots is None else pivots
     out = pd.Series(np.nan, index=close.index, name="remaining_excursion")

@@ -24,7 +24,8 @@ from tradingvision import metrics, normalize, split
 from tradingvision.data.binance import STORE
 from tradingvision.dataset import build
 
-LABELS = ["target", "next_pivot"]
+# The columns that are not model input: the label itself and what purging needs.
+META = ["target", "next_pivot"]
 CACHE = STORE / "step1.parquet"
 
 
@@ -42,7 +43,7 @@ def predict(x: pd.DataFrame, coef: np.ndarray) -> pd.Series:
 def fit_predict(df: pd.DataFrame, cut: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
     """Fit on the purged train side of `cut`, predict on both sides."""
     train, test = split.temporal(df, cut)
-    cols = [c for c in df.columns if c not in LABELS]
+    cols = [c for c in df.columns if c not in META]
     stats = normalize.fit(train[cols])  # train only: refitting on the whole frame is leakage
     x_train, x_test = normalize.apply(train[cols], stats), normalize.apply(test[cols], stats)
 
@@ -50,9 +51,8 @@ def fit_predict(df: pd.DataFrame, cut: str) -> tuple[pd.DataFrame, pd.DataFrame,
     return train, test, predict(x_train, coef), predict(x_test, coef)
 
 
-def run(df: pd.DataFrame, cut: str) -> pd.DataFrame:
+def report(train: pd.DataFrame, test: pd.DataFrame, p_train: pd.Series, p_test: pd.Series) -> pd.DataFrame:
     """The four signal metrics on both sides of the cut."""
-    train, test, p_train, p_test = fit_predict(df, cut)
     rows = {
         "train": metrics.signal(p_train, train.target),
         "test": metrics.signal(p_test, test.target),
@@ -62,12 +62,17 @@ def run(df: pd.DataFrame, cut: str) -> pd.DataFrame:
     return out
 
 
+def run(df: pd.DataFrame, cut: str) -> pd.DataFrame:
+    """Fit and report in one call, for the checks that do not need the fit itself."""
+    return report(*fit_predict(df, cut))
+
+
 # Bars to the next pivot, in 5m steps. The last bucket is open: the horizon is unbounded, p99 is
 # 202 bars and the maximum measured 754.
 HORIZON_BINS = [0, 6, 12, 24, 48, 96, 192, 10**6]
 
 
-def by_horizon(df: pd.DataFrame, cut: str, bins: list[int] = HORIZON_BINS) -> pd.DataFrame:
+def by_horizon(test: pd.DataFrame, pred: pd.Series, bins: list[int] = HORIZON_BINS) -> pd.DataFrame:
     """Test Rank IC split by how far the next pivot is — the discriminator between the two
     readings of a high step-1 IC.
 
@@ -78,7 +83,6 @@ def by_horizon(df: pd.DataFrame, cut: str, bins: list[int] = HORIZON_BINS) -> pd
     features can already see. A flat profile clears the pipeline; a spike on the near buckets is a
     bug to find.
     """
-    _, test, _, pred = fit_predict(df, cut)
     horizon = (test.next_pivot - test.index.get_level_values(0)) // pd.Timedelta(minutes=5)
     bucket = pd.cut(horizon, bins, right=False)
     rows = {}
@@ -106,8 +110,9 @@ def _selfcheck() -> None:
 
     # The horizon split keeps every test bar and puts each one in the bucket of its own distance.
     far = df.assign(next_pivot=idx.get_level_values(0) + pd.Timedelta(hours=3))
-    h = by_horizon(far, "2024-01-10", bins=[0, 12, 24, 10**6])
-    assert h.bars.sum() == len(split.temporal(far, "2024-01-10")[1])
+    _, far_test, _, far_pred = fit_predict(far, "2024-01-10")
+    h = by_horizon(far_test, far_pred, bins=[0, 12, 24, 10**6])
+    assert h.bars.sum() == len(far_test)
     assert h.index.tolist() == ["[24, 1000000)"], h  # 3h at a 12-bar hour is 36 bars
 
 
@@ -127,10 +132,11 @@ def main() -> None:
         df = build(start=args.start, stride=args.stride)
         df.to_parquet(args.cache)
     print(f"{len(df):,} rows, {df.index.get_level_values(1).nunique()} symbols, cut at {args.cut}\n")
-    print(run(df, args.cut).round(4).to_string())
+    train, test, p_train, p_test = fit_predict(df, args.cut)  # one fit, both reports
+    print(report(train, test, p_train, p_test).round(4).to_string())
     if args.horizon:
         print("\ntest Rank IC by bars to the next pivot\n")
-        print(by_horizon(df, args.cut).round(4).to_string())
+        print(by_horizon(test, p_test).round(4).to_string())
 
 
 if __name__ == "__main__":

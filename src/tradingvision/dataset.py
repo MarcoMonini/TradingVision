@@ -17,7 +17,9 @@ unchanged), so a pivot on the 15m bar 09:45 is a price realised at 10:00 and lan
 09:55. The target is then interpolated over 5m bars between two pivots.
 
 The label is `remaining_excursion` and the column is called `target`, so swapping the label again
-costs one line here instead of a rename across the pipeline.
+costs one line here instead of a rename across the pipeline. It is called on the 5m close, which
+is what its `horizon` and `lookback` defaults are counted in — see its docstring, the numbers do
+not mean what their names suggest on this grid.
 
 `next_pivot` travels with the data because purging is exact, not a fixed embargo: the split drops
 every train bar whose next pivot falls beyond the cut, and that horizon is unbounded (p99 is 202
@@ -25,6 +27,8 @@ bars, the maximum measured 754).
 """
 
 from __future__ import annotations
+
+from typing import Callable
 
 import pandas as pd
 
@@ -55,10 +59,12 @@ def branch(bars: pd.DataFrame, tf: str, index: pd.DatetimeIndex, n: int = EXTREM
 
 # The label. It is an argument rather than a hard call so the comparison against the
 # retrospective `swing_leg_target` it replaced can be rebuilt from scratch (see `crosscheck`).
-LABEL = remaining_excursion
+LABEL: Callable[..., pd.Series] = remaining_excursion
 
 
-def symbol_frame(symbol: str, start: str | None = None, n: int = EXTREMA_WINDOW, label=LABEL) -> pd.DataFrame:
+def symbol_frame(
+    symbol: str, start: str | None = None, n: int = EXTREMA_WINDOW, label: Callable[..., pd.Series] = LABEL
+) -> pd.DataFrame:
     """Branches, target and purging horizon for one symbol, warm-up rows dropped."""
     bars = binance.load(symbol, BASE_TF)
     if start is not None:
@@ -67,7 +73,13 @@ def symbol_frame(symbol: str, start: str | None = None, n: int = EXTREMA_WINDOW,
 
     pivots = find_pivots(binance.load(symbol, PIVOT_TF).close, n)
     pivots.index = pivots.index + _shift(PIVOT_TF)
-    pivots = pivots[pivots.index.isin(idx)]
+    pivots = pivots[(pivots.index >= idx[0]) & (pivots.index <= idx[-1])]
+    # Every 15m close is also a 5m close, so a pivot inside the range must land on an existing 5m
+    # bar. It always does today (measured: none missing on 2023+), but a gap in the 5m series
+    # would silently move the next pivot of the preceding bars one leg further and mislabel them.
+    missing = pivots.index.difference(idx)
+    if len(missing):
+        raise ValueError(f"{len(missing)} pivots have no 5m bar, first at {missing[0]}")
 
     out = pd.concat([branch(binance.load(symbol, tf), tf, idx, n) for tf in BRANCHES], axis=1)
     out["target"] = label(bars.close, pivots, n)
@@ -81,7 +93,7 @@ def build(
     start: str | None = "2023",
     stride: int = 12,
     n: int = EXTREMA_WINDOW,
-    label=LABEL,
+    label: Callable[..., pd.Series] = LABEL,
 ) -> pd.DataFrame:
     """Every symbol stacked on a (timestamp, symbol) index.
 
