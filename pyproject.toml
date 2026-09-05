@@ -41,3 +41,14 @@ dev = [
     "ruff>=0.16.6",
     "torch==2.14.0",
 ]
+
+# torch on Linux would pull the CUDA build and 73 nvidia wheels behind it — a few gigabytes for a
+# CI job that runs on CPU, and for an image that never trains at all. macOS stays on PyPI, where
+# the wheel is already the CPU/MPS one.
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
