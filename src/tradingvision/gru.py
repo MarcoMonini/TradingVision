@@ -127,6 +127,18 @@ def scaled(x: np.ndarray, train: np.ndarray) -> np.ndarray:
     return (np.clip((x - center) / scale, -normalize.CLIP, normalize.CLIP) * normalize.SCALE).astype("float32")
 
 
+def near(df: pd.DataFrame, band: int) -> pd.DataFrame:
+    """The rows whose next pivot is within `band` 5m bars — the specialist's training set.
+
+    A model fitted on everything optimises the mass, and 84% of the rows sit further out than 48
+    bars, where the relation between features and target has the opposite sign. Restricting the
+    training set is the cheapest way to ask whether anything at all can read the band: if a model
+    that sees nothing else still cannot get a positive Rank IC there, the regime is not in these
+    twelve columns and no head, gate or weighting recovers it.
+    """
+    return df[(df.next_pivot - df.index.get_level_values(0)) / pd.Timedelta("5min") < band]
+
+
 def cross_section(y: pd.Series, mode: str = "z") -> pd.Series:
     """`y` with the level ("demean") or the level and the scale ("z") of its timestamp removed.
 
@@ -237,7 +249,13 @@ def fit(
 
 
 def fold(
-    x: np.ndarray, train: pd.DataFrame, test: pd.DataFrame, seed: int = 0, z_target: str = "off", **kw
+    x: np.ndarray,
+    train: pd.DataFrame,
+    test: pd.DataFrame,
+    seed: int = 0,
+    z_target: str = "off",
+    band: int = 0,
+    **kw,
 ) -> pd.Series:
     """Fit on one fold's train side and predict its test slice.
 
@@ -246,6 +264,9 @@ def fold(
     labels it has already seen.
     """
     inner, valid = split.temporal_fraction(train, VALID_FRACTION)
+    if band:
+        # Validation too: early stopping has to read the band the model is being judged on.
+        inner, valid = near(inner, band), near(valid, band)
     z = scaled(x, inner.row.to_numpy())  # train only, and the inner train at that
     if z_target != "off":
         # Training only. Validation keeps the raw label, so early stopping reads the metric the
@@ -375,6 +396,11 @@ def _selfcheck() -> None:
     z = cross_section(df.target)
     per_date = z.groupby(level=0)
     assert np.allclose(per_date.mean(), 0, atol=1e-9) and np.allclose(per_date.std(), 1, atol=1e-9)
+    ahead = pd.Series(np.where(rng.random(n) < 0.5, 60, 6000), index=idx)
+    assert (
+        len(near(df.assign(next_pivot=idx.get_level_values(0) + pd.to_timedelta(ahead, "m")), 24))
+        == (ahead < 120).sum()
+    )
     d = cross_section(df.target, "demean")
     assert np.allclose(d.groupby(level=0).mean(), 0, atol=1e-9) and d.std() > 0.5, "demean keeps the dispersion"
     assert np.isclose(
@@ -392,6 +418,7 @@ def main() -> None:
     ap.add_argument("--tensor", type=Path, default=TENSOR, help="the built sequences, reused when present")
     ap.add_argument("--horizon", action="store_true", help="also split the test Rank IC by distance to the next pivot")
     ap.add_argument("--verbose", action="store_true", help="print the validation Rank IC each epoch")
+    ap.add_argument("--band", type=int, default=0, help="train only on rows within this many 5m bars of the pivot")
     ap.add_argument(
         "--z-target",
         choices=["off", "demean", "z"],
@@ -415,6 +442,7 @@ def main() -> None:
         args.seeds,
         epochs=args.epochs,
         z_target=args.z_target,
+        band=args.band,
         quiet=not args.verbose,
     )
     print(out["folds"].round(4).to_string())
