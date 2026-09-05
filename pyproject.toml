@@ -31,11 +31,13 @@ target-version = "py312"
 select = ["E", "F", "I"]
 
 [dependency-groups]
-# lightgbm sits here and not in the runtime dependencies: the deployed image serves the chart app
-# and never trains anything, and the wheel pulls an OpenMP runtime the slim base image lacks.
+# lightgbm and torch sit here and not in the runtime dependencies: the deployed image serves the
+# chart app and never trains anything, and the wheels pull an OpenMP runtime and a few hundred MB
+# of CUDA-less tensor machinery the slim base image lacks.
 dev = [
     "black>=26.5.1",
     "lightgbm==4.7.0",
     "pytest>=9.1.1",
     "ruff>=0.16.6",
+    "torch==2.14.0",
 ]
