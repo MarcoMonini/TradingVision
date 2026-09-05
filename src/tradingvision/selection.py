@@ -229,6 +229,8 @@ def permutation_importance(
 # What the five passes returned, on the stamped `data/step2.parquet`, train period to 2025-06.
 # In descending permutation importance. This is the module's output: `main()` measures it, this
 # records it, and step 3 reads it from here instead of re-running an hour of clustering.
+# `features.SELECTED` is the same set in schema order, kept there so the chart app can read it
+# without importing lightgbm.
 #
 # It is a measurement and not a decision carved in stone. It was made *with a GBM*, and a column
 # an ensemble of trees cannot use on flattened inputs is not necessarily a column a recurrent net
@@ -349,6 +351,7 @@ def _selfcheck() -> None:
     assert redundant(mean_abs(mats)).index.tolist() == [("a", "b")]
 
     assert set(SIMPLICITY) == set(features.COLUMNS), "every candidate needs a place in the tie-break"
+    assert set(SELECTED) == set(features.SELECTED), "the two orderings must hold the same set"
     assert len(SELECTED) == 12 and not set(SELECTED) - set(features.COLUMNS), SELECTED
     kept = select(pd.DataFrame(columns=["close_position_in_window_5m", "adx_trend_strength_1h", *linear.META]))
     assert list(kept.columns) == ["close_position_in_window_5m", *linear.META]

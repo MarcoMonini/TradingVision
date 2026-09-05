@@ -57,6 +57,25 @@ FAMILIES: dict[str, tuple[str, ...]] = {
 }
 COLUMNS = [c for cols in FAMILIES.values() for c in cols]
 
+# What survives the five passes of `tradingvision.selection` on the step 2 dataset — 12 of the 28
+# candidates, in the order above rather than by importance. It lives here and not in `selection`
+# because the chart app reads it and `selection` imports lightgbm, which the deployed image does
+# not carry. `selection.SELECTED` is the same list ranked by permutation importance.
+SELECTED = [
+    "cum_log_return_window",
+    "bar_range_pct",
+    "candle_body_pct",
+    "lower_wick_pct",
+    "close_position_in_bar",
+    "close_position_in_window",
+    "distance_from_window_high_pct",
+    "distance_from_window_low_pct",
+    "age_of_window_high",
+    "age_of_window_low",
+    "log_volume_vs_median",
+    "ema_slope",
+]
+
 # Chart labels: the identifier is what the dataset carries, this is what a reader sees on a plot.
 LABELS = {
     "log_return": "Log Return",
