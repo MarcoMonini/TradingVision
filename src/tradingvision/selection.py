@@ -191,6 +191,46 @@ def groups_of(columns: list[str], names: list[str]) -> dict[str, list[str]]:
     return out
 
 
+def branch_groups(columns: list[str], name: str, branches: tuple[str, ...] = dataset.BRANCHES) -> dict[str, list[str]]:
+    """`name`'s flattened columns split by branch, each group paired with its complement.
+
+    Open point 6. The selection permutes the four branches of an indicator together by
+    construction, so nothing it measured says whether the 0.130 of `close_position_in_window` sits
+    on one horizon or on all four — and the multi-branch model of step 4 is not justified until
+    that is known.
+
+    One branch at a time undershoots on its own: the other three are the same indicator on a
+    neighbouring horizon and fill the hole, exactly as a lag does for its own column. So the
+    complement is measured beside it. `only 15m` is what that branch adds on top of the other
+    three; `without 15m` is what is left when it is the only one still standing. A concept living
+    on a single branch shows up as a large `without` on that branch and small ones elsewhere.
+    """
+    per = {tf: [c for c in columns if gbm.base_feature(c) == name and c.endswith(f"_{tf}")] for tf in branches}
+    if missing := [tf for tf, g in per.items() if not g]:
+        raise SystemExit(f"{name} has no column on {missing}")
+    return {f"only {tf}": g for tf, g in per.items()} | {
+        f"without {tf}": [c for other, g in per.items() if other != tf for c in g] for tf in branches
+    }
+
+
+# What it returned on `close_position_in_window`, the only group large enough for the difference to
+# show, on the stamped `data/step2.parquet`, train period to 2025-06, baseline Rank IC 0.1525:
+#
+#     only 15m   0.0437     without 15m   0.0027
+#     only 30m   0.0028     without 30m   0.0447
+#     only 5m    0.0005     without 5m    0.0520
+#     only 1h    0.0002     without 1h    0.0526
+#
+# The concept lives on the 15m branch alone. Permuting the other three and leaving 15m standing
+# costs 0.0027 of 0.1525 — under the noise of a single fold, and a twentieth of what removing 15m
+# costs. This is the branch the pivots are detected on, and it is the branch the model reads.
+#
+# Step 4 starts uphill, and this is the measure that says so before it is built: whatever the
+# multi-branch model gains cannot come from this indicator on the other three horizons, because
+# there is nothing there to gain. It has to come from indicators too small for pass 4 to resolve,
+# or from a dynamic that only the sequence composes.
+
+
 def _rank_ic(model, x: np.ndarray, index: pd.MultiIndex, target: pd.Series) -> float:
     return metrics.by_date(pd.Series(model.predict(x), index=index), target, rank=True).dropna().mean()
 
@@ -390,6 +430,12 @@ def _selfcheck() -> None:
     grouped = groups_of(["a_5m", "a_lag1_5m", "c_5m"], ["a", "c"])
     assert grouped == {"a": ["a_5m", "a_lag1_5m"], "c": ["c_5m"]}
 
+    # Split by branch, and the complement beside it. `_5m` must not swallow `_15m`: the branch
+    # suffix carries its underscore precisely so the shorter name is not a suffix of the longer.
+    by_branch = branch_groups(["a_5m", "a_lag1_5m", "a_15m", "b_5m"], "a", ("5m", "15m"))
+    assert by_branch["only 5m"] == ["a_5m", "a_lag1_5m"] and by_branch["only 15m"] == ["a_15m"]
+    assert by_branch["without 15m"] == ["a_5m", "a_lag1_5m"] and by_branch["without 5m"] == ["a_15m"]
+
     frame, grouped = with_shadow(frame, grouped)
     inner, valid = split.temporal_fraction(frame, 0.3)
     model = gbm.fit(inner, valid, IMPORTANCE_ROUNDS)
@@ -424,12 +470,32 @@ def main() -> None:
     ap.add_argument("--cut", type=float, default=CUT, help="clustering cut on distance = 1 - |rho|")
     ap.add_argument("--permutations", type=int, default=PERMUTATIONS, help="draws per group in pass 4")
     ap.add_argument("--folds", type=int, default=4, help="walk-forward folds for the ablation")
+    ap.add_argument(
+        "--branch-of",
+        metavar="INDICATOR",
+        help="skip the five passes and measure this indicator one branch at a time (open point 6)",
+    )
     args = ap.parse_args()
 
     _selfcheck()
     df = cached(args.cache, start=args.start, stride=args.stride, lags=True)
     train, _ = split.temporal(df, args.test_start)
     print(f"{len(train):,} train rows to {args.test_start}, {len(gbm.columns(train))} columns\n")
+
+    if args.branch_of:
+        # Passes 2 and 3 are skipped here on purpose. They exist so pass 4 cannot lean on a
+        # correlate of the group it permutes, and that confound is symmetric across the four
+        # branches of one indicator — which is the only comparison this makes. The absolute drops
+        # come out smaller than pass 4's for that reason; their spread is what is being read.
+        usable = sanity(train[gbm.columns(train)])
+        cols = usable[usable.keep].index.tolist()
+        groups = branch_groups(cols, args.branch_of)
+        inner, valid = split.temporal_fraction(train[cols + linear.META], gbm.VALID_FRACTION)
+        model = gbm.fit(inner, valid, IMPORTANCE_ROUNDS)
+        base, per_branch_report = permutation_importance(model, valid, groups, args.permutations)
+        print(f"{args.branch_of} by branch — Rank IC {base:.4f} on {len(valid):,} validation rows\n")
+        print(per_branch_report.round(5).to_string())
+        return
 
     report = sanity(train[gbm.columns(train)])
     dropped = report[~report.keep]
