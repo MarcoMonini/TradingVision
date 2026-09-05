@@ -60,7 +60,8 @@ DELTA = 2.1  # Huber, measured on this label over the train period — see `data
 # Huber for the cross-sectional target, measured the same way — the median of |z| over the train
 # period, 0.557. Delta lives in the units of the label, so it cannot be carried over or rescaled
 # by eye when the label changes.
-Z_DELTA = 0.56
+# One per target: the median of |label| over the train period, the criterion that fixed 2.1.
+Z_DELTA = {"z": 0.56, "demean": 1.45}
 VALID_FRACTION = 0.2  # the same tail the GBM holds out, purged against its own boundary
 # Not in the spec, which names ReduceLROnPlateau without settling its shape. Half the early
 # stopping patience, so the rate gets one chance to help before the run is stopped.
@@ -126,8 +127,8 @@ def scaled(x: np.ndarray, train: np.ndarray) -> np.ndarray:
     return (np.clip((x - center) / scale, -normalize.CLIP, normalize.CLIP) * normalize.SCALE).astype("float32")
 
 
-def cross_section(y: pd.Series) -> pd.Series:
-    """`y` standardised inside each timestamp — the level and the scale the metric cannot see.
+def cross_section(y: pd.Series, mode: str = "z") -> pd.Series:
+    """`y` with the level ("demean") or the level and the scale ("z") of its timestamp removed.
 
     Rank IC is computed per date over the symbols, so adding a constant to a whole cross-section
     or multiplying it by a positive number leaves every rank untouched. Measured on the train
@@ -135,11 +136,20 @@ def cross_section(y: pd.Series) -> pd.Series:
     gradient on it. Removing it does not throw away signal — it throws away the half of the label
     the evaluation is blind to by construction.
 
-    Dates with a single symbol have no dispersion and drop out (3.6% of the train rows); the
-    metric already ignores them, needing three symbols to correlate anything.
+    Dates with a single symbol have no dispersion and drop out under "z" (3.6% of the train rows);
+    the metric already ignores them, needing three symbols to correlate anything.
+
+    The two modes are not the same bet. "demean" removes the 47% of variance that is the common
+    component, and nothing else. "z" also divides by the dispersion of the date — which is
+    invisible to the metric too, but re-weights the training: a date whose symbols barely differ
+    has its small, mostly accidental gaps blown up to unit scale, and the Huber then treats them
+    as the errors worth fixing. Measured, "z" costs 0.007 of Rank IC against the raw label.
     """
     g = y.groupby(level=0)
-    return ((y - g.transform("mean")) / g.transform("std")).replace([np.inf, -np.inf], np.nan).dropna()
+    out = y - g.transform("mean")
+    if mode == "z":
+        out = out / g.transform("std")
+    return out.replace([np.inf, -np.inf], np.nan).dropna()
 
 
 class Net(nn.Module):
@@ -227,7 +237,7 @@ def fit(
 
 
 def fold(
-    x: np.ndarray, train: pd.DataFrame, test: pd.DataFrame, seed: int = 0, z_target: bool = False, **kw
+    x: np.ndarray, train: pd.DataFrame, test: pd.DataFrame, seed: int = 0, z_target: str = "off", **kw
 ) -> pd.Series:
     """Fit on one fold's train side and predict its test slice.
 
@@ -237,11 +247,11 @@ def fold(
     """
     inner, valid = split.temporal_fraction(train, VALID_FRACTION)
     z = scaled(x, inner.row.to_numpy())  # train only, and the inner train at that
-    if z_target:
+    if z_target != "off":
         # Training only. Validation keeps the raw label, so early stopping reads the metric the
         # result is judged on — which the transform leaves unchanged anyway.
-        y = cross_section(inner.target)
-        inner, kw = inner.loc[y.index].assign(target=y), dict(kw, delta=Z_DELTA)
+        y = cross_section(inner.target, z_target)
+        inner, kw = inner.loc[y.index].assign(target=y), dict(kw, delta=Z_DELTA[z_target])
     return predict(fit(z, inner, valid, seed, **kw), z, test.row.to_numpy(), test.index)
 
 
@@ -365,6 +375,8 @@ def _selfcheck() -> None:
     z = cross_section(df.target)
     per_date = z.groupby(level=0)
     assert np.allclose(per_date.mean(), 0, atol=1e-9) and np.allclose(per_date.std(), 1, atol=1e-9)
+    d = cross_section(df.target, "demean")
+    assert np.allclose(d.groupby(level=0).mean(), 0, atol=1e-9) and d.std() > 0.5, "demean keeps the dispersion"
     assert np.isclose(
         metrics.signal(one, z.loc[one.index])["rank_ic"], metrics.signal(one, df.target.loc[one.index])["rank_ic"]
     )
@@ -380,7 +392,12 @@ def main() -> None:
     ap.add_argument("--tensor", type=Path, default=TENSOR, help="the built sequences, reused when present")
     ap.add_argument("--horizon", action="store_true", help="also split the test Rank IC by distance to the next pivot")
     ap.add_argument("--verbose", action="store_true", help="print the validation Rank IC each epoch")
-    ap.add_argument("--z-target", action="store_true", help="train on the target standardised inside each timestamp")
+    ap.add_argument(
+        "--z-target",
+        choices=["off", "demean", "z"],
+        default="off",
+        help="train on the target with the level, or the level and the scale, of its timestamp removed",
+    )
     ap.add_argument("--smooth", type=int, nargs="*", default=[2, 4, 12], help="output low-pass windows to report")
     args = ap.parse_args()
 
