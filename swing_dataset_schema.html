@@ -1,1023 +1,478 @@
-<body>
-<title>Swing Dataset Schema</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap">
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Swing multi-timeframe — specifica e risultati</title>
 <style>
 :root{
-  --bg:#0e1420;
-  --surface:#141c2c;
-  --surface-2:#1a2438;
-  --line:#2a3550;
-  --line-soft:#20293e;
-  --text:#e7ecf7;
-  --text-dim:#a9b4cc;
-  --text-faint:#6f7b98;
-  --accent:#7fd8c8;
-  --accent-soft:#7fd8c822;
-  --amber:#e8b168;
-  --amber-soft:#e8b16822;
-  --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-  --sans:'IBM Plex Sans',system-ui,sans-serif;
+  --bg:#fbfaf8; --panel:#fff; --ink:#1a1c1f; --soft:#5c6169; --line:#e3e1dc;
+  --accent:#1b6b4a; --amber:#8a6212; --blue:#1f5c8c; --red:#a33a2a;
+  --chip:#f1efea; --code:#f4f2ee;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,system-ui,sans-serif;
 }
-@media (prefers-color-scheme: light){
-  :root:not([data-theme="dark"]){
-    --bg:#f6f4ee;
-    --surface:#ffffff;
-    --surface-2:#f0eee6;
-    --line:#dcd7c8;
-    --line-soft:#e7e3d6;
-    --text:#1c2230;
-    --text-dim:#4c5468;
-    --text-faint:#8a8f7f;
-    --accent:#1f8f78;
-    --accent-soft:#1f8f7818;
-    --amber:#b4711f;
-    --amber-soft:#b4711f18;
-  }
-}
-:root[data-theme="light"]{
-  --bg:#f6f4ee;
-  --surface:#ffffff;
-  --surface-2:#f0eee6;
-  --line:#dcd7c8;
-  --line-soft:#e7e3d6;
-  --text:#1c2230;
-  --text-dim:#4c5468;
-  --text-faint:#8a8f7f;
-  --accent:#1f8f78;
-  --accent-soft:#1f8f7818;
-  --amber:#b4711f;
-  --amber-soft:#b4711f18;
-}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#15161a; --panel:#1c1e23; --ink:#e8e6e3; --soft:#9aa0a8; --line:#2c2f36;
+  --accent:#5cc394; --amber:#d9a441; --blue:#6aa9d9; --red:#e08b7a;
+  --chip:#24272d; --code:#22252b;
+}}
 :root[data-theme="dark"]{
-  --bg:#0e1420;
-  --surface:#141c2c;
-  --surface-2:#1a2438;
-  --line:#2a3550;
-  --line-soft:#20293e;
-  --text:#e7ecf7;
-  --text-dim:#a9b4cc;
-  --text-faint:#6f7b98;
-  --accent:#7fd8c8;
-  --accent-soft:#7fd8c822;
-  --amber:#e8b168;
-  --amber-soft:#e8b16822;
+  --bg:#15161a; --panel:#1c1e23; --ink:#e8e6e3; --soft:#9aa0a8; --line:#2c2f36;
+  --accent:#5cc394; --amber:#d9a441; --blue:#6aa9d9; --red:#e08b7a;
+  --chip:#24272d; --code:#22252b;
 }
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.62;margin:0}
+.wrap{max-width:960px;margin:0 auto;padding:48px 24px 96px}
 
-*{box-sizing:border-box;}
-body{
-  margin:0;
-  background:var(--bg);
-  color:var(--text);
-  font-family:var(--sans);
-  padding:48px 24px 80px;
-  -webkit-font-smoothing:antialiased;
-}
-.wrap{max-width:920px;margin:0 auto;}
+/* intestazione */
+header{border-bottom:2px solid var(--ink);padding-bottom:24px;margin-bottom:8px}
+h1{font-size:30px;line-height:1.2;margin:0 0 8px;letter-spacing:-.02em}
+.tagline{color:var(--soft);font-size:16px;margin:0 0 20px;max-width:70ch}
+.facts{display:flex;flex-wrap:wrap;gap:10px}
+.fact{background:var(--chip);border-radius:6px;padding:8px 12px;font-size:13px}
+.fact b{display:block;font-size:17px;font-variant-numeric:tabular-nums}
+.fact span{color:var(--soft)}
 
-header{margin-bottom:40px;}
-.eyebrow{
-  font-family:var(--mono);
-  font-size:12px;
-  letter-spacing:.08em;
-  text-transform:uppercase;
-  color:var(--accent);
-  margin:0 0 10px;
-}
-h1{
-  font-size:clamp(28px,4vw,38px);
-  font-weight:700;
-  margin:0 0 12px;
-  text-wrap:balance;
-  letter-spacing:-.01em;
-}
-.sub{
-  font-size:15px;
-  line-height:1.6;
-  color:var(--text-dim);
-  max-width:62ch;
-  margin:0;
-}
+/* sezioni */
+section{margin-top:56px;scroll-margin-top:16px}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.12em;color:var(--soft);
+   margin:0 0 4px;font-weight:600}
+h2 .n{color:var(--ink);font-variant-numeric:tabular-nums}
+.h2sub{font-size:23px;font-weight:650;letter-spacing:-.01em;margin:0 0 20px;
+       padding-bottom:12px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:32px 0 10px;font-weight:640;letter-spacing:-.01em}
+h3:first-of-type{margin-top:24px}
+p{margin:0 0 12px;max-width:78ch}
+.lead{font-size:16px;color:var(--soft);max-width:74ch}
 
-.legend{
-  display:flex;
-  gap:20px;
-  flex-wrap:wrap;
-  margin-top:24px;
-  padding-top:20px;
-  border-top:1px solid var(--line-soft);
-}
-.legend-item{
-  display:flex;
-  align-items:center;
-  gap:8px;
-  font-family:var(--mono);
-  font-size:12px;
-  color:var(--text-faint);
-}
-.dot{width:8px;height:8px;border-radius:50%;flex:none;}
-.dot.seq{background:var(--accent);}
-.dot.target{background:var(--amber);}
+/* badge di stato, un solo vocabolario in tutto il documento */
+.b{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.06em;
+   text-transform:uppercase;padding:2px 8px;border-radius:99px;vertical-align:3px;margin-left:8px}
+.b-ok{background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accent)}
+.b-msr{background:color-mix(in srgb,var(--blue) 15%,transparent);color:var(--blue)}
+.b-open{background:color-mix(in srgb,var(--amber) 18%,transparent);color:var(--amber)}
+.b-no{background:color-mix(in srgb,var(--red) 15%,transparent);color:var(--red)}
 
-.tree{
-  font-family:var(--mono);
-  font-size:13px;
-  margin:0 0 44px;
-}
-.node{position:relative;}
-.node-row{
-  display:flex;
-  align-items:baseline;
-  gap:10px;
-  padding:9px 0;
-}
-.node-key{color:var(--text);font-weight:600;}
-.node-meta{color:var(--text-faint);font-size:12px;}
-.badge{
-  font-family:var(--mono);
-  font-size:11px;
-  padding:2px 7px;
-  border-radius:3px;
-  border:1px solid var(--line);
-  color:var(--text-dim);
-  white-space:nowrap;
-}
-.badge.accent{color:var(--accent);border-color:var(--accent-soft);background:var(--accent-soft);}
-.badge.amber{color:var(--amber);border-color:var(--amber-soft);background:var(--amber-soft);}
+/* riquadri */
+.box{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+     padding:18px 20px;margin:18px 0}
+.box>:last-child{margin-bottom:0}
+.box.why{border-left:3px solid var(--blue)}
+.box.no{border-left:3px solid var(--red)}
+.box.open{border-left:3px solid var(--amber)}
+.box h4{margin:0 0 8px;font-size:15px;font-weight:640}
 
-.branch{
-  margin-left:22px;
-  padding-left:22px;
-  border-left:1px solid var(--line);
-}
-.leaf-row{
-  display:flex;
-  align-items:baseline;
-  gap:10px;
-  padding:9px 0;
-  border-bottom:1px solid var(--line-soft);
-}
-.leaf-row:last-child{border-bottom:none;}
-.leaf-key{color:var(--text-dim);min-width:0;}
+/* tabelle */
+.tw{overflow-x:auto;margin:18px 0;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+caption{text-align:left;padding:12px 16px;color:var(--soft);font-size:12.5px;border-bottom:1px solid var(--line)}
+th{text-align:left;font-weight:600;color:var(--soft);font-size:12px;text-transform:uppercase;
+   letter-spacing:.05em;padding:10px 14px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:9px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+tbody tr:last-child td{border-bottom:none}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td.key{font-family:var(--mono);font-size:12.5px}
+tr.total td{font-weight:650;background:var(--chip)}
+tr.hi td{background:color-mix(in srgb,var(--accent) 8%,transparent);font-weight:600}
+td.foot{color:var(--soft);font-size:12.5px;background:var(--chip)}
+.pos{color:var(--accent)}.neg{color:var(--red)}
 
-.branches{display:flex;flex-direction:column;gap:0;}
-
-table{
-  width:100%;
-  border-collapse:collapse;
-  font-family:var(--mono);
-  font-size:12.5px;
-  margin-top:14px;
-}
-caption{
-  text-align:left;
-  font-family:var(--sans);
-  font-size:14px;
-  font-weight:600;
-  color:var(--text);
-  margin-bottom:6px;
-}
-th{
-  text-align:left;
-  font-size:11px;
-  letter-spacing:.04em;
-  text-transform:uppercase;
-  color:var(--text-faint);
-  font-weight:500;
-  padding:8px 12px;
-  border-bottom:1px solid var(--line);
-}
-td{
-  padding:9px 12px;
-  border-bottom:1px solid var(--line-soft);
-  color:var(--text-dim);
-  vertical-align:top;
-}
-td:first-child, th:first-child{padding-left:0;}
-tr td.col-name{color:var(--text);font-weight:500;}
-.tbl-wrap{overflow-x:auto;margin-bottom:36px;}
-
-.tf-heading{
-  display:flex;
-  align-items:center;
-  gap:12px;
-  margin:44px 0 4px;
-}
-.tf-heading h2{
-  font-size:17px;
-  font-weight:700;
-  margin:0;
-  font-family:var(--sans);
-}
-.tf-heading .badge{font-size:12px;}
-.tf-note{
-  font-size:13px;
-  color:var(--text-faint);
-  margin:2px 0 0;
-}
-
-.callout{
-  border:1px solid var(--amber-soft);
-  background:var(--amber-soft);
-  border-radius:6px;
-  padding:16px 18px;
-  margin:20px 0 36px;
-}
-.callout h3{
-  font-size:13px;
-  font-weight:700;
-  color:var(--amber);
-  margin:0 0 8px;
-  text-transform:uppercase;
-  letter-spacing:.03em;
-}
-.callout p{
-  font-size:13.5px;
-  line-height:1.65;
-  color:var(--text-dim);
-  margin:0 0 10px;
-}
-.callout p:last-child{margin-bottom:0;}
-
-.foot{
-  margin-top:56px;
-  padding-top:24px;
-  border-top:1px solid var(--line-soft);
-  display:grid;
-  grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
-  gap:24px;
-}
-.foot-item h3{
-  font-size:12px;
-  text-transform:uppercase;
-  letter-spacing:.05em;
-  color:var(--text-faint);
-  margin:0 0 8px;
-  font-weight:600;
-}
-.foot-item p{
-  font-size:13px;
-  line-height:1.6;
-  color:var(--text-dim);
-  margin:0;
-  font-family:var(--mono);
-}
-
-@media (max-width:640px){
-  .branch{margin-left:10px;padding-left:14px;}
-  table{font-size:11.5px;}
-  th,td{padding:7px 8px;}
-}
-
-.status-open{color:var(--amber);}
-.status-done{color:var(--accent);}
-h2.sec{
-  font-size:20px;font-weight:700;margin:56px 0 6px;
-  padding-bottom:8px;border-bottom:1px solid var(--line);
-}
-.lead{font-size:14px;line-height:1.65;color:var(--text-dim);margin:10px 0 20px;max-width:70ch;}
-.callout h4{font-size:13px;font-weight:700;color:var(--text);margin:14px 0 6px;}
+code{font-family:var(--mono);font-size:.88em;background:var(--code);padding:1.5px 5px;border-radius:4px}
+pre{font-family:var(--mono);font-size:12.5px;background:var(--code);padding:14px 16px;
+    border-radius:8px;overflow-x:auto;margin:12px 0;line-height:1.5}
+ul{margin:0 0 12px;padding-left:20px;max-width:78ch}li{margin-bottom:6px}
+strong{font-weight:650}
+footer{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);color:var(--soft);font-size:13px}
 </style>
-
+</head>
+<body>
 <div class="wrap">
-  <header>
-    <p class="eyebrow">cryptofarm · ml/swing — schema dataset · rev. 18 — set finale fissato: 12 indicatori, 2 parametri</p>
-    <h1>Schema dataset multi-timeframe</h1>
-    <p class="sub">Quattro rami sequenziali (5m → 1h), 24 step fissi per ramo, stesso set di colonne e stessi parametri su ogni ramo. Nessun prezzo assoluto, nessun symbol nel tensore. Target = escursione che resta prima della fine della gamba, in unità di volatilità nota. Dati da Binance: 20 coppie USDT, 2017→, 14,9M righe a 5m.</p>
-    <div class="legend">
-      <span class="legend-item"><span class="dot seq"></span> ramo sequenziale (input GRU)</span>
-      <span class="legend-item"><span class="dot target"></span> target / metadata</span>
-    </div>
-  </header>
 
-  <h2 class="sec">Stato</h2>
-  <p class="lead">Cosa è deciso e implementato, cosa è deciso e ancora da scrivere, cosa è aperto. Le scelte chiuse sono documentate nella sezione di competenza; i punti aperti sono raccolti in fondo.</p>
-  <div class="tbl-wrap">
+<header>
+  <h1>Swing multi-timeframe — specifica e risultati</h1>
+  <p class="tagline">Prevedere quanta escursione resta prima che una gamba di prezzo finisca, su venti coppie crypto, con una rete ricorrente su quattro orizzonti temporali. Questo documento tiene le decisioni chiuse, i numeri misurati e ciò che resta aperto.</p>
+  <div class="facts">
+    <div class="fact"><b>20</b><span>coppie USDT</span></div>
+    <div class="fact"><b>14,9M</b><span>candele 5m</span></div>
+    <div class="fact"><b>24</b><span>finestra_estremi</span></div>
+    <div class="fact"><b>0.1582</b><span>Rank IC, miglior modello</span></div>
+    <div class="fact"><b>0.586</b><span>Rank ICIR</span></div>
+  </div>
+</header>
+
+<section>
+  <h2><span class="n">1</span> · Risultati</h2>
+  <p class="h2sub">Dove siamo</p>
+  <p class="lead">Ogni step deve battere il precedente sulle metriche di segnale out-of-sample, sugli stessi quattro fold walk-forward dal 2025-06. Rank ICIR è la metrica su cui si decide una promozione.</p>
+
+  <div class="tw">
     <table>
-      <caption>stato per componente</caption>
-      <thead><tr><th>componente</th><th>stato</th><th>dove</th></tr></thead>
+      <caption>la scala degli step — Rank IC e Rank ICIR di test, media ± std sui fold</caption>
+      <thead><tr><th>step</th><th>modello</th><th>input</th><th class="num">Rank IC</th><th class="num">Rank ICIR</th><th>esito</th></tr></thead>
       <tbody>
-        <tr><td class="col-name">fonte dati</td><td class="status-done">chiuso · implementato</td><td><code>data.binance</code></td></tr>
-        <tr><td class="col-name">pivot, finestra_estremi = 24</td><td class="status-done">misurato · implementato</td><td><code>data.pivots</code></td></tr>
-        <tr><td class="col-name">remaining_excursion</td><td class="status-done">misurato · implementato</td><td><code>data.target</code></td></tr>
-        <tr><td class="col-name">swing_leg_target</td><td class="status-open">sostituito — non predittivo</td><td>sezione target</td></tr>
-        <tr><td class="col-name">riferimento[k] = σ·√durata</td><td class="status-done">misurato · implementato</td><td><code>reference</code></td></tr>
-        <tr><td class="col-name">oracolo (step 0)</td><td class="status-done">eseguito</td><td><code>oracle</code></td></tr>
-        <tr><td class="col-name">δ = 2.1 della Huber</td><td class="status-done">rimisurato sul nuovo target</td><td>sezione loss</td></tr>
-        <tr><td class="col-name">testa densa lineare</td><td class="status-done">chiuso</td><td>sezione architettura</td></tr>
-        <tr><td class="col-name">28 feature candidate</td><td class="status-done">definite · implementate</td><td><code>features</code></td></tr>
-        <tr><td class="col-name">normalizzazione delle feature</td><td class="status-done">misurata · implementata</td><td><code>normalize</code></td></tr>
-        <tr><td class="col-name">parametri indicatori per ramo</td><td class="status-open">ipotesi fissata · da validare</td><td>sezione feature</td></tr>
-        <tr><td class="col-name">split e purging</td><td class="status-done">chiusi · implementati</td><td><code>split</code></td></tr>
-        <tr><td class="col-name">dataset multi-ramo su griglia 5m</td><td class="status-done">implementato · verificato</td><td><code>dataset</code></td></tr>
-        <tr><td class="col-name">metriche di segnale</td><td class="status-done">implementate</td><td><code>metrics</code></td></tr>
-        <tr><td class="col-name">step 1 — regressione lineare</td><td class="status-done">eseguito</td><td><code>linear</code>, sezione validazione</td></tr>
-        <tr><td class="col-name">walk-forward, 4 fold espansivi</td><td class="status-done">implementato</td><td><code>split.walk_forward</code></td></tr>
-        <tr><td class="col-name">appiattimento (b) — lag e aggregati</td><td class="status-done">implementato</td><td><code>dataset.lagged</code>, 560 colonne</td></tr>
-        <tr><td class="col-name">step 2 — GBM, baseline e metriche</td><td class="status-done">eseguito</td><td><code>gbm</code>, sezione validazione</td></tr>
-        <tr><td class="col-name">step 2 — selezione delle feature (5 passi)</td><td class="status-done">eseguita — 28 candidate → 12 indicatori</td><td>sezione selezione</td></tr>
-        <tr><td class="col-name">test del beta di mercato</td><td class="status-done">superato — segnale non di sola fase</td><td>sezione validazione</td></tr>
-        <tr><td class="col-name">segno negativo sotto le 24 barre</td><td class="status-open">confermato · irrisolto dal GBM</td><td>punti aperti, punto 4</td></tr>
-        <tr><td class="col-name">stride, materializzazione, regolarizzazione</td><td class="status-open">aperti</td><td>punti aperti</td></tr>
+        <tr><td class="num">0</td><td>oracolo</td><td>estremi noti</td><td class="num">—</td><td class="num">—</td><td>fissa <code>finestra_estremi</code> e δ<span class="b b-ok">fatto</span></td></tr>
+        <tr><td class="num">1</td><td>regressione lineare</td><td>ultima candela × 4 rami</td><td class="num">0.124</td><td class="num">0.28</td><td>limite inferiore<span class="b b-ok">fatto</span></td></tr>
+        <tr><td class="num">2</td><td>GBM (LightGBM)</td><td>560 colonne appiattite</td><td class="num">0.156 ± 0.015</td><td class="num">0.578 ± 0.053</td><td>riferimento<span class="b b-ok">fatto</span></td></tr>
+        <tr><td class="num">3</td><td>GRU ramo singolo</td><td>(B, 24, 12) — 15m</td><td class="num">0.154 ± 0.015</td><td class="num">0.567 ± 0.052</td><td>pareggia, non batte<span class="b b-no">no</span></td></tr>
+        <tr class="hi"><td class="num">3</td><td>GRU ramo singolo</td><td>(B, 24, 28) — 15m</td><td class="num">0.1582 ± 0.0150</td><td class="num">0.586 ± 0.054</td><td>batte il GBM su tutti e 4 i fold<span class="b b-ok">5 seed</span></td></tr>
+        <tr><td class="num">4</td><td>GRU multi-ramo</td><td>4 × (B, 24, 28)</td><td class="num">—</td><td class="num">—</td><td>da fare, sul set completo<span class="b b-open">aperto</span></td></tr>
       </tbody>
     </table>
   </div>
 
-  <h2 class="sec">Struttura del dataset</h2>
+  <h3>Il numero aggregato non basta</h3>
+  <p>Scomposto per distanza dal pivot successivo, il Rank IC racconta una storia diversa da quella della media. <strong>Sotto le 24 barre è negativo in ogni modello provato</strong>: dove servirebbe un'uscita, il modello sbaglia direzione. Tutto il guadagno degli step 2 e 3 sta nelle fasce lontane.</p>
 
-  <div class="tree">
-    <div class="node">
-      <div class="node-row">
-        <span class="node-key">swing_multi_tf</span>
-        <span class="node-meta">— dataset root, una riga per bar 5m</span>
+  <div class="tw">
+    <table>
+      <caption>Rank IC di test per distanza dal pivot successivo, in barre da 5m, aggregato sui quattro fold</caption>
+      <thead><tr><th>barre al pivot</th><th class="num">bar</th><th class="num">step 1</th><th class="num">step 2</th><th class="num">step 3 · 12</th><th class="num">step 3 · 28</th></tr></thead>
+      <tbody>
+        <tr><td>0–6</td><td class="num">8.567</td><td class="num neg">−0.083</td><td class="num neg">−0.064</td><td class="num neg">−0.059</td><td class="num neg">−0.059</td></tr>
+        <tr><td>6–12</td><td class="num">8.464</td><td class="num neg">−0.076</td><td class="num neg">−0.085</td><td class="num neg">−0.100</td><td class="num neg">−0.107</td></tr>
+        <tr><td>12–24</td><td class="num">16.893</td><td class="num neg">−0.083</td><td class="num neg">−0.098</td><td class="num neg">−0.095</td><td class="num neg">−0.094</td></tr>
+        <tr><td>24–48</td><td class="num">31.924</td><td class="num neg">−0.041</td><td class="num neg">−0.034</td><td class="num neg">−0.030</td><td class="num neg">−0.029</td></tr>
+        <tr><td>48–96</td><td class="num">49.783</td><td class="num pos">+0.017</td><td class="num pos">+0.028</td><td class="num pos">+0.028</td><td class="num pos">+0.031</td></tr>
+        <tr><td>96–192</td><td class="num">55.052</td><td class="num pos">+0.022</td><td class="num pos">+0.041</td><td class="num pos">+0.051</td><td class="num pos">+0.054</td></tr>
+        <tr><td>oltre 192</td><td class="num">49.001</td><td class="num pos">+0.022</td><td class="num pos">+0.059</td><td class="num pos">+0.060</td><td class="num pos">+0.066</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Cosa è stato provato e non ha funzionato <span class="b b-msr">misurato</span></h3>
+  <p>Tenuto qui perché costa meno rileggerlo che rimisurarlo. Tutte le righe sono su quattro fold, un seed, set a 12 colonne salvo indicazione.</p>
+
+  <div class="tw">
+    <table>
+      <caption>le varianti scartate, con il costo misurato rispetto alla baseline della loro riga di partenza</caption>
+      <thead><tr><th>variante</th><th class="num">Rank IC</th><th class="num">ICIR</th><th>perché non funziona</th></tr></thead>
+      <tbody>
+        <tr><td>target z-score per timestamp</td><td class="num">0.1475</td><td class="num">0.541</td><td>toglie il 47% di varianza che la metrica non vede, ma quella componente serviva all'addestramento</td></tr>
+        <tr><td>target demean per timestamp</td><td class="num">0.1464</td><td class="num">0.537</td><td>perde uguale al z-score: la colpa non è del riscalamento, è la componente comune stessa</td></tr>
+        <tr><td>passa-basso sulla predizione, k=2</td><td class="num">0.1284</td><td class="num">0.476</td><td>monotono nella direzione sbagliata (0.097 a k=4, 0.041 a k=12): la variazione nel tempo è segnale</td></tr>
+        <tr><td>addestramento solo su h &lt; 48</td><td class="num">0.1334</td><td class="num">0.484</td><td>migliora ogni fascia vicina, nessuna passa lo zero</td></tr>
+        <tr><td>solo h &lt; 48, set a 28</td><td class="num">0.1332</td><td class="num">0.485</td><td>fascia 0–6 a −0.019, il meglio mai visto, ancora negativo</td></tr>
+        <tr><td colspan="4" class="foot">lo specialista sulla banda è il <strong>limite superiore</strong> di qualunque condizionamento sul regime — una loss pesata, una testa multi-task o una miscela di esperti sono versioni più deboli della stessa idea, perché lo specialista ha già tutta la capacità e l'early stopping sulla banda. Il suo fallimento le esclude tutte in una misura sola</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="box why">
+    <h4>Le tre cose che questi numeri hanno insegnato</h4>
+    <p><strong>1. La selezione delle feature non si trasferisce fra modelli.</strong> I 12 indicatori scelti col GBM costano 0.005 di Rank IC e 0.022 di ICIR a una ricorrente. Dentro le 48 barre dal pivot i due predittori più forti sono <code>tsi_momentum</code> (0.072 su train, 0.067 su test) e <code>rsi_centered</code> (0.068 / 0.063), entrambi scartati dal passo 4 perché su colonne appiattite sono ridondanti.</p>
+    <p><strong>2. La relazione cambia segno vicino al pivot.</strong> <code>close_position_in_window_15m</code> vale +0.157 di Rank IC su tutto il train e −0.063 dentro le 24 barre; 66 colonne su 112 invertono allo stesso modo. Una mappa unica e incondizionata non può tenere entrambi i rami, e fitta la massa — dove sta l'84% delle righe.</p>
+    <p><strong>3. Non è instabilità, è una variabile mancante.</strong> Dentro le 48 barre la Rank IC per colonna su train e su test <strong>correla a 0.924</strong>, e solo 8 colonne su 112 cambiano segno. L'informazione in banda generalizza benissimo: quello che manca è la variabile che dice al modello in quale dei due regimi si trova.</p>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">2</span> · Dati</h2>
+  <p class="h2sub">Binance, venti coppie USDT<span class="b b-ok">chiuso</span></p>
+  <p class="lead">Dump pubblici di <code>data.binance.vision</code>: ZIP statici su S3, nessuna chiave, nessun rate limit. Alpaca resta la fonte live e il venue di esecuzione, e le sue commissioni (0,50% round trip) sono quelle usate in tutte le misure di costo. In codice: <code>data.binance</code>.</p>
+
+  <div class="box why">
+    <h4>Perché non lo storico di Alpaca</h4>
+    <p>Parte dal 2021-01-01, perché gli endpoint distribuiscono i dati del venue di Alpaca stesso, nato allora — non è una restrizione di piano. In più il 2023 è bucato dai delisting seguiti alle cause SEC: SOL ha un buco di 417 giorni, e la copertura 5m di quell'anno crolla al 39% su BCH, 21% su BAT, 15% su YFI.</p>
+  </div>
+
+  <div class="tw">
+    <table>
+      <caption>i 20 simboli — un file per simbolo a 5m, tutti gli altri timeframe ricampionati al volo</caption>
+      <thead><tr><th>coppia</th><th class="num">candele 5m</th><th>da</th><th class="num">giorni</th><th class="num">di cui 2023+</th></tr></thead>
+      <tbody>
+        <tr><td class="key">BTC</td><td class="num">949.801</td><td>2017-08-17</td><td class="num">3.303</td><td class="num">386.192</td></tr>
+        <tr><td class="key">ETH</td><td class="num">949.801</td><td>2017-08-17</td><td class="num">3.303</td><td class="num">386.192</td></tr>
+        <tr><td class="key">LTC</td><td class="num">915.906</td><td>2017-12-13</td><td class="num">3.185</td><td class="num">386.192</td></tr>
+        <tr><td class="key">ADA</td><td class="num">880.348</td><td>2018-04-17</td><td class="num">3.060</td><td class="num">386.192</td></tr>
+        <tr><td class="key">XRP</td><td class="num">875.402</td><td>2018-05-04</td><td class="num">3.043</td><td class="num">386.192</td></tr>
+        <tr><td class="key">TRX</td><td class="num">864.418</td><td>2018-06-11</td><td class="num">3.005</td><td class="num">386.192</td></tr>
+        <tr><td class="key">LINK</td><td class="num">801.722</td><td>2019-01-16</td><td class="num">2.786</td><td class="num">386.192</td></tr>
+        <tr><td class="key">BAT</td><td class="num">788.186</td><td>2019-03-04</td><td class="num">2.739</td><td class="num">386.192</td></tr>
+        <tr><td class="key">DOGE</td><td class="num">752.942</td><td>2019-07-05</td><td class="num">2.616</td><td class="num">386.192</td></tr>
+        <tr><td class="key">XTZ</td><td class="num">729.722</td><td>2019-09-24</td><td class="num">2.535</td><td class="num">386.192</td></tr>
+        <tr><td class="key">BCH</td><td class="num">711.066</td><td>2019-11-28</td><td class="num">2.470</td><td class="num">386.192</td></tr>
+        <tr><td class="key">YFI</td><td class="num">637.493</td><td>2020-08-10</td><td class="num">2.214</td><td class="num">386.192</td></tr>
+        <tr><td class="key">SOL</td><td class="num">637.277</td><td>2020-08-11</td><td class="num">2.213</td><td class="num">386.192</td></tr>
+        <tr><td class="key">CRV</td><td class="num">636.149</td><td>2020-08-15</td><td class="num">2.209</td><td class="num">386.192</td></tr>
+        <tr><td class="key">DOT</td><td class="num">635.057</td><td>2020-08-18</td><td class="num">2.206</td><td class="num">386.192</td></tr>
+        <tr><td class="key">SUSHI</td><td class="num">631.169</td><td>2020-09-01</td><td class="num">2.192</td><td class="num">386.192</td></tr>
+        <tr><td class="key">UNI</td><td class="num">626.657</td><td>2020-09-17</td><td class="num">2.176</td><td class="num">386.192</td></tr>
+        <tr><td class="key">AVAX</td><td class="num">625.175</td><td>2020-09-22</td><td class="num">2.171</td><td class="num">386.192</td></tr>
+        <tr><td class="key">NEAR</td><td class="num">618.857</td><td>2020-10-14</td><td class="num">2.149</td><td class="num">386.192</td></tr>
+        <tr><td class="key">AAVE</td><td class="num">618.593</td><td>2020-10-15</td><td class="num">2.148</td><td class="num">386.192</td></tr>
+        <tr class="total"><td>totale</td><td class="num">14.885.741</td><td>2017-08-17</td><td class="num">3.303</td><td class="num">7.723.840</td></tr>
+        <tr><td colspan="5" class="foot">tutti chiudono al 2026-09-02. La colonna 2023+ è identica per tutti perché è il periodo di addestramento ed è comune a tutti i simboli: <strong>386.192 barre a testa</strong>, ed è ciò che rende piena la sezione cross-sectional. In tutto il 2023+ manca <strong>un solo buco di 16 barre, simultaneo su tutti e 20</strong> — un'interruzione dell'exchange, 320 barre, lo 0,004%</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p><strong>Due trappole nei dump</strong>, entrambe gestite: <code>open_time</code> è passato da millisecondi a microsecondi nel 2025 senza marcatore di versione, e alcuni file hanno una riga di header. L'unità si deduce per file dall'ordine di grandezza.</p>
+</section>
+
+<section>
+  <h2><span class="n">3</span> · Target</h2>
+  <p class="h2sub">remaining_excursion<span class="b b-ok">chiuso</span></p>
+  <p class="lead">Quanto il prezzo deve ancora percorrere prima che la gamba corrente finisca, in unità di volatilità. In codice: <code>data.target</code>, pivot in <code>data.pivots</code>.</p>
+
+  <pre>remaining_excursion(i) = log(close[pivot_succ] / close[i]) / (σᵢ · √24)</pre>
+  <p>Numeratore interamente futuro, denominatore interamente passato. I pivot sono estremi del Close a 15m con <code>finestra_estremi = 24</code>. Misurato sul train: simmetrico e centrato (media −0.11, asimmetria 0.01), σ = 5.22, quantili di |target| a 1.09 / 2.11 / 3.97 / 6.95 sul 25°–90° percentile e 19.6 sul 99°.</p>
+
+  <div class="box why">
+    <h4>Perché non l'etichetta precedente</h4>
+    <p><code>swing_leg_target</code> misurava <em>dove sei</em> lungo la gamba corrente, ed era in gran parte già nota a <code>t</code>: una regressione lineare sull'ultima candela la riproduceva a Rank IC 0.38 out-of-sample. Un lineare su feature point-in-time non prevede il futuro — se riproduce l'etichetta, è l'etichetta a essere descrittiva.</p>
+      <div class="tw">
+        <table>
+          <caption>stesso OLS, stessi 219.983 bar di test, due etichette</caption>
+          <thead><tr><th>modello → etichetta</th><th class="num">Rank IC</th><th class="num">Rank ICIR</th></tr></thead>
+          <tbody>
+            <tr><td>vecchio → vecchia (retrospettiva)</td><td class="num">0.3821</td><td class="num">0.9501</td></tr>
+            <tr><td>vecchio → nuova (predittiva)</td><td class="num">0.0753</td><td class="num">0.1689</td></tr>
+            <tr><td>nuovo → nuova (predittiva)</td><td class="num">0.1237</td><td class="num">0.2802</td></tr>
+          </tbody>
+        </table>
       </div>
-      <div class="branch branches">
-        <p class="tf-note" style="margin:0 0 6px">24 step fissi per ramo, finestra crescente</p>
-        <div class="leaf-row"><span class="leaf-key">ramo_5m</span><span class="badge accent">seq · 24 step · 2h</span></div>
-        <div class="leaf-row"><span class="leaf-key">ramo_15m</span><span class="badge accent">seq · 24 step · 6h</span></div>
-        <div class="leaf-row"><span class="leaf-key">ramo_30m</span><span class="badge accent">seq · 24 step · 12h</span></div>
-        <div class="leaf-row"><span class="leaf-key">ramo_1h</span><span class="badge accent">seq · 24 step · 24h</span></div>
-        <div class="leaf-row"><span class="leaf-key">target</span><span class="badge amber">swing_leg_target</span></div>
-        <div class="leaf-row"><span class="leaf-key">timestamp</span><span class="badge amber">chiave, non feature</span></div>
-        <div class="leaf-row"><span class="leaf-key">symbol</span><span class="badge amber">chiave di raggruppamento, non feature</span></div>
-      </div>
-    </div>
+    <p>Quattro quinti del segnale evaporano quando lo si misura su ciò che accade davvero, e chiedere direttamente la cosa giusta rende di più: 0.124 contro 0.075, stesse feature e stesso modello.</p>
   </div>
 
-  <div class="callout">
-    <h3>Perché 24 step fissi e non una finestra temporale comune</h3>
-    <p>La variante con finestra 6h su tutti i rami (72/24/12/6 step) è ridondante: <code>ramo_5m</code> a 72 step e <code>ramo_15m</code> a 24 step coprono lo stesso intervallo, e il secondo è un'aggregazione deterministica del primo — quattro viste della stessa informazione. Con 24 step fissi gli orizzonti sono distinti (2h / 6h / 12h / 24h), l'informazione è complementare e i tensori restano uniformi.</p>
-    <p>Lo stesso argomento vale un piano più in basso, sui parametri degli indicatori: vedi "Parametri per ramo".</p>
-  </div>
+  <h3>Rilevazione dei pivot</h3>
+  <p><code>argrelextrema</code> su Close con <code>order = finestra_estremi</code>: un punto è estremo se supera tutte le 24 barre a destra e a sinistra. Massimi e minimi vengono fusi in sequenza alternata; fra due massimi consecutivi resta il più estremo.</p>
+  <p><strong>Close e non High/Low</strong>, per quattro ragioni che convergono: coerenza con la serie su cui il modello vede <code>log_return</code>; robustezza a wick e spike di liquidazione, che producono estremi non negoziabili; assenza del caso ambiguo in cui una barra è massimo su High e minimo su Low; realismo esecutivo, dato che un ordine si riempie vicino al close e non sull'estremo assoluto.</p>
 
-  <div class="callout">
-    <h3>Fonte dati — Binance, non Alpaca</h3>
-    <p>Lo storico di Alpaca sui crypto <strong>parte dal 2021-01-01</strong>: gli endpoint <code>v1beta3</code> distribuiscono i dati del venue di Alpaca stesso, nato allora. Non è una restrizione di piano. In più il 2023 è bucato dai delisting successivi alle cause SEC — SOL ha un buco di 417 giorni, e la copertura 5m di quell'anno crolla al 39% su BCH, 21% su BAT, 15% su YFI.</p>
-    <p>Il dataset ML si costruisce quindi dai dump pubblici di <code>data.binance.vision</code>: ZIP statici su S3, nessuna chiave, nessun rate limit, coppie USDT. <strong>20 coppie con almeno 70 mesi di storico 5m e zero mesi mancanti</strong>, da 2017-08 (BTC, ETH) a oggi, per <strong>14,9M righe</strong>. Alpaca resta la fonte live e il venue di esecuzione, e le sue commissioni (0,25% taker tier 1, 0,50% round trip) sono quelle usate in tutte le misure di costo.</p>
-    <p>Due trappole nei dump, entrambe gestite in <code>data.binance</code>: <code>open_time</code> è passato da millisecondi a microsecondi nel corso del 2025 senza marcatore di versione, e alcuni file hanno una riga di header. L'unità si deduce per file dall'ordine di grandezza. Sul disco esiste un solo file per simbolo, a 5m; tutti gli altri timeframe sono ricampionati al volo.</p>
-  </div>
+  <h3>finestra_estremi = 24 — il parametro primario <span class="b b-msr">misurato</span></h3>
+  <p>Definisce quali oscillazioni contano come gamba. Da qui discendono le finestre di ogni indicatore, l'ampiezza del purging, la finestra di volatilità della pesatura (<code>4 × finestra_estremi</code>) e i 24 step per ramo del tensore.</p>
+  <p><strong>Il criterio ovvio è degenere.</strong> Massimizzare il P&amp;L netto dell'oracolo non individua una struttura di mercato ma la finestra più corta in cui la gamba media supera i costi: l'argmax cade a 3 barre, e non è stazionario (su BTC va da 2 nel 2017 a 12 nel 2023). La correzione è penalizzare il ritardo di rilevazione — un pivot è confermabile solo dopo <code>order</code> barre, quindi si entra ed esce L barre dopo.</p>
 
-  <h2 class="sec">Target</h2>
-  <p class="lead">Implementato in <code>data.target</code>, pivot in <code>data.pivots</code>, calibrazione del riferimento in <code>reference</code>. L'etichetta del dataset è <code>remaining_excursion</code>; <code>swing_leg_target</code> resta documentato come termine di confronto, e il perché della sostituzione è misurato qui sotto.</p>
-
-  <div class="tbl-wrap">
+  <div class="tw">
     <table>
-      <thead><tr><th>colonna</th><th>definizione</th><th>note</th></tr></thead>
+      <caption>log P&amp;L per anno, media su 20 simboli, 2023+, 0,50% round trip</caption>
+      <thead><tr><th class="num">finestra</th><th class="num">L=0</th><th class="num">L=1</th><th class="num">L=2</th><th class="num">L=3</th><th class="num">gambe in utile (L=2)</th></tr></thead>
       <tbody>
-        <tr>
-          <td class="col-name">remaining_excursion</td>
-          <td><code>log(close[pivot_succ] / close[i]) / (σ<sub>i</sub>·√24)</code> — quanto il prezzo deve ancora percorrere prima che la gamba finisca</td>
-          <td>pivot su Close 15m, <code>finestra_estremi = 24</code> (±6h). Numeratore interamente futuro, denominatore interamente passato</td>
-        </tr>
-        <tr>
-          <td class="col-name">swing_leg_target</td>
-          <td>posizione lungo la gamba fra due pivot adiacenti, interpolata con <code>smoothing = 0.7</code>, con i pivot pesati per significatività</td>
-          <td><span class="status-open">sostituito</span> — resta nel codice come termine di confronto, vedi sotto</td>
-        </tr>
+        <tr><td class="num">16</td><td class="num">16.1</td><td class="num">11.5</td><td class="num">9.2</td><td class="num">7.6</td><td class="num">79%</td></tr>
+        <tr><td class="num">20</td><td class="num">14.9</td><td class="num">11.1</td><td class="num">9.2</td><td class="num">7.9</td><td class="num">85%</td></tr>
+        <tr class="hi"><td class="num">24</td><td class="num">14.0</td><td class="num">10.7</td><td class="num">9.1</td><td class="num">8.0</td><td class="num">89%</td></tr>
+        <tr><td class="num">26</td><td class="num">13.6</td><td class="num">10.5</td><td class="num">9.0</td><td class="num">7.9</td><td class="num">90%</td></tr>
+        <tr><td class="num">28</td><td class="num">13.3</td><td class="num">10.4</td><td class="num">8.9</td><td class="num">7.9</td><td class="num">91%</td></tr>
+        <tr><td colspan="6" class="foot">il vantaggio delle finestre corte evapora col ritardo: da L=0 a L=2 la finestra 16 perde il 43% del P&amp;L, la 24 il 35%, e a L=3 l'ordine si inverte</td></tr>
       </tbody>
     </table>
   </div>
 
-  <div class="callout">
-    <h3>Perché il target è cambiato — misurato, non deciso a tavolino</h3>
-    <p><code>swing_leg_target</code> descrive <em>dove sei</em> lungo la gamba corrente. Sembrava esattamente ciò che serve — "sono a 0.9, sto per arrivare, esco" — ma lo step 1 ha mostrato che quella lettura non regge: una <strong>regressione lineare sull'ultima candela dei 4 rami</strong> ottiene <strong>Rank IC 0.38 out-of-sample</strong>. Un modello lineare su feature point-in-time non può prevedere il futuro; se riproduce l'etichetta, è l'etichetta a essere in gran parte già nota a <code>t</code>.</p>
-    <p><strong>Il meccanismo.</strong> Il target è per il 70% <code>(i − inizio)/(fine − inizio)</code>. Il numeratore è noto a <code>t</code>, il denominatore no, ma varia poco nel cross-section: ordinare i simboli per "quanto tempo è passato dall'ultimo pivot" riproduce quasi lo stesso ordinamento. Il modello non prevede, descrive.</p>
-    <p><strong>Perché non è un bug di pipeline.</strong> Il Rank IC scomposto per distanza dal pivot successivo è alto ovunque — 0.46 sotto le 6 barre, ancora <strong>0.29 oltre le 192</strong> (16h). Un difetto di allineamento o di purging si concentrerebbe sui bar col pivot imminente e crollerebbe lontano. Il profilo liscio e decrescente è la firma di una correlazione contemporanea, non di informazione che filtra dal futuro.</p>
-    <p><strong>La verifica che ha deciso.</strong> Lo stesso modello OLS addestrato sul vecchio target, valutato contro il nuovo, sugli stessi 219.983 bar di test (<code>crosscheck</code>):</p>
+  <p><strong>Esito: 24.</strong> Ottimo del range a L=3 ed entro l'1% dell'ottimo a L=2, col miglior tasso di gambe in utile fra i valori equivalenti. La gamba risultante, mediane sui 20 simboli su 2023+: <strong>ampiezza 3,63%</strong>, primo quartile 2,29% (margine 4,6× sul costo), durata 8h50m, <strong>~344 gambe/anno</strong> per simbolo, commissioni pari al 13,8% della gamba mediana.</p>
+</section>
+
+<section>
+  <h2><span class="n">4</span> · Feature</h2>
+  <p class="h2sub">28 candidate, stessi parametri su ogni ramo<span class="b b-ok">chiuso</span></p>
+  <p class="lead">Le stesse colonne su tutti e quattro i rami. Tutte causali: ogni finestra rolling guarda solo all'indietro, mai centrata. L'asimmetria col target è voluta — i pivot vedono il futuro perché sono l'etichetta, le feature no perché sono l'input. <code>target</code>, <code>timestamp</code> e <code>symbol</code> non entrano nel tensore. In codice: <code>features</code>.</p>
+
+  <div class="tw">
     <table>
-      <thead><tr><th>modello → etichetta</th><th>Rank IC</th><th>Rank ICIR</th></tr></thead>
+      <caption>le 28 candidate — C, O, H, L, V della candela; N = finestra_estremi = 24 barre del ramo</caption>
+      <thead><tr><th class="num">#</th><th>colonna</th><th>famiglia</th><th>definizione</th></tr></thead>
       <tbody>
-        <tr><td>vecchio → vecchia (retrospettiva)</td><td>0.3821</td><td>0.9501</td></tr>
-        <tr><td>vecchio → nuova (predittiva)</td><td>0.0753</td><td>0.1689</td></tr>
-        <tr><td>nuovo → nuova (predittiva)</td><td>0.1237</td><td>0.2802</td></tr>
-      </tbody>
-    </table>
-    <p>Quattro quinti del segnale evaporano quando lo si misura su ciò che accade davvero. <strong>Non a zero però: 0.075 è piccolo, non nullo</strong> — il vecchio target conteneva un residuo di informazione reale, sovrastimato cinque volte dalla metrica con cui lo si misurava. E chiedere direttamente la cosa giusta rende di più: 0.124 contro 0.075, stesse feature, stesso modello.</p>
-    <p><strong>Dove cade l'errore.</strong> Due barre indistinguibili alle feature — stesso tempo trascorso, stessa distanza percorsa — ricevono etichette diverse a seconda di quanto durerà la gamba: alla barra 25 di una gamba da 30 l'etichetta è 0.83, di una da 300 è 0.08. Il modello emette un valore intermedio per entrambe, e sbaglia sistematicamente sulle <em>gambe lunghe</em>, cioè quelle da cui viene il profitto.</p>
-    <p><strong>Cosa sparisce col cambio.</strong> <code>smoothing</code> e il termine di avanzamento prezzo non esistono più. La pesatura per significatività nemmeno: una gamba degenere non va da nessuna parte, quindi vale già ~0 di suo — la correzione è incorporata nella grandezza invece di essere applicata sopra. Restano invariati pivot, <code>finestra_estremi</code>, feature, split, purging e metriche.</p>
-    <p><strong>Cosa cambia in conseguenza.</strong> Il target non è più limitato in [−1, +1]: misurato sul train ha σ = 5.22 e 99° percentile a 19.6. <strong>δ = 0.4 decade</strong> (era la mediana di |target| della vecchia distribuzione): rimisurato con lo stesso criterio vale <strong>2.1</strong>. Il punto aperto sulla forma dell'interpolazione si estingue: non c'è più interpolazione.</p>
-  </div>
-
-  <div class="callout">
-    <h3>Rilevazione degli estremi — argrelextrema su Close</h3>
-    <p><code>massimi = argrelextrema(close, np.greater, order=finestra_estremi)</code><br>
-    <code>minimi&nbsp; = argrelextrema(close, np.less,&nbsp; order=finestra_estremi)</code></p>
-    <p><strong>Criterio.</strong> Un punto è estremo se è più alto (o più basso) di tutte le <code>order</code> barre a destra <em>e</em> a sinistra. Nessuna nozione di ampiezza: la selezione è puramente topologica. Massimi e minimi vengono poi fusi in sequenza alternata per indice; se due massimi si susseguono senza un minimo in mezzo, resta solo il più estremo dei due.</p>
-    <p><strong>Serie di input: Close, non High/Low.</strong> (1) Coerenza col target: <code>swing_leg_target</code> misura la posizione lungo una gamba di prezzo, e la gamba va definita sulla stessa serie su cui il modello vede <code>log_return</code>. (2) Robustezza: wick e spike di liquidazione producono estremi su High/Low che non corrispondono a un livello realmente negoziabile né a un'inversione strutturale. (3) Consistenza dell'alternanza: due serie diverse possono produrre un massimo su High e un minimo su Low nella stessa barra, caso ambiguo che con una serie unica non esiste. (4) Realismo esecutivo: un ordine non si riempie sul minimo assoluto della barra, si riempie vicino al close.</p>
-    <p><strong>Costo.</strong> Le gambe misurate su Close sono più corte di quelle wick-to-wick: l'oracolo restituisce valori più bassi ma più realistici, quindi il valore di <code>finestra_estremi</code> che ne esce è già al netto di quell'illusione.</p>
-  </div>
-
-  <div class="callout">
-    <h3>Ampiezza di gamba — convenzione all'indietro</h3>
-    <p><code>argrelextrema</code> restituisce solo indici. L'ampiezza si calcola <strong>dopo la fusione</strong>, e per convenzione guarda al <strong>pivot precedente</strong>: l'ampiezza associata a k è quella della gamba <em>appena conclusa</em> in k, non di quella che da k si apre.</p>
-    <p><code>ampiezza[k] = abs(log(close[pivot_k]) − log(close[pivot_k−1]))</code></p>
-    <p><strong>Perché all'indietro.</strong> Ogni grandezza derivata da un pivot deve essere costruita su informazione già disponibile in quel punto: in k la gamba k−1→k è conclusa e misurabile, quella k→k+1 non esiste ancora. La convenzione all'avanti renderebbe <code>ampiezza[k]</code> inutilizzabile in qualunque contesto causale — filtro, pesatura, diagnostica in produzione — e creerebbe un'asimmetria silenziosa rispetto al resto della pipeline.</p>
-    <p><strong>In scala logaritmica.</strong> Una differenza di prezzo grezza non è confrontabile fra asset: 600 su BTC a 60.000 e 0.005 su ADA a 0.50 sono lo stesso movimento (1%) a cinque ordini di grandezza di distanza. Poiché <code>log(b) − log(a) = log(b/a)</code>, sui logaritmi l'ampiezza diventa un rapporto e dipende solo dalla variazione percentuale. Conversione: <code>variazione_pct = exp(ampiezza) − 1</code>; sotto ~10% vale <code>ampiezza ≈ variazione_pct</code>.</p>
-    <p><strong>Primo pivot.</strong> Non ha un precedente: come riferimento si usa il primo close disponibile della serie, <code>ampiezza[0] = abs(log(close[pivot_0]) − log(close[0]))</code>. La gamba risultante è troncata e la sua ampiezza dipende da dove comincia lo storico, non da una struttura di mercato — un pivot per simbolo su decine di migliaia, da trattare come non rappresentativo ovunque <code>ampiezza[k]</code> serva da criterio.</p>
-    <p><strong>Il target resta retrospettivo.</strong> <code>swing_leg_target</code> interpola fra k e k+1 e quindi <em>vede</em> il pivot futuro: è corretto e inevitabile, è il senso di un'etichetta. La convenzione all'indietro non rende causale il target, rende causale <code>ampiezza[k]</code>, che serve altrove — come peso, dove usare il futuro sarebbe un errore.</p>
-    <p><strong>Nota.</strong> Questa è l'ampiezza della gamba fra due pivot adiacenti, non la prominenza topologica, che misurerebbe lo stacco rispetto all'intero contesto circostante e potrebbe estendersi oltre una singola gamba. Per il target serve la prima.</p>
-  </div>
-
-  <div class="callout">
-    <h3>Interpolazione lungo la gamba <span class="status-open">storico — etichetta sostituita</span></h3>
-    <p>Quanto segue descrive <code>swing_leg_target</code>, che non è più l'etichetta del dataset. Resta documentato perché il codice lo conserva come termine di confronto e perché le misure sul clip e sulla significatività restano valide di per sé.</p>
-    <p><code>x = smoothing·avanzamento_tempo + (1−smoothing)·avanzamento_prezzo</code><br>
-    <code>target(i) = valori[k] + x·(valori[k+1] − valori[k])</code></p>
-    <p>Con <code>smoothing = 0.7</code> il target pesa al 70% l'avanzamento <em>temporale</em> lungo la gamba (quante barre sono passate dal pivot k rispetto alla durata totale) e al 30% l'avanzamento <em>di prezzo</em> (quanta distanza è stata percorsa rispetto all'escursione totale). Il parametro è esposto come slider nell'app. Effetto: più peso al tempo rende il target quasi regolare lungo la gamba anche quando il prezzo si muove a scatti — più liscio da apprendere, meno reattivo a un'accelerazione improvvisa.</p>
-    <p><strong>Non è un filtro a valle.</strong> Non c'è un secondo passaggio di smoothing: un'EMA causale sul target introdurrebbe un ritardo e andrebbe documentata con un proprio simbolo. Se in futuro servisse, va aggiunta come step distinto, mai confusa con <code>smoothing</code>.</p>
-    <p><strong>L'avanzamento di prezzo va clippato a [0, 1], quello temporale no.</strong> Il tempo ci sta per costruzione, il prezzo no: i pivot sono estremi locali di una finestra di 24 barre, non gli estremi della gamba, quindi una barra intermedia può scambiare oltre l'uno o l'altro pivot senza essere a sua volta un pivot — le servirebbero 24 barre libere da entrambi i lati. Misurato su 4 simboli a 15m: <strong>l'1.0% delle barre e il 3.1% delle gambe</strong> escono da [0, 1], con estremi osservati a −16 e +28. Senza clip il target sfonderebbe [−1, +1] proprio dove il prezzo è più rumoroso.</p>
-    <p><strong>Cosa il clip non risolve.</strong> Sulle gambe sane — l'86% dei casi fuori range — lo sconfinamento è minimo (mediana 0.16 di avanzamento, meno di 0.10 sul target) e il clip è la lettura corretta: quella barra <em>è</em> davvero all'estremo della gamba. Il residuo è un'altra popolazione: gambe a escursione quasi nulla, dove i due pivot distano pochi punti base e il target ramp da +1 a −1 su rumore puro. Non è un problema di aritmetica ma di validità dell'etichetta, ed è trattato dalla pesatura per significatività, non dal clip.</p>
-    <p><strong>Forma lineare.</strong> Gradiente costante ovunque, nessun bias verso pivot o corpo del movimento, zero parametri di forma. Le due varianti non lineari che erano un punto aperto si estinguono col cambio di etichetta.</p>
-  </div>
-
-  <div class="callout">
-    <h3>Pesatura dei pivot per significatività della gamba</h3>
-    <p><strong>I pivot non valgono ±1 piatti: valgono la significatività della gamba che chiudono.</strong></p>
-    <p><code>valori[k] = kind[k] · tanh( ampiezza[k] / (σ · √durata[k]) )</code></p>
-    <p><strong>Perché serve.</strong> Su una gamba a escursione quasi nulla l'etichetta non è debole, è <em>falsa</em>. Il pivot minimo può chiudere <em>sopra</em> il massimo che lo precede — caso reale su BTC 15m: massimo a 69416.37, minimo 94 barre dopo a 69482.00, col prezzo che nel mezzo oscilla fra 68356 e 71228 — e il target scende da +1 a −1 mentre il prezzo sale. Non è un caso di scuola: <strong>1.3% delle gambe</strong> su 101.541 misurate.</p>
-    <p><strong><code>riferimento[k]</code> = σ·√durata, non l'ATR.</strong> σ è la deviazione standard dei log-return su 96 barre — <code>4 × finestra_estremi</code>, derivata come tutti gli altri parametri e non scelta a parte. Il rapporto legge "quanto si è mosso il prezzo rispetto a quanto si sarebbe mosso per caso nel tempo che la gamba ha impiegato". Scelto per misura su 20 simboli, 101.541 gambe, 2017–2026, con due criteri: <em>invarianza</em> (una soglia fissata sul pooled al 5% deve colpire il 5% in ogni simbolo e in ogni anno) e <em>discriminazione</em> (deve pescare le gambe rotte, definite in modo indipendente come quelle il cui avanzamento di prezzo esce da [0,1] di oltre 0.5).</p>
-    <div class="tbl-wrap">
-      <table>
-        <caption>candidati per riferimento[k] — 20 simboli, 101.541 gambe, 15m</caption>
-        <thead><tr><th>candidato</th><th>spread mediane (log)<br>per simbolo</th><th>per anno</th><th>recall gambe rotte</th><th>percentile della rotta mediana</th></tr></thead>
-        <tbody>
-          <tr><td class="col-name">nessuno (soglia % fissa)</td><td>0.25</td><td>0.24</td><td>39.8%</td><td>8.9</td></tr>
-          <tr><td class="col-name">ATR% (96 barre)</td><td>0.06</td><td>0.08</td><td>53.6%</td><td>3.8</td></tr>
-          <tr><td class="col-name">ATR% (24 barre)</td><td>0.05</td><td>0.06</td><td>57.0%</td><td>2.5</td></tr>
-          <tr><td class="col-name">σ·√durata</td><td>0.03</td><td>0.04</td><td><strong>85.1%</strong></td><td><strong>0.9</strong></td></tr>
-          <tr><td class="col-name">mediana gambe recenti</td><td>0.01</td><td>0.01</td><td>49.1%</td><td>5.4</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <p><strong>Perché l'ATR perde.</strong> Misura quanto il prezzo si muove <em>in una barra</em>, quindi una gamba lunga accumula più unità di ATR di una corta a parità di ampiezza: il rapporto confonde "gamba grande" con "gamba lenta". Il <code>√durata</code> toglie esattamente quel termine, ed è il motivo per cui vince — le gambe degeneri sono lunghe e piatte.</p>
-    <p><strong>La mediana delle gambe recenti va scartata benché vinca l'invarianza.</strong> Normalizzare sulle gambe precedenti dà invarianza perfetta per costruzione, ma si adatta anche al regime sbagliato: in una fase piatta dove <em>tutte</em> le gambe sono rumore la mediana scende con loro e nessuna viene più segnalata. Si vede nel recall, 49%. È il caso in cui l'invarianza da sola avrebbe scelto il candidato peggiore, ed è la ragione per cui i criteri sono due.</p>
-    <p><strong>Nessuna costante di scala, nessuna soglia.</strong> Il rapporto è già O(1) — mediana di panel 1.6 — quindi la <code>tanh</code> si applica nuda e non introduce parametri. La gamba mediana tiene un pivot a 0.92, la gamba rotta mediana scende a 0.39, e su BTC 15m il valore assoluto mediano di un pivot è 0.88. Non c'è una soglia da tarare né uno scarto: l'attenuazione è continua, quindi cade anche il rischio di shift di distribuzione che uno scarto secco avrebbe introdotto — il modello continua a vedere le gambe deboli, con un'etichetta che dice quanto valgono.</p>
-    <p><strong>La pesatura è per pivot, non per gamba.</strong> Un pivot è condiviso dalla gamba che finisce su di lui e da quella che riparte, e deve essere un numero solo: pesare per gamba renderebbe il target discontinuo proprio sul pivot. Conseguenza: una gamba debole non sta piatta a 0, decade dal valore del pivot precedente verso ~0 — "eravamo su un massimo, poi non è successo niente di significativo". La convenzione all'indietro fa il resto: <code>ampiezza[k]</code> qualifica la gamba k−1→k e quindi il pivot k.</p>
-    <p><strong>Costo.</strong> NaN sui pivot non valutabili — il primo della serie e quelli finché la finestra di volatilità non si è riempita — che si propaga alle due gambe che li toccano: su 3000 barre di BTC sono 44 barre in meno, in testa alla serie.</p>
-  </div>
-
-  <div class="callout">
-    <h3>finestra_estremi = 24 — il parametro primario</h3>
-    <p>Definisce quali oscillazioni contano come "gamba", e quindi cosa il modello deve imparare a riconoscere. Da questo valore discendono le finestre di ogni indicatore su ogni ramo, l'ampiezza del purging (via la distribuzione di <code>orizzonte(i)</code>), la finestra di volatilità della pesatura (<code>4 × finestra_estremi</code>) e la stessa scelta dei 24 step per ramo. È misurato, non assunto.</p>
-    <p><strong>Il criterio ovvio è degenere.</strong> "Massimizzare il P&amp;L netto costi dell'oracolo" non individua una struttura di mercato: individua la finestra più corta in cui la gamba media supera ancora i costi. Misurato su 20 coppie USDT, 15m, dal 2017, con 0,50% di round trip, l'argmax cade a <strong>3 barre</strong> e la gamba mediana all'ottimo vale ~1,06% su tutti e 20 i simboli, con finestre ottime da 2 a 8. È il rapporto costo/volatilità, non una proprietà degli swing: dove la volatilità è alta il costo viene superato prima, quindi la finestra ottima si accorcia. E l'ottimo non è stazionario — su BTC scende a 2 nel 2017 (vol 150%) e sale a 12 nel 2023 (vol 43%).</p>
-    <p><strong>La correzione: penalizzare il ritardo di rilevazione.</strong> L'oracolo nudo entra ed esce esattamente sul pivot, cosa che nessun modello causale può fare — un pivot con <code>argrelextrema(order=w)</code> è confermabile solo dopo <em>w</em> barre a destra. Si rimisura entrando ed uscendo <em>L</em> barre dopo il pivot. Il vantaggio delle finestre corte evapora: da L=0 a L=2 la finestra 16 perde il 43% del P&amp;L, la 24 il 35%, e a L=3 l'ordine si inverte.</p>
-    <div class="tbl-wrap">
-      <table>
-        <caption>log P&amp;L per anno, media su 20 simboli, 2023+, 0,50% round trip</caption>
-        <thead>
-          <tr><th>finestra</th><th>L=0</th><th>L=1</th><th>L=2</th><th>L=3</th><th>gambe in utile (L=2)</th></tr>
-        </thead>
-        <tbody>
-          <tr><td>16</td><td>16.1</td><td>11.5</td><td>9.2</td><td>7.6</td><td>79%</td></tr>
-          <tr><td>18</td><td>15.5</td><td>11.3</td><td>9.2</td><td>7.8</td><td>82%</td></tr>
-          <tr><td>20</td><td>14.9</td><td>11.1</td><td>9.2</td><td>7.9</td><td>85%</td></tr>
-          <tr><td>22</td><td>14.5</td><td>10.9</td><td>9.2</td><td>7.9</td><td>87%</td></tr>
-          <tr><td><strong>24</strong></td><td>14.0</td><td>10.7</td><td>9.1</td><td><strong>8.0</strong></td><td><strong>89%</strong></td></tr>
-          <tr><td>26</td><td>13.6</td><td>10.5</td><td>9.0</td><td>7.9</td><td>90%</td></tr>
-          <tr><td>28</td><td>13.3</td><td>10.4</td><td>8.9</td><td>7.9</td><td>91%</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <p><strong>Esito: 24.</strong> Ottimo del range a L=3, entro l'1% dell'ottimo a L=2, e miglior tasso di gambe in utile fra i valori equivalenti. Il range difendibile è 20–26; dentro quel range 24 è il più robusto rispetto all'ipotesi sull'errore del modello. Caratteristiche della gamba risultante, mediane sui 20 simboli su 2023+: <strong>ampiezza mediana 3,63%</strong>, primo quartile 2,29% (margine 4,6× sul costo), durata mediana 8h50m, <strong>~344 gambe/anno</strong> per simbolo, commissioni pari al 13,8% della gamba mediana.</p>
-  </div>
-
-  <h2 class="sec">Feature</h2>
-  <p class="lead">Le stesse colonne e <strong>gli stessi parametri</strong> su tutti e quattro i rami: i parametri sono espressi in barre del ramo, non in ore, quindi non cambiano da un timeframe all'altro. <code>target</code>, <code>timestamp</code> e <code>symbol</code> non sono colonne del tensore. <code>C</code>, <code>O</code>, <code>H</code>, <code>L</code>, <code>V</code> = close, open, high, low, volume della candela; <code>N = finestra_estremi = 24</code> barre del ramo.</p>
-  <p class="tf-note"><strong>Queste 28 sono candidate, non il set finale.</strong> Il set definitivo si ottiene per misura (vedi "Selezione del set di feature"), riducendo per correlazione e importanza. Atteso: 7–12 colonne superstiti. <strong>Eseguito: ne restano 12</strong> — vedi "Cosa ha detto la selezione".</p>
-  <p class="tf-note"><strong>Tutte causali.</strong> Ogni finestra rolling guarda solo all'indietro rispetto alla barra corrente — mai centrata. L'asimmetria col target è voluta: i pivot vedono il futuro perché sono l'etichetta, le feature no perché sono l'input.</p>
-
-  <div class="tbl-wrap">
-    <table>
-      <caption>candidate per candela — 28 colonne, da ridurre per misura</caption>
-      <thead>
-        <tr><th>#</th><th>colonna</th><th>famiglia</th><th>definizione</th><th>note</th></tr>
-      </thead>
-      <tbody>
-        <tr><td>1</td><td class="col-name">log_return</td><td>prezzo</td><td>log(C / C₋₁)</td><td>log-ritorno di barra</td></tr>
-        <tr><td>2</td><td class="col-name">cum_log_return_window</td><td>prezzo</td><td>log(C / C₋ₙ)</td><td>momentum grezzo su N, nessuno smoothing</td></tr>
-        <tr><td>3</td><td class="col-name">bar_range_pct</td><td>volatilità</td><td>(H − L) / C</td><td>escursione istantanea</td></tr>
-        <tr><td>4</td><td class="col-name">candle_body_pct</td><td>prezzo</td><td>(C − O) / C</td><td>corpo della candela, con segno</td></tr>
-        <tr><td>5</td><td class="col-name">upper_wick_pct</td><td>struttura</td><td>(H − max(O,C)) / C</td><td>rifiuto verso l'alto</td></tr>
-        <tr><td>6</td><td class="col-name">lower_wick_pct</td><td>struttura</td><td>(min(O,C) − L) / C</td><td>rifiuto verso il basso</td></tr>
-        <tr><td>7</td><td class="col-name">close_position_in_bar</td><td>struttura</td><td>(C − L) / (H − L)</td><td>in [0,1], dove chiude dentro la barra</td></tr>
-        <tr><td>8</td><td class="col-name">close_position_in_window</td><td>posizione</td><td>2(C − minL_N)/(maxH_N − minL_N) − 1</td><td>in [−1,+1], allineata al target</td></tr>
-        <tr><td>9</td><td class="col-name">distance_from_window_high_pct</td><td>posizione</td><td>log(C / maxH_N)</td><td>≤ 0, distanza dal massimo recente</td></tr>
-        <tr><td>10</td><td class="col-name">distance_from_window_low_pct</td><td>posizione</td><td>log(C / minL_N)</td><td>≥ 0, distanza dal minimo recente</td></tr>
-        <tr><td>11</td><td class="col-name">age_of_window_high</td><td>posizione</td><td>barre dal maxH_N / N</td><td>in [0,1], età dell'estremo</td></tr>
-        <tr><td>12</td><td class="col-name">age_of_window_low</td><td>posizione</td><td>barre dal minL_N / N</td><td>in [0,1]</td></tr>
-        <tr><td>13</td><td class="col-name">window_range_pct</td><td>volatilità</td><td>log(maxH_N / minL_N)</td><td>ampiezza dell'escursione recente</td></tr>
-        <tr><td>14</td><td class="col-name">average_true_range_pct</td><td>volatilità</td><td>ATR_N / C</td><td>smoothing di Wilder</td></tr>
-        <tr><td>15</td><td class="col-name">realized_volatility</td><td>volatilità</td><td>deviazione_standard(log_return, N)</td><td></td></tr>
-        <tr><td>16</td><td class="col-name">volatility_expansion</td><td>volatilità</td><td>std(ret, N/4) / std(ret, N)</td><td>volatilità in espansione o compressione</td></tr>
-        <tr><td>17</td><td class="col-name">log_volume_vs_median</td><td>volume</td><td>log(V / mediana(V, N))</td><td>in log: il ratio grezzo ha skew 15 e coda solo a destra</td></tr>
-        <tr><td>18</td><td class="col-name">signed_volume</td><td>volume</td><td>log1p(V / mediana(V, N)) · segno(log_return)</td><td>flusso direzionale, non cumulato</td></tr>
-        <tr><td>19</td><td class="col-name">volume_trend</td><td>volume</td><td>log(media(V, N/4) / media(V, N))</td><td></td></tr>
-        <tr><td>20</td><td class="col-name">on_balance_volume_zscore</td><td>volume</td><td>z-score di OBV<sub>N</sub> = Σ<sub>N</sub> V·segno(log_return), su finestra N</td><td>cumulata <em>rolling</em>, non dall'inizio serie — stazionaria</td></tr>
-        <tr><td>21</td><td class="col-name">distance_from_vwap_pct</td><td>volume/prezzo</td><td>log(C / VWAP_N)</td><td></td></tr>
-        <tr><td>22</td><td class="col-name">distance_from_kama_pct</td><td>trend</td><td>log(C / KAMA_N)</td><td></td></tr>
-        <tr><td>23</td><td class="col-name">distance_from_ema_pct</td><td>trend</td><td>log(C / EMA_N)</td><td></td></tr>
-        <tr><td>24</td><td class="col-name">ema_slope</td><td>trend</td><td>log(EMA_N / EMA_N₋ₖ)</td><td>pendenza del trend, k = N/4</td></tr>
-        <tr><td>25</td><td class="col-name">distance_from_psar_pct</td><td>trend</td><td>(C − PSAR) / C</td><td>segno = regime</td></tr>
-        <tr><td>26</td><td class="col-name">adx_trend_strength</td><td>forza trend</td><td>ADX_N / 100</td><td>in [0,1]</td></tr>
-        <tr><td>27</td><td class="col-name">tsi_momentum</td><td>momentum</td><td>TSI / 100</td><td>in [−1,+1], doppio smoothing</td></tr>
-        <tr><td>28</td><td class="col-name">rsi_centered</td><td>momentum</td><td>RSI_N / 50 − 1</td><td>in [−1,+1]</td></tr>
+        <tr><td class="num">1</td><td class="key">log_return</td><td>prezzo</td><td>log(C / C₋₁)</td></tr>
+        <tr><td class="num">2</td><td class="key">cum_log_return_window</td><td>prezzo</td><td>log(C / C₋ₙ)</td></tr>
+        <tr><td class="num">3</td><td class="key">bar_range_pct</td><td>volatilità</td><td>(H − L) / C</td></tr>
+        <tr><td class="num">4</td><td class="key">candle_body_pct</td><td>prezzo</td><td>(C − O) / C</td></tr>
+        <tr><td class="num">5</td><td class="key">upper_wick_pct</td><td>struttura</td><td>(H − max(O,C)) / C</td></tr>
+        <tr><td class="num">6</td><td class="key">lower_wick_pct</td><td>struttura</td><td>(min(O,C) − L) / C</td></tr>
+        <tr><td class="num">7</td><td class="key">close_position_in_bar</td><td>struttura</td><td>(C − L) / (H − L)</td></tr>
+        <tr><td class="num">8</td><td class="key">close_position_in_window</td><td>posizione</td><td>2(C − minL_N)/(maxH_N − minL_N) − 1</td></tr>
+        <tr><td class="num">9</td><td class="key">distance_from_window_high_pct</td><td>posizione</td><td>log(C / maxH_N)</td></tr>
+        <tr><td class="num">10</td><td class="key">distance_from_window_low_pct</td><td>posizione</td><td>log(C / minL_N)</td></tr>
+        <tr><td class="num">11</td><td class="key">age_of_window_high</td><td>posizione</td><td>barre dal maxH_N / N</td></tr>
+        <tr><td class="num">12</td><td class="key">age_of_window_low</td><td>posizione</td><td>barre dal minL_N / N</td></tr>
+        <tr><td class="num">13</td><td class="key">window_range_pct</td><td>volatilità</td><td>log(maxH_N / minL_N)</td></tr>
+        <tr><td class="num">14</td><td class="key">average_true_range_pct</td><td>volatilità</td><td>ATR_N / C</td></tr>
+        <tr><td class="num">15</td><td class="key">realized_volatility</td><td>volatilità</td><td>std(log_return, N)</td></tr>
+        <tr><td class="num">16</td><td class="key">volatility_expansion</td><td>volatilità</td><td>std(ret, N/4) / std(ret, N)</td></tr>
+        <tr><td class="num">17</td><td class="key">log_volume_vs_median</td><td>volume</td><td>log(V / mediana(V, N))</td></tr>
+        <tr><td class="num">18</td><td class="key">signed_volume</td><td>volume</td><td>log1p(V / mediana(V, N)) · segno(log_return)</td></tr>
+        <tr><td class="num">19</td><td class="key">volume_trend</td><td>volume</td><td>log(media(V, N/4) / media(V, N))</td></tr>
+        <tr><td class="num">20</td><td class="key">on_balance_volume_zscore</td><td>volume</td><td>z-score di OBV su finestra N, rolling e non da inizio serie</td></tr>
+        <tr><td class="num">21</td><td class="key">distance_from_vwap_pct</td><td>volume/prezzo</td><td>log(C / VWAP_N)</td></tr>
+        <tr><td class="num">22</td><td class="key">distance_from_kama_pct</td><td>trend</td><td>log(C / KAMA_N)</td></tr>
+        <tr><td class="num">23</td><td class="key">distance_from_ema_pct</td><td>trend</td><td>log(C / EMA_N)</td></tr>
+        <tr><td class="num">24</td><td class="key">ema_slope</td><td>trend</td><td>log(EMA_N / EMA_N₋ₖ), k = N/4</td></tr>
+        <tr><td class="num">25</td><td class="key">distance_from_psar_pct</td><td>trend</td><td>(C − PSAR) / C</td></tr>
+        <tr><td class="num">26</td><td class="key">adx_trend_strength</td><td>forza trend</td><td>ADX_N / 100</td></tr>
+        <tr><td class="num">27</td><td class="key">tsi_momentum</td><td>momentum</td><td>TSI / 100</td></tr>
+        <tr><td class="num">28</td><td class="key">rsi_centered</td><td>momentum</td><td>RSI_N / 50 − 1</td></tr>
       </tbody>
     </table>
   </div>
 
-  <div class="callout">
-    <h3>Parametri per ramo — N in barre, non in ore</h3>
-    <p><strong>Regola: <code>N = finestra_estremi = 24</code> barre del ramo, su ogni ramo.</strong> Non 6h ovunque. Le due letture non sono equivalenti e la seconda è la stessa scelta già fatta sui 24 step del tensore: con la regola oraria il <code>ramo_5m</code> avrebbe N=72 e misurerebbe la stessa cosa del <code>ramo_15m</code> a N=24, solo campionata più fitta — quattro rami che guardano tutti 6h sono quattro copie rumorose di un ramo solo. È N in barre che li rende non ridondanti, con copertura 2h / 6h / 12h / 24h.</p>
-    <p>Conseguenza pratica: i parametri sono <em>identici</em> su tutti e quattro i rami, e non c'è nessun pavimento da imporre — N=24 sta sopra il minimo statistico di ATR, ADX, KAMA e TSI, e <code>N/4 = 6</code> è una sotto-finestra sensata. Con la regola oraria il ramo 1h sarebbe finito a N=6, dove quegli stessi indicatori non misurano nulla.</p>
-    <div class="tbl-wrap">
-      <table>
-        <caption>parametri per indicatore — ipotesi di partenza, uguali su 5m / 15m / 30m / 1h</caption>
-        <thead><tr><th>indicatore</th><th>parametro</th><th>valore</th><th>derivazione</th></tr></thead>
-        <tbody>
-          <tr><td class="col-name">famiglia N (2, 8–13, 15, 17, 20, 21, 23)</td><td>finestra</td><td>24</td><td>= finestra_estremi</td></tr>
-          <tr><td class="col-name">average_true_range_pct</td><td>window</td><td>24</td><td>= N</td></tr>
-          <tr><td class="col-name">adx_trend_strength</td><td>window</td><td>24</td><td>= N</td></tr>
-          <tr><td class="col-name">rsi_centered</td><td>window</td><td>24</td><td>= N</td></tr>
-          <tr><td class="col-name">distance_from_kama_pct</td><td>window (fast 2, slow 30)</td><td>24</td><td>= N; fast/slow sono costanti EMA, non finestre</td></tr>
-          <tr><td class="col-name">tsi_momentum</td><td>slow / fast</td><td>24 / 12</td><td>= N, N/2 — cade quasi sul classico 25/13</td></tr>
-          <tr><td class="col-name">volatility_expansion, volume_trend, ema_slope</td><td>sotto-finestra</td><td>6</td><td>= N/4</td></tr>
-          <tr><td class="col-name">distance_from_psar_pct</td><td>step / max_step</td><td>0.02 / 0.2</td><td><strong>non derivabile</strong> — vedi sotto</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <p><strong>PSAR è l'eccezione onesta.</strong> Step e max_step sono accelerazioni, non finestre: <code>finestra_estremi</code> non li determina in nessun modo. 0.02 / 0.2 è convenzione, e non c'è un argomento migliore. È l'unico indicatore il cui parametro resta arbitrario.</p>
-    <p><strong>Questi valori erano un'ipotesi di partenza, non una misura.</strong> Congelati per rendere calcolabili le feature, e non tarati prima della selezione per due ragioni: (1) le colonne con smoothing interno — KAMA, PSAR, TSI, ADX — erano le prime candidate all'uscita, e tarare costanti di colonne che probabilmente spariscono è lavoro buttato; (2) tararle prima significava misurare su un target già noto senza protocollo out-of-sample, cioè esattamente il leakage che la procedura di selezione vieta. <strong>La previsione (1) si è avverata al 100%</strong>: KAMA, PSAR, TSI, ADX e ATR sono usciti tutti, e con loro sette delle otto righe di questa tabella. Quel che resta sta nel riquadro seguente.</p>
+  <div class="box why">
+    <h4>N in barre, non in ore</h4>
+    <p>N = 24 <em>barre del ramo</em> su ogni ramo, non 6h ovunque. Con la regola oraria il ramo 5m avrebbe N=72 e misurerebbe la stessa cosa del ramo 15m a N=24, solo campionata più fitta: quattro rami che guardano tutti 6h sono quattro copie rumorose di un ramo solo. È N in barre che li rende complementari, con copertura 2h / 6h / 12h / 24h. Conseguenza pratica: parametri identici sui quattro rami, e nessun pavimento da imporre — con la regola oraria il ramo 1h finirebbe a N=6, dove ATR, ADX, KAMA e TSI non misurano nulla.</p>
+    <p><strong>Unica eccezione onesta:</strong> step e max_step di PSAR sono accelerazioni, non finestre, e <code>finestra_estremi</code> non li determina. 0.02 / 0.2 resta convenzione — l'unico parametro arbitrario del progetto, e l'indicatore è comunque uscito dalla selezione.</p>
   </div>
 
-  <div class="callout">
-    <h3>Il set finale — 12 indicatori, 2 parametri <span class="status-done">misurato · rev. 18</span></h3>
-    <p class="lead">Ciò che sopravvive ai cinque passi della selezione (vedi "Cosa ha detto la selezione"). È l'input dello step 3: <code>(B, 24, 12)</code> per ramo, 240 colonne appiattite invece di 560. In codice è <code>tradingvision.selection.SELECTED</code>, e <code>select(df)</code> riduce un dataset costruito.</p>
+  <h3>La selezione — 28 → 12, e perché non si trasferisce <span class="b b-msr">misurato</span></h3>
+  <p>Cinque passi, tutti sul solo periodo di train (423.093 righe fino al 2025-06), sul dataset appiattito dello step 2. In codice: <code>selection</code>.</p>
 
-    <div class="tbl-wrap">
-      <table>
-        <caption>set finale — 12 colonne per candela, in ordine di permutation importance</caption>
-        <thead><tr><th>#</th><th>colonna</th><th>famiglia</th><th>definizione</th><th>parametro</th><th>importanza</th></tr></thead>
-        <tbody>
-          <tr><td>8</td><td class="col-name">close_position_in_window</td><td>posizione</td><td>2(C − minL_N)/(maxH_N − minL_N) − 1</td><td>N = 24</td><td><strong>0.1296</strong></td></tr>
-          <tr><td>24</td><td class="col-name">ema_slope</td><td>trend</td><td>log(EMA_N / EMA_N₋ₖ)</td><td>N = 24, k = 6</td><td>0.0040</td></tr>
-          <tr><td>4</td><td class="col-name">candle_body_pct</td><td>prezzo</td><td>(C − O) / C</td><td>—</td><td>0.0036</td></tr>
-          <tr><td>10</td><td class="col-name">distance_from_window_low_pct</td><td>posizione</td><td>log(C / minL_N)</td><td>N = 24</td><td>0.0023</td></tr>
-          <tr><td>2</td><td class="col-name">cum_log_return_window</td><td>prezzo</td><td>log(C / C₋ₙ)</td><td>N = 24</td><td>0.0021</td></tr>
-          <tr><td>11</td><td class="col-name">age_of_window_high</td><td>posizione</td><td>barre dal maxH_N / N</td><td>N = 24</td><td>0.0018</td></tr>
-          <tr><td>6</td><td class="col-name">lower_wick_pct</td><td>struttura</td><td>(min(O,C) − L) / C</td><td>—</td><td>0.0016</td></tr>
-          <tr><td>3</td><td class="col-name">bar_range_pct</td><td>volatilità</td><td>(H − L) / C</td><td>—</td><td>0.0013</td></tr>
-          <tr><td>9</td><td class="col-name">distance_from_window_high_pct</td><td>posizione</td><td>log(C / maxH_N)</td><td>N = 24</td><td>0.0008</td></tr>
-          <tr><td>12</td><td class="col-name">age_of_window_low</td><td>posizione</td><td>barre dal minL_N / N</td><td>N = 24</td><td>0.0006</td></tr>
-          <tr><td>17</td><td class="col-name">log_volume_vs_median</td><td>volume</td><td>log(V / mediana(V, N))</td><td>N = 24</td><td>0.0003</td></tr>
-          <tr><td>7</td><td class="col-name">close_position_in_bar</td><td>struttura</td><td>(C − L) / (H − L)</td><td>—</td><td>0.0002</td></tr>
-          <tr><td colspan="6" class="tf-note">il # è quello della tabella delle 28 candidate. L'importanza è in punti di Rank IC di validazione, gruppo intero permutato (valore, lag1, lag4, media, deviazione × 4 rami)</td></tr>
-        </tbody>
-      </table>
-    </div>
-
-    <p><strong>Uscite le 16 candidate: </strong><code>log_return</code>, <code>upper_wick_pct</code>, <code>window_range_pct</code>, <code>average_true_range_pct</code>, <code>realized_volatility</code>, <code>volatility_expansion</code>, <code>signed_volume</code>, <code>volume_trend</code>, <code>on_balance_volume_zscore</code>, <code>distance_from_vwap_pct</code>, <code>distance_from_kama_pct</code>, <code>distance_from_ema_pct</code>, <code>distance_from_psar_pct</code>, <code>adx_trend_strength</code>, <code>tsi_momentum</code>, <code>rsi_centered</code>. Nove per ridondanza al passo 3, sette per importanza indistinguibile dal rumore al passo 4.</p>
-
-    <div class="tbl-wrap">
-      <table>
-        <caption>parametri residui — dopo la selezione ne restano due, uguali su 5m / 15m / 30m / 1h</caption>
-        <thead><tr><th>parametro</th><th>valore</th><th>derivazione</th><th>usato da</th></tr></thead>
-        <tbody>
-          <tr><td class="col-name">N</td><td>24</td><td>= finestra_estremi, in barre del ramo</td><td>8 indicatori su 12</td></tr>
-          <tr><td class="col-name">k = N/4</td><td>6</td><td>sotto-finestra</td><td><code>ema_slope</code></td></tr>
-          <tr><td colspan="4" class="tf-note">i restanti 4 — candle_body_pct, lower_wick_pct, bar_range_pct, close_position_in_bar — leggono la sola candela corrente e non hanno parametro</td></tr>
-        </tbody>
-      </table>
-    </div>
-
-    <p><strong>Il punto aperto dei parametri si è chiuso da solo.</strong> Delle otto righe della tabella precedente ne sopravvive una e mezza. Spariscono tutte le costanti che <code>finestra_estremi</code> non determinava: <code>step</code> e <code>max_step</code> di PSAR — "l'unico indicatore il cui parametro resta arbitrario" — escono con l'indicatore; con loro fast/slow di KAMA, slow/fast di TSI, le finestre di ADX, RSI e ATR. <strong>Non resta un solo parametro non derivato da <code>finestra_estremi</code>.</strong> Il punto 7 dei punti aperti (taratura per ramo) si riduce quindi a una sola domanda: N deve restare 24 su tutti e quattro i rami? — e non a otto tarature indipendenti.</p>
-    <p><strong>Conseguenza sulla normalizzazione.</strong> Il riquadro "Scala comune" divide ADX e TSI per 100 perché hanno range noto: entrambi sono usciti, quindi quel caso speciale non serve più. Restano <code>age_of_window_high</code> e <code>age_of_window_low</code>, già in [0,1] per costruzione, e <code>close_position_in_window</code> in [−1,+1]; tutto il resto passa dal robust scaling di <code>tradingvision.normalize</code>, che non cambia.</p>
-  </div>
-
-  <div class="callout">
-    <h3>Scala comune per tutte le feature</h3>
-    <p>"Scala-libero" non significa pronto per una rete. Le colonne in % stanno nell'ordine di 10⁻³–10⁻², ADX in 0–100, TSI in −100…+100, <code>on_balance_volume_zscore</code> in ~±3: ordini di grandezza incompatibili rallentano la convergenza e sbilanciano l'inizializzazione dei gate della GRU.</p>
-    <p><strong>TSI e ADX — divisione per 100.</strong> Entrambi hanno range noto e fisso per costruzione: ADX ∈ [0, 100] → <code>adx_trend_strength/100</code> ∈ [0, 1]; TSI ∈ [−100, +100] → <code>tsi_momentum/100</code> ∈ [−1, +1]. Costante nota, nessuna statistica da stimare, nessun rischio di leakage, trasformazione identica su train e test.</p>
-    <p><strong>Le altre colonne.</strong> Non hanno range noto a priori: <code>log_return</code>, <code>bar_range_pct</code>, <code>average_true_range_pct</code>, <code>distance_from_kama_pct</code>, <code>distance_from_psar_pct</code> sono già in % ma con dispersione molto diversa fra loro e fra timeframe; <code>log_volume_vs_median</code> è un ratio a coda lunga, preso in log a monte; <code>on_balance_volume_zscore</code> è già standardizzato per costruzione. Per queste serve una statistica di scala — robust scaling su quantili, più adatto delle code grasse dei ritorni — stimata <strong>solo sul periodo di train</strong> e applicata invariata a test. Mai ricalcolata su tutto il dataset: sarebbe leakage.</p>
-  </div>
-
-  <div class="callout">
-    <h3>Normalizzazione — formula fissata e misurata <span class="status-done">chiuso · implementato</span></h3>
-    <p><strong>La formula.</strong> <code>z = clip((x − mediana) / IQR, ±5) × 0.1</code>, statistiche stimate <strong>solo sul periodo di train</strong> e applicate invariate a validazione, test e live. Implementata in <code>tradingvision.normalize</code>: <code>fit(train)</code> restituisce centro e scala per colonna, <code>apply(x, stats)</code> non legge mai il frame a cui è applicata.</p>
-    <p><strong>Perché serve il clip.</strong> Misurato su 8 simboli, 15m, train 2023–24 e test 2025+ (1,03M righe): le 28 colonne grezze coprono <strong>3,2 ordini di grandezza</strong> — wick e log-ritorni a IQR 10⁻³, le limitate a 10⁰. Il quantile scaling da solo normalizza il corpo della distribuzione e lascia outlier fino a <strong>380 IQR</strong> fuori campione, che sui gate della GRU pesano quanto tutto il resto. Con <code>CLIP = 5</code> si tronca lo 0,46% dei valori (1,13% sulla colonna peggiore, <code>lower_wick_pct</code>) e il risultato è limitato a ±0,5.</p>
-    <p><strong>Esito.</strong> IQR esattamente 0,1 su tutte e 28 in train, 0,093–0,111 in test, cioè 0,08 decadi di spread contro le 3,2 di partenza. La trasformazione è monotona per colonna, quindi le correlazioni di Spearman del passo 2 della selezione restano intatte. <code>CLIP</code> è un compromesso esplicito: a 3 tronca il 2,0%, a 8 solo lo 0,15% ma gli estremi risalgono a 0,8.</p>
-    <p><strong>Anche le colonne già limitate passano di qui.</strong> L'argomento della sezione precedente — range noto, nessuna statistica da stimare, nessun leakage — resta corretto, ma fra loro hanno comunque 1,2 decadi di spread (<code>adx_trend_strength</code> a IQR 0,12 contro <code>on_balance_volume_zscore</code> a 2,10). Tenerle fuori ricrea in piccolo il problema che la normalizzazione risolve.</p>
-    <p><strong>Alternative scartate, misurate.</strong> <code>tanh</code> sullo span p1–p99: limitata a ±1 ma lascia 0,8 decadi di spread residuo e satura esattamente a 1,0, cioè gradiente nullo sugli estremi. Rank-uniform: perfettamente uniforme, ma sostituisce la grandezza col percentile e rompe il rapporto fra colonne parenti (<code>average_true_range_pct</code> contro <code>realized_volatility</code>).</p>
-  </div>
-
-  <h2 class="sec">Split, allineamento, leakage</h2>
-
-  <div class="callout">
-    <h3>Chiave di split — taglio temporale unico</h3>
-    <p><strong>Un solo taglio nel tempo, identico per tutti i simboli.</strong> Tutto ciò che precede la data di taglio è train (dopo purging), tutto ciò che segue è test. <code>symbol</code> resta una colonna del dataframe, usata per raggruppare e costruire le sequenze contigue per asset, ma <strong>non entra mai nel tensore</strong> e non definisce la partizione.</p>
-    <p><strong>Lo split per-symbol con periodi diversi è escluso.</strong> I 20 asset USDT sono fortemente correlati: avere BTC in test nello stesso periodo in cui ETH è in train significa valutare il modello su campioni quasi identici a quelli visti in addestramento — leakage cross-sectional, IC di test gonfiato e non replicabile in produzione.</p>
-  </div>
-
-  <div class="callout">
-    <h3>Purging, non embargo fisso</h3>
-    <p><strong>Dove sta il leakage.</strong> Non nelle candele: nessun bar è comune ai due periodi, e le feature sono causali. Sta nelle <em>label</em>. <code>swing_leg_target(i)</code> interpola fino al pivot k+1: un bar vicino alla fine del train il cui pivot successivo cade dopo il taglio ha un target che incorpora prezzi del periodo di test. Secondo canale: <code>argrelextrema(order=finestra_estremi)</code> conferma un pivot solo dopo <code>order</code> barre a destra, quindi un pivot a ridosso del taglio è conoscibile solo grazie a barre già oltre.</p>
-    <p><strong>Perché non un embargo fisso.</strong> <code>3 × finestra_estremi</code> presume che l'orizzonte del target sia legato alla finestra di ricerca. Non lo è: la distanza da <code>i</code> al pivot k+1 non è limitata da <code>order</code> — una gamba può durare centinaia di barre. Un embargo a 72 barre lascia leakage residuo sulle gambe lunghe e allo stesso tempo butta via bar puliti sulle gambe corte.</p>
-    <p><strong>Regola adottata.</strong> Purging esatto: si scarta dal train ogni bar il cui <code>pivot_succ_idx</code> supera l'indice di taglio — <code>train = train[pivot_succ_idx &lt; idx_taglio]</code>. Elimina esattamente i bar contaminati, nessuno di più.</p>
-    <p><strong>Su ogni confine, non solo train/test.</strong> Si applica a tutti i tagli del protocollo: train→valid, valid→test, e ogni taglio di ogni fold walk-forward. Un valid non purgato contamina l'early stopping e la scelta degli iperparametri — leakage indiretto, stesso effetto sull'IC finale.</p>
-    <p><strong>Coda della serie.</strong> I bar successivi all'ultimo pivot confermato non hanno k+1, quindi target indefinito: l'ultimo pivot e la coda che lo segue si scartano per tutti gli asset. In produzione questa è la condizione permanente del bar corrente — il modello predice proprio dove il target non è ancora calcolabile.</p>
-    <p><strong>Misurata.</strong> Distribuzione di <code>orizzonte(i) = idx(pivot_{k+1}) − i</code> con <code>finestra_estremi = 24</code>, 20 simboli, 2023+, in barre da 15m — mediana sui simboli: <strong>p50 28, p95 124, p99 202, p99.9 314</strong>, massimo 389 (754 sul simbolo peggiore, 7,9 giorni). Conferma quantitativa del rifiuto dell'embargo fisso: <strong>72 barre coprono solo circa il p87</strong>, quindi un embargo a <code>3 × finestra_estremi</code> lascerebbe leakage sul 13% dei bar al confine. Il purging esatto costa in media 28 barre per taglio, ma la coda è lunga: la sua ampiezza effettiva va riportata per fold, non assunta.</p>
-  </div>
-
-  <div class="callout">
-    <h3>Griglia di campionamento e allineamento fra rami</h3>
-    <p><strong>Una riga per bar 5m.</strong> Ogni ramo legge solo fino alla candela <em>già chiusa</em> rispetto al bar 5m corrente: al bar 5m delle 10:05 il <code>ramo_15m</code> vede l'ultima candela chiusa alle 10:00, non quella in formazione. Niente leakage fra piani.</p>
-    <p><strong>Il target si valuta sulla griglia 5m, con i pivot definiti a 15m.</strong> I pivot restano estremi del Close 15m — è la definizione di gamba e non cambia. Ma <code>swing_leg_target</code> si calcola sulle barre 5m fra due pivot: <code>avanzamento_tempo</code> e <code>avanzamento_prezzo</code> in barre da 5m. Ogni timestamp di chiusura 15m è anche un timestamp 5m, quindi i pivot cadono esattamente su righe esistenti e non serve alcuna interpolazione di appoggio.</p>
-    <p>L'alternativa — calcolare il target a 15m e farlo ereditare alle tre barre 5m — darebbe a due righe su tre un'etichetta che descrive la posizione del prezzo fino a 10 minuti più avanti. Il target è retrospettivo per costruzione, quindi non è leakage nel senso stretto, ma è un'etichetta meno precisa a costo zero di precisione: la versione a 5m si ottiene passando la stessa funzione a una serie diversa.</p>
-    <p><strong>La pesatura per significatività è invariante al cambio di griglia</strong>, e non va ritarata: <code>σ·√durata</code> con σ per barra 5m e durata in barre 5m vale <code>σ₅·√(3n)</code>, contro <code>σ₁₅·√n</code> a 15m, e <code>σ₁₅ ≈ √3·σ₅</code>. I due si equivalgono.</p>
-    <p><strong>Warm-up.</strong> La serie di ogni simbolo inizia quando tutti gli indicatori di tutti i rami sono valorizzati. Train e test non contengono NaN. Ogni campione richiede 48 barre per ramo, non 24: 24 di sequenza più le 24 che il primo step deve poter guardare all'indietro — sul <code>ramo_1h</code> sono due giorni.</p>
-  </div>
-
-  <h2 class="sec">Architettura</h2>
-
-  <div class="tbl-wrap">
+  <div class="tw">
     <table>
-      <caption>24 step fissi, finestra crescente</caption>
-      <thead>
-        <tr><th>ramo</th><th>shape</th><th>batch</th><th>timestep</th><th>feature</th><th>copertura</th></tr>
-      </thead>
+      <caption>i cinque passi e il loro esito</caption>
+      <thead><tr><th class="num">#</th><th>passaggio</th><th>esito</th></tr></thead>
       <tbody>
-        <tr><td class="col-name">ramo_5m</td><td>(B, 24, F)</td><td>B</td><td>24</td><td>F</td><td>2h</td></tr>
-        <tr><td class="col-name">ramo_15m</td><td>(B, 24, F)</td><td>B</td><td>24</td><td>F</td><td>6h</td></tr>
-        <tr><td class="col-name">ramo_30m</td><td>(B, 24, F)</td><td>B</td><td>24</td><td>F</td><td>12h</td></tr>
-        <tr><td class="col-name">ramo_1h</td><td>(B, 24, F)</td><td>B</td><td>24</td><td>F</td><td>24h</td></tr>
-      </tbody>
-    </table>
-  </div>
-  <div class="tbl-wrap">
-    <table>
-      <caption>flusso encoder → testa</caption>
-      <thead>
-        <tr><th>step</th><th>operazione</th><th>shape in</th><th>shape out</th></tr>
-      </thead>
-      <tbody>
-        <tr><td class="col-name">1</td><td>GRU indipendente per ramo (pesi non condivisi tra rami)</td><td>(B, 24, F)</td><td>(B, H)</td></tr>
-        <tr><td class="col-name">2</td><td>concatenazione dei 4 stati finali</td><td>4 × (B, H)</td><td>(B, 4H)</td></tr>
-        <tr><td class="col-name">3</td><td>testa densa lineare (nessuna attivazione in uscita)</td><td>(B, 4H)</td><td>(B, 1)</td></tr>
-      </tbody>
-    </table>
-  </div>
-  <p class="tf-note">H = dimensione dello stato nascosto per ramo, da fissare in tuning. F = numero di feature superstiti alla selezione. Output: scalare non limitato, addestrato sulla scala di <code>swing_leg_target</code>.</p>
-
-  <div class="callout">
-    <h3>Testa densa lineare, nessuna tanh in uscita</h3>
-    <p><strong>L'attivazione <code>tanh</code> in uscita è eliminata.</strong> Il problema: il target valeva esattamente ±1 sui pivot (oggi non più, per via della pesatura per significatività) e la tanh tocca ±1 solo asintoticamente, quindi il gradiente si annullava proprio nei punti di maggior interesse. Alternative scartate: riscalare il target a ±0.9 o ±0.95 — una costante arbitraria che entra in tutte le metriche di scala e conserva comunque un gradiente ridotto (1−y² vale 0.19 a 0.9 e 0.10 a 0.95) — e la tanh con guadagno, un iperparametro in più per risolvere qualcosa che togliere l'attivazione elimina.</p>
-    <p><strong>Perché il bound non serve.</strong> Nessuna metrica del documento lo richiede: Rank IC è invariante per trasformazioni monotone, IC per trasformazioni lineari. E l'uscita resta comunque limitata per costruzione: lo stato nascosto della GRU sta in [−1, 1] (combinazione convessa), quindi <code>w·h + b</code> è limitata da ‖w‖₁ + |b|, una costante che dipende solo dai pesi e non dall'input. Il residuo realistico è un lieve sforamento sui pivot più riconoscibili, che è informazione utile: l'ordinamento fra "pivot molto probabile" e "pivot probabile" sopravvive invece di essere schiacciato contro l'asintoto.</p>
-    <p><strong>Conseguenze.</strong> Nessun clip, né in training né in produzione, salvo esigenze di presentazione. L'Huber copre il tetto sull'errore singolo che la tanh forniva — con MSE pura andrebbe riconsiderato. Se in futuro la testa diventasse a due strati, l'attivazione va rimessa <strong>fra</strong> i due strati, mai in uscita. L'inizializzazione dell'ultimo strato va standard (bias a 0, pesi piccoli), così l'uscita parte vicino a 0, centro della distribuzione del target.</p>
-  </div>
-
-  <div class="callout">
-    <h3>GRU e non LSTM</h3>
-    <p>Con 24 step per ramo la scelta è GRU senza riserve: il vantaggio dell'LSTM riguarda dipendenze su centinaia di step, qui inesistenti. La GRU ha ~25% di parametri in meno a parità di stato nascosto (2 gate, nessun cell state separato), il che conta molto su un problema a rapporto segnale/rumore basso come questo.</p>
-    <p><strong>Resta aperto:</strong> pesi condivisi fra rami — vedi punti aperti.</p>
-  </div>
-
-  <h2 class="sec">Funzione di loss</h2>
-  <p class="lead">Disallineamento da tenere presente: la valutazione è in Rank IC (ordinale, scala-invariante), mentre una loss di regressione è cardinale — un modello che sbaglia l'ampiezza ma azzecca l'ordine ha MSE pessima e Rank IC ottima. La scelta gestisce il disallineamento, non lo elimina.</p>
-
-  <div class="callout">
-    <h3>Huber con δ = 2.1, selezione su Rank IC</h3>
-    <p><strong>δ = 2.1, rimisurato sul nuovo target</strong> — 423.155 bar del solo periodo di <em>train</em> (20 simboli, 2023 → 2025-06, un campione all'ora). Stesso criterio di prima, la mediana di |target|; cambia solo la distribuzione su cui si misura. Il vecchio 0.4 era la mediana di <code>|swing_leg_target|</code>, un'etichetta limitata in [−1, +1]: non è trasportabile.</p>
-    <p><strong>Un effetto collaterale positivo.</strong> Sul vecchio target l'Huber non serviva per robustezza (l'etichetta era limitata per costruzione, senza outlier da attenuare) ed era solo un regolatore di scala del gradiente. Sul nuovo le code sono reali — una gamba lunga vale decine di σ — quindi la Huber fa il lavoro per cui esiste.</p>
-    <p><code>L = 0.5·e²</code> se <code>|e| ≤ δ</code>, <code>δ·(|e| − 0.5δ)</code> altrimenti. Early stopping e model selection sempre su Rank IC di valid, <strong>mai sulla loss</strong>.</p>
-    <p><strong>La distribuzione misurata.</strong> <code>remaining_excursion</code> resta simmetrico e centrato (media −0.11, asimmetria 0.01) ma è largo undici volte tanto: σ = 5.22, e i quantili di |target| valgono <strong>1.09 / 2.11 / 3.97 / 6.95</strong> al 25° / 50° / 75° / 90° percentile, con il 99° a <strong>19.6</strong>. Il 35% delle barre supera 3 in valore assoluto. Sono le code che l'etichetta vecchia non aveva.</p>
-    <p><strong>Misurato sul train, non sull'intero dataset.</strong> δ è un iperparametro: tararlo su dati che includono il test è la stessa fuga che il purging esiste per chiudere. In pratica qui non cambierebbe il valore — la mediana sul dataset completo è 2.12 contro 2.11 — ma l'asimmetria sì (0.43 contro 0.01), segno che il periodo di test ha una direzionalità sua. Ragione in più per non guardarlo.</p>
-    <p><strong>δ vive nelle unità del target.</strong> Il target è in σ di un cammino casuale a 24 barre; se quella normalizzazione cambia — per esempio passando alla variante <code>σ·√(fine − i)</code> — δ va rifatto, non riscalato a occhio.</p>
-    <p><strong>Perché proprio la mediana.</strong> Nel caso pessimo di un modello senza segnale, che predice ~0, metà dei residui cade nel ramo quadratico e metà in quello lineare. Man mano che il modello impara i residui si restringono sotto δ e la Huber degrada da sola verso la MSE, che è il comportamento voluto — δ frena l'inizio dell'addestramento, non la fine.</p>
-    <p><strong>Ora la Huber serve anche per la robustezza.</strong> Col vecchio target, limitato per costruzione, non c'erano outlier di label da attenuare e δ era solo un regolatore di scala del gradiente. Col nuovo le code sono reali: il 99° percentile di |target| sta a 19.6, quasi dieci volte δ, e senza troncamento del gradiente quelle barre dominerebbero il batch. Vale ancora la ragione per cui δ non va alzato: portandolo verso σ la loss torna MSE pura.</p>
-  </div>
-
-  <div class="callout">
-    <h3>Termine di correlazione — opzionale, dopo</h3>
-    <p><code>L = huber(p,y) − λ·pearson(p,y)</code>: il primo termine ancora la scala, il secondo premia la correlazione, avvicinando l'objective alla metrica di valutazione. Da valutare solo <em>dopo</em> aver ottenuto un Rank IC stabilmente positivo con λ=0.</p>
-    <p><strong>δ si tara una volta, λ no.</strong> δ è in unità del target e dipende solo dalla sua distribuzione, comune a tutti i modelli. λ bilancia le magnitudini di due gradienti e dipende da architettura, learning rate, scala delle attivazioni e soprattutto <strong>batch size</strong> — Pearson su 512 campioni ha varianza molto diversa che su 2048. Nessuno di questi è condiviso fra GBM e GRU, né fra GRU a ramo singolo e a 4 rami.</p>
-    <p><strong>Sul GBM non si implementa.</strong> Tecnicamente: un objective custom in LightGBM richiede gradiente e hessiana <em>per riga</em>, ma la derivata di Pearson rispetto a <code>p_i</code> dipende da media e deviazione dell'intero vettore — non è separabile per campione, e l'hessiana vera è densa mentre LightGBM accetta solo la diagonale. Metodologicamente, più importante: il GBM serve a dare un Rank IC di riferimento e la feature importance, quindi deve restare semplice; con objective diversi il confronto step 2 → step 3 misurerebbe anche la differenza di loss, non solo l'architettura.</p>
-    <p><strong>Vincoli sulla taratura.</strong> Fissare il batch size <em>prima</em>: λ e batch size interagiscono, tararli insieme è una griglia 2D non sostenibile. Serve il protocollo multi-seed — il delta di Rank IC fra λ=0.1 e λ=0.3 sarà probabilmente inferiore alla varianza da inizializzazione, quindi griglia di 3–4 valori (0, 0.1, 0.3, 0.5) × almeno 5 seed. <strong>λ=0 deve stare nella griglia</strong> come controllo: se non perde contro gli altri, il termine non serve e si elimina un iperparametro dal progetto.</p>
-    <p><strong>Scartata — loss su ranking differenziabile</strong> (pairwise, soft-Spearman). Il Rank IC è cross-sectional, quindi la loss dovrebbe confrontare i 20 simboli dello stesso timestamp: il cross-section è troppo stretto perché il termine di ranking sia più informativo del rumore che introduce, il batching per timestamp vincola pesantemente il data loader, e il costo è O(B²) aggiuntivo.</p>
-  </div>
-
-  <div class="tbl-wrap">
-    <table>
-      <caption>quando si fissa cosa</caption>
-      <thead><tr><th>fase</th><th>loss</th><th>λ</th></tr></thead>
-      <tbody>
-        <tr><td>step 0 — oracolo</td><td>—</td><td>distribuzione del target misurata → <strong>δ = 2.1</strong></td></tr>
-        <tr><td>step 1 — lineare</td><td>MSE</td><td>— (solo controllo di leakage)</td></tr>
-        <tr><td>step 2 — GBM</td><td>L2 / Huber standard</td><td>non implementato</td></tr>
-        <tr><td>step 3 — GRU singolo</td><td>Huber</td><td>λ = 0, fino a Rank IC positivo e stabile</td></tr>
-        <tr><td>step 3b — GRU singolo</td><td>Huber + λ·Pearson</td><td><strong>prima taratura</strong>, sul modello più economico</td></tr>
-        <tr><td>step 4 — GRU multi-ramo</td><td>Huber + λ·Pearson</td><td>ri-verifica su griglia ristretta (λ<sub>3b</sub>, metà, doppio)</td></tr>
-        <tr><td>fase finale</td><td>—</td><td>λ fra gli iperparametri da rifinire</td></tr>
-      </tbody>
-    </table>
-  </div>
-  <p class="tf-note"><strong>Priorità.</strong> λ è un'ottimizzazione di second'ordine. Vengono prima un Rank IC positivo con Huber puro: se quello è ~0, λ non lo recupera — il problema sarebbe nelle feature o nella definizione della gamba.</p>
-
-  <h2 class="sec">Selezione del set di feature</h2>
-  <p class="lead">Procedura per passare dalle 28 candidate al set finale. Tutto si esegue <strong>solo sul periodo di train</strong>, con split temporale e purging: misurare la selezione su dati di test la invalida.</p>
-
-  <div class="tbl-wrap">
-    <table>
-      <caption>passaggi, in ordine</caption>
-      <thead><tr><th>#</th><th>passaggio</th><th>criterio</th><th>esito</th></tr></thead>
-      <tbody>
-        <tr><td>1</td><td class="col-name">sanità</td><td>quota di NaN, varianza nulla, code infinite</td><td>si scartano le colonne degeneri prima di misurare qualsiasi altra cosa</td></tr>
-        <tr><td>2</td><td class="col-name">correlazione</td><td>matrice di Spearman fra le 28, per ramo</td><td>si individuano i gruppi ridondanti — Spearman e non Pearson perché è robusto alle code grasse dei ritorni e coglie relazioni monotone non lineari</td></tr>
-        <tr><td>3</td><td class="col-name">clustering</td><td>raggruppamento gerarchico su distanza = 1 − |correlazione|, taglio a 0.2 (≈ |ρ| 0.8)</td><td>da ogni cluster sopravvive una sola colonna: la più semplice e la meno laggata</td></tr>
-        <tr><td>4</td><td class="col-name">importanza</td><td>permutation importance del GBM, su fold di validazione</td><td>ordinamento delle superstiti; le colonne a importanza nulla o negativa escono</td></tr>
-        <tr><td>5</td><td class="col-name">ablazione</td><td>IC out-of-sample del set completo contro il ridotto</td><td>se pareggiano vince il ridotto — meno parametri, meno overfitting</td></tr>
+        <tr><td class="num">1</td><td>sanità</td><td>560 colonne su 560 utilizzabili. Passo a vuoto — che è la risposta, non un motivo per saltarlo</td></tr>
+        <tr><td class="num">2</td><td>Spearman per ramo</td><td>28 coppie a |ρ| ≥ 0.8. I quattro rami concordano entro ~0.01: la ridondanza è degli indicatori, non del timeframe</td></tr>
+        <tr><td class="num">3</td><td>clustering a 0.2</td><td>19 cluster, quattro con più di un membro. Complete linkage, così ogni coppia dentro il cluster supera la soglia</td></tr>
+        <tr><td class="num">4</td><td>permutation importance</td><td>12 gruppi su 19 battono il pavimento di rumore. Un solo gruppo vale <strong>0.130 su 0.149</strong> di baseline</td></tr>
+        <tr><td class="num">5</td><td>ablazione</td><td>0.1560 ± 0.0150 col set completo contro 0.1531 ± 0.0166 col ridotto: pareggio, quindi vince il ridotto</td></tr>
       </tbody>
     </table>
   </div>
 
-  <div class="callout">
-    <h3>Quattro avvertenze che pesano più della procedura</h3>
-    <p><strong>Permutation, non gain.</strong> Il <em>gain</em> nativo di LightGBM misura quanto un albero ha usato una colonna in training, non quanto quella colonna generalizza: premia le feature ad alta cardinalità e il rumore che l'albero è riuscito a memorizzare. La permutation importance rimescola una colonna alla volta e misura il degrado su dati non visti — è la sola delle due che risponde alla domanda giusta.</p>
-    <p><strong>Permutare per gruppo, non per colonna.</strong> Due colonne quasi identiche appaiono entrambe mediocri anche quando il gruppo che formano è forte: permutandone una, l'altra copre il buco. Per questo il clustering (passo 3) precede l'importanza (passo 4), e si permuta l'intero cluster — sul GBM anche tutti i lag e aggregati della stessa feature base. Due vincoli: <strong>stesso indice di permutazione</strong> per tutte le colonne del gruppo, altrimenti si mescolano campioni distinti dentro lo stesso concetto e si creano input impossibili, sovrastimando il degrado; e permutazione <strong>su tutti e 4 i rami insieme</strong> — <code>average_true_range_pct</code> a 5m e a 1h sono la stessa feature a orizzonti diversi, permutarne una sola lascia all'altra il modo di compensare.</p>
-    <p><strong>Sulla GRU, permutare la sequenza e non i singoli step.</strong> Rimescolare una colonna step per step distrugge la struttura temporale della finestra, quindi il degrado misurato mescola "feature inutile" e "sequenza rotta", e sovrastima l'importanza di tutto. La permutazione va fatta <em>lungo la dimensione batch</em>: si scambia l'intera sequenza a 24 step di quella feature fra campioni diversi, lasciandola internamente intatta. Così si rompe solo l'associazione con la label, che è ciò che si vuole misurare.</p>
-    <p><strong>Split temporale anche qui.</strong> La selezione è essa stessa un modello addestrato sui dati: farla su split casuale significa misurare leakage e portarselo dentro al set finale. Stessa regola del training — taglio unico e purging sulle label che sconfinano.</p>
+  <p>Il set superstite, in ordine di importanza: <code>close_position_in_window</code> (0.1296), <code>ema_slope</code> (0.0040), <code>candle_body_pct</code> (0.0036), <code>distance_from_window_low_pct</code>, <code>cum_log_return_window</code>, <code>age_of_window_high</code>, <code>lower_wick_pct</code>, <code>bar_range_pct</code>, <code>distance_from_window_high_pct</code>, <code>age_of_window_low</code>, <code>log_volume_vs_median</code>, <code>close_position_in_bar</code>. Momentum sparisce del tutto, volatilità resta col solo <code>bar_range_pct</code>, trend col solo <code>ema_slope</code>.</p>
+
+  <div class="box no">
+    <h4>Ma il set ridotto è sbagliato per la GRU <span class="b b-msr">step 3</span></h4>
+    <p>La selezione è corretta <em>come misura</em> — su un GBM con colonne appiattite quelle 16 colonne sono davvero ridondanti — e sbagliata come trasferimento. Con tutte e 28 la GRU passa da 0.154 a <strong>0.1582</strong> di Rank IC e da 0.567 a <strong>0.586</strong> di ICIR (quattro fold, cinque seed), e batte il GBM <strong>su tutti e quattro i fold</strong> — di poco, +0.0022 in media contro una dispersione fra fold di 0.0150, ma nella stessa direzione ogni volta. Le due colonne che contano di più nella banda vicino al pivot, <code>tsi_momentum</code> e <code>rsi_centered</code>, sono fra le scartate.</p>
+    <p><strong>Regola che ne segue:</strong> la selezione va rifatta per architettura, o non fatta affatto. Il set è un parametro (<code>--features</code>), non una cancellazione.</p>
   </div>
+</section>
 
-  <div class="callout">
-    <h3>Cosa aspettarsi dai gruppi</h3>
-    <p><strong>Ridondanze probabili</strong> — <code>average_true_range_pct</code> / <code>bar_range_pct</code> / <code>realized_volatility</code> misurano volatilità a smoothing diversi; <code>distance_from_kama_pct</code> / <code>distance_from_ema_pct</code> / <code>distance_from_psar_pct</code> sono tutte "distanza da un trend-follower"; <code>tsi_momentum</code> / <code>rsi_centered</code> / <code>cum_log_return_window</code> sono tutte momentum; <code>log_volume_vs_median</code> / <code>on_balance_volume_zscore</code> / <code>volume_trend</code> si sovrappongono in parte.</p>
-    <p><strong>Perché ci sono comunque.</strong> Una GRU su 24 step può apprendere qualunque filtro lineare della sequenza dei ritorni: gli indicatori con smoothing interno alla finestra di input non aggiungono informazione, aggiungono il proprio ritardo. Restano in lista perché l'ipotesi va <em>misurata</em>, non assunta — ma sono i primi candidati all'uscita, e sono gli stessi le cui costanti non vale la pena tarare in anticipo.</p>
-    <p><strong>Il gruppo su cui puntare</strong> — le feature 8–12 (<code>close_position_in_window</code>, <code>distance_from_window_high_pct</code>, <code>distance_from_window_low_pct</code>, <code>age_of_window_high</code>, <code>age_of_window_low</code>) descrivono dove sta il prezzo rispetto agli estremi recenti e da quanto: è la stessa grandezza che <code>swing_leg_target</code> misura, calcolata però solo sul passato. Zero smoothing, zero ritardo. È il gruppo da cui aspettarsi più IC.</p>
-  </div>
+<section>
+  <h2><span class="n">5</span> · Split, allineamento, leakage</h2>
+  <p class="h2sub">Taglio temporale unico e purging esatto<span class="b b-ok">chiuso</span></p>
+  <p class="lead">In codice: <code>split</code>. Il leakage non sta nelle candele — nessun bar è comune ai due periodi e le feature sono causali — sta nelle etichette.</p>
 
-  <h2 class="sec">Validazione</h2>
-  <p class="lead">Prima di costruire l'intera pipeline multi-ramo e tunare H, si misura l'IC di modelli semplici sulle stesse feature. Se nessuno supera una soglia minima, il problema è nelle feature o nella definizione della gamba, e nessuna architettura ricorrente lo recupera.</p>
+  <h3>Purging esatto, non embargo fisso</h3>
+  <p>Il target di un bar vicino al taglio interpola fino a un pivot che può cadere oltre di esso. Un embargo fisso non lo copre: la distanza al pivot successivo non è limitata da <code>order</code>. Misurata su 20 simboli, 2023+, in barre da 15m: <strong>p50 28, p95 124, p99 202, massimo 754</strong> — 72 barre coprirebbero circa l'87° percentile.</p>
+  <pre>train = train[pivot_succ_idx &lt; idx_taglio]</pre>
+  <p>Si scarta esattamente ogni bar contaminato e nessuno in più, <strong>su ogni confine</strong>: train→valid quanto train→test, e ogni taglio di ogni fold. Un valid non purgato contamina l'early stopping, che è leakage indiretto con lo stesso effetto sull'IC finale.</p>
 
-  <div class="tbl-wrap">
+  <h3>Walk-forward, non split unico</h3>
+  <p>Uno split solo dà una stima senza barra d'errore, e la domanda di ogni step — questo batte il precedente o è rumore? — non si risponde con due numeri senza dispersione. Quattro fold espansivi dal 2025-06, train su tutto ciò che precede il taglio, test sulla fetta che segue, media e deviazione standard. Il primo taglio coincide con lo split unico dello step 1, così tutti gli step sono confrontabili sullo stesso periodo.</p>
+  <p><strong>Lo split per-symbol è escluso:</strong> i 20 asset sono fortemente correlati, e avere BTC in test mentre ETH è in train nello stesso periodo è leakage cross-sectional.</p>
+
+  <h3>Griglia 5m e allineamento fra rami</h3>
+  <p>Una riga per bar 5m. Ogni ramo legge solo fino alla candela <strong>già chiusa</strong>: al bar delle 10:05 il ramo 15m vede la candela chiusa alle 10:00, non quella in formazione. Una sola barra di anticipo sul ramo 1h regalerebbe al modello dodici barre 5m di futuro.</p>
+  <p>I pivot restano estremi del Close 15m, ma il target si calcola sulle barre 5m fra due pivot. Ogni chiusura 15m è anche una chiusura 5m, quindi i pivot cadono su righe esistenti senza interpolazione d'appoggio. <strong>Warm-up:</strong> ogni campione richiede 48 barre per ramo — 24 di sequenza più le 24 che il primo step guarda all'indietro.</p>
+</section>
+
+<section>
+  <h2><span class="n">6</span> · Normalizzazione</h2>
+  <p class="h2sub">Robust scaling con clip<span class="b b-ok">chiuso</span></p>
+  <pre>z = clip((x − mediana) / IQR, ±5) × 0.1</pre>
+  <p class="lead">Statistiche stimate <strong>solo sul train</strong> e applicate invariate a validazione, test e live; <code>apply</code> non legge mai il frame a cui è applicata. In codice: <code>normalize</code>.</p>
+  <p><strong>Perché serve il clip.</strong> Le 28 colonne grezze coprono 3,2 ordini di grandezza — wick e log-ritorni a IQR 10⁻³, le limitate a 10⁰. Il quantile scaling da solo normalizza il corpo della distribuzione e lascia outlier fino a <strong>380 IQR</strong> fuori campione, che sui gate della GRU pesano quanto tutto il resto. A CLIP = 5 si tronca lo 0,46% dei valori e il risultato sta in ±0,5.</p>
+  <p><strong>Esito:</strong> IQR esattamente 0,1 su tutte le colonne in train, 0,093–0,111 in test — 0,08 decadi di spread contro le 3,2 di partenza. La trasformazione è monotona per colonna, quindi le correlazioni di Spearman della selezione restano intatte. Anche le colonne già limitate passano di qui: fra loro avevano comunque 1,2 decadi di spread.</p>
+</section>
+
+<section>
+  <h2><span class="n">7</span> · Modello</h2>
+  <p class="h2sub">GRU per ramo, testa densa lineare<span class="b b-ok">chiuso</span></p>
+
+  <div class="tw">
     <table>
-      <caption>sequenza di validazione — da eseguire in ordine</caption>
-      <thead><tr><th>#</th><th>modello</th><th>input</th><th>serve a</th><th>stato</th></tr></thead>
+      <caption>flusso encoder → testa. H = stato nascosto per ramo, F = feature superstiti</caption>
+      <thead><tr><th class="num">step</th><th>operazione</th><th>in</th><th>out</th></tr></thead>
       <tbody>
-        <tr><td>0</td><td class="col-name">oracolo</td><td>estremi da argrelextrema</td><td>fissare finestra_estremi e la distribuzione del target (→ δ)</td><td class="status-done">fatto</td></tr>
-        <tr><td>1</td><td class="col-name">regressione lineare</td><td>ultima candela × 4 rami</td><td>limite inferiore e diagnostica di leakage. <strong>Rank IC 0.124</strong> (ICIR 0.28) sul target predittivo, 20 simboli 2023+, taglio 2025-06</td><td class="status-done">fatto</td></tr>
-        <tr><td>2</td><td class="col-name">GBM (LightGBM)</td><td>lag e aggregati × 4 rami</td><td>IC di riferimento + feature importance per potare le colonne inutili. <strong>Rank IC 0.156</strong> (ICIR 0.58) su 4 fold walk-forward; selezione <strong>28 → 12</strong> indicatori</td><td class="status-done">fatto</td></tr>
-        <tr><td>3</td><td class="col-name">GRU singolo ramo</td><td>(B, 24, F) solo 15m</td><td>verificare che la sequenza aggiunga segnale rispetto alla singola candela</td><td class="status-open">—</td></tr>
-        <tr><td>4</td><td class="col-name">GRU multi-ramo</td><td>4 × (B, 24, F)</td><td>verificare che il multi-timeframe aggiunga segnale rispetto al ramo singolo</td><td class="status-open">—</td></tr>
+        <tr><td class="num">1</td><td>GRU indipendente per ramo, pesi non condivisi</td><td>(B, 24, F)</td><td>(B, H)</td></tr>
+        <tr><td class="num">2</td><td>concatenazione dei 4 stati finali</td><td>4 × (B, H)</td><td>(B, 4H)</td></tr>
+        <tr><td class="num">3</td><td>testa densa lineare, nessuna attivazione in uscita</td><td>(B, 4H)</td><td>(B, 1)</td></tr>
+        <tr><td colspan="4" class="foot">copertura dei rami: 5m → 2h, 15m → 6h, 30m → 12h, 1h → 24h. 24 step fissi ovunque, per lo stesso argomento che tiene N in barre</td></tr>
       </tbody>
     </table>
   </div>
-  <p class="tf-note">Criterio di avanzamento: ogni step deve battere il precedente sulle metriche di segnale out-of-sample. Se lo step 4 non batte lo step 3, il multi-ramo non si giustifica.</p>
 
-  <div class="callout">
-    <h3>Cosa ha detto lo step 1 — e cosa correggere nelle attese</h3>
-    <p><strong>L'attesa iniziale era sbagliata.</strong> Il documento diceva "se l'IC qui non è ~0 c'è leakage". Non regge: il limite inferiore non è zero, perché anche un lineare su singola candela coglie qualcosa di reale. La soglia da battere per gli step successivi è quindi <strong>Rank IC 0.124</strong>, non 0.02–0.03.</p>
-    <p><strong>La scomposizione conta più del numero.</strong> Diviso per distanza dal pivot successivo, il Rank IC dello step 1 è quasi nullo <em>dentro</em> ogni fascia: il valore aggregato vive quasi tutto sulla dimensione orizzonte, cioè sul distinguere "chi è appena partito in una gamba" da "chi è a fine corsa". È previsione legittima — a <code>t</code> quella distinzione non è nota — ma è un segnale più grezzo di quanto 0.124 suggerisca. Un modello che batte lo step 1 solo in aggregato, e non dentro le fasce, non sta aggiungendo nulla di utile.</p>
-    <div class="tbl-wrap">
-      <table>
-        <thead><tr><th>barre al pivot successivo</th><th>bar di test</th><th>Rank IC</th></tr></thead>
-        <tbody>
-          <tr><td>0–6</td><td>8.550</td><td>−0.083</td></tr>
-          <tr><td>6–12</td><td>8.501</td><td>−0.076</td></tr>
-          <tr><td>12–24</td><td>16.885</td><td>−0.083</td></tr>
-          <tr><td>24–48</td><td>31.979</td><td>−0.041</td></tr>
-          <tr><td>48–96</td><td>49.865</td><td>+0.017</td></tr>
-          <tr><td>96–192</td><td>55.079</td><td>+0.022</td></tr>
-          <tr><td>oltre 192</td><td>49.124</td><td>+0.022</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <p><strong>Il segno negativo vicino al pivot è il problema vero.</strong> Sotto le 24 barre dalla fine della gamba il modello sbaglia <em>direzione</em>: le feature sono momentum e dicono "continua" proprio dove il movimento sta per invertirsi. È il punto in cui servirebbe un'uscita, ed è dove un lineare su singola candela fa peggio del caso. È questo che GBM e GRU devono risolvere, non l'aggregato.</p>
-    <p><strong>Nota di protocollo.</strong> Lo split è unico e non walk-forward, come previsto per i controlli rapidi dello step 1: i numeri qui sopra sono una stima senza barra d'errore. Dallo step 2 in poi vale il walk-forward.</p>
-  </div>
+  <p><strong>Nessuna tanh in uscita.</strong> Toccava ±1 solo asintoticamente, quindi il gradiente si annullava proprio sui pivot, i punti di maggior interesse. Nessuna metrica richiede un bound: Rank IC è invariante per trasformazioni monotone. E l'uscita resta limitata per costruzione — lo stato nascosto sta in [−1, 1], quindi <code>w·h + b</code> è limitata da ‖w‖₁ + |b|. Se la testa diventasse a due strati, l'attivazione va rimessa <em>fra</em> i due, mai in uscita.</p>
+  <p><strong>GRU e non LSTM.</strong> Con 24 step il vantaggio dell'LSTM — dipendenze su centinaia di step — non esiste, e la GRU ha ~25% di parametri in meno a parità di stato nascosto. Su un problema a rapporto segnale/rumore basso conta.</p>
 
-  <div class="callout">
-    <h3>Che cos'è un GBM, e perché come baseline</h3>
-    <p><strong>Gradient Boosting Machine</strong> — un insieme di alberi decisionali costruiti in sequenza: ogni nuovo albero viene addestrato a predire l'<em>errore residuo</em> lasciato dalla somma dei precedenti. La predizione finale è la somma dei contributi di tutti gli alberi. Implementazioni standard: <code>LightGBM</code>, <code>XGBoost</code>, <code>CatBoost</code>.</p>
-    <p><strong>Perché qui.</strong> (1) Su dati tabellari finanziari con poche centinaia di migliaia di righe batte le reti neurali nella maggior parte dei casi. (2) Allena in minuti su CPU, contro ore su GPU per la GRU: molte più iterazioni di validazione a parità di tempo. (3) Dà feature importance per colonna, quindi dice quali indicatori portano segnale — informazione che la GRU non restituisce. (4) Non richiede normalizzazione di scala, quindi è testabile prima ancora di fissare la regola di normalizzazione.</p>
-    <p><strong>Come si applica a un input sequenziale.</strong> Il GBM non accetta tensori 3D: le sequenze vanno appiattite. Due opzioni — (a) solo l'ultima candela di ciascun ramo → 4 × F colonne; (b) lag e aggregati per colonna (valore a t, t−1, t−4, media e deviazione sulla finestra) → qualche centinaio di colonne. <strong>Si usa (b).</strong> Con la sola ultima candela il GBM non vede la sequenza, quindi non è un confronto onesto contro la GRU, e la feature importance che ne esce penalizza le colonne informative solo in dinamica (<code>age_of_window_high</code>, <code>ema_slope</code>).</p>
-  </div>
+  <h3>Loss — Huber con δ = 2.1</h3>
+  <pre>L = 0.5·e²           se |e| ≤ δ
+L = δ·(|e| − 0.5·δ)  altrimenti</pre>
+  <p>δ è la mediana di |target| misurata <strong>sul solo train</strong>: tararla su dati che includono il test è la stessa fuga che il purging esiste per chiudere. Nel caso pessimo di un modello che predice ~0, metà dei residui cade nel ramo quadratico e metà in quello lineare; man mano che il modello impara la Huber degrada da sola verso la MSE. δ frena l'inizio dell'addestramento, non la fine — e <strong>vive nelle unità del target</strong>: se l'etichetta cambia, δ va rimisurato, non riscalato a occhio.</p>
+  <p><strong>Early stopping e model selection sempre su Rank IC di validazione, mai sulla loss.</strong> La loss è cardinale, la metrica è ordinale: un modello che sbaglia l'ampiezza e azzecca l'ordine ha MSE pessima e Rank IC ottima.</p>
 
-  <div class="callout">
-    <h3>Walk-forward, non split unico</h3>
-    <p>Lo split temporale unico produce <em>una sola</em> stima dell'IC: un numero senza barra d'errore, con cui non si può dire se lo step 4 batte davvero lo step 3 o se la differenza è rumore.</p>
-    <p><strong>Protocollo.</strong> train fino a T₁ → test T₁..T₂ → train fino a T₂ → test T₂..T₃ → ecc. N training, N stime, si riporta media e deviazione standard. Purging applicato a ogni taglio. Con 3–5 fold la differenza fra due step diventa valutabile.</p>
-    <p>Costo: N volte il training. Irrilevante sul GBM, pesante sulla GRU — ma con storico crypto corto è l'unico modo di ottenere una stima con incertezza. Lo split unico resta valido solo per i controlli rapidi (step 1, diagnostica di leakage).</p>
-  </div>
-
-
-  <div class="callout">
-    <h3>Cosa ha detto lo step 2 — il GBM</h3>
-    <p>LightGBM sui parametri di partenza della tabella, Huber δ = 2.1, appiattimento (b): 28 colonne per ramo diventano 140 (valore a t, t−1, t−4, media e deviazione sulla finestra di 24 passi del ramo stesso), 560 in totale. 642.961 righe, stride 12, quattro fold espansivi dal 2025-06 — il primo taglio coincide con lo split unico dello step 1, così i due step sono confrontabili sullo stesso periodo. Nessuna normalizzazione: il GBM non la richiede, e questo lo rende misurabile prima ancora che la regola sia fissata.</p>
-    <div class="tbl-wrap">
-      <table>
-        <caption>walk-forward, quattro fold</caption>
-        <thead><tr><th>fold</th><th>train</th><th>test</th><th>alberi</th><th>IC</th><th>Rank IC</th><th>Rank ICIR</th></tr></thead>
-        <tbody>
-          <tr><td>1 · 2025-06→09</td><td>423.093</td><td>55.041</td><td>48</td><td>0.199</td><td>0.150</td><td>0.569</td></tr>
-          <tr><td>2 · 2025-09→2026-01</td><td>478.118</td><td>55.040</td><td>6</td><td>0.203</td><td>0.160</td><td>0.594</td></tr>
-          <tr><td>3 · 2026-01→05</td><td>533.153</td><td>55.019</td><td>66</td><td>0.192</td><td>0.139</td><td>0.511</td></tr>
-          <tr><td>4 · 2026-05→09</td><td>588.238</td><td>54.584</td><td>76</td><td>0.202</td><td>0.174</td><td>0.636</td></tr>
-          <tr><td class="col-name">media ± std</td><td>—</td><td>—</td><td>—</td><td>0.199 ± 0.005</td><td class="col-name">0.156 ± 0.015</td><td class="col-name">0.578 ± 0.053</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <p><strong>In aggregato batte lo step 1, e con una barra d'errore.</strong> Rank IC 0.156 ± 0.015 contro 0.124, Rank ICIR 0.578 ± 0.053 contro 0.28. Il guadagno sull'IC è modesto — un quarto — ma il raddoppio dell'ICIR non lo è: il segnale del GBM è molto più stabile nel tempo di quello del lineare, ed è l'ICIR la metrica su cui si decide una promozione. <strong>La nuova soglia da battere per lo step 3 è 0.156 / 0.58</strong>, non 0.124 / 0.28.</p>
-
-    <p><strong>Il test del beta di mercato è superato, e questo chiude un punto aperto.</strong> Rank IC contro il target privato della sua media cross-sectional: <strong>0.156</strong>, contro 0.156 sul target grezzo. Invariato alla terza cifra. Il segnale non è la fase del mercato replicata su venti serie: il modello distingue davvero i simboli, l'input multi-asset porta informazione e non serve la baseline sul solo BTC prevista come alternativa. È il risultato più solido dello step.</p>
-
-    <div class="tbl-wrap">
-      <table>
-        <caption>Rank IC di test per distanza dal pivot successivo, aggregato sui quattro fold</caption>
-        <thead><tr><th>barre al pivot successivo</th><th>bar di test</th><th>step 1</th><th>step 2</th><th>Δ</th></tr></thead>
-        <tbody>
-          <tr><td>0–6</td><td>8.567</td><td>−0.083</td><td>−0.064</td><td>+0.019</td></tr>
-          <tr><td>6–12</td><td>8.464</td><td>−0.076</td><td>−0.085</td><td>−0.009</td></tr>
-          <tr><td>12–24</td><td>16.893</td><td>−0.083</td><td>−0.098</td><td>−0.015</td></tr>
-          <tr><td>24–48</td><td>31.924</td><td>−0.041</td><td>−0.034</td><td>+0.007</td></tr>
-          <tr><td>48–96</td><td>49.783</td><td>+0.017</td><td>+0.028</td><td>+0.011</td></tr>
-          <tr><td>96–192</td><td>55.052</td><td>+0.022</td><td>+0.041</td><td>+0.019</td></tr>
-          <tr><td>oltre 192</td><td>49.001</td><td>+0.022</td><td>+0.059</td><td>+0.037</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <p><strong>Il problema vero non è stato risolto.</strong> Tutto il guadagno sta nelle fasce lontane: oltre 192 barre il Rank IC quasi triplica (+0.022 → +0.059), e sotto le 24 barre il segno resta negativo — <em>peggiorato</em> nella fascia 12–24, da −0.083 a −0.098. Vale quindi alla lettera l'avvertenza scritta dopo lo step 1: il GBM ha alzato l'aggregato senza toccare la banda in cui servirebbe un'uscita. Il modello è diventato più bravo a dire "questa gamba è appena cominciata" e non ha imparato nulla sul dire "questa gamba sta finendo".</p>
-
-    <div class="tbl-wrap">
-      <table>
-        <caption>feature importance per indicatore, quota del <em>gain</em> totale — le 140 colonne di ciascun ramo ricondotte all'indicatore di origine. <strong>Non è la misura che la selezione richiede</strong>: vedi sotto</caption>
-        <thead><tr><th>indicatore</th><th>quota</th><th></th><th>indicatore</th><th>quota</th></tr></thead>
-        <tbody>
-          <tr><td class="col-name">close_position_in_window</td><td>0.373</td><td></td><td>distance_from_window_high_pct</td><td>0.010</td></tr>
-          <tr><td class="col-name">distance_from_vwap_pct</td><td>0.363</td><td></td><td>age_of_window_high</td><td>0.009</td></tr>
-          <tr><td class="col-name">rsi_centered</td><td>0.133</td><td></td><td>distance_from_window_low_pct</td><td>0.007</td></tr>
-          <tr><td class="col-name">distance_from_kama_pct</td><td>0.041</td><td></td><td>lower_wick_pct</td><td>0.007</td></tr>
-          <tr><td colspan="5" class="tf-note">le tre prime valgono l'87% del gain; le restanti 24 colonne si dividono il 5%</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <p><strong>Attenzione a come si legge questa tabella.</strong> È il <code>gain</code> nativo di LightGBM, cioè esattamente la metrica che la sezione "Selezione del set di feature" rifiuta per nome: misura quanto un albero ha usato una colonna <em>in training</em>, non quanto quella colonna generalizza, e premia il rumore che l'albero è riuscito a memorizzare. Serve a farsi un'idea, non a decidere. Il passo 4 della selezione richiede la <strong>permutation importance su fold di validazione</strong>, permutata per cluster e su tutti e quattro i rami insieme: è stata eseguita, sta più sotto, e <em>corregge questa tabella</em> — le prime tre voci qui sono tre nomi diversi dello stesso concetto.</p>
-    <p><strong>Il modello è, in sostanza, una sola partizione grossolana.</strong> Tre colonne — tutte della famiglia "dove sono dentro il range" — valgono l'87% del gain. E il numero che lo dice meglio di ogni importance: passando i round di boosting da 1 a 300 su tutti e quattro i fold, <strong>un singolo albero segna già 0.150</strong> di Rank IC di test in media, contro 0.157 dell'ensemble completo e 0.124 del lineare dello step 1. Il boosting aggiunge 0.007 sopra un unico taglio non lineare. Con 560 colonne a disposizione, di cui la maggior parte dinamiche, il GBM ne usa tre statiche.</p>
-    <p><strong>Nota sull'early stopping.</strong> Il numero di alberi in tabella oscilla fra 6 e 76 e non è una quantità significativa: misurata su tutti i fold, la Rank IC di validazione è piatta entro 0.001–0.004 fra il round 6 e il round 100, quindi l'argmax dentro quel plateau lo decide il rumore. Fermarsi al fondo del plateau invece che al centro costa al massimo 0.0065 di Rank IC di test, contro una deviazione fra fold di 0.015; alzare la patience non aiuta, sul fold 2 i due round candidati differiscono di 6e−5. Oltre i 100 round il calo è invece reale e consistente su ogni fold, in validazione come in test, ed è quello che l'early stopping serve a intercettare.</p>
-  </div>
-
-  <div class="callout">
-    <h3>Cosa ha detto la selezione — da 28 candidate a 12</h3>
-    <p class="lead">I cinque passi eseguiti nell'ordine previsto, tutti sul solo periodo di train (423.093 righe fino al 2025-06), sul dataset appiattito dello step 2. Modulo <code>tradingvision.selection</code>.</p>
-
-    <div class="tbl-wrap">
-      <table>
-        <caption>i cinque passi e il loro esito</caption>
-        <thead><tr><th>#</th><th>passaggio</th><th>esito</th></tr></thead>
-        <tbody>
-          <tr><td>1</td><td class="col-name">sanità</td><td><strong>560 colonne su 560</strong> utilizzabili: nessun NaN residuo, nessun infinito oltre soglia, nessuna varianza nulla. Passo a vuoto — che è la risposta, non un motivo per saltarlo.</td></tr>
-          <tr><td>2</td><td class="col-name">Spearman per ramo</td><td><strong>28 coppie</strong> a |ρ| ≥ 0.8. I quattro rami concordano entro ~0.01 su quasi tutte: la ridondanza è una proprietà degli indicatori, non del timeframe.</td></tr>
-          <tr><td>3</td><td class="col-name">clustering a 0.2</td><td><strong>19 cluster</strong>, quattro con più di un membro. Sopravvive il meno laggato di ciascuno.</td></tr>
-          <tr><td>4</td><td class="col-name">permutation importance</td><td><strong>12 gruppi su 19</strong> battono il pavimento di rumore. Un solo gruppo vale 0.130 su 0.149 di baseline.</td></tr>
-          <tr><td>5</td><td class="col-name">ablazione</td><td>Rank IC <strong>0.1560 ± 0.0150</strong> col set completo contro <strong>0.1531 ± 0.0166</strong> col ridotto. Pareggio, quindi <strong>vince il ridotto</strong>.</td></tr>
-        </tbody>
-      </table>
-    </div>
-
-    <p><strong>Passo 2 — cosa era stato previsto e cosa no.</strong> Le ridondanze attese ci sono tutte: <code>average_true_range_pct</code> / <code>realized_volatility</code> / <code>window_range_pct</code> (volatilità a smoothing diversi), <code>distance_from_kama_pct</code> / <code>distance_from_ema_pct</code> / <code>distance_from_vwap_pct</code> (distanza da un trend-follower), <code>tsi_momentum</code> / <code>rsi_centered</code> / <code>cum_log_return_window</code> / <code>ema_slope</code> (momentum). Due previsioni cadono: <code>distance_from_psar_pct</code> è <em>indipendente</em> dagli altri trend-follower — il segno-regime è un'altra grandezza — e i tre volumetrici non si sovrappongono affatto. In compenso ne emerge una non prevista: <code>log_return</code> / <code>candle_body_pct</code> a 0.987 e <code>signed_volume</code> a 0.85, cioè la candela singola descritta tre volte.</p>
-
-    <div class="tbl-wrap">
-      <table>
-        <caption>passo 3 — i quattro cluster non banali e chi sopravvive (in grassetto)</caption>
-        <thead><tr><th>membri</th><th>superstite, e perché</th></tr></thead>
-        <tbody>
-          <tr><td><strong>window_range_pct</strong>, realized_volatility, average_true_range_pct</td><td>l'unico senza smoothing ricorsivo sopra la finestra</td></tr>
-          <tr><td><strong>close_position_in_window</strong>, distance_from_vwap_pct, distance_from_ema_pct</td><td>N di finestra pieno contro N più un filtro ricorsivo</td></tr>
-          <tr><td><strong>ema_slope</strong>, rsi_centered, distance_from_kama_pct, tsi_momentum</td><td>KAMA è adattivo, TSI ha due smoothing in cascata</td></tr>
-          <tr><td><strong>candle_body_pct</strong>, log_return, signed_volume</td><td>la sola candela corrente, nessun ritardo</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <p class="tf-note">Il criterio "la più semplice e la meno laggata" non è deducibile dal codice, quindi è scritto: un <em>lag efficace</em> per candidata, in barre del ramo, con l'ordine della tabella delle 28 come spareggio. È un giudizio, ed è la prima manopola da girare se un cluster tiene la colonna sbagliata.</p>
-
-    <div class="tbl-wrap">
-      <table>
-        <caption>passo 4 — permutation importance per gruppo, in punti di Rank IC di validazione (baseline 0.1493, 84.535 righe)</caption>
-        <thead><tr><th>gruppo</th><th>importanza</th><th>σ</th><th></th><th>gruppo</th><th>importanza</th><th>σ</th></tr></thead>
-        <tbody>
-          <tr><td class="col-name">close_position_in_window</td><td><strong>0.12956</strong></td><td>0.00344</td><td></td><td class="col-name">age_of_window_low</td><td>0.00056</td><td>0.00028</td></tr>
-          <tr><td class="col-name">ema_slope</td><td>0.00403</td><td>0.00130</td><td></td><td class="col-name">log_volume_vs_median</td><td>0.00032</td><td>0.00027</td></tr>
-          <tr><td class="col-name">candle_body_pct</td><td>0.00361</td><td>0.00064</td><td></td><td class="col-name">close_position_in_bar</td><td>0.00015</td><td>0.00010</td></tr>
-          <tr><td class="col-name">distance_from_window_low_pct</td><td>0.00234</td><td>0.00025</td><td></td><td class="col-name">volatility_expansion</td><td>0.00009</td><td>0.00016</td></tr>
-          <tr><td class="col-name">cum_log_return_window</td><td>0.00207</td><td>0.00088</td><td></td><td class="col-name">adx_trend_strength</td><td>0.00007</td><td>0.00021</td></tr>
-          <tr><td class="col-name">age_of_window_high</td><td>0.00180</td><td>0.00058</td><td></td><td class="col-name">window_range_pct</td><td>0.00001</td><td>0.00015</td></tr>
-          <tr><td class="col-name">lower_wick_pct</td><td>0.00163</td><td>0.00045</td><td></td><td class="col-name"><em>shadow (rumore puro)</em></td><td><em>0.00000</em></td><td><em>0.00000</em></td></tr>
-          <tr><td class="col-name">bar_range_pct</td><td>0.00126</td><td>0.00096</td><td></td><td class="col-name">on_balance_volume_zscore</td><td>−0.00002</td><td>0.00012</td></tr>
-          <tr><td class="col-name">distance_from_window_high_pct</td><td>0.00081</td><td>0.00041</td><td></td><td class="col-name">upper_wick_pct</td><td>−0.00002</td><td>0.00004</td></tr>
-          <tr><td colspan="7" class="tf-note">gruppo = i 20 collassati di un indicatore: valore, lag1, lag4, media, deviazione, per tutti e quattro i rami. Fuori anche <code>volume_trend</code> (−0.00003) e <code>distance_from_psar_pct</code> (−0.00052)</td></tr>
-        </tbody>
-      </table>
-    </div>
-
-    <p><strong>Due cose che la specifica lasciava aperte, e come sono state chiuse.</strong> Primo, il <em>linkage</em>: con quello singolo basta una catena di coppie ridondanti a tenere insieme un cluster, e su questi dati |ρ| 0.85 fra a e b e fra b e c avrebbe fatto collassare tutto il blocco trend+momentum in un gruppo solo attraverso coppie che stanno a 0.3. Si usa il <em>complete linkage</em>, che chiede che <em>ogni</em> coppia dentro il cluster superi la soglia — che è ciò che significa dire che il gruppo è ridondante. Secondo, "importanza nulla" non si può leggere come "importanza ≤ 0": permutare qualunque colonna su cui il modello splitta aggiunge rumore alla predizione e abbassa la Rank IC, che quella colonna porti segnale o no, e la abbassa di più quanto più il gruppo è largo. Il pavimento va quindi <em>misurato</em>: un gruppo di rumore puro della stessa larghezza degli altri, addestrato insieme a loro e permutato allo stesso modo. Un gruppo sopravvive se batte quel null di più della somma delle due dispersioni. Sui dati veri il modello non ha splittato <em>nemmeno una volta</em> sulle colonne fantasma, il che dice qualcosa di rassicurante sul setup a 380 colonne.</p>
-
-    <p><strong>La permutation corregge la tabella del gain, non la conferma.</strong> Il gain metteva ai primi tre posti <code>close_position_in_window</code> (0.373), <code>distance_from_vwap_pct</code> (0.363) e <code>rsi_centered</code> (0.133). Il passo 2 mostra che le prime due stanno a |ρ| 0.921 e le altre due sono nello stesso cluster: erano <em>tre nomi della stessa informazione</em>, e il gain l'ha divisa fra loro perché conta gli split, non la generalizzazione. Permutando il concetto intero — tutti i lag, tutti gli aggregati, tutti e quattro i rami insieme — l'informazione torna dove sta: <code>close_position_in_window</code> da sola vale <strong>0.130 su 0.149</strong>, e nessun altro gruppo arriva a 0.005. Il titolo dello step 2 ("tre colonne valgono l'87%") era giusto per caso; la sua composizione era sbagliata.</p>
-
-    <p><strong>Il set finale — 12 indicatori, 240 colonne invece di 560.</strong> In ordine di importanza: <code>close_position_in_window</code>, <code>ema_slope</code>, <code>candle_body_pct</code>, <code>distance_from_window_low_pct</code>, <code>cum_log_return_window</code>, <code>age_of_window_high</code>, <code>lower_wick_pct</code>, <code>bar_range_pct</code>, <code>distance_from_window_high_pct</code>, <code>age_of_window_low</code>, <code>log_volume_vs_median</code>, <code>close_position_in_bar</code>. La scommessa dichiarata nella sezione — "il gruppo su cui puntare sono le feature 8–12" — è vinta e con un margine più netto del previsto: quattro delle cinque sono dentro, e la prima di quelle cinque vale da sola l'87% del segnale. Delle sette famiglie ne sopravvivono cinque: <strong>volatilità</strong> resta con il solo <code>bar_range_pct</code>, <strong>trend</strong> con il solo <code>ema_slope</code>, <strong>momentum</strong> sparisce del tutto (ADX, TSI e RSI escono tutti), e del <strong>volume</strong> resta una colonna su cinque.</p>
-  </div>
-
-  <div class="callout">
-    <h3>Conclusioni per gli step 3 e 4</h3>
-    <p><strong>1. L'indiziato è il set di feature, non l'architettura.</strong> Il GBM aveva i lag e gli aggregati di 24 passi su quattro orizzonti e non li ha usati: misurata come si deve, la permutation dà 0.0040 a <code>ema_slope</code> e 0.0018 a <code>age_of_window_high</code>, contro 0.1296 di una posizione statica. Erano esattamente le colonne che l'appiattimento (b) doveva rendere visibili, e la dinamica non ha portato niente. Una GRU legge la stessa sequenza delle stesse 28 colonne: se l'informazione su "la gamba sta finendo" non è dentro quelle colonne, la GRU riprodurrà lo stesso profilo per fascia a costo molto più alto. La spiegazione alternativa — che l'informazione ci sia ma solo in una dinamica che alberi su colonne appiattite non compongono — resta aperta ed è precisamente ciò che lo step 3 metterebbe alla prova. Ma va messa alla prova sapendo che è la seconda ipotesi, non la prima.</p>
-    <p><strong>2. Prima dello step 3 conviene un controllo da poche ore.</strong> Misurare il Rank IC di ogni singola colonna, ristretto alle sole barre sotto le 24 dal pivot. Se nessuna delle 28 supera il rumore su quella banda, il problema è di feature e nessuna architettura lo risolve: si passa al punto 7 dei punti aperti (taratura dei parametri per ramo) e a feature di esaurimento — divergenza, climax di volume, asimmetria dei wick agli estremi — invece che di momentum. Se qualcuna regge, l'informazione c'è e non viene composta, e lo step 3 ha una domanda precisa a cui rispondere. Costa una frazione di un training GPU e decide dove spendere il prossimo mese.</p>
-    <p><strong>3. Lo step 3 parte da 12 indicatori, non da 28.</strong> La selezione è eseguita e sta dentro le 7–12 previste: il tensore dello step 3 è <code>(B, 24, 12)</code> per ramo, non <code>(B, 24, 28)</code>, e l'ablazione dice che quelle 16 uscite non costano segnale — 0.0029 di Rank IC contro una dispersione fra fold di 0.0150. È meno della metà della capacità e del weight decay da distribuire, a parità di misura. Con una riserva onesta: la selezione è stata fatta <em>col GBM</em>, e una colonna inutile a un albero su feature appiattite non è necessariamente inutile a una ricorrente che legge la sequenza. Le sette scartate restano nel codice e la lista è un parametro, non una cancellazione — se lo step 3 fallisce col set ridotto, rifarlo col completo è una riga.</p>
-    <p><strong>4. Il multi-asset è confermato, il multi-ramo no.</strong> Il beta di mercato superato chiude la questione dell'universo: le venti serie portano informazione indipendente. Sui rami non si è invece imparato nulla, e la selezione non poteva dirlo: il passo 4 permuta i quattro rami <em>insieme</em> per costruzione, altrimenti ognuno copre il buco dell'altro. Serve una misura apposta — permutare un ramo alla volta di <code>close_position_in_window</code>, che è l'unico gruppo con abbastanza importanza perché la differenza si veda. È il pre-test naturale del criterio "se lo step 4 non batte lo step 3, il multi-ramo non si giustifica": se i 0.130 stanno su un ramo solo, lo step 4 è in salita prima di cominciare. Unico indizio finora, e debole: al passo 2 i quattro rami concordano entro 0.01 su quasi tutte le correlazioni, cioè si assomigliano più di quanto la scelta di N in barre volesse.</p>
-    <p><strong>5. Il criterio di promozione per lo step 3.</strong> Rank IC &gt; 0.156 e Rank ICIR &gt; 0.58 sugli stessi quattro fold, <em>e</em> un miglioramento visibile nelle fasce sotto le 48 barre. La soglia resta quella del set completo e non lo 0.1531 del ridotto: lo step 3 deve battere il meglio che lo step 2 ha prodotto, non la versione potata di cui eredita l'input. Il primo da solo non basta: lo step 2 lo ha superato spostando solo le fasce lontane, ed è il caso che l'avvertenza dello step 1 aveva già dichiarato inutile.</p>
-  </div>
-
-  <h2 class="sec">Metriche di segnale</h2>
-  <p class="lead">Si adotta il set di metriche di segnale di qlib. <strong>Nessuna metrica di portafoglio</strong> (annualized return, IR, max drawdown): la valutazione economica passa dal rapporto con l'oracolo, non da un backtest di strategia.</p>
-
-  <div class="tbl-wrap">
+  <div class="tw">
     <table>
-      <caption>quattro metriche, calcolate per data sul cross-section e poi aggregate nel tempo</caption>
+      <caption>iperparametri — valori di partenza, non tarati</caption>
+      <thead><tr><th>parametro</th><th>valore</th><th>nota</th></tr></thead>
+      <tbody>
+        <tr><td class="key">H</td><td class="num">32</td><td>oltre 64 overfitta rapidamente</td></tr>
+        <tr><td class="key">layer GRU</td><td class="num">1</td><td>2 solo se il singolo satura</td></tr>
+        <tr><td class="key">dropout</td><td class="num">0.2</td><td>sull'output dei rami, prima della concat</td></tr>
+        <tr><td class="key">optimizer</td><td>AdamW</td><td>weight decay 1e-4</td></tr>
+        <tr><td class="key">learning rate</td><td class="num">1e-3</td><td>ReduceLROnPlateau su Rank IC di valid</td></tr>
+        <tr><td class="key">batch size</td><td class="num">512</td><td>da fissare prima di tarare qualunque termine di loss</td></tr>
+        <tr><td class="key">grad clip</td><td class="num">1.0</td><td>sulla norma</td></tr>
+        <tr><td class="key">early stopping</td><td>patience 10</td><td>su Rank IC di valid, mai sulla loss</td></tr>
+        <tr><td class="key">epoche max</td><td class="num">100</td><td>con early stopping raramente raggiunte</td></tr>
+        <tr><td class="key">seed</td><td class="num">5</td><td>in esplorazione; 10–20 nei confronti finali</td></tr>
+        <tr><td colspan="3" class="foot">misurato allo step 3: la Rank IC di validazione vale 0.145 dopo la prima epoca, ~0.152 dopo la seconda, poi resta piatta entro 0.002 fino all'early stopping. La <strong>capacità non è il vincolo</strong> — la dispersione fra seed è 0.0014 contro 0.0145 fra fold</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">8</span> · Metriche</h2>
+  <p class="h2sub">Il set di segnale di qlib<span class="b b-ok">chiuso</span></p>
+  <p class="lead">Nessuna metrica di portafoglio: la valutazione economica passa dal rapporto con l'oracolo, non da un backtest di strategia. Calcolate per data sul cross-section, poi aggregate nel tempo. In codice: <code>metrics</code>.</p>
+
+  <div class="tw">
+    <table>
       <thead><tr><th>metrica</th><th>definizione</th><th>come si legge</th></tr></thead>
       <tbody>
-        <tr><td class="col-name">IC</td><td>media su t di pearson(pred<sub>t</sub>, target<sub>t</sub>)</td><td>forza lineare del segnale. Sensibile agli outlier: un solo bar estremo può spostarla.</td></tr>
-        <tr><td class="col-name">ICIR</td><td>media(IC<sub>t</sub>) / std(IC<sub>t</sub>)</td><td>stabilità nel tempo, non forza. Un IC 0.05 costante batte un IC 0.08 che oscilla fra +0.3 e −0.2.</td></tr>
-        <tr><td class="col-name">Rank IC</td><td>come IC ma con Spearman</td><td>coglie relazioni monotone non lineari, robusto alle code grasse dei ritorni. È la metrica primaria.</td></tr>
-        <tr><td class="col-name">Rank ICIR</td><td>media(RankIC<sub>t</sub>) / std(RankIC<sub>t</sub>)</td><td>stabilità della versione robusta. Il numero da guardare per decidere se un modello è promuovibile.</td></tr>
+        <tr><td class="key">IC</td><td>media su t di pearson(pred, target)</td><td>forza lineare. Sensibile agli outlier</td></tr>
+        <tr><td class="key">ICIR</td><td>media(ICₜ) / std(ICₜ)</td><td>stabilità nel tempo, non forza</td></tr>
+        <tr><td class="key">Rank IC</td><td>come IC ma con Spearman</td><td>robusto alle code grasse. <strong>Metrica primaria</strong></td></tr>
+        <tr><td class="key">Rank ICIR</td><td>media(RankICₜ) / std(RankICₜ)</td><td>il numero su cui si decide una promozione</td></tr>
       </tbody>
     </table>
   </div>
 
-  <div class="callout">
-    <h3>Avvertenze di lettura</h3>
-    <p><strong>Con 20 simboli l'IC cross-sectional è rumoroso.</strong> Con n=20 per timestamp l'errore standard della correlazione è ≈ 1/√(n−3) ≈ 0.24: i singoli IC<sub>t</sub> sono quasi puro rumore, ed è solo la media su migliaia di date a essere informativa. Per questo l'ICIR conta più dell'IC. In alternativa, o in parallelo, si può calcolare l'<strong>IC time-series per simbolo</strong> (correlazione su tutta la serie di un asset) e poi mediare: più stabile a universo stretto.</p>
-    <p><strong>Soglia.</strong> Indicativamente Rank IC &gt; 0.02–0.03 out-of-sample per considerare il segnale reale, e Rank ICIR &gt; 0.3. Entrambe da riportare come media ± std sui fold walk-forward e sui seed. <strong>Sono soglie di esistenza, non di promozione:</strong> lo step 1 misura già 0.124 / 0.28 e lo step 2 misura 0.156 / 0.58, quindi la soglia corrente per lo step 3 è quest'ultima — e va superata anche nelle fasce vicine al pivot, non solo in aggregato.</p>
-    <p><strong>Test del beta di mercato — dopo il primo GBM.</strong> I 20 pair USDT si muovono in blocco: quando BTC è a metà di una gamba ascendente lo sono spesso anche gli altri, quindi il target vale un valore simile su tutti allo stesso istante. Se è così, le 20 serie non sono 20 osservazioni indipendenti ma una sola ripetuta, e un Rank IC apparentemente confermato su tutti gli asset poggia su molti meno gradi di libertà di quanti sembri. Misura in due righe — <code>target_res = target − target.groupby(timestamp).transform('mean')</code>, poi Rank IC contro <code>target_res</code>. Se regge, il modello distingue davvero i simboli e il multi-asset porta informazione; se crolla a ~0, il segnale è la fase del mercato nel suo insieme e va confrontato con una baseline addestrata sul solo BTC. È una diagnostica, non un preprocessing.  <strong>Eseguito sullo step 2: superato</strong> — 0.156 contro 0.156, invariato. Il segnale non è la fase di mercato e la baseline sul solo BTC non serve.</p>
-    <p><strong>Le stesse metriche a ogni step.</strong> Regressione lineare, GBM, GRU singolo e GRU multi-ramo si confrontano sulle stesse quattro metriche, sugli stessi fold. Cambiare metrica fra uno step e l'altro rende il confronto privo di senso.</p>
+  <p><strong>Con 20 simboli il singolo cross-section è rumoroso:</strong> l'errore standard della correlazione è ≈ 1/√(n−3) ≈ 0.24, quindi i singoli ICₜ sono quasi puro rumore ed è solo la media su migliaia di date a essere informativa. È la ragione per cui l'ICIR conta più dell'IC.</p>
+  <p><strong>Il beta di mercato è superato</strong> e chiude un punto aperto. Rank IC contro il target privato della sua media cross-sectional: 0.156 contro 0.156 sul target grezzo allo step 2, 0.1551 contro 0.1540 allo step 3. Il segnale non è la fase del mercato replicata su venti serie — il modello distingue davvero i simboli, e la baseline sul solo BTC non serve.</p>
+</section>
+
+<section>
+  <h2><span class="n">9</span> · Punti aperti</h2>
+  <p class="h2sub">Solo ciò che è davvero indeciso</p>
+
+  <div class="box open">
+    <h4>1 · La banda vicino al pivot <span class="b b-open">il problema principale</span></h4>
+    <p>Sotto le 24 barre dal pivot ogni modello provato sbaglia direzione, e non per mancanza di architettura: lo specialista addestrato solo sulla banda, con tutte le 28 colonne, arriva a −0.019 e non passa lo zero. L'informazione in banda esiste e generalizza (0.924 di correlazione fra train e test per colonna), ma il suo segno è opposto a quello che vale sulla massa e nessuna variabile disponibile dice al modello in quale regime si trova.</p>
+    <p><strong>Strada:</strong> feature di esaurimento — divergenza, climax di volume, asimmetria dei wick agli estremi — invece che di momentum. In alternativa una testa condizionata sulla distanza stimata dal pivot, ma quella distanza è prevedibile appena (0.044 di Rank IC al meglio, contro 0.157 sul target).</p>
   </div>
 
-  <h2 class="sec">Iperparametri</h2>
-  <div class="tbl-wrap">
-    <table>
-      <caption>valori di partenza, da misurare in fase finale</caption>
-      <thead><tr><th>parametro</th><th>partenza</th><th>nota</th></tr></thead>
-      <tbody>
-        <tr><td class="col-name">H</td><td>32</td><td>con F≈10 e 24 step, oltre 64 overfitta rapidamente</td></tr>
-        <tr><td class="col-name">layer GRU</td><td>1</td><td>2 solo se il singolo satura</td></tr>
-        <tr><td class="col-name">dropout</td><td>0.2</td><td>sull'output dei rami, prima della concat</td></tr>
-        <tr><td class="col-name">weight decay</td><td>1e-4</td><td>via AdamW</td></tr>
-        <tr><td class="col-name">optimizer</td><td>AdamW</td><td>—</td></tr>
-        <tr><td class="col-name">learning rate</td><td>1e-3</td><td>con ReduceLROnPlateau su Rank IC di valid</td></tr>
-        <tr><td class="col-name">batch size</td><td>512–1024</td><td>batch grandi mediano gradienti rumorosi; da fissare prima di tarare λ</td></tr>
-        <tr><td class="col-name">grad clip</td><td>1.0</td><td>sulla norma</td></tr>
-        <tr><td class="col-name">early stopping</td><td>patience 10 su Rank IC di valid</td><td>mai sulla loss</td></tr>
-        <tr><td class="col-name">epoche max</td><td>100</td><td>con early stopping raramente raggiunte</td></tr>
-        <tr><td class="col-name">seed</td><td>5 in esplorazione, 10–20 nei confronti finali</td><td>media ± std</td></tr>
-        <tr><td class="col-name">LightGBM</td><td>num_leaves 31, lr 0.05, feature/bagging_fraction 0.8</td><td>early stopping su Rank IC di valid, patience 50 round (la patience 10 in tabella è un numero da epoche, non da alberi); valid = ultimo 20% del train di ogni fold, purgato. Eseguito: il numero di alberi non è identificabile, vedi la nota nello step 2</td></tr>
-      </tbody>
-    </table>
-  </div>
-  <p class="tf-note">Nessuno di questi va tunato all'inizio: si fissano, si misura, si muove un parametro alla volta.</p>
-
-  <h2 class="sec">Punti aperti</h2>
-  <p class="lead">Solo ciò che è davvero indeciso. Le scelte chiuse stanno nella sezione di competenza, non qui.</p>
-
-  <div class="callout">
-    <h3>1. Sovrapposizione delle sequenze — stride</h3>
-    <p>Una riga per bar 5m con finestra 24 → campioni consecutivi condividono 23 step su 24. I campioni <em>indipendenti</em> sono circa 1/24 delle righe: i batch non sono i.i.d., i gradienti sono correlati, e valid ed early stopping risultano ottimisti. Serve una decisione su <strong>stride</strong> (1, 4, 12?) o subsampling casuale — compromesso fra volume di dati e indipendenza, delicato con storico corto. Interagisce col punto 2.</p>
+  <div class="box open">
+    <h4>2 · Fase di campionamento e barre a volume zero</h4>
+    <p><code>build</code> sottocampiona con uno stride <em>posizionale</em>, quindi ogni riga che sparisce sfasa quel simbolo per sempre. Il risultato: solo il 6,3% delle righe sta sul minuto :00, e <strong>circa il 5% finisce su timestamp che nessun altro simbolo condivide</strong>, dove la metrica cross-sectional non è calcolabile.</p>
+    <p>La causa non sono i buchi dei dati — ce n'è uno solo, simultaneo su tutti — ma le righe rimosse dal <code>dropna</code> a valle: il dataset ha <strong>28.615 barre a volume zero</strong> (SUSHI da solo 4.556) che diventano infiniti nel logaritmo del volume e vengono cancellate per simbolo. Due correzioni indipendenti: campionare a orologio, e decidere cosa significa una barra senza scambi invece di lasciarla sparire.</p>
   </div>
 
-  <div class="callout">
-    <h3>2. Volume dati e materializzazione</h3>
-    <p>14,9M righe a 5m; con 4 rami × 24 step × F feature in float32 il tensore materializzato è dell'ordine delle decine di GB. Da decidere fra generazione lazy per batch, memmap su disco, o precomputo con stride ampio. Non è un dettaglio implementativo: vincola lo stride del punto 1. <strong>Si riprende dopo la selezione delle feature</strong>, quando F e la copertura temporale sono noti.</p>
+  <div class="box open">
+    <h4>3 · Regolarizzazione</h4>
+    <p>Dropout 0.2, weight decay 1e-4 e grad clip 1.0 sono ereditati da convenzione, non scelti per misura. Con rapporto segnale/rumore basso conta — anche se il plateau alla seconda epoca suggerisce che il vincolo attuale sia altrove.</p>
   </div>
 
-  <div class="callout">
-    <h3>3. Regolarizzazione</h3>
-    <p>Con rapporto segnale/rumore basso è determinante: senza, la GRU memorizza il rumore in poche epoche. I valori di partenza sono in tabella (dropout 0.2, weight decay 1e-4, grad clip 1.0), ma non sono stati scelti per misura — vanno fissati con un protocollo, non ereditati da una convenzione.</p>
+  <div class="box open">
+    <h4>4 · Termine di correlazione nella loss</h4>
+    <p><code>L = huber(p,y) − λ·pearson(p,y)</code> avvicina l'objective alla metrica. Da valutare solo dopo un Rank IC stabilmente positivo con λ=0, con batch size già fissato e protocollo multi-seed: griglia (0, 0.1, 0.3, 0.5) × almeno 5 seed, con λ=0 dentro come controllo. Sul GBM non si implementa — la derivata di Pearson non è separabile per campione.</p>
   </div>
 
-  <div class="callout">
-    <h3>4. Il segno negativo vicino al pivot</h3>
-    <p>Allo step 1 il Rank IC è <strong>negativo sotto le 24 barre</strong> dal pivot successivo (−0.08): dove serve l'uscita, un lineare su singola candela sbaglia direzione. Da capire se è una proprietà delle feature — momentum che per costruzione dice "continua" — o della definizione di gamba, e se GBM e GRU lo correggono o lo ereditano. È la prima cosa da guardare allo step 2, prima dell'aggregato. <strong>Step 2: ereditato, non corretto</strong> — il GBM resta a −0.064 / −0.085 / −0.098 sulle tre fasce sotto le 24 barre, peggio dello step 1 su 12–24, mentre triplica il Rank IC oltre le 192 barre. Avendo avuto a disposizione lag e aggregati e non avendoli usati, l'indiziato si sposta sulle feature. Il controllo che decide è nelle conclusioni dello step 2, punto 2: Rank IC per singola colonna ristretto alla banda 0–24.</p>
-
-    <h3>5. Pesi condivisi fra rami</h3>
-    <p>I 4 encoder sono distinti ma operano su input strutturalmente identici — stesse colonne, stessa semantica, stessi parametri, solo orizzonte diverso. Variante da testare: un unico encoder GRU condiviso fra i rami, con un embedding di timeframe concatenato allo stato finale di ciascuno. Stessa espressività, circa 4× parametri in meno. Da valutare solo dopo lo step 4.</p>
+  <div class="box open">
+    <h4>5 · Pesi condivisi fra rami</h4>
+    <p>I quattro encoder sono distinti ma operano su input strutturalmente identici: stesse colonne, stessa semantica, solo orizzonte diverso. Variante da testare allo step 4: un unico encoder condiviso più un embedding di timeframe concatenato allo stato finale. Stessa espressività, ~4× parametri in meno.</p>
   </div>
 
-  <div class="callout">
-    <h3>6. IC di riconoscibilità sul range 20–26</h3>
-    <p>Il ritardo L usato per fissare <code>finestra_estremi</code> è un proxy grezzo dell'errore del modello: penalizza il timing ma non la direzione. Resta da misurare l'IC di <code>remaining_excursion</code> sul range 20–26, per sapere quanto una gamba da 24 barre è <em>riconoscibile</em> da un modello causale, non solo profittevole a posteriori. Lo step 1 è ora disponibile per farlo: è un ciclo su <code>finestra_estremi</code> con la pipeline già in piedi.</p>
+  <div class="box open">
+    <h4>6 · Il multi-ramo non è ancora giustificato</h4>
+    <p>Il multi-asset è confermato dal beta di mercato; sui rami non si è imparato nulla, perché la selezione permuta i quattro insieme per costruzione. Serve una misura apposta — permutare un ramo alla volta di <code>close_position_in_window</code>, l'unico gruppo abbastanza importante perché la differenza si veda. Se i suoi 0.130 stanno su un ramo solo, lo step 4 è in salita prima di cominciare.</p>
   </div>
+</section>
 
-  <div class="callout">
-    <h3>7. Taratura fine dei parametri degli indicatori</h3>
-    <p>Le costanti che <code>finestra_estremi</code> non determina — fast/slow di KAMA, step/max del PSAR, doppio smoothing del TSI — sono congelate a valori convenzionali. Si rifiniscono in fase finale, in walk-forward, e <strong>solo sulle colonne sopravvissute alla selezione</strong>. Vedi "Parametri per ramo" per il ragionamento.</p>
-  </div>
+<footer>
+  Moduli: <code>data.binance</code> · <code>data.pivots</code> · <code>data.target</code> · <code>features</code> · <code>dataset</code> · <code>normalize</code> · <code>split</code> · <code>metrics</code> · <code>oracle</code> · <code>linear</code> · <code>gbm</code> · <code>selection</code> · <code>nearpivot</code> · <code>gru</code>
+</footer>
 
-  <div class="callout">
-    <h3>Nota di progetto — CryptoFarmEvolution</h3>
-    <p>Questo modello e la sua sperimentazione non restano dentro CryptoFarm: pagina di simulazione dedicata (come <code>simulator.py</code>, ma focalizzata solo su questi modelli multi-tf), dati non più da Binance ma da <strong>Alpaca</strong> (<code>alpaca-py</code>). Repo separato: <strong>CryptoFarmEvolution</strong>.</p>
-  </div>
 </div>
-
 </body>
+</html>

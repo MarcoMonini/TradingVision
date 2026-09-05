@@ -7,10 +7,12 @@ someone ran the module by hand.
 """
 
 import runpy
+import subprocess
+import sys
 
 import pytest
 
-from tradingvision import crosscheck, dataset, gbm, linear, selection
+from tradingvision import crosscheck, dataset, gbm, linear, nearpivot, selection
 
 SELF_CHECKED = [
     "tradingvision.data.pivots",
@@ -40,6 +42,23 @@ def test_linear_selfcheck():
 
 def test_gbm_selfcheck():
     gbm._selfcheck()
+
+
+def test_gru_selfcheck():
+    """In its own process, because torch and lightgbm each bring their own OpenMP runtime.
+
+    lightgbm links `@rpath/libomp.dylib` and finds Homebrew's; torch loads the copy bundled in
+    `torch/lib`. Two of them in one process is `OMP: Error #15` and an immediate abort, in either
+    import order. No code path imports both — `gru` deliberately stays clear of `gbm` — so the
+    only place they meet is this file, and a subprocess is cheaper than making the two share a
+    runtime. It trains a few small models, which makes it the slow test here, about ten seconds.
+    """
+    code = "from tradingvision import gru; gru._selfcheck()"
+    subprocess.run([sys.executable, "-c", code], check=True)
+
+
+def test_nearpivot_selfcheck():
+    nearpivot._selfcheck()
 
 
 def test_selection_selfcheck():
