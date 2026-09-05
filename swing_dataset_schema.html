@@ -316,8 +316,12 @@ h2.sec{
         <tr><td class="col-name">step 2 — GBM, baseline e metriche</td><td class="status-done">eseguito</td><td><code>gbm</code>, sezione validazione</td></tr>
         <tr><td class="col-name">step 2 — selezione delle feature (5 passi)</td><td class="status-done">eseguita — 28 candidate → 12 indicatori</td><td>sezione selezione</td></tr>
         <tr><td class="col-name">test del beta di mercato</td><td class="status-done">superato — segnale non di sola fase</td><td>sezione validazione</td></tr>
-        <tr><td class="col-name">segno negativo sotto le 24 barre</td><td class="status-open">confermato · irrisolto dal GBM</td><td>punti aperti, punto 4</td></tr>
-        <tr><td class="col-name">stride, materializzazione, regolarizzazione</td><td class="status-open">aperti</td><td>punti aperti</td></tr>
+        <tr><td class="col-name">pre-check — Rank IC per colonna in banda 0–24</td><td class="status-done">eseguito — 80 colonne su 112 battono il rumore</td><td><code>nearpivot</code>, sezione validazione</td></tr>
+        <tr><td class="col-name">step 3 — GRU singolo ramo, 15m</td><td class="status-done">eseguito — pareggia lo step 2, non lo batte</td><td><code>gru</code>, sezione validazione</td></tr>
+        <tr><td class="col-name">step 4 — GRU multi-ramo</td><td class="status-open">sospeso — lo step 3 non ha battuto il precedente</td><td>sezione validazione</td></tr>
+        <tr><td class="col-name">segno negativo sotto le 24 barre</td><td class="status-open">spiegato · irrisolto — la relazione inverte</td><td>punti aperti, punto 4</td></tr>
+        <tr><td class="col-name">stride e materializzazione</td><td class="status-done">chiusi per il ramo singolo — stride 12, tensore da 740 MB</td><td>punti aperti, punti 1 e 2</td></tr>
+        <tr><td class="col-name">regolarizzazione</td><td class="status-open">aperta — non ancora misurata</td><td>punti aperti, punto 3</td></tr>
       </tbody>
     </table>
   </div>
@@ -763,8 +767,8 @@ h2.sec{
         <tr><td>0</td><td class="col-name">oracolo</td><td>estremi da argrelextrema</td><td>fissare finestra_estremi e la distribuzione del target (→ δ)</td><td class="status-done">fatto</td></tr>
         <tr><td>1</td><td class="col-name">regressione lineare</td><td>ultima candela × 4 rami</td><td>limite inferiore e diagnostica di leakage. <strong>Rank IC 0.124</strong> (ICIR 0.28) sul target predittivo, 20 simboli 2023+, taglio 2025-06</td><td class="status-done">fatto</td></tr>
         <tr><td>2</td><td class="col-name">GBM (LightGBM)</td><td>lag e aggregati × 4 rami</td><td>IC di riferimento + feature importance per potare le colonne inutili. <strong>Rank IC 0.156</strong> (ICIR 0.58) su 4 fold walk-forward; selezione <strong>28 → 12</strong> indicatori</td><td class="status-done">fatto</td></tr>
-        <tr><td>3</td><td class="col-name">GRU singolo ramo</td><td>(B, 24, F) solo 15m</td><td>verificare che la sequenza aggiunga segnale rispetto alla singola candela</td><td class="status-open">—</td></tr>
-        <tr><td>4</td><td class="col-name">GRU multi-ramo</td><td>4 × (B, 24, F)</td><td>verificare che il multi-timeframe aggiunga segnale rispetto al ramo singolo</td><td class="status-open">—</td></tr>
+        <tr><td>3</td><td class="col-name">GRU singolo ramo</td><td>(B, 24, 12) solo 15m</td><td>verificare che la sequenza aggiunga segnale rispetto alla singola candela. <strong>Rank IC 0.154</strong> (ICIR 0.567) su 4 fold × 5 seed: <strong>pareggia lo step 2, non lo batte</strong> — la sequenza non aggiunge</td><td class="status-done">fatto</td></tr>
+        <tr><td>4</td><td class="col-name">GRU multi-ramo</td><td>4 × (B, 24, F)</td><td>verificare che il multi-timeframe aggiunga segnale rispetto al ramo singolo</td><td class="status-open">sospeso — lo step 3 non ha battuto il precedente</td></tr>
       </tbody>
     </table>
   </div>
@@ -931,6 +935,70 @@ h2.sec{
     <p><strong>5. Il criterio di promozione per lo step 3.</strong> Rank IC &gt; 0.156 e Rank ICIR &gt; 0.58 sugli stessi quattro fold, <em>e</em> un miglioramento visibile nelle fasce sotto le 48 barre. La soglia resta quella del set completo e non lo 0.1531 del ridotto: lo step 3 deve battere il meglio che lo step 2 ha prodotto, non la versione potata di cui eredita l'input. Il primo da solo non basta: lo step 2 lo ha superato spostando solo le fasce lontane, ed è il caso che l'avvertenza dello step 1 aveva già dichiarato inutile.</p>
   </div>
 
+
+  <div class="callout">
+    <h3>Cosa ha detto lo step 3 — la GRU a ramo singolo</h3>
+    <p><strong>Prima, il controllo del punto 2 — ed è passato.</strong> Rank IC di ogni colonna grezza contro il target, ristretto alle barre entro 24 dal pivot successivo, sul solo train purgato, con il pavimento <em>misurato</em> e non assunto: cinque colonne di rumore puro nella stessa identica pipeline. Su 66.651 barre in banda (di 423.093 di train), <strong>80 colonne su 112 battono il pavimento di 0.0115</strong>, e <code>close_position_in_window_15m</code> arriva a −0.063 con t = −10.6. L'informazione vicino al pivot c'è, e lo step 3 aveva quindi la domanda precisa a cui il punto 2 lo mandava a rispondere. In codice è <code>tradingvision.nearpivot</code>.</p>
+
+    <p><strong>La GRU.</strong> Solo ramo 15m, tensore <code>(642.961, 24, 12)</code> costruito con la stessa regola di allineamento del dataset — l'etichetta di un ramo sta a <code>label + tf − 5m</code> sulla griglia 5m ed è forward-fillata da lì — e sulle <em>stesse righe dello step 2</em>: stessi timestamp, stessi simboli, stride 12, stessi quattro fold. Così il confronto misura l'architettura e non il campionamento. Iperparametri quelli della tabella, nessuno tarato: H 32, un layer, dropout 0.2, AdamW 1e-3 con weight decay 1e-4, grad clip 1.0, batch 512, Huber δ = 2.1, early stopping su Rank IC di valid con patience 10 e mai sulla loss, valid = ultimo 20% del train di ogni fold, purgato come ogni altro confine. Normalizzazione fittata per fold sulle sole righe di inner train. Cinque seed per fold. In codice è <code>tradingvision.gru</code>.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <caption>walk-forward, quattro fold × cinque seed — media sui seed</caption>
+        <thead><tr><th>fold</th><th>train</th><th>test</th><th>IC</th><th>Rank IC</th><th>Rank ICIR</th><th>σ seed (Rank IC)</th></tr></thead>
+        <tbody>
+          <tr><td>1 · 2025-06→09</td><td>423.093</td><td>55.041</td><td>0.197</td><td>0.1487</td><td>0.555</td><td>0.0013</td></tr>
+          <tr><td>2 · 2025-09→2026-01</td><td>478.118</td><td>55.040</td><td>0.204</td><td>0.1627</td><td>0.605</td><td>0.0013</td></tr>
+          <tr><td>3 · 2026-01→05</td><td>533.153</td><td>55.019</td><td>0.189</td><td>0.1362</td><td>0.498</td><td>0.0011</td></tr>
+          <tr><td>4 · 2026-05→09</td><td>588.238</td><td>54.584</td><td>0.199</td><td>0.1686</td><td>0.610</td><td>0.0020</td></tr>
+          <tr><td class="col-name">media ± std</td><td>—</td><td>—</td><td>0.197 ± 0.007</td><td class="col-name">0.154 ± 0.015</td><td class="col-name">0.567 ± 0.052</td><td>—</td></tr>
+          <tr><td colspan="7" class="tf-note">σ seed è la deviazione fra i cinque seed dentro un fold. Vale 0.0014 in media contro 0.0145 di dispersione fra fold: l'inizializzazione non è la fonte di incertezza, il periodo lo è</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p><strong>Non batte lo step 2 — lo pareggia, di un soffio sotto.</strong> Rank IC <strong>0.154 ± 0.015</strong> contro 0.156 ± 0.015, Rank ICIR <strong>0.567 ± 0.052</strong> contro 0.578 ± 0.053. Fold per fold la differenza è −0.0013, +0.0027, −0.0028, −0.0054: media −0.0017, cioè poco più di una deviazione fra seed (0.0014) e un decimo di quella fra fold. Non è "la GRU è peggio": è che i due modelli misurano <em>lo stesso numero</em>. Il criterio di promozione chiedeva Rank IC &gt; 0.156 <em>e</em> Rank ICIR &gt; 0.58 <em>e</em> un miglioramento nelle fasce sotto le 48 barre. Nessuno dei tre è soddisfatto. Il beta di mercato resta superato anche qui (0.1551 contro 0.1540 sul target grezzo), coerente con lo step 2.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <caption>Rank IC di test per distanza dal pivot successivo — i tre step a confronto, aggregato sui quattro fold</caption>
+        <thead><tr><th>barre al pivot successivo</th><th>bar di test</th><th>step 1</th><th>step 2</th><th>step 3</th><th>Δ vs step 2</th></tr></thead>
+        <tbody>
+          <tr><td>0–6</td><td>8.567</td><td>−0.083</td><td>−0.064</td><td>−0.059</td><td>+0.005</td></tr>
+          <tr><td>6–12</td><td>8.464</td><td>−0.076</td><td>−0.085</td><td>−0.100</td><td>−0.015</td></tr>
+          <tr><td>12–24</td><td>16.893</td><td>−0.083</td><td>−0.098</td><td>−0.095</td><td>+0.003</td></tr>
+          <tr><td>24–48</td><td>31.924</td><td>−0.041</td><td>−0.034</td><td>−0.030</td><td>+0.004</td></tr>
+          <tr><td>48–96</td><td>49.783</td><td>+0.017</td><td>+0.028</td><td>+0.028</td><td>0.000</td></tr>
+          <tr><td>96–192</td><td>55.052</td><td>+0.022</td><td>+0.041</td><td>+0.051</td><td>+0.010</td></tr>
+          <tr><td>oltre 192</td><td>49.001</td><td>+0.022</td><td>+0.059</td><td>+0.060</td><td>+0.001</td></tr>
+          <tr><td colspan="6" class="tf-note">gli scostamenti stanno tutti dentro ±0.015, contro una dispersione fra fold di 0.0145 sull'aggregato: il profilo è quello dello step 2, non una sua correzione</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p><strong>Il tetto si tocca alla seconda epoca.</strong> Su tutti e quattro i fold il Rank IC di validazione vale 0.145 dopo la prima epoca, ~0.152 dopo la seconda, e poi resta piatto entro 0.002 per le sedici-diciannove epoche che l'early stopping concede prima di fermare. È la stessa forma dello step 2, dove un <em>singolo</em> albero valeva già 0.150 su 0.157 finali. Due architetture senza niente in comune arrivano allo stesso numero per la stessa via: una mappa grezza appresa in una passata, e poi nulla. Non è un problema di capacità né di regolarizzazione — è il segnale che si esaurisce lì.</p>
+
+    <p><strong>Perché, e questa è la scoperta dello step.</strong> La relazione fra feature e target <em>cambia segno</em> con la distanza dal pivot. <code>close_position_in_window_15m</code> vale +0.157 di Rank IC su tutto il train e −0.063 dentro le 24 barre. Non è un caso isolato: <strong>66 colonne su 112 invertono il segno</strong> fra la banda e l'insieme, e sono le stesse che il passo 4 della selezione aveva premiato. Una mappa unica e incondizionata non può soddisfare entrambi i rami — un modello addestrato su tutte le righe fitta la massa, dove la relazione è positiva e dove stanno il 90% dei campioni, e quella stessa mappa è per costruzione di segno sbagliato in banda. È esattamente il profilo misurato agli step 1, 2 e 3.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <caption>Rank IC per colonna: dentro la banda 0–24 contro tutto il train (2023 → 2025-06, purgato)</caption>
+        <thead><tr><th>colonna</th><th>entro 24 barre</th><th>tutto il train</th></tr></thead>
+        <tbody>
+          <tr><td class="col-name">close_position_in_window_15m</td><td>−0.0633</td><td>+0.1565</td></tr>
+          <tr><td class="col-name">distance_from_window_high_pct_5m</td><td>−0.0627</td><td>+0.0878</td></tr>
+          <tr><td class="col-name">close_position_in_window_5m</td><td>−0.0601</td><td>+0.1163</td></tr>
+          <tr><td class="col-name">rsi_centered_5m</td><td>−0.0465</td><td>+0.1596</td></tr>
+          <tr><td class="col-name">distance_from_ema_pct_5m</td><td>−0.0453</td><td>+0.1202</td></tr>
+          <tr><td class="col-name">window_range_pct_15m</td><td>+0.0458</td><td>−0.0097</td></tr>
+          <tr><td colspan="3" class="tf-note">le prime dodici della banda invertono tutte. Il modello dovrebbe condizionare il segno su "quanto manca al pivot" — che è la cosa che gli si sta chiedendo di prevedere</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p><strong>Conseguenze.</strong> (1) L'ipotesi alternativa del punto 1 delle conclusioni dello step 2 — l'informazione c'è ma vive in una dinamica che alberi su colonne appiattite non compongono — è <em>caduta</em>: una ricorrente che legge la sequenza vera arriva allo stesso numero. Resta la prima ipotesi, l'indiziato è il set di feature. (2) Lo step 4 non si giustifica <em>in questa forma</em>: il criterio di avanzamento chiede che ogni step batta il precedente, e lo step 3 non ha battuto il suo. Quattro rami su feature il cui segno si inverte danno quattro volte il costo dello stesso tetto. (3) La direzione che resta è quella del punto 2 delle conclusioni dello step 2, ora con una ragione precisa: servono feature di <em>esaurimento</em>, che identifichino il regime invece di misurare il momentum — divergenza, climax di volume, asimmetria dei wick agli estremi — perché è il regime la variabile mancante che rende la relazione condizionale. In alternativa, e a costo minore, un modello che condizioni esplicitamente sulla distanza stimata dal pivot.</p>
+  </div>
+
   <h2 class="sec">Metriche di segnale</h2>
   <p class="lead">Si adotta il set di metriche di segnale di qlib. <strong>Nessuna metrica di portafoglio</strong> (annualized return, IR, max drawdown): la valutazione economica passa dal rapporto con l'oracolo, non da un backtest di strategia.</p>
 
@@ -983,12 +1051,12 @@ h2.sec{
 
   <div class="callout">
     <h3>1. Sovrapposizione delle sequenze — stride</h3>
-    <p>Una riga per bar 5m con finestra 24 → campioni consecutivi condividono 23 step su 24. I campioni <em>indipendenti</em> sono circa 1/24 delle righe: i batch non sono i.i.d., i gradienti sono correlati, e valid ed early stopping risultano ottimisti. Serve una decisione su <strong>stride</strong> (1, 4, 12?) o subsampling casuale — compromesso fra volume di dati e indipendenza, delicato con storico corto. Interagisce col punto 2.</p>
+    <p>Una riga per bar 5m con finestra 24 → campioni consecutivi condividono 23 step su 24. I campioni <em>indipendenti</em> sono circa 1/24 delle righe: i batch non sono i.i.d., i gradienti sono correlati, e valid ed early stopping risultano ottimisti. Serve una decisione su <strong>stride</strong> (1, 4, 12?) o subsampling casuale — compromesso fra volume di dati e indipendenza, delicato con storico corto. Interagisce col punto 2. <strong>Chiuso per lo step 3: stride 12</strong>, cioè le righe stesse dello step 2 — un confronto su righe diverse misurerebbe il campionamento insieme all'architettura, e la promozione si decide su quello. Resta aperto se uno stride più fitto aiuti: allo step 3 non servirebbe, visto che il tetto si tocca alla seconda epoca, ma è una domanda da rifare su un set di feature diverso.</p>
   </div>
 
   <div class="callout">
     <h3>2. Volume dati e materializzazione</h3>
-    <p>14,9M righe a 5m; con 4 rami × 24 step × F feature in float32 il tensore materializzato è dell'ordine delle decine di GB. Da decidere fra generazione lazy per batch, memmap su disco, o precomputo con stride ampio. Non è un dettaglio implementativo: vincola lo stride del punto 1. <strong>Si riprende dopo la selezione delle feature</strong>, quando F e la copertura temporale sono noti.</p>
+    <p>14,9M righe a 5m; con 4 rami × 24 step × F feature in float32 il tensore materializzato è dell'ordine delle decine di GB. Da decidere fra generazione lazy per batch, memmap su disco, o precomputo con stride ampio. Non è un dettaglio implementativo: vincola lo stride del punto 1. <strong>Chiuso per il ramo singolo: precomputo.</strong> Con stride 12, F = 12 e un solo ramo il tensore è <code>(642.961, 24, 12)</code> in float32, cioè 740 MB — sta in memoria, si costruisce in tre minuti e si materializza su disco con lo stamp dei parametri che l'hanno prodotto, come il dataset. A quattro rami sarebbero 3 GB: ancora gestibile, e la generazione lazy resta non necessaria finché lo stride non scende.</p>
   </div>
 
   <div class="callout">
@@ -998,7 +1066,7 @@ h2.sec{
 
   <div class="callout">
     <h3>4. Il segno negativo vicino al pivot</h3>
-    <p>Allo step 1 il Rank IC è <strong>negativo sotto le 24 barre</strong> dal pivot successivo (−0.08): dove serve l'uscita, un lineare su singola candela sbaglia direzione. Da capire se è una proprietà delle feature — momentum che per costruzione dice "continua" — o della definizione di gamba, e se GBM e GRU lo correggono o lo ereditano. È la prima cosa da guardare allo step 2, prima dell'aggregato. <strong>Step 2: ereditato, non corretto</strong> — il GBM resta a −0.064 / −0.085 / −0.098 sulle tre fasce sotto le 24 barre, peggio dello step 1 su 12–24, mentre triplica il Rank IC oltre le 192 barre. Avendo avuto a disposizione lag e aggregati e non avendoli usati, l'indiziato si sposta sulle feature. Il controllo che decide è nelle conclusioni dello step 2, punto 2: Rank IC per singola colonna ristretto alla banda 0–24.</p>
+    <p>Allo step 1 il Rank IC è <strong>negativo sotto le 24 barre</strong> dal pivot successivo (−0.08): dove serve l'uscita, un lineare su singola candela sbaglia direzione. Da capire se è una proprietà delle feature — momentum che per costruzione dice "continua" — o della definizione di gamba, e se GBM e GRU lo correggono o lo ereditano. È la prima cosa da guardare allo step 2, prima dell'aggregato. <strong>Step 2: ereditato, non corretto</strong> — il GBM resta a −0.064 / −0.085 / −0.098 sulle tre fasce sotto le 24 barre, peggio dello step 1 su 12–24, mentre triplica il Rank IC oltre le 192 barre. Avendo avuto a disposizione lag e aggregati e non avendoli usati, l'indiziato si sposta sulle feature. Il controllo che decide è nelle conclusioni dello step 2, punto 2: Rank IC per singola colonna ristretto alla banda 0–24. <strong>Step 3: il controllo è stato eseguito, e il punto è spiegato — non risolto.</strong> Le colonne in banda hanno segnale (80 su 112 battono il pavimento di rumore), ma <strong>66 su 112 hanno segno opposto a quello che hanno sull'insieme</strong>: <code>close_position_in_window_15m</code> vale +0.157 su tutto il train e −0.063 in banda. Non è quindi né "feature di momentum" né una proprietà della definizione di gamba: è che la relazione è <em>condizionale</em> al regime, e nessuna mappa unica e incondizionata può tenere i due segni. La GRU eredita il profilo come il GBM (−0.059 / −0.100 / −0.095 sulle tre fasce), che è ciò che ci si deve aspettare da qualunque architettura finché il regime non è osservabile in input. La strada è una feature che identifichi il regime, o una testa condizionata sulla distanza stimata dal pivot.</p>
 
     <h3>5. Pesi condivisi fra rami</h3>
     <p>I 4 encoder sono distinti ma operano su input strutturalmente identici — stesse colonne, stessa semantica, stessi parametri, solo orizzonte diverso. Variante da testare: un unico encoder GRU condiviso fra i rami, con un embedding di timeframe concatenato allo stato finale di ciascuno. Stessa espressività, circa 4× parametri in meno. Da valutare solo dopo lo step 4.</p>
