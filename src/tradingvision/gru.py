@@ -48,6 +48,9 @@ CACHE = STORE / "step2.parquet"  # read for its index, target and pivot horizon 
 # first wrote it, not which step may read it: the rows, the steps and the alignment are the same
 # for both, so step 4 reuses step 3's 15m tensor instead of spending 1.7 GB to rename it.
 TENSOR = STORE / "step3.npy"
+# One fitted model, for the chart app to draw. Written by `--save`, and never by a walk-forward
+# run: a fold's model is a measurement, this is the one trained on the whole train period.
+CHECKPOINT = STORE / "gru.pt"
 # The full candidate set, kept as an option rather than a rebuild: the selection was made with a
 # GBM on the aggregate, and the columns it dropped are not necessarily the ones a recurrent net
 # reading the band cannot use. Measured inside 48 bars of the pivot, `tsi_momentum` and
@@ -418,6 +421,54 @@ def _market_beta(pred: pd.Series, target: pd.Series) -> dict[str, float]:
     return metrics.signal(pred, target - target.groupby(level=0).transform("mean"))
 
 
+def save(path: Path, model: Net, x: Branches, branches: list[str], keep: list[str]) -> None:
+    """The weights and everything needed to feed them: the scaling of the train period, the
+    columns, the branches and their widths. A model without its scaler is not a model."""
+    torch.save(
+        {
+            "state": model.state_dict(),
+            "stats": x.stats,
+            "widths": x.widths,
+            "branches": branches,
+            "keep": keep,
+            "steps": STEPS,
+            "shared": model.shared,
+        },
+        path,
+    )
+
+
+def restore(path: Path = CHECKPOINT) -> tuple[Net, dict]:
+    checkpoint = torch.load(path, weights_only=False)
+    model = Net(checkpoint["widths"], shared=checkpoint["shared"]).to(DEVICE)
+    model.load_state_dict(checkpoint["state"])
+    model.eval()
+    return model, checkpoint
+
+
+def predict_frame(model: Net, checkpoint: dict, bars: pd.DataFrame) -> pd.Series:
+    """The prediction at every bar of `bars`, which must be candles of the model's own branch.
+
+    The chart draws one timeframe, so this takes one branch and says so rather than guessing how
+    to line four of them up on a grid the app does not have.
+
+    `shift(1)` is the no-anticipation rule on this grid: at the bar labelled T the candle T is the
+    one still forming — labels are open times everywhere in this project — so the last closed
+    candle is T-1, exactly as the 5m row of 10:05 reads the 15m candle labelled 09:45. The first
+    bars have no window behind them and come back NaN rather than as a number nothing supports.
+    """
+    if len(checkpoint["branches"]) != 1:
+        raise ValueError(f"the chart draws one branch, not {checkpoint['branches']}")
+    f = features(bars, EXTREMA_WINDOW)[checkpoint["keep"]]
+    x = apply(window(f.shift(1), bars.index, checkpoint["steps"]), checkpoint["stats"][0])
+    ready = np.isfinite(x).all(axis=(1, 2))
+    out = pd.Series(np.nan, index=bars.index, name="prediction")
+    if ready.any():
+        with torch.no_grad():
+            out[ready] = model([torch.from_numpy(x[ready]).to(DEVICE)]).cpu().numpy()
+    return out
+
+
 def meta(path: Path = CACHE) -> pd.DataFrame:
     """Step 2's rows: the label, the purging horizon and each row's place in the tensor."""
     df = pd.read_parquet(path, columns=linear.META)
@@ -548,6 +599,13 @@ def main() -> None:
         help="train on the target with the level, or the level and the scale, of its timestamp removed",
     )
     ap.add_argument("--smooth", type=int, nargs="*", default=[2, 4, 12], help="output low-pass windows to report")
+    ap.add_argument(
+        "--save",
+        type=Path,
+        nargs="?",
+        const=CHECKPOINT,
+        help="fit one model on the whole train period and write it here for the chart app, then stop",
+    )
     args = ap.parse_args()
 
     _selfcheck()
@@ -563,6 +621,18 @@ def main() -> None:
         for tf in branches
     ]
     print(f"{len(df):,} rows, {STEPS} steps x {len(keep)} features on {'+'.join(branches)}, {args.encoder}, {DEVICE}")
+
+    if args.save:
+        # No folds: the walk-forward exists to measure, and what the app draws is one model fitted
+        # on everything before the test period, with the scaling that goes with it.
+        train, _ = split.temporal(df, args.test_start)
+        inner, valid = split.temporal_fraction(train, VALID_FRACTION)
+        z = Branches(x, inner.row.to_numpy())
+        model = fit(z, inner, valid, epochs=args.epochs, shared=args.encoder == "shared", quiet=not args.verbose)
+        save(args.save, model, z, branches, keep)
+        print(f"fitted on {len(inner):,} rows to {args.test_start} and saved to {args.save}")
+        return
+
     print(f"{args.folds} folds from {args.test_start}, {args.seeds} seed(s) each\n")
 
     out = run(
