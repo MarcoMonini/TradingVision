@@ -35,7 +35,7 @@ import pandas as pd
 import torch
 from torch import nn
 
-from tradingvision import linear, metrics, normalize, split
+from tradingvision import linear, metrics, nearpivot, normalize, split
 from tradingvision.data.binance import STORE, load
 from tradingvision.data.pivots import EXTREMA_WINDOW
 from tradingvision.dataset import _shift
@@ -75,6 +75,17 @@ LR_PATIENCE, LR_FACTOR = 5, 0.5
 DEVICE = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 
 
+def window(f: pd.DataFrame, when: pd.DatetimeIndex, steps: int = STEPS) -> np.ndarray:
+    """`(len(when), steps, F)` — the last `steps` rows of `f` at or before each `when`, oldest first.
+
+    `f` is already carried onto the 5m grid, so this is `steps` shifts of it read at `when` and
+    never a rolling window: the two grids differ, and a branch contributes one row per *its own*
+    bar. `method="ffill"` is what makes a row readable only from its own label onwards, which is
+    the no-anticipation rule the whole dataset rests on.
+    """
+    return np.stack([f.shift(k).reindex(when, method="ffill").to_numpy() for k in reversed(range(steps))], axis=1)
+
+
 def sequences(index: pd.MultiIndex, keep: list[str] = SELECTED, tf: str = BRANCH, steps: int = STEPS) -> np.ndarray:
     """`(len(index), steps, len(keep))` — the last `steps` closed `tf` candles at each 5m row.
 
@@ -87,12 +98,9 @@ def sequences(index: pd.MultiIndex, keep: list[str] = SELECTED, tf: str = BRANCH
     out = np.empty((len(index), steps, len(keep)), dtype="float32")
     pos = pd.Series(np.arange(len(index)), index=index)
     for symbol, rows in pos.groupby(level=1):
-        when = rows.index.get_level_values(0)
         f = features(load(symbol, tf), EXTREMA_WINDOW)[keep]
         f.index = f.index + _shift(tf)
-        at = rows.to_numpy()
-        for k in range(steps):
-            out[at, steps - 1 - k] = f.shift(k).reindex(when, method="ffill").to_numpy()
+        out[rows.to_numpy()] = window(f, rows.index.get_level_values(0), steps)
     if not np.isfinite(out).all():
         raise ValueError("the window reaches past the start of a symbol's history — widen the warm-up")
     return out
@@ -130,18 +138,6 @@ def scaled(x: np.ndarray, train: np.ndarray) -> np.ndarray:
     stats = normalize.fit(pd.DataFrame(x[train, -1], columns=names))
     center, scale = stats.center.to_numpy("float32"), stats.scale.to_numpy("float32")
     return (np.clip((x - center) / scale, -normalize.CLIP, normalize.CLIP) * normalize.SCALE).astype("float32")
-
-
-def near(df: pd.DataFrame, band: int) -> pd.DataFrame:
-    """The rows whose next pivot is within `band` 5m bars — the specialist's training set.
-
-    A model fitted on everything optimises the mass, and 84% of the rows sit further out than 48
-    bars, where the relation between features and target has the opposite sign. Restricting the
-    training set is the cheapest way to ask whether anything at all can read the band: if a model
-    that sees nothing else still cannot get a positive Rank IC there, the regime is not in these
-    twelve columns and no head, gate or weighting recovers it.
-    """
-    return df[(df.next_pivot - df.index.get_level_values(0)) / pd.Timedelta("5min") < band]
 
 
 def cross_section(y: pd.Series, mode: str = "z") -> pd.Series:
@@ -249,6 +245,8 @@ def fit(
             since += 1
             if since >= patience:
                 break
+    if best_state is None:
+        raise ValueError(f"the validation Rank IC was never a number over {epochs} epochs — {len(valid)} valid rows")
     model.load_state_dict(best_state)
     return model
 
@@ -271,7 +269,11 @@ def fold(
     inner, valid = split.temporal_fraction(train, VALID_FRACTION)
     if band:
         # Validation too: early stopping has to read the band the model is being judged on.
-        inner, valid = near(inner, band), near(valid, band)
+        # `nearpivot.near`, the same rows its measurement was taken on. A model fitted on
+        # everything optimises the mass — 84% of the rows sit past 48 bars, where the relation has
+        # the opposite sign — so restricting the training set is the upper bound of what any
+        # regime-conditioned head could reach.
+        inner, valid = nearpivot.near(inner, band), nearpivot.near(valid, band)
     z = scaled(x, inner.row.to_numpy())  # train only, and the inner train at that
     if z_target != "off":
         # Training only. Validation keeps the raw label, so early stopping reads the metric the
@@ -396,16 +398,26 @@ def _selfcheck() -> None:
     )
     assert smoothed(apart, 2).tolist() == [1.0, 3.0, 5.5, 16.5]
 
+    # The window, which is the one place a bug would invent future information. A branch label
+    # sits at `label + tf - 5m` on the 5m grid, so the 15m candle that closes at 10:00 becomes
+    # readable at the 5m bar of 09:55 and not one bar earlier.
+    labels = pd.date_range("2024-01-01 09:00", periods=8, freq="15min", tz="UTC")
+    frame = pd.DataFrame({"v": range(8)}, index=labels + pd.Timedelta("10min"), dtype="float64")
+    grid = pd.date_range("2024-01-01 09:50", periods=4, freq="5min", tz="UTC")  # 09:50 09:55 10:00 10:05
+    w = window(frame, grid, steps=3)
+    assert w.shape == (4, 3, 1)
+    assert w[0, -1, 0] == 2, "at 09:50 the last closed 15m candle is the one labelled 09:30"
+    assert w[1, -1, 0] == 3, "at 09:55 the candle labelled 09:45 has closed"
+    assert w[3, -1, 0] == 3, "at 10:05 the candle labelled 10:00 is still forming"
+    assert list(w[1, :, 0]) == [1.0, 2.0, 3.0], "oldest step first"
+    # Causal: truncating the frame after the grid leaves every value untouched.
+    assert np.array_equal(w, window(frame[frame.index <= grid[-1]], grid, steps=3))
+
     # The cross-sectional target: standardised inside each date, and — the reason for the whole
     # change — scoring identically under the metric, which is what makes dropping it free.
     z = cross_section(df.target)
     per_date = z.groupby(level=0)
     assert np.allclose(per_date.mean(), 0, atol=1e-9) and np.allclose(per_date.std(), 1, atol=1e-9)
-    ahead = pd.Series(np.where(rng.random(n) < 0.5, 60, 6000), index=idx)
-    assert (
-        len(near(df.assign(next_pivot=idx.get_level_values(0) + pd.to_timedelta(ahead, "m")), 24))
-        == (ahead < 120).sum()
-    )
     d = cross_section(df.target, "demean")
     assert np.allclose(d.groupby(level=0).mean(), 0, atol=1e-9) and d.std() > 0.5, "demean keeps the dispersion"
     assert np.isclose(
