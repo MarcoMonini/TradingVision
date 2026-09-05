@@ -280,7 +280,7 @@ h2.sec{
 
 <div class="wrap">
   <header>
-    <p class="eyebrow">cryptofarm · ml/swing — schema dataset · rev. 17 — step 2 chiuso, selezione eseguita: 28 → 12</p>
+    <p class="eyebrow">cryptofarm · ml/swing — schema dataset · rev. 18 — set finale fissato: 12 indicatori, 2 parametri</p>
     <h1>Schema dataset multi-timeframe</h1>
     <p class="sub">Quattro rami sequenziali (5m → 1h), 24 step fissi per ramo, stesso set di colonne e stessi parametri su ogni ramo. Nessun prezzo assoluto, nessun symbol nel tensore. Target = escursione che resta prima della fine della gamba, in unità di volatilità nota. Dati da Binance: 20 coppie USDT, 2017→, 14,9M righe a 5m.</p>
     <div class="legend">
@@ -545,7 +545,51 @@ h2.sec{
       </table>
     </div>
     <p><strong>PSAR è l'eccezione onesta.</strong> Step e max_step sono accelerazioni, non finestre: <code>finestra_estremi</code> non li determina in nessun modo. 0.02 / 0.2 è convenzione, e non c'è un argomento migliore. È l'unico indicatore il cui parametro resta arbitrario.</p>
-    <p><strong>Questi valori sono un'ipotesi di partenza, non una misura.</strong> Congelati per rendere calcolabili le feature. Non si tarano prima della selezione, per due ragioni: (1) le colonne con smoothing interno — KAMA, PSAR, TSI, ADX — sono le prime candidate all'uscita, e tarare costanti di colonne che probabilmente spariscono è lavoro buttato; (2) tararle ora significherebbe misurare su un target già noto senza protocollo out-of-sample, cioè esattamente il leakage che la procedura di selezione vieta. Si rifinisce in fase finale, in walk-forward, solo ciò che sopravvive.</p>
+    <p><strong>Questi valori erano un'ipotesi di partenza, non una misura.</strong> Congelati per rendere calcolabili le feature, e non tarati prima della selezione per due ragioni: (1) le colonne con smoothing interno — KAMA, PSAR, TSI, ADX — erano le prime candidate all'uscita, e tarare costanti di colonne che probabilmente spariscono è lavoro buttato; (2) tararle prima significava misurare su un target già noto senza protocollo out-of-sample, cioè esattamente il leakage che la procedura di selezione vieta. <strong>La previsione (1) si è avverata al 100%</strong>: KAMA, PSAR, TSI, ADX e ATR sono usciti tutti, e con loro sette delle otto righe di questa tabella. Quel che resta sta nel riquadro seguente.</p>
+  </div>
+
+  <div class="callout">
+    <h3>Il set finale — 12 indicatori, 2 parametri <span class="status-done">misurato · rev. 18</span></h3>
+    <p class="lead">Ciò che sopravvive ai cinque passi della selezione (vedi "Cosa ha detto la selezione"). È l'input dello step 3: <code>(B, 24, 12)</code> per ramo, 240 colonne appiattite invece di 560. In codice è <code>tradingvision.selection.SELECTED</code>, e <code>select(df)</code> riduce un dataset costruito.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <caption>set finale — 12 colonne per candela, in ordine di permutation importance</caption>
+        <thead><tr><th>#</th><th>colonna</th><th>famiglia</th><th>definizione</th><th>parametro</th><th>importanza</th></tr></thead>
+        <tbody>
+          <tr><td>8</td><td class="col-name">close_position_in_window</td><td>posizione</td><td>2(C − minL_N)/(maxH_N − minL_N) − 1</td><td>N = 24</td><td><strong>0.1296</strong></td></tr>
+          <tr><td>24</td><td class="col-name">ema_slope</td><td>trend</td><td>log(EMA_N / EMA_N₋ₖ)</td><td>N = 24, k = 6</td><td>0.0040</td></tr>
+          <tr><td>4</td><td class="col-name">candle_body_pct</td><td>prezzo</td><td>(C − O) / C</td><td>—</td><td>0.0036</td></tr>
+          <tr><td>10</td><td class="col-name">distance_from_window_low_pct</td><td>posizione</td><td>log(C / minL_N)</td><td>N = 24</td><td>0.0023</td></tr>
+          <tr><td>2</td><td class="col-name">cum_log_return_window</td><td>prezzo</td><td>log(C / C₋ₙ)</td><td>N = 24</td><td>0.0021</td></tr>
+          <tr><td>11</td><td class="col-name">age_of_window_high</td><td>posizione</td><td>barre dal maxH_N / N</td><td>N = 24</td><td>0.0018</td></tr>
+          <tr><td>6</td><td class="col-name">lower_wick_pct</td><td>struttura</td><td>(min(O,C) − L) / C</td><td>—</td><td>0.0016</td></tr>
+          <tr><td>3</td><td class="col-name">bar_range_pct</td><td>volatilità</td><td>(H − L) / C</td><td>—</td><td>0.0013</td></tr>
+          <tr><td>9</td><td class="col-name">distance_from_window_high_pct</td><td>posizione</td><td>log(C / maxH_N)</td><td>N = 24</td><td>0.0008</td></tr>
+          <tr><td>12</td><td class="col-name">age_of_window_low</td><td>posizione</td><td>barre dal minL_N / N</td><td>N = 24</td><td>0.0006</td></tr>
+          <tr><td>17</td><td class="col-name">log_volume_vs_median</td><td>volume</td><td>log(V / mediana(V, N))</td><td>N = 24</td><td>0.0003</td></tr>
+          <tr><td>7</td><td class="col-name">close_position_in_bar</td><td>struttura</td><td>(C − L) / (H − L)</td><td>—</td><td>0.0002</td></tr>
+          <tr><td colspan="6" class="tf-note">il # è quello della tabella delle 28 candidate. L'importanza è in punti di Rank IC di validazione, gruppo intero permutato (valore, lag1, lag4, media, deviazione × 4 rami)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p><strong>Uscite le 16 candidate: </strong><code>log_return</code>, <code>upper_wick_pct</code>, <code>window_range_pct</code>, <code>average_true_range_pct</code>, <code>realized_volatility</code>, <code>volatility_expansion</code>, <code>signed_volume</code>, <code>volume_trend</code>, <code>on_balance_volume_zscore</code>, <code>distance_from_vwap_pct</code>, <code>distance_from_kama_pct</code>, <code>distance_from_ema_pct</code>, <code>distance_from_psar_pct</code>, <code>adx_trend_strength</code>, <code>tsi_momentum</code>, <code>rsi_centered</code>. Nove per ridondanza al passo 3, sette per importanza indistinguibile dal rumore al passo 4.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <caption>parametri residui — dopo la selezione ne restano due, uguali su 5m / 15m / 30m / 1h</caption>
+        <thead><tr><th>parametro</th><th>valore</th><th>derivazione</th><th>usato da</th></tr></thead>
+        <tbody>
+          <tr><td class="col-name">N</td><td>24</td><td>= finestra_estremi, in barre del ramo</td><td>8 indicatori su 12</td></tr>
+          <tr><td class="col-name">k = N/4</td><td>6</td><td>sotto-finestra</td><td><code>ema_slope</code></td></tr>
+          <tr><td colspan="4" class="tf-note">i restanti 4 — candle_body_pct, lower_wick_pct, bar_range_pct, close_position_in_bar — leggono la sola candela corrente e non hanno parametro</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p><strong>Il punto aperto dei parametri si è chiuso da solo.</strong> Delle otto righe della tabella precedente ne sopravvive una e mezza. Spariscono tutte le costanti che <code>finestra_estremi</code> non determinava: <code>step</code> e <code>max_step</code> di PSAR — "l'unico indicatore il cui parametro resta arbitrario" — escono con l'indicatore; con loro fast/slow di KAMA, slow/fast di TSI, le finestre di ADX, RSI e ATR. <strong>Non resta un solo parametro non derivato da <code>finestra_estremi</code>.</strong> Il punto 7 dei punti aperti (taratura per ramo) si riduce quindi a una sola domanda: N deve restare 24 su tutti e quattro i rami? — e non a otto tarature indipendenti.</p>
+    <p><strong>Conseguenza sulla normalizzazione.</strong> Il riquadro "Scala comune" divide ADX e TSI per 100 perché hanno range noto: entrambi sono usciti, quindi quel caso speciale non serve più. Restano <code>age_of_window_high</code> e <code>age_of_window_low</code>, già in [0,1] per costruzione, e <code>close_position_in_window</code> in [−1,+1]; tutto il resto passa dal robust scaling di <code>tradingvision.normalize</code>, che non cambia.</p>
   </div>
 
   <div class="callout">
