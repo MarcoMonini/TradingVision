@@ -97,8 +97,8 @@ footer{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);color:v
     <div class="fact"><b>20</b><span>coppie USDT</span></div>
     <div class="fact"><b>14,9M</b><span>candele 5m</span></div>
     <div class="fact"><b>24</b><span>finestra_estremi</span></div>
-    <div class="fact"><b>0.1595</b><span>Rank IC, miglior modello</span></div>
-    <div class="fact"><b>0.589</b><span>Rank ICIR</span></div>
+    <div class="fact"><b>0.1582</b><span>Rank IC, miglior modello</span></div>
+    <div class="fact"><b>0.586</b><span>Rank ICIR</span></div>
   </div>
 </header>
 
@@ -116,7 +116,7 @@ footer{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);color:v
         <tr><td class="num">1</td><td>regressione lineare</td><td>ultima candela × 4 rami</td><td class="num">0.124</td><td class="num">0.28</td><td>limite inferiore<span class="b b-ok">fatto</span></td></tr>
         <tr><td class="num">2</td><td>GBM (LightGBM)</td><td>560 colonne appiattite</td><td class="num">0.156 ± 0.015</td><td class="num">0.578 ± 0.053</td><td>riferimento<span class="b b-ok">fatto</span></td></tr>
         <tr><td class="num">3</td><td>GRU ramo singolo</td><td>(B, 24, 12) — 15m</td><td class="num">0.154 ± 0.015</td><td class="num">0.567 ± 0.052</td><td>pareggia, non batte<span class="b b-no">no</span></td></tr>
-        <tr class="hi"><td class="num">3</td><td>GRU ramo singolo</td><td>(B, 24, 28) — 15m</td><td class="num">0.1595 ± 0.0156</td><td class="num">0.589 ± 0.058</td><td>batte il GBM<span class="b b-msr">1 seed</span></td></tr>
+        <tr class="hi"><td class="num">3</td><td>GRU ramo singolo</td><td>(B, 24, 28) — 15m</td><td class="num">0.1582 ± 0.0150</td><td class="num">0.586 ± 0.054</td><td>batte il GBM su tutti e 4 i fold<span class="b b-ok">5 seed</span></td></tr>
         <tr><td class="num">4</td><td>GRU multi-ramo</td><td>4 × (B, 24, 28)</td><td class="num">—</td><td class="num">—</td><td>da fare, sul set completo<span class="b b-open">aperto</span></td></tr>
       </tbody>
     </table>
@@ -130,12 +130,12 @@ footer{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);color:v
       <caption>Rank IC di test per distanza dal pivot successivo, in barre da 5m, aggregato sui quattro fold</caption>
       <thead><tr><th>barre al pivot</th><th class="num">bar</th><th class="num">step 1</th><th class="num">step 2</th><th class="num">step 3 · 12</th><th class="num">step 3 · 28</th></tr></thead>
       <tbody>
-        <tr><td>0–6</td><td class="num">8.567</td><td class="num neg">−0.083</td><td class="num neg">−0.064</td><td class="num neg">−0.059</td><td class="num neg">−0.066</td></tr>
-        <tr><td>6–12</td><td class="num">8.464</td><td class="num neg">−0.076</td><td class="num neg">−0.085</td><td class="num neg">−0.100</td><td class="num neg">−0.098</td></tr>
-        <tr><td>12–24</td><td class="num">16.893</td><td class="num neg">−0.083</td><td class="num neg">−0.098</td><td class="num neg">−0.095</td><td class="num neg">−0.092</td></tr>
+        <tr><td>0–6</td><td class="num">8.567</td><td class="num neg">−0.083</td><td class="num neg">−0.064</td><td class="num neg">−0.059</td><td class="num neg">−0.059</td></tr>
+        <tr><td>6–12</td><td class="num">8.464</td><td class="num neg">−0.076</td><td class="num neg">−0.085</td><td class="num neg">−0.100</td><td class="num neg">−0.107</td></tr>
+        <tr><td>12–24</td><td class="num">16.893</td><td class="num neg">−0.083</td><td class="num neg">−0.098</td><td class="num neg">−0.095</td><td class="num neg">−0.094</td></tr>
         <tr><td>24–48</td><td class="num">31.924</td><td class="num neg">−0.041</td><td class="num neg">−0.034</td><td class="num neg">−0.030</td><td class="num neg">−0.029</td></tr>
-        <tr><td>48–96</td><td class="num">49.783</td><td class="num pos">+0.017</td><td class="num pos">+0.028</td><td class="num pos">+0.028</td><td class="num pos">+0.032</td></tr>
-        <tr><td>96–192</td><td class="num">55.052</td><td class="num pos">+0.022</td><td class="num pos">+0.041</td><td class="num pos">+0.051</td><td class="num pos">+0.052</td></tr>
+        <tr><td>48–96</td><td class="num">49.783</td><td class="num pos">+0.017</td><td class="num pos">+0.028</td><td class="num pos">+0.028</td><td class="num pos">+0.031</td></tr>
+        <tr><td>96–192</td><td class="num">55.052</td><td class="num pos">+0.022</td><td class="num pos">+0.041</td><td class="num pos">+0.051</td><td class="num pos">+0.054</td></tr>
         <tr><td>oltre 192</td><td class="num">49.001</td><td class="num pos">+0.022</td><td class="num pos">+0.059</td><td class="num pos">+0.060</td><td class="num pos">+0.066</td></tr>
       </tbody>
     </table>
@@ -331,7 +331,7 @@ footer{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);color:v
 
   <div class="box no">
     <h4>Ma il set ridotto è sbagliato per la GRU <span class="b b-msr">step 3</span></h4>
-    <p>La selezione è corretta <em>come misura</em> — su un GBM con colonne appiattite quelle 16 colonne sono davvero ridondanti — e sbagliata come trasferimento. Con tutte e 28 la GRU passa da 0.154 a <strong>0.1595</strong> di Rank IC e da 0.567 a <strong>0.589</strong> di ICIR, e per la prima volta batte il GBM. Le due colonne che contano di più nella banda vicino al pivot, <code>tsi_momentum</code> e <code>rsi_centered</code>, sono fra le scartate.</p>
+    <p>La selezione è corretta <em>come misura</em> — su un GBM con colonne appiattite quelle 16 colonne sono davvero ridondanti — e sbagliata come trasferimento. Con tutte e 28 la GRU passa da 0.154 a <strong>0.1582</strong> di Rank IC e da 0.567 a <strong>0.586</strong> di ICIR (quattro fold, cinque seed), e batte il GBM <strong>su tutti e quattro i fold</strong> — di poco, +0.0022 in media contro una dispersione fra fold di 0.0150, ma nella stessa direzione ogni volta. Le due colonne che contano di più nella banda vicino al pivot, <code>tsi_momentum</code> e <code>rsi_centered</code>, sono fra le scartate.</p>
     <p><strong>Regola che ne segue:</strong> la selezione va rifatta per architettura, o non fatta affatto. Il set è un parametro (<code>--features</code>), non una cancellazione.</p>
   </div>
 </section>
