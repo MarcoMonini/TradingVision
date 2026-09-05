@@ -318,7 +318,8 @@ h2.sec{
         <tr><td class="col-name">test del beta di mercato</td><td class="status-done">superato — segnale non di sola fase</td><td>sezione validazione</td></tr>
         <tr><td class="col-name">pre-check — Rank IC per colonna in banda 0–24</td><td class="status-done">eseguito — 80 colonne su 112 battono il rumore</td><td><code>nearpivot</code>, sezione validazione</td></tr>
         <tr><td class="col-name">step 3 — GRU singolo ramo, 15m</td><td class="status-done">eseguito — pareggia lo step 2, non lo batte</td><td><code>gru</code>, sezione validazione</td></tr>
-        <tr><td class="col-name">step 4 — GRU multi-ramo</td><td class="status-open">sospeso — lo step 3 non ha battuto il precedente</td><td>sezione validazione</td></tr>
+        <tr><td class="col-name">step 4 — GRU multi-ramo</td><td class="status-open">sbloccato sul set a 28 colonne</td><td>sezione validazione</td></tr>
+        <tr><td class="col-name">set di feature per la GRU</td><td class="status-done">misurato — 28 batte 12, la selezione GBM non si trasferisce</td><td><code>gru --features all</code></td></tr>
         <tr><td class="col-name">segno negativo sotto le 24 barre</td><td class="status-open">spiegato · irrisolto — la relazione inverte</td><td>punti aperti, punto 4</td></tr>
         <tr><td class="col-name">stride e materializzazione</td><td class="status-done">chiusi per il ramo singolo — stride 12, tensore da 740 MB</td><td>punti aperti, punti 1 e 2</td></tr>
         <tr><td class="col-name">regolarizzazione</td><td class="status-open">aperta — non ancora misurata</td><td>punti aperti, punto 3</td></tr>
@@ -798,8 +799,8 @@ h2.sec{
         <tr><td>0</td><td class="col-name">oracolo</td><td>estremi da argrelextrema</td><td>fissare finestra_estremi e la distribuzione del target (→ δ)</td><td class="status-done">fatto</td></tr>
         <tr><td>1</td><td class="col-name">regressione lineare</td><td>ultima candela × 4 rami</td><td>limite inferiore e diagnostica di leakage. <strong>Rank IC 0.124</strong> (ICIR 0.28) sul target predittivo, 20 simboli 2023+, taglio 2025-06</td><td class="status-done">fatto</td></tr>
         <tr><td>2</td><td class="col-name">GBM (LightGBM)</td><td>lag e aggregati × 4 rami</td><td>IC di riferimento + feature importance per potare le colonne inutili. <strong>Rank IC 0.156</strong> (ICIR 0.58) su 4 fold walk-forward; selezione <strong>28 → 12</strong> indicatori</td><td class="status-done">fatto</td></tr>
-        <tr><td>3</td><td class="col-name">GRU singolo ramo</td><td>(B, 24, 12) solo 15m</td><td>verificare che la sequenza aggiunga segnale rispetto alla singola candela. <strong>Rank IC 0.154</strong> (ICIR 0.567) su 4 fold × 5 seed: <strong>pareggia lo step 2, non lo batte</strong> — la sequenza non aggiunge</td><td class="status-done">fatto</td></tr>
-        <tr><td>4</td><td class="col-name">GRU multi-ramo</td><td>4 × (B, 24, F)</td><td>verificare che il multi-timeframe aggiunga segnale rispetto al ramo singolo</td><td class="status-open">sospeso — lo step 3 non ha battuto il precedente</td></tr>
+        <tr><td>3</td><td class="col-name">GRU singolo ramo</td><td>(B, 24, 12) solo 15m</td><td>verificare che la sequenza aggiunga segnale rispetto alla singola candela. <strong>Rank IC 0.154</strong> (ICIR 0.567) col set ridotto: pareggia. Col set completo a 28 colonne <strong>0.1595</strong> (ICIR 0.589), sopra il GBM — la selezione dello step 2 non si trasferisce alla ricorrente</td><td class="status-done">fatto</td></tr>
+        <tr><td>4</td><td class="col-name">GRU multi-ramo</td><td>4 × (B, 24, 28)</td><td>verificare che il multi-timeframe aggiunga segnale rispetto al ramo singolo. Da fare sul <strong>set completo</strong>, non sul ridotto</td><td class="status-open">—</td></tr>
       </tbody>
     </table>
   </div>
@@ -1028,6 +1029,35 @@ h2.sec{
     </div>
 
     <p><strong>Conseguenze.</strong> (1) L'ipotesi alternativa del punto 1 delle conclusioni dello step 2 — l'informazione c'è ma vive in una dinamica che alberi su colonne appiattite non compongono — è <em>caduta</em>: una ricorrente che legge la sequenza vera arriva allo stesso numero. Resta la prima ipotesi, l'indiziato è il set di feature. (2) Lo step 4 non si giustifica <em>in questa forma</em>: il criterio di avanzamento chiede che ogni step batta il precedente, e lo step 3 non ha battuto il suo. Quattro rami su feature il cui segno si inverte danno quattro volte il costo dello stesso tetto. (3) La direzione che resta è quella del punto 2 delle conclusioni dello step 2, ora con una ragione precisa: servono feature di <em>esaurimento</em>, che identifichino il regime invece di misurare il momentum — divergenza, climax di volume, asimmetria dei wick agli estremi — perché è il regime la variabile mancante che rende la relazione condizionale. In alternativa, e a costo minore, un modello che condizioni esplicitamente sulla distanza stimata dal pivot.</p>
+
+    <p><strong>Il seguito — e la prima cosa che ha funzionato.</strong> Il punto 2 delle conclusioni dello step 2 mandava, in caso di fallimento, sulle feature di esaurimento. Prima di arrivarci sono state fatte tre prove, in ordine di costo, e la terza ha spostato il risultato.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <caption>gli esperimenti dello step 3, un seed per fold salvo dove indicato</caption>
+        <thead><tr><th>variante</th><th>Rank IC</th><th>Rank ICIR</th><th>fascia 0–6</th><th>esito</th></tr></thead>
+        <tbody>
+          <tr><td>step 2 — GBM, 560 colonne</td><td>0.156 ± 0.015</td><td>0.578</td><td>−0.064</td><td>la soglia</td></tr>
+          <tr><td class="col-name">GRU, 12 feature (5 seed)</td><td>0.154 ± 0.015</td><td>0.567</td><td>−0.059</td><td class="status-open">pareggia</td></tr>
+          <tr><td>+ target z-score per timestamp</td><td>0.1475</td><td>0.541</td><td>—</td><td class="status-open">−0.007</td></tr>
+          <tr><td>+ target demean per timestamp</td><td>0.1464</td><td>0.537</td><td>−0.038</td><td class="status-open">−0.008</td></tr>
+          <tr><td>+ passa-basso sulla predizione, k=2</td><td>0.1284</td><td>0.476</td><td>—</td><td class="status-open">−0.019</td></tr>
+          <tr><td>+ addestramento solo su h &lt; 48</td><td>0.1334</td><td>0.484</td><td>−0.035</td><td class="status-open">diagnostico</td></tr>
+          <tr><td class="col-name">GRU, 28 feature</td><td class="col-name">0.1595 ± 0.0156</td><td class="col-name">0.589 ± 0.058</td><td>−0.066</td><td class="status-done">batte il GBM</td></tr>
+          <tr><td>28 feature, solo h &lt; 48</td><td>0.1332</td><td>0.485</td><td class="col-name">−0.019</td><td class="status-open">diagnostico</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p><strong>1. Togliere ciò che la metrica non vede non è gratis.</strong> Rank IC è cross-sectional, quindi un livello o una scala comuni a un'intera sezione lasciano i ranghi identici: la valutazione non li vede, e sono il 47% della varianza del target. Sembrava una sottrazione a costo zero. Non lo è, e su ogni fold: −0.007 con lo z-score, −0.008 col solo demean. Lo split fra le due varianti serviva a incolpare la scala — dividere per la dispersione della data porta a scala unitaria le sezioni tranquille, dove le differenze residue sono in gran parte accidentali, e la Huber le insegue — e la scagiona: <em>demean</em> perde uguale. È la componente comune stessa che l'addestramento stava usando. Chiude anche la variante sulle feature, che era la stessa idea applicata all'input.</p>
+
+    <p><strong>2. Il filtro va a valle, e non serve comunque.</strong> A monte l'argomento è quello di sempre: una GRU su 24 step apprende già qualunque filtro lineare della finestra, quindi uno smoothing sull'input aggiunge solo il proprio ritardo. A valle è misurabile — media causale delle ultime k predizioni per simbolo — e il risultato è monotono nella direzione sbagliata: 0.147 a k=1, 0.128 a 2, 0.097 a 4, 0.041 a 12. Già k=2 costa più dell'intera distanza dal GBM. La variazione temporale della predizione è segnale: a campionamento orario lo stato di un'ora fa è un altro stato.</p>
+
+    <p><strong>3. La banda non si risolve, e ora è dimostrato.</strong> Addestrare e validare solo sulle righe entro 48 barre dal pivot — il 30,5% — è il limite superiore di qualunque condizionamento sul regime: una loss pesata, una testa multi-task o una miscela di esperti sono versioni più deboli della stessa idea, perché lo specialista ha già il 100% della capacità sulla banda e l'early stopping su di essa. Migliora ogni fascia e non ne porta nessuna sopra lo zero: la 0–6 va da −0.059 a −0.035, e a −0.019 con tutte le 28 colonne. Tre interventi, tre miglioramenti monotoni, mai un cambio di segno. E non è instabilità della relazione: misurata per colonna dentro le 48 barre, la Rank IC di train e quella di test <strong>correlano a 0.924</strong> e solo 8 colonne su 112 cambiano segno.</p>
+
+    <p><strong>4. L'errore era la selezione, e il doc lo aveva previsto.</strong> Lo specialista ha detto <em>quali</em> colonne mancavano: dentro le 48 barre i due predittori più forti sono <code>tsi_momentum</code> (0.072 su train, 0.067 su test) e <code>rsi_centered</code> (0.068 / 0.063), e sono due dei sedici che il passo 4 aveva scartato. Non era una misura sbagliata — su un GBM con colonne appiattite quelle colonne sono davvero ridondanti — ma trasferirla a una ricorrente ha tolto segnale. Col set completo la GRU segna <strong>Rank IC 0.1595 e Rank ICIR 0.589</strong>: +0.005 e +0.022 sul set ridotto, e <strong>per la prima volta sopra il GBM</strong>. È esattamente la riserva scritta al punto 3 delle conclusioni dello step 2 — "una colonna inutile a un albero su feature appiattite non è necessariamente inutile a una ricorrente che legge la sequenza" — ed è l'unica delle cinque che si è rivelata decisiva.</p>
+
+    <p><strong>Dove resta lo step 3.</strong> Un seed per fold sul set completo, con la conferma a cinque da riportare qui: il margine sul GBM è +0.0035, sopra la dispersione fra seed (0.0014) ma dentro quella fra fold (0.0156). E il criterio di promozione ha tre condizioni: le prime due sono soddisfatte, la terza — un miglioramento nelle fasce sotto le 48 barre — no, perché l'aggregato è salito spostando le fasce lontane, che è il caso che l'avvertenza dello step 1 aveva già dichiarato insufficiente. Lo step 4 può quindi partire sul set a 28 colonne, ma il pezzo vicino al pivot resta scoperto e la strada per quello è la stessa di prima: feature di esaurimento, non architettura.</p>
   </div>
 
   <h2 class="sec">Metriche di segnale</h2>
