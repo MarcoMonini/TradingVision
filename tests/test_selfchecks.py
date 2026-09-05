@@ -10,7 +10,7 @@ import runpy
 
 import pytest
 
-from tradingvision import crosscheck, dataset, gbm, linear, selection
+from tradingvision import crosscheck, dataset, gbm, linear, nearpivot, selection
 
 SELF_CHECKED = [
     "tradingvision.data.pivots",
@@ -40,6 +40,10 @@ def test_linear_selfcheck():
 
 def test_gbm_selfcheck():
     gbm._selfcheck()
+
+
+def test_nearpivot_selfcheck():
+    nearpivot._selfcheck()
 
 
 def test_selection_selfcheck():
