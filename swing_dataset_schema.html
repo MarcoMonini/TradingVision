@@ -463,9 +463,23 @@ L = δ·(|e| − 0.5·δ)  altrimenti</pre>
     <p>I quattro encoder sono distinti ma operano su input strutturalmente identici: stesse colonne, stessa semantica, solo orizzonte diverso. Variante da testare allo step 4: un unico encoder condiviso più un embedding di timeframe concatenato allo stato finale. Stessa espressività, ~4× parametri in meno.</p>
   </div>
 
-  <div class="box open">
-    <h4>6 · Il multi-ramo non è ancora giustificato</h4>
-    <p>Il multi-asset è confermato dal beta di mercato; sui rami non si è imparato nulla, perché la selezione permuta i quattro insieme per costruzione. Serve una misura apposta — permutare un ramo alla volta di <code>close_position_in_window</code>, l'unico gruppo abbastanza importante perché la differenza si veda. Se i suoi 0.130 stanno su un ramo solo, lo step 4 è in salita prima di cominciare.</p>
+  <div class="box no">
+    <h4>6 · Il multi-ramo parte in salita <span class="b b-msr">misurato</span></h4>
+    <p>Il multi-asset era confermato dal beta di mercato; sui rami non si era imparato nulla, perché la selezione permuta i quattro insieme per costruzione. La misura apposta — <code>selection --branch-of close_position_in_window</code>, un ramo alla volta e il suo complemento accanto, perché un ramo da solo sottostima: gli altri tre sono lo stesso indicatore a un orizzonte vicino e riempiono il buco.</p>
+    <div class="tw">
+    <table>
+      <caption>permutazione per ramo di <code>close_position_in_window</code> — caduta della Rank IC di validazione, baseline 0.1525 su 84.535 righe</caption>
+      <thead><tr><th>ramo</th><th class="num">solo quel ramo</th><th class="num">tutti tranne quello</th></tr></thead>
+      <tbody>
+        <tr class="hi"><td>15m</td><td class="num">0.0437</td><td class="num">0.0027</td></tr>
+        <tr><td>30m</td><td class="num">0.0028</td><td class="num">0.0447</td></tr>
+        <tr><td>5m</td><td class="num">0.0005</td><td class="num">0.0520</td></tr>
+        <tr><td>1h</td><td class="num">0.0002</td><td class="num">0.0526</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p><strong>Il concetto vive sul solo ramo 15m.</strong> Permutare gli altri tre e lasciare in piedi il 15m costa 0.0027 su 0.1525 — sotto il rumore di un singolo fold, e un ventesimo di quello che costa togliere il 15m. È il ramo su cui i pivot sono rilevati, ed è il ramo che il modello legge.</p>
+    <p><strong>Conseguenza per lo step 4:</strong> qualunque cosa guadagni il multi-ramo non può venire da questo indicatore sugli altri tre orizzonti, perché lì non c'è niente da guadagnare. Deve venire da indicatori troppo piccoli perché il passo 4 li risolva, o da una dinamica che solo la sequenza compone.</p>
   </div>
 </section>
 
