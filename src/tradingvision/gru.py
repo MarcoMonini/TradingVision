@@ -57,6 +57,10 @@ GRAD_CLIP = 1.0
 EPOCHS = 100
 PATIENCE = 10  # on validation Rank IC, never on the loss
 DELTA = 2.1  # Huber, measured on this label over the train period — see `data.target`
+# Huber for the cross-sectional target, measured the same way — the median of |z| over the train
+# period, 0.557. Delta lives in the units of the label, so it cannot be carried over or rescaled
+# by eye when the label changes.
+Z_DELTA = 0.56
 VALID_FRACTION = 0.2  # the same tail the GBM holds out, purged against its own boundary
 # Not in the spec, which names ReduceLROnPlateau without settling its shape. Half the early
 # stopping patience, so the rate gets one chance to help before the run is stopped.
@@ -122,6 +126,22 @@ def scaled(x: np.ndarray, train: np.ndarray) -> np.ndarray:
     return (np.clip((x - center) / scale, -normalize.CLIP, normalize.CLIP) * normalize.SCALE).astype("float32")
 
 
+def cross_section(y: pd.Series) -> pd.Series:
+    """`y` standardised inside each timestamp — the level and the scale the metric cannot see.
+
+    Rank IC is computed per date over the symbols, so adding a constant to a whole cross-section
+    or multiplying it by a positive number leaves every rank untouched. Measured on the train
+    period, that invisible part is 47% of the target's variance, and a pooled Huber spends its
+    gradient on it. Removing it does not throw away signal — it throws away the half of the label
+    the evaluation is blind to by construction.
+
+    Dates with a single symbol have no dispersion and drop out (3.6% of the train rows); the
+    metric already ignores them, needing three symbols to correlate anything.
+    """
+    g = y.groupby(level=0)
+    return ((y - g.transform("mean")) / g.transform("std")).replace([np.inf, -np.inf], np.nan).dropna()
+
+
 class Net(nn.Module):
     """GRU over the branch, dropout, linear head. No activation on the output.
 
@@ -162,6 +182,7 @@ def fit(
     epochs: int = EPOCHS,
     patience: int = PATIENCE,
     batch_size: int = BATCH,
+    delta: float = DELTA,
     quiet: bool = True,
 ) -> Net:
     """One model, stopped when the validation Rank IC stops improving.
@@ -174,7 +195,7 @@ def fit(
     model = Net(x.shape[2]).to(DEVICE)
     opt = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
     sched = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, mode="max", factor=LR_FACTOR, patience=LR_PATIENCE)
-    loss_fn = nn.HuberLoss(delta=DELTA)
+    loss_fn = nn.HuberLoss(delta=delta)
 
     at = train.row.to_numpy()
     y = torch.from_numpy(train.target.to_numpy("float32"))
@@ -205,7 +226,9 @@ def fit(
     return model
 
 
-def fold(x: np.ndarray, train: pd.DataFrame, test: pd.DataFrame, seed: int = 0, **kw) -> pd.Series:
+def fold(
+    x: np.ndarray, train: pd.DataFrame, test: pd.DataFrame, seed: int = 0, z_target: bool = False, **kw
+) -> pd.Series:
     """Fit on one fold's train side and predict its test slice.
 
     The validation tail is cut out of the train side and purged against its own boundary, exactly
@@ -214,6 +237,11 @@ def fold(x: np.ndarray, train: pd.DataFrame, test: pd.DataFrame, seed: int = 0, 
     """
     inner, valid = split.temporal_fraction(train, VALID_FRACTION)
     z = scaled(x, inner.row.to_numpy())  # train only, and the inner train at that
+    if z_target:
+        # Training only. Validation keeps the raw label, so early stopping reads the metric the
+        # result is judged on — which the transform leaves unchanged anyway.
+        y = cross_section(inner.target)
+        inner, kw = inner.loc[y.index].assign(target=y), dict(kw, delta=Z_DELTA)
     return predict(fit(z, inner, valid, seed, **kw), z, test.row.to_numpy(), test.index)
 
 
@@ -242,9 +270,27 @@ def run(x: np.ndarray, df: pd.DataFrame, start: str, folds: int = 4, seeds: int 
     return {
         "folds": out,
         "seeds": pd.DataFrame(per_seed).T,
+        "pred": pred,
+        "target": test.target,
         "horizon": linear.by_horizon(test, pred),
         "market_beta": pd.DataFrame({"vs residual target": _market_beta(pred, test.target)}).T,
     }
+
+
+def smoothed(pred: pd.Series, k: int) -> pd.Series:
+    """The last `k` predictions of each symbol, averaged — a low-pass on the output.
+
+    The place a filter belongs. Smoothing the *input* buys nothing: a GRU over 24 steps can
+    already learn any linear filter of the window, so a moving average upstream adds only its own
+    lag — the reason every smoothed indicator left the selection. Downstream is different: the
+    prediction carries the model's estimation noise on top of whatever signal it found, and that
+    noise is what an average over neighbouring bars removes. Causal, so it stays honest — the
+    value at `t` reads `t-k+1..t` and nothing later.
+    """
+    if k <= 1:
+        return pred
+    wide = pred.unstack(level=1).sort_index()
+    return wide.rolling(k, min_periods=1).mean().stack().reorder_levels([0, 1]).reindex(pred.index)
 
 
 def _market_beta(pred: pd.Series, target: pd.Series) -> dict[str, float]:
@@ -293,6 +339,24 @@ def _selfcheck() -> None:
     b = fit(x, df.iloc[: n // 2], df.iloc[n // 2 :], seed=1, epochs=1, patience=1)
     assert not torch.allclose(a.head.weight, b.head.weight)
 
+    # The filter averages over time inside a symbol and never across symbols, and k=1 is identity.
+    one = out["pred"]
+    assert smoothed(one, 1).equals(one)
+    two = smoothed(one, 2)
+    assert two.index.equals(one.index) and two.notna().all()
+    first = one.xs("a", level=1).sort_index()
+    assert np.isclose(two.xs("a", level=1).sort_index().iloc[1], first.iloc[:2].mean())
+    assert np.isclose(two.xs("a", level=1).sort_index().iloc[0], first.iloc[0]), "no value before the first bar"
+
+    # The cross-sectional target: standardised inside each date, and — the reason for the whole
+    # change — scoring identically under the metric, which is what makes dropping it free.
+    z = cross_section(df.target)
+    per_date = z.groupby(level=0)
+    assert np.allclose(per_date.mean(), 0, atol=1e-9) and np.allclose(per_date.std(), 1, atol=1e-9)
+    assert np.isclose(
+        metrics.signal(one, z.loc[one.index])["rank_ic"], metrics.signal(one, df.target.loc[one.index])["rank_ic"]
+    )
+
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
@@ -304,6 +368,8 @@ def main() -> None:
     ap.add_argument("--tensor", type=Path, default=TENSOR, help="the built sequences, reused when present")
     ap.add_argument("--horizon", action="store_true", help="also split the test Rank IC by distance to the next pivot")
     ap.add_argument("--verbose", action="store_true", help="print the validation Rank IC each epoch")
+    ap.add_argument("--z-target", action="store_true", help="train on the target standardised inside each timestamp")
+    ap.add_argument("--smooth", type=int, nargs="*", default=[2, 4, 12], help="output low-pass windows to report")
     args = ap.parse_args()
 
     _selfcheck()
@@ -312,11 +378,24 @@ def main() -> None:
     print(f"{len(df):,} rows, {x.shape[1]} steps x {x.shape[2]} features of the {BRANCH} branch, on {DEVICE}")
     print(f"{args.folds} folds from {args.test_start}, {args.seeds} seed(s) each\n")
 
-    out = run(x, df, args.test_start, args.folds, args.seeds, epochs=args.epochs, quiet=not args.verbose)
+    out = run(
+        x,
+        df,
+        args.test_start,
+        args.folds,
+        args.seeds,
+        epochs=args.epochs,
+        z_target=args.z_target,
+        quiet=not args.verbose,
+    )
     print(out["folds"].round(4).to_string())
     if args.seeds > 1:
         print("\nper seed\n")
         print(out["seeds"].round(4).to_string())
+    if args.smooth:
+        print("\nlow-pass on the prediction — Rank IC of the k-bar average, pooled over the folds\n")
+        rows = {k: metrics.signal(smoothed(out["pred"], k), out["target"]) for k in [1] + args.smooth}
+        print(pd.DataFrame(rows).T.rename_axis("k").round(4).to_string())
     print("\nmarket beta — the same metrics once the cross-sectional mean is removed\n")
     print(out["market_beta"].round(4).to_string())
     if args.horizon:
