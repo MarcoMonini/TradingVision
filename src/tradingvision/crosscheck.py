@@ -59,6 +59,37 @@ def compare(old: pd.DataFrame, new: pd.DataFrame, cut: str) -> pd.DataFrame:
     return pd.DataFrame(rows).T
 
 
+def _selfcheck() -> None:
+    """The three readings are what they claim, and the comparison happens on shared bars only.
+
+    The measurement this module exists for is a translation: the same predictions, scored against
+    a different label. If `compare` ever scored each model on its own bars the drop from 0.38 to
+    0.075 would be an artefact of the two datasets covering different times, not of the labels
+    disagreeing — so the intersection is the part worth pinning down.
+    """
+    import numpy as np
+
+    rng = np.random.default_rng(0)
+    idx = pd.MultiIndex.from_product([pd.date_range("2024", periods=300, freq="h", tz="UTC"), list("abcde")])
+    x = pd.Series(rng.normal(size=len(idx)), index=idx)
+    frame = pd.DataFrame({"x": x, "next_pivot": idx.get_level_values(0)})
+    old = frame.assign(target=x + rng.normal(0, 0.2, len(idx)))
+    # The predictive label keeps a fifth of the old one and is otherwise unrelated, which is the
+    # shape of the real finding: not zero, but most of the agreement gone.
+    new = frame.assign(target=0.2 * x + rng.normal(0, 1.0, len(idx)))
+
+    out = compare(old, new, "2024-01-08")
+    assert list(out.index) == ["old model -> old label", "old model -> new label", "new model -> new label"]
+    assert out.loc["old model -> old label", "rank_ic"] > 0.8
+    assert 0.05 < out.loc["old model -> new label", "rank_ic"] < 0.4, out
+
+    # Half the new dataset's test bars removed: the readings move, and nothing raises on the
+    # misaligned index — the three rows are still scored on one common set of bars.
+    fewer = new[new.index.get_level_values(1).isin(list("abc"))]
+    shared = compare(old, fewer, "2024-01-08")
+    assert shared.shape == out.shape and not shared.isna().to_numpy().any(), shared
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--start", default="2023")
@@ -77,4 +108,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    _selfcheck()
     main()

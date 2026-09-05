@@ -21,6 +21,14 @@ costs one line here instead of a rename across the pipeline. It is called on the
 is what its `horizon` and `lookback` defaults are counted in — see its docstring, the numbers do
 not mean what their names suggest on this grid.
 
+A branch normally contributes one row per bar — the value of its features at `t`. That is all a
+model that reads the sequence itself needs. A GBM does not read sequences: it takes a flat table,
+so the history has to be spelled out as columns or it is invisible. `lagged` does that, and the
+step-2 run turns it on: value at `t`, at `t-1`, at `t-4`, plus the mean and the standard deviation
+over the extrema window. Without it the comparison against the GRU is dishonest — the GBM would
+be judged on a single candle — and the feature importance would rank `age_of_window_high` and
+`ema_slope` last for having no room to move.
+
 `next_pivot` travels with the data because purging is exact, not a fixed embargo: the split drops
 every train bar whose next pivot falls beyond the cut, and that horizon is unbounded (p99 is 202
 bars, the maximum measured 754).
@@ -28,6 +36,9 @@ bars, the maximum measured 754).
 
 from __future__ import annotations
 
+import json
+import tempfile
+from pathlib import Path
 from typing import Callable
 
 import pandas as pd
@@ -50,9 +61,32 @@ def _shift(tf: str) -> pd.Timedelta:
     return pd.Timedelta(tf) - pd.Timedelta(BASE_TF)
 
 
-def branch(bars: pd.DataFrame, tf: str, index: pd.DatetimeIndex, n: int = EXTREMA_WINDOW) -> pd.DataFrame:
+# Which past steps to spell out, in bars of the branch's own timeframe: the previous one and four
+# back. Deliberately short — the mean and the deviation already carry the window, and a lag per
+# step would be 24x the columns for a model that cannot use most of them.
+LAGS = (1, 4)
+
+
+def lagged(f: pd.DataFrame, n: int = EXTREMA_WINDOW) -> pd.DataFrame:
+    """`f` widened from value-at-t to value, lags and window statistics — 5 columns per input.
+
+    Causal like everything upstream: `shift` and `rolling` look backwards only. float32 because
+    the width is the cost here — 28 columns become 140, four branches 560 — and a GBM bins its
+    inputs into 255 buckets, so the discarded precision cannot reach the model anyway.
+    """
+    parts = [f] + [f.shift(k).add_suffix(f"_lag{k}") for k in LAGS]
+    window = f.rolling(n)
+    parts += [window.mean().add_suffix("_mean"), window.std().add_suffix("_std")]
+    return pd.concat(parts, axis=1).astype("float32")
+
+
+def branch(
+    bars: pd.DataFrame, tf: str, index: pd.DatetimeIndex, n: int = EXTREMA_WINDOW, lags: bool = False
+) -> pd.DataFrame:
     """The features of one branch, carried onto the 5m `index` with no bar of anticipation."""
     f = features(bars, n)
+    if lags:
+        f = lagged(f, n)
     f.index = f.index + _shift(tf)
     return f.reindex(index, method="ffill").add_suffix(f"_{tf}")
 
@@ -63,7 +97,11 @@ LABEL: Callable[..., pd.Series] = remaining_excursion
 
 
 def symbol_frame(
-    symbol: str, start: str | None = None, n: int = EXTREMA_WINDOW, label: Callable[..., pd.Series] = LABEL
+    symbol: str,
+    start: str | None = None,
+    n: int = EXTREMA_WINDOW,
+    label: Callable[..., pd.Series] = LABEL,
+    lags: bool = False,
 ) -> pd.DataFrame:
     """Branches, target and purging horizon for one symbol, warm-up rows dropped."""
     bars = binance.load(symbol, BASE_TF)
@@ -81,7 +119,7 @@ def symbol_frame(
     if len(missing):
         raise ValueError(f"{len(missing)} pivots have no 5m bar, first at {missing[0]}")
 
-    out = pd.concat([branch(binance.load(symbol, tf), tf, idx, n) for tf in BRANCHES], axis=1)
+    out = pd.concat([branch(binance.load(symbol, tf), tf, idx, n, lags) for tf in BRANCHES], axis=1)
     out["target"] = label(bars.close, pivots, n)
     # Timestamp of the pivot that closes each bar's leg — the bar itself when it is a pivot.
     out["next_pivot"] = pd.Series(pivots.index, index=pivots.index).reindex(idx, method="bfill")
@@ -94,6 +132,7 @@ def build(
     stride: int = 12,
     n: int = EXTREMA_WINDOW,
     label: Callable[..., pd.Series] = LABEL,
+    lags: bool = False,
 ) -> pd.DataFrame:
     """Every symbol stacked on a (timestamp, symbol) index.
 
@@ -104,15 +143,77 @@ def build(
     symbols = binance.SYMBOLS if symbols is None else symbols
     frames = {}
     for s in symbols:
-        f = symbol_frame(s, start, n, label)
+        f = symbol_frame(s, start, n, label, lags)
         if start is not None:
             f = f.loc[pd.Timestamp(start, tz="UTC") :]
         frames[s] = f.iloc[::stride]
     return pd.concat(frames, names=["symbol"]).swaplevel().sort_index()
 
 
+def cached(path: Path, **params) -> pd.DataFrame:
+    """`build(**params)`, materialised next to a JSON stamp of the arguments that produced it.
+
+    A built dataset takes about half an hour and 600 MB, so it is reused across runs — and a
+    reused file that was built with a different stride, window or lag setting is the kind of
+    mistake that shows up as a metric nobody can reproduce. So the parameters travel with the
+    parquet and a mismatch stops the run instead of quietly answering the wrong question.
+    """
+    stamp = path.with_suffix(".json")
+    # `LAGS` travels too: it is not an argument, and changing it changes every column in the file.
+    written = dict(params, symbols=sorted(params.get("symbols") or binance.SYMBOLS), lags_at=list(LAGS))
+    if path.exists():
+        if not stamp.exists():
+            raise SystemExit(f"{path} has no {stamp.name} recording how it was built — delete it and rebuild")
+        if (was := json.loads(stamp.read_text())) != written:
+            raise SystemExit(f"{path} was built with {was}, not {written} — delete it or pass another --cache")
+        return pd.read_parquet(path)
+
+    df = build(**params)
+    df.to_parquet(path)
+    stamp.write_text(json.dumps(written, indent=2, sort_keys=True))
+    return df
+
+
+def _selfcheck() -> None:
+    """`lagged` widens without looking forward — the one thing that would quietly invent signal."""
+    f = pd.DataFrame(
+        {"a": range(100), "b": [x * x for x in range(100)]},
+        index=pd.date_range("2024", periods=100, freq="15min", tz="UTC"),
+        dtype="float64",
+    )
+    out = lagged(f, n=4)
+    assert list(out.columns) == ["a", "b", "a_lag1", "b_lag1", "a_lag4", "b_lag4", "a_mean", "b_mean", "a_std", "b_std"]
+    assert len(out.columns) == 5 * len(f.columns)
+    assert out.a.iloc[7] == 7 and out.a_lag1.iloc[7] == 6 and out.a_lag4.iloc[7] == 3
+    assert out.a_mean.iloc[7] == 5.5, "mean of 4,5,6,7"
+    assert out.a_lag4.iloc[:4].isna().all(), "no value before the fourth bar"
+    # Causality: truncating the future leaves every past row untouched.
+    assert lagged(f.iloc[:50], n=4).iloc[49].equals(out.iloc[49])
+
+    # The cache refuses a file built with other parameters instead of answering the wrong question.
+    with tempfile.TemporaryDirectory() as d:
+        path = Path(d) / "x.parquet"
+        pd.DataFrame({"target": [1.0]}).to_parquet(path)
+        for wrong in (dict(stride=12, symbols=["BTC"]),):  # no stamp yet: unreadable provenance
+            try:
+                cached(path, **wrong)
+            except SystemExit:
+                break
+            raise AssertionError("a cache with no stamp has to stop the run")
+        path.with_suffix(".json").write_text(json.dumps(dict(stride=12, symbols=["BTC"], lags_at=list(LAGS))))
+        assert len(cached(path, stride=12, symbols=["BTC"])) == 1, "a matching stamp reads the file back"
+        for wrong in (dict(stride=6, symbols=["BTC"]), dict(stride=12, symbols=["ETH"])):
+            try:
+                cached(path, **wrong)
+            except SystemExit:
+                continue
+            raise AssertionError(f"a cache built with other parameters has to stop the run: {wrong}")
+
+
 if __name__ == "__main__":
     import sys
+
+    _selfcheck()
 
     df = build(["BTC", "ETH"], start="2024", stride=12)
     print(df.shape, df.index.get_level_values(0).min(), "->", df.index.get_level_values(0).max())

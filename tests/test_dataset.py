@@ -5,8 +5,9 @@ the truncated run would have nothing to read there and the values would differ."
 
 import numpy as np
 import pandas as pd
+import pytest
 
-from tradingvision.data.binance import OHLC
+from tradingvision.data.binance import OHLC, STORE
 from tradingvision.dataset import BRANCHES, branch, symbol_frame
 
 
@@ -53,6 +54,11 @@ def test_a_branch_column_only_changes_when_its_bar_closes():
     assert list(minutes) == [55], f"the 1h branch should only step at :55 (closing :00), got {minutes}"
 
 
+# The only test here that reads the downloaded store rather than the synthetic series above. The
+# parquet files are gigabytes and gitignored, so CI has nothing to point it at; running it there
+# would mean downloading the store on every push to check a property the synthetic tests cannot
+# check anyway — that the real data produces a sane label.
+@pytest.mark.skipif(not (STORE / "BTCUSDT-5m.parquet").exists(), reason="needs the downloaded store")
 def test_symbol_frame_carries_the_purging_horizon():
     df = symbol_frame("BTC", start="2025-06")
     assert df.next_pivot.min() >= df.index.min(), "a bar's next pivot cannot precede it"

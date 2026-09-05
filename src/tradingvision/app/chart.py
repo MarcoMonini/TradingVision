@@ -17,7 +17,7 @@ from plotly.subplots import make_subplots
 from tradingvision.data.candles import SYMBOLS, TIMEFRAMES, get_candles
 from tradingvision.data.pivots import EXTREMA_WINDOW, find_pivots
 from tradingvision.data.target import SMOOTHING, leg_significance, remaining_excursion, swing_leg_target
-from tradingvision.features import COLUMNS, FAMILIES, LABELS, features
+from tradingvision.features import COLUMNS, FAMILIES, LABELS, SELECTED, features
 from tradingvision.normalize import CLIP, SCALE, apply, fit
 from tradingvision.oracle import FEE, run
 
@@ -202,7 +202,14 @@ def main() -> None:
         significance = st.sidebar.toggle("Weight pivots by leg significance", value=True)
     # The feature windows all derive from the extrema window, so they follow it rather than being
     # tuned here; the per-branch values are still to be measured.
-    picked = st.sidebar.multiselect("Features", COLUMNS, default=COLUMNS, format_func=LABELS.get)
+    # A toggle and not a 28-item checklist: after the selection there are only two sets anyone
+    # wants to look at, and the reduced one is what the model actually trains on.
+    full = st.sidebar.toggle(
+        f"All {len(COLUMNS)} candidates",
+        value=False,
+        help=f"off: the {len(SELECTED)} that survived the feature selection — see the schema doc",
+    )
+    picked = COLUMNS if full else [c for c in COLUMNS if c in SELECTED]
     normalized = st.sidebar.toggle("Normalized", value=True, help="clip((x - median) / IQR, ±5) × 0.1")
 
     request = (symbol, timeframe, days)

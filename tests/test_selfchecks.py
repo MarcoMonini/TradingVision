@@ -10,7 +10,7 @@ import runpy
 
 import pytest
 
-from tradingvision import linear
+from tradingvision import crosscheck, dataset, gbm, linear, selection
 
 SELF_CHECKED = [
     "tradingvision.data.pivots",
@@ -27,7 +27,25 @@ def test_module_selfcheck(module):
     runpy.run_module(module, run_name="__main__")
 
 
+def test_dataset_selfcheck():
+    """Same reason as `linear`: the module's `__main__` builds from the real store."""
+    dataset._selfcheck()
+
+
 def test_linear_selfcheck():
     """`linear` keeps its checks in a function because its `__main__` is the real run, which
     needs the dataset."""
     linear._selfcheck()
+
+
+def test_gbm_selfcheck():
+    gbm._selfcheck()
+
+
+def test_selection_selfcheck():
+    selection._selfcheck()
+
+
+def test_crosscheck_selfcheck():
+    """`crosscheck` keeps its checks in a function too: its `__main__` rebuilds both datasets."""
+    crosscheck._selfcheck()
