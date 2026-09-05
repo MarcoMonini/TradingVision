@@ -357,6 +357,37 @@ h2.sec{
     <h3>Fonte dati — Binance, non Alpaca</h3>
     <p>Lo storico di Alpaca sui crypto <strong>parte dal 2021-01-01</strong>: gli endpoint <code>v1beta3</code> distribuiscono i dati del venue di Alpaca stesso, nato allora. Non è una restrizione di piano. In più il 2023 è bucato dai delisting successivi alle cause SEC — SOL ha un buco di 417 giorni, e la copertura 5m di quell'anno crolla al 39% su BCH, 21% su BAT, 15% su YFI.</p>
     <p>Il dataset ML si costruisce quindi dai dump pubblici di <code>data.binance.vision</code>: ZIP statici su S3, nessuna chiave, nessun rate limit, coppie USDT. <strong>20 coppie con almeno 70 mesi di storico 5m e zero mesi mancanti</strong>, da 2017-08 (BTC, ETH) a oggi, per <strong>14,9M righe</strong>. Alpaca resta la fonte live e il venue di esecuzione, e le sue commissioni (0,25% taker tier 1, 0,50% round trip) sono quelle usate in tutte le misure di costo.</p>
+    <div class="tbl-wrap">
+      <table>
+        <caption>i 20 simboli, candele 5m sul disco — un file per simbolo, tutti gli altri timeframe ricampionati al volo</caption>
+        <thead><tr><th>coppia USDT</th><th>candele 5m</th><th>da</th><th>giorni</th><th>di cui 2023+</th></tr></thead>
+        <tbody>
+          <tr><td class="col-name">BTC</td><td>949.801</td><td>2017-08-17</td><td>3.303</td><td>386.192</td></tr>
+          <tr><td class="col-name">ETH</td><td>949.801</td><td>2017-08-17</td><td>3.303</td><td>386.192</td></tr>
+          <tr><td class="col-name">LTC</td><td>915.906</td><td>2017-12-13</td><td>3.185</td><td>386.192</td></tr>
+          <tr><td class="col-name">ADA</td><td>880.348</td><td>2018-04-17</td><td>3.060</td><td>386.192</td></tr>
+          <tr><td class="col-name">XRP</td><td>875.402</td><td>2018-05-04</td><td>3.043</td><td>386.192</td></tr>
+          <tr><td class="col-name">TRX</td><td>864.418</td><td>2018-06-11</td><td>3.005</td><td>386.192</td></tr>
+          <tr><td class="col-name">LINK</td><td>801.722</td><td>2019-01-16</td><td>2.786</td><td>386.192</td></tr>
+          <tr><td class="col-name">BAT</td><td>788.186</td><td>2019-03-04</td><td>2.739</td><td>386.192</td></tr>
+          <tr><td class="col-name">DOGE</td><td>752.942</td><td>2019-07-05</td><td>2.616</td><td>386.192</td></tr>
+          <tr><td class="col-name">XTZ</td><td>729.722</td><td>2019-09-24</td><td>2.535</td><td>386.192</td></tr>
+          <tr><td class="col-name">BCH</td><td>711.066</td><td>2019-11-28</td><td>2.470</td><td>386.192</td></tr>
+          <tr><td class="col-name">YFI</td><td>637.493</td><td>2020-08-10</td><td>2.214</td><td>386.192</td></tr>
+          <tr><td class="col-name">SOL</td><td>637.277</td><td>2020-08-11</td><td>2.213</td><td>386.192</td></tr>
+          <tr><td class="col-name">CRV</td><td>636.149</td><td>2020-08-15</td><td>2.209</td><td>386.192</td></tr>
+          <tr><td class="col-name">DOT</td><td>635.057</td><td>2020-08-18</td><td>2.206</td><td>386.192</td></tr>
+          <tr><td class="col-name">SUSHI</td><td>631.169</td><td>2020-09-01</td><td>2.192</td><td>386.192</td></tr>
+          <tr><td class="col-name">UNI</td><td>626.657</td><td>2020-09-17</td><td>2.176</td><td>386.192</td></tr>
+          <tr><td class="col-name">AVAX</td><td>625.175</td><td>2020-09-22</td><td>2.171</td><td>386.192</td></tr>
+          <tr><td class="col-name">NEAR</td><td>618.857</td><td>2020-10-14</td><td>2.149</td><td>386.192</td></tr>
+          <tr><td class="col-name">AAVE</td><td>618.593</td><td>2020-10-15</td><td>2.148</td><td>386.192</td></tr>
+          <tr><td class="col-name">totale</td><td class="col-name">14.885.741</td><td>2017-08-17</td><td>3.303</td><td class="col-name">7.723.840</td></tr>
+          <tr><td colspan="5" class="tf-note">tutti chiudono al 2026-09-02. La colonna 2023+ è identica per tutti perché è il periodo su cui gira l'addestramento, ed è comune: 386.192 barre a simbolo. Nell'intero storico 2023+ manca <strong>un solo buco, di 16 barre, simultaneo su tutti e 20</strong> — un'interruzione dell'exchange, 320 barre in tutto, lo 0,004%</td></tr>
+        </tbody>
+      </table>
+    </div>
+
     <p>Due trappole nei dump, entrambe gestite in <code>data.binance</code>: <code>open_time</code> è passato da millisecondi a microsecondi nel corso del 2025 senza marcatore di versione, e alcuni file hanno una riga di header. L'unità si deduce per file dall'ordine di grandezza. Sul disco esiste un solo file per simbolo, a 5m; tutti gli altri timeframe sono ricampionati al volo.</p>
   </div>
 
