@@ -35,16 +35,19 @@ import pandas as pd
 import torch
 from torch import nn
 
-from tradingvision import linear, metrics, nearpivot, normalize, split
+from tradingvision import dataset, linear, metrics, nearpivot, normalize, split
 from tradingvision.data.binance import STORE, load
 from tradingvision.data.pivots import EXTREMA_WINDOW
-from tradingvision.dataset import _shift
 from tradingvision.features import COLUMNS, SELECTED, features
 
-BRANCH = "15m"
+BRANCH = "15m"  # step 3's single branch, and the default of `--branches`
+BRANCHES = dataset.BRANCHES  # step 4: 5m -> 2h, 15m -> 6h, 30m -> 12h, 1h -> 24h
 STEPS = 24
 CACHE = STORE / "step2.parquet"  # read for its index, target and pivot horizon only
-TENSOR = STORE / "step3-15m.npy"
+# One file per branch and feature set, `step3-15m-all.npy` and its kin. The prefix says which step
+# first wrote it, not which step may read it: the rows, the steps and the alignment are the same
+# for both, so step 4 reuses step 3's 15m tensor instead of spending 1.7 GB to rename it.
+TENSOR = STORE / "step3.npy"
 # The full candidate set, kept as an option rather than a rebuild: the selection was made with a
 # GBM on the aggregate, and the columns it dropped are not necessarily the ones a recurrent net
 # reading the band cannot use. Measured inside 48 bars of the pivot, `tsi_momentum` and
@@ -54,7 +57,11 @@ FEATURES = {"selected": SELECTED, "all": COLUMNS}
 # Spec starting values, table "Iperparametri". None of them is tuned: they are fixed, the result
 # is measured, and then one parameter moves at a time.
 H = 32
-DROPOUT = 0.2  # on the branch output, before the head — with one branch there is no concat
+DROPOUT = 0.2  # on the branch outputs, before the head — with one branch there is no concat
+# Width of the timeframe embedding of the shared encoder. Not in the spec, which names the variant
+# without sizing it. Small on purpose: it has to tell four horizons apart and nothing else, and
+# every dimension of it is a dimension the head reads instead of the hidden state.
+EMBEDDING = 4
 WEIGHT_DECAY = 1e-4
 LEARNING_RATE = 1e-3
 BATCH = 512
@@ -99,7 +106,7 @@ def sequences(index: pd.MultiIndex, keep: list[str] = SELECTED, tf: str = BRANCH
     pos = pd.Series(np.arange(len(index)), index=index)
     for symbol, rows in pos.groupby(level=1):
         f = features(load(symbol, tf), EXTREMA_WINDOW)[keep]
-        f.index = f.index + _shift(tf)
+        f.index = f.index + dataset._shift(tf)
         out[rows.to_numpy()] = window(f, rows.index.get_level_values(0), steps)
     if not np.isfinite(out).all():
         raise ValueError("the window reaches past the start of a symbol's history — widen the warm-up")
@@ -117,27 +124,63 @@ def cached_sequences(path: Path, index: pd.MultiIndex, **params) -> np.ndarray:
             raise SystemExit(f"{path} has no {stamp.name} recording how it was built — delete it and rebuild")
         if (was := json.loads(stamp.read_text())) != written:
             raise SystemExit(f"{path} was built with {was}, not {written} — delete it")
-        return np.load(path)
-    x = sequences(index, **params)
-    np.save(path, x)
+        return np.load(path, mmap_mode="r")
+    np.save(path, sequences(index, **params))
     stamp.write_text(json.dumps(written, indent=2, sort_keys=True))
-    return x
+    # Mapped and not resident: four branches are 6.9 GB of float32, and only the rows of the batch
+    # being read have to be in memory at once.
+    return np.load(path, mmap_mode="r")
 
 
-def scaled(x: np.ndarray, train: np.ndarray) -> np.ndarray:
-    """`normalize`'s transform, fitted on the train rows of this fold and applied to all of them.
+def stats_of(x: np.ndarray, train: np.ndarray) -> pd.DataFrame:
+    """`normalize.fit` on the train rows of this fold, per fold and never once for the run — a
+    scaler fitted across the whole span reads quantiles of the test period.
 
     Fitted on the most recent step alone: every step of the window is drawn from the same series,
     so one step is a clean estimate of the column's train-period quartiles, and it keeps the fit
-    to the same shape `normalize.fit` takes everywhere else. Per fold and not once for the run —
-    a scaler fitted across the whole span reads quantiles of the test period.
+    to the same shape `normalize.fit` takes everywhere else.
     """
     # Named when the width says these are the selected indicators, so a degenerate column comes
     # back from `normalize.fit` with a name and not a position.
     names = next((c for c in FEATURES.values() if len(c) == x.shape[2]), list(range(x.shape[2])))
-    stats = normalize.fit(pd.DataFrame(x[train, -1], columns=names))
+    return normalize.fit(pd.DataFrame(x[train, -1], columns=names))
+
+
+def apply(x: np.ndarray, stats: pd.DataFrame) -> np.ndarray:
+    """`normalize`'s transform, on a whole tensor or on one batch of it — the arithmetic is
+    elementwise, so which of the two it is makes no difference to the result."""
     center, scale = stats.center.to_numpy("float32"), stats.scale.to_numpy("float32")
     return (np.clip((x - center) / scale, -normalize.CLIP, normalize.CLIP) * normalize.SCALE).astype("float32")
+
+
+def scaled(x: np.ndarray, train: np.ndarray) -> np.ndarray:
+    """The whole tensor, scaled. Kept for the checks; `Branches` never calls it."""
+    return apply(x, stats_of(x, train))
+
+
+class Branches:
+    """The branch tensors of one fold, scaled when a batch is read rather than up front.
+
+    Four branches at 643k rows, 24 steps and 28 columns are 6.9 GB of float32, and the whole-array
+    form of the transform wants that much again for its output. Scaling the 512 rows of a batch
+    instead costs an operation that was going to happen anyway, one batch at a time, and the
+    tensors stay memory-mapped and shared between folds. The statistics are still fitted once per
+    fold on the train rows alone, which is the part that matters for leakage.
+
+    Indexing returns one tensor per branch, on the device, so `model(x[rows])` reads the same at
+    every call site as it did with one array.
+    """
+
+    def __init__(self, arrays: list[np.ndarray], train: np.ndarray):
+        self.arrays = arrays
+        self.stats = [stats_of(a, train) for a in arrays]
+
+    def __getitem__(self, rows: np.ndarray) -> list[torch.Tensor]:
+        return [torch.from_numpy(apply(a[rows], st)).to(DEVICE) for a, st in zip(self.arrays, self.stats)]
+
+    @property
+    def widths(self) -> list[int]:
+        return [a.shape[2] for a in self.arrays]
 
 
 def cross_section(y: pd.Series, mode: str = "z") -> pd.Series:
@@ -166,39 +209,70 @@ def cross_section(y: pd.Series, mode: str = "z") -> pd.Series:
 
 
 class Net(nn.Module):
-    """GRU over the branch, dropout, linear head. No activation on the output.
+    """A GRU per branch, concatenated final states, dropout, linear head. No activation on output.
 
     The tanh the spec removed used to saturate exactly on the pivots, where the gradient matters
     most; nothing downstream needs a bounded output, since Rank IC is invariant to any monotone
     transform. The head starts at zero bias so the first predictions sit at the centre of the
     target's distribution. GRU and not LSTM: at 24 steps the cell state buys nothing and costs a
     quarter of the parameters.
+
+    With `shared`, one encoder reads all four branches and a timeframe embedding is concatenated
+    to each final state — open point 5. The branches carry the same columns with the same meaning
+    at four horizons, so four private encoders learn four times what one could, and the embedding
+    is what keeps the head able to tell them apart. Same expressiveness on paper, a quarter of the
+    parameters, and which of the two wins is a measurement and not an argument.
+
+    Dropout lands on the concatenated states, which is elementwise the same as on each branch
+    before the concat, and one call instead of four.
     """
 
-    def __init__(self, n_features: int, hidden: int = H, dropout: float = DROPOUT):
+    def __init__(
+        self,
+        widths: list[int],
+        hidden: int = H,
+        dropout: float = DROPOUT,
+        shared: bool = False,
+        embedding: int = EMBEDDING,
+    ):
         super().__init__()
-        self.gru = nn.GRU(n_features, hidden, batch_first=True)
+        self.shared = shared
+        if shared:
+            if len(set(widths)) != 1:
+                raise ValueError(f"a shared encoder needs one width, not {widths}")
+            self.gru = nn.GRU(widths[0], hidden, batch_first=True)
+            self.timeframe = nn.Embedding(len(widths), embedding)
+            width = len(widths) * (hidden + embedding)
+        else:
+            self.gru = nn.ModuleList(nn.GRU(f, hidden, batch_first=True) for f in widths)
+            width = len(widths) * hidden
         self.drop = nn.Dropout(dropout)
-        self.head = nn.Linear(hidden, 1)
+        self.head = nn.Linear(width, 1)
         nn.init.zeros_(self.head.bias)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        _, h = self.gru(x)
-        return self.head(self.drop(h[-1])).squeeze(-1)
+    def forward(self, xs: list[torch.Tensor]) -> torch.Tensor:
+        if self.shared:
+            states = [
+                torch.cat([self.gru(x)[1][-1], self.timeframe.weight[i].expand(len(x), -1)], dim=1)
+                for i, x in enumerate(xs)
+            ]
+        else:
+            states = [gru(x)[1][-1] for gru, x in zip(self.gru, xs)]
+        return self.head(self.drop(torch.cat(states, dim=1))).squeeze(-1)
 
 
-def predict(model: Net, x: np.ndarray, rows: np.ndarray, index: pd.MultiIndex, batch: int = 4096) -> pd.Series:
+def predict(model: Net, x: Branches, rows: np.ndarray, index: pd.MultiIndex, batch: int = 4096) -> pd.Series:
     """Predictions for `rows`, on the (timestamp, symbol) index the metrics need."""
     model.eval()
     out = []
     with torch.no_grad():
         for at in np.array_split(rows, max(1, len(rows) // batch)):
-            out.append(model(torch.from_numpy(x[at]).to(DEVICE)).cpu().numpy())
+            out.append(model(x[at]).cpu().numpy())
     return pd.Series(np.concatenate(out), index=index)
 
 
 def fit(
-    x: np.ndarray,
+    x: Branches,
     train: pd.DataFrame,
     valid: pd.DataFrame,
     seed: int = 0,
@@ -206,6 +280,7 @@ def fit(
     patience: int = PATIENCE,
     batch_size: int = BATCH,
     delta: float = DELTA,
+    shared: bool = False,
     quiet: bool = True,
 ) -> Net:
     """One model, stopped when the validation Rank IC stops improving.
@@ -215,7 +290,7 @@ def fit(
     the best loss is not the round with the best signal.
     """
     torch.manual_seed(seed)
-    model = Net(x.shape[2]).to(DEVICE)
+    model = Net(x.widths, shared=shared).to(DEVICE)
     opt = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
     sched = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, mode="max", factor=LR_FACTOR, patience=LR_PATIENCE)
     loss_fn = nn.HuberLoss(delta=delta)
@@ -228,7 +303,7 @@ def fit(
         model.train()
         for batch in np.array_split(rng.permutation(len(at)), max(1, len(at) // batch_size)):
             opt.zero_grad()
-            loss = loss_fn(model(torch.from_numpy(x[at[batch]]).to(DEVICE)), y[batch].to(DEVICE))
+            loss = loss_fn(model(x[at[batch]]), y[batch].to(DEVICE))
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP)
             opt.step()
@@ -252,7 +327,7 @@ def fit(
 
 
 def fold(
-    x: np.ndarray,
+    x: list[np.ndarray],
     train: pd.DataFrame,
     test: pd.DataFrame,
     seed: int = 0,
@@ -274,7 +349,7 @@ def fold(
         # the opposite sign — so restricting the training set is the upper bound of what any
         # regime-conditioned head could reach.
         inner, valid = nearpivot.near(inner, band), nearpivot.near(valid, band)
-    z = scaled(x, inner.row.to_numpy())  # train only, and the inner train at that
+    z = Branches(x, inner.row.to_numpy())  # fitted on the train rows only, and the inner train at that
     if z_target != "off":
         # Training only. Validation keeps the raw label, so early stopping reads the metric the
         # result is judged on — which the transform leaves unchanged anyway.
@@ -283,7 +358,9 @@ def fold(
     return predict(fit(z, inner, valid, seed, **kw), z, test.row.to_numpy(), test.index)
 
 
-def run(x: np.ndarray, df: pd.DataFrame, start: str, folds: int = 4, seeds: int = 1, **kw) -> dict[str, pd.DataFrame]:
+def run(
+    x: list[np.ndarray], df: pd.DataFrame, start: str, folds: int = 4, seeds: int = 1, **kw
+) -> dict[str, pd.DataFrame]:
     """Walk-forward over `folds` expanding folds and `seeds` initialisations each."""
     per_fold, per_seed, tests, preds = {}, {}, [], []
     for i, (train, test) in enumerate(split.walk_forward(df, start, folds), 1):
@@ -361,13 +438,13 @@ def _selfcheck() -> None:
     df = pd.DataFrame({"target": y, "next_pivot": idx.get_level_values(0), "row": np.arange(n)}, index=idx)
 
     kw = dict(folds=2, epochs=60, patience=60, batch_size=128)
-    out = run(x, df, "2024-01-25", **kw)
+    out = run([x], df, "2024-01-25", **kw)
     assert out["folds"].index.tolist() == ["fold 1", "fold 2", "mean", "std"]
     assert out["folds"].loc["mean", "rank_ic"] > 0.5, out["folds"]
     blind = linear.run(df.assign(last=x[:, -1, 0]), "2024-01-25")
     assert blind.loc["test", "rank_ic"] < 0.15, "the last step alone must be blind to a drift"
 
-    noise = run(x, df.assign(target=rng.normal(size=n)), "2024-01-25", **kw | dict(epochs=6, patience=6))
+    noise = run([x], df.assign(target=rng.normal(size=n)), "2024-01-25", **kw | dict(epochs=6, patience=6))
     assert abs(noise["folds"].loc["mean", "rank_ic"]) < 0.15, noise["folds"]
 
     # Scaling reads the train rows only, so a slice normalises to exactly what it does inside the
@@ -376,10 +453,29 @@ def _selfcheck() -> None:
     z = scaled(x, train)
     assert np.allclose(z[:10], scaled(x[: n // 2], train[: n // 2])[:10])
     assert abs(z).max() <= normalize.CLIP * normalize.SCALE + 1e-6
+    # And a batch scaled on the way to the model is the same number as the whole tensor scaled up
+    # front — the equality that lets four branches stay memory mapped instead of copied per fold.
+    rows = np.array([3, 700, 4999])
+    assert np.allclose(Branches([x], train)[rows][0].cpu().numpy(), z[rows])
     # Two seeds differ, which is the reason the spec reports mean +- std over them.
-    a = fit(x, df.iloc[: n // 2], df.iloc[n // 2 :], seed=0, epochs=1, patience=1)
-    b = fit(x, df.iloc[: n // 2], df.iloc[n // 2 :], seed=1, epochs=1, patience=1)
+    kwx = dict(epochs=1, patience=1)
+    a = fit(Branches([x], train), df.iloc[: n // 2], df.iloc[n // 2 :], seed=0, **kwx)
+    b = fit(Branches([x], train), df.iloc[: n // 2], df.iloc[n // 2 :], seed=1, **kwx)
     assert not torch.allclose(a.head.weight, b.head.weight)
+
+    # Step 4. The signal sits on the *middle* branch and the other two are noise of the same
+    # shape, so a model that reads only the first branch, or that lets two useless encoders drown
+    # the third, fails here. Shared weights, which is the harder of the two: one encoder sees all
+    # three and only the timeframe embedding tells the head which is which.
+    blank = [rng.normal(size=(n, steps, f)).astype("float32") for _ in range(2)]
+    multi = run([blank[0], x, blank[1]], df, "2024-01-25", shared=True, **kw)
+    assert multi["folds"].loc["mean", "rank_ic"] > 0.5, multi["folds"]
+    # Same expressiveness, roughly a quarter of the parameters — the reason the variant exists.
+    widths = [len(COLUMNS)] * len(BRANCHES)  # the real shape: at f=2 the head, shared either way, dominates
+    def size(**how: bool) -> int:
+        return sum(p.numel() for p in Net(widths, **how).parameters())
+
+    assert size(shared=True) < size() / 3, (size(shared=True), size())
 
     # The filter averages over time inside a symbol and never across symbols, and k=1 is identity.
     one = out["pred"]
@@ -432,10 +528,18 @@ def main() -> None:
     ap.add_argument("--seeds", type=int, default=1, help="initialisations per fold; the spec asks 5 in exploration")
     ap.add_argument("--epochs", type=int, default=EPOCHS)
     ap.add_argument("--cache", type=Path, default=CACHE, help="step 2's dataset, read for its rows")
-    ap.add_argument("--tensor", type=Path, default=None, help="the built sequences, reused when present")
     ap.add_argument("--horizon", action="store_true", help="also split the test Rank IC by distance to the next pivot")
     ap.add_argument("--verbose", action="store_true", help="print the validation Rank IC each epoch")
     ap.add_argument("--features", choices=list(FEATURES), default="selected", help="which candidate set to feed")
+    ap.add_argument(
+        "--branches", default=BRANCH, help=f"comma separated, from {','.join(BRANCHES)} — step 4 is all four"
+    )
+    ap.add_argument(
+        "--encoder",
+        choices=["separate", "shared"],
+        default="separate",
+        help="one GRU per branch, or one for all four plus a timeframe embedding",
+    )
     ap.add_argument("--band", type=int, default=0, help="train only on rows within this many 5m bars of the pivot")
     ap.add_argument(
         "--z-target",
@@ -449,9 +553,16 @@ def main() -> None:
     _selfcheck()
     df = meta(args.cache)
     keep = FEATURES[args.features]
-    tensor = args.tensor or TENSOR.with_stem(f"{TENSOR.stem}-{args.features}")
-    x = cached_sequences(tensor, df.index, keep=keep, tf=BRANCH, steps=STEPS)
-    print(f"{len(df):,} rows, {x.shape[1]} steps x {x.shape[2]} features of the {BRANCH} branch, on {DEVICE}")
+    branches = args.branches.split(",")
+    if unknown := [tf for tf in branches if tf not in BRANCHES]:
+        raise SystemExit(f"{unknown} is not a branch — pick from {BRANCHES}")
+    x = [
+        cached_sequences(
+            TENSOR.with_stem(f"{TENSOR.stem}-{tf}-{args.features}"), df.index, keep=keep, tf=tf, steps=STEPS
+        )
+        for tf in branches
+    ]
+    print(f"{len(df):,} rows, {STEPS} steps x {len(keep)} features on {'+'.join(branches)}, {args.encoder}, {DEVICE}")
     print(f"{args.folds} folds from {args.test_start}, {args.seeds} seed(s) each\n")
 
     out = run(
@@ -463,6 +574,7 @@ def main() -> None:
         epochs=args.epochs,
         z_target=args.z_target,
         band=args.band,
+        shared=args.encoder == "shared",
         quiet=not args.verbose,
     )
     print(out["folds"].round(4).to_string())
