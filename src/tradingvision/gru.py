@@ -39,12 +39,17 @@ from tradingvision import linear, metrics, normalize, split
 from tradingvision.data.binance import STORE, load
 from tradingvision.data.pivots import EXTREMA_WINDOW
 from tradingvision.dataset import _shift
-from tradingvision.features import SELECTED, features
+from tradingvision.features import COLUMNS, SELECTED, features
 
 BRANCH = "15m"
 STEPS = 24
 CACHE = STORE / "step2.parquet"  # read for its index, target and pivot horizon only
 TENSOR = STORE / "step3-15m.npy"
+# The full candidate set, kept as an option rather than a rebuild: the selection was made with a
+# GBM on the aggregate, and the columns it dropped are not necessarily the ones a recurrent net
+# reading the band cannot use. Measured inside 48 bars of the pivot, `tsi_momentum` and
+# `rsi_centered` are the two strongest predictors there and both are among the sixteen it dropped.
+FEATURES = {"selected": SELECTED, "all": COLUMNS}
 
 # Spec starting values, table "Iperparametri". None of them is tuned: they are fixed, the result
 # is measured, and then one parameter moves at a time.
@@ -121,7 +126,7 @@ def scaled(x: np.ndarray, train: np.ndarray) -> np.ndarray:
     """
     # Named when the width says these are the selected indicators, so a degenerate column comes
     # back from `normalize.fit` with a name and not a position.
-    names = SELECTED if x.shape[2] == len(SELECTED) else list(range(x.shape[2]))
+    names = next((c for c in FEATURES.values() if len(c) == x.shape[2]), list(range(x.shape[2])))
     stats = normalize.fit(pd.DataFrame(x[train, -1], columns=names))
     center, scale = stats.center.to_numpy("float32"), stats.scale.to_numpy("float32")
     return (np.clip((x - center) / scale, -normalize.CLIP, normalize.CLIP) * normalize.SCALE).astype("float32")
@@ -415,9 +420,10 @@ def main() -> None:
     ap.add_argument("--seeds", type=int, default=1, help="initialisations per fold; the spec asks 5 in exploration")
     ap.add_argument("--epochs", type=int, default=EPOCHS)
     ap.add_argument("--cache", type=Path, default=CACHE, help="step 2's dataset, read for its rows")
-    ap.add_argument("--tensor", type=Path, default=TENSOR, help="the built sequences, reused when present")
+    ap.add_argument("--tensor", type=Path, default=None, help="the built sequences, reused when present")
     ap.add_argument("--horizon", action="store_true", help="also split the test Rank IC by distance to the next pivot")
     ap.add_argument("--verbose", action="store_true", help="print the validation Rank IC each epoch")
+    ap.add_argument("--features", choices=list(FEATURES), default="selected", help="which candidate set to feed")
     ap.add_argument("--band", type=int, default=0, help="train only on rows within this many 5m bars of the pivot")
     ap.add_argument(
         "--z-target",
@@ -430,7 +436,9 @@ def main() -> None:
 
     _selfcheck()
     df = meta(args.cache)
-    x = cached_sequences(args.tensor, df.index, keep=SELECTED, tf=BRANCH, steps=STEPS)
+    keep = FEATURES[args.features]
+    tensor = args.tensor or TENSOR.with_stem(f"{TENSOR.stem}-{args.features}")
+    x = cached_sequences(tensor, df.index, keep=keep, tf=BRANCH, steps=STEPS)
     print(f"{len(df):,} rows, {x.shape[1]} steps x {x.shape[2]} features of the {BRANCH} branch, on {DEVICE}")
     print(f"{args.folds} folds from {args.test_start}, {args.seeds} seed(s) each\n")
 
