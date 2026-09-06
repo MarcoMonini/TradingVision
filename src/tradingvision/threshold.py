@@ -78,6 +78,7 @@ def forward_return(close: pd.Series) -> pd.Series:
 def pnl(pred: pd.Series, close: pd.Series, threshold: float, fee: float = FEE, sign: int = -1) -> dict:
     """One threshold, priced. Log returns throughout, with the fee charged as a log cost too —
     at 0.25% the difference to the exact multiplicative form is in the fifth decimal."""
+    span = (pred.index.get_level_values(0).max() - pred.index.get_level_values(0).min()) / YEAR
     pos = positions(pred, threshold, sign)
     r = forward_return(close).fillna(0.0)
     symbol = pos.index.get_level_values(1)
@@ -92,10 +93,16 @@ def pnl(pred: pd.Series, close: pd.Series, threshold: float, fee: float = FEE, s
     held = f[f.pos != 0]
     per_trade = held.groupby([held.index.get_level_values(1), held.leg]).g.sum() - 2 * fee
 
-    span = (pred.index.get_level_values(0).max() - pred.index.get_level_values(0).min()) / YEAR
+    # Split by side, which is the check that separates an edge from a market. Over a period the
+    # market spends falling, a rule that is short half the time earns without predicting anything;
+    # a signal that reads turning points has to make money on both sides, or say why not.
+    gross_by_side = (pos * r).groupby([symbol, np.sign(pos)]).sum().groupby(level=1).mean()
     return {
         "threshold": threshold,
         "in_market": float((pos != 0).mean()),
+        "long_share": float((pos > 0).mean()),
+        "gross_long": float(gross_by_side.get(1.0, 0.0) / span),
+        "gross_short": float(gross_by_side.get(-1.0, 0.0) / span),
         "trades_per_year": len(per_trade) / len(gross) / span,
         "gross_per_year": float(gross.mean() / span),
         "fees_per_year": float(cost.mean() / span),
@@ -170,11 +177,23 @@ def _selfcheck() -> None:
     # A symmetric flip rule is always in the market once it has fired at all: `in_market` says
     # whether the prediction ever reached the band, not how selective the rule is.
     assert table.in_market.iloc[0] == 1.0
+    # On the saw both sides earn, because the signal really does read the turns. It is the
+    # asymmetry on real data that means something, so the symmetric case has to hold here.
+    both = pnl(pred, close, 0.9)
+    assert both["gross_long"] > 0 and both["gross_short"] > 0, both
+    assert 0.3 < both["long_share"] < 0.7, both
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--pred", type=Path, required=True, help="the predictions a gru run wrote")
+    ap.add_argument(
+        "--quantiles",
+        type=float,
+        nargs="+",
+        default=list(QUANTILES),
+        help="quantiles of |prediction| to take the thresholds at",
+    )
     ap.add_argument("--fee", type=float, default=FEE, help="per side; the default is Alpaca taker tier 1")
     ap.add_argument(
         "--sign",
@@ -190,7 +209,7 @@ def main() -> None:
     close = prices(pred.index)
     print(f"{len(pred):,} rows, {pred.index.get_level_values(1).nunique()} symbols, fee {args.fee * 100:.2f}% per side")
     print(f"{pred.index.get_level_values(0).min():%Y-%m-%d} to {pred.index.get_level_values(0).max():%Y-%m-%d}\n")
-    print(sweep(pred, close, fee=args.fee, sign=args.sign).round(4).to_string())
+    print(sweep(pred, close, args.quantiles, args.fee, args.sign).round(4).to_string())
     print(f"\nbuy and hold, same rows: {buy_and_hold(close)['net_per_year'] * 100:.1f}% log per year")
 
 
