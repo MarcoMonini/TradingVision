@@ -124,7 +124,13 @@ def window(f: pd.DataFrame, when: pd.DatetimeIndex, steps: int = STEPS) -> np.nd
     return np.stack([f.shift(k).reindex(when, method="ffill").to_numpy() for k in reversed(range(steps))], axis=1)
 
 
-def sequences(index: pd.MultiIndex, keep: list[str] = SELECTED, tf: str = BRANCH, steps: int = STEPS) -> np.ndarray:
+def sequences(
+    index: pd.MultiIndex,
+    keep: list[str] = SELECTED,
+    tf: str = BRANCH,
+    steps: int = STEPS,
+    rank: bool = False,
+) -> np.ndarray:
     """`(len(index), steps, len(keep))` — the last `steps` closed `tf` candles at each 5m row.
 
     Oldest step first. The alignment is `dataset`'s and cannot be got wrong here either: a branch
@@ -132,16 +138,41 @@ def sequences(index: pd.MultiIndex, keep: list[str] = SELECTED, tf: str = BRANCH
     of 10:05 reads the 15m candle closed at 10:00 and never the one still forming. Step `k` back is
     then the same frame shifted `k` of its own bars, which is why this is 24 reindexes and not a
     rolling window: the 5m grid is not the branch's grid.
+
+    With `rank`, every column is replaced by its percentile inside its own timestamp before the
+    windows are cut — `normalize.cross_rank`, and see it for why the target makes that the natural
+    reading of a feature. It has to happen here and not on the tensor: a rank is a statistic over
+    the symbols of one bar, and by the time the rows are stacked into `(row, step, feature)` the
+    symbols of step `k` are no longer next to each other.
     """
-    out = np.empty((len(index), steps, len(keep)), dtype="float32")
     pos = pd.Series(np.arange(len(index)), index=index)
-    for symbol, rows in pos.groupby(level=1):
+    frames = {}
+    for symbol in pos.index.get_level_values(1).unique():
         f = features(load(symbol, tf), EXTREMA_WINDOW)[keep]
         f.index = f.index + dataset._shift(tf)
-        out[rows.to_numpy()] = window(f, rows.index.get_level_values(0), steps)
+        frames[symbol] = f
+    if rank:
+        frames = ranked(frames)
+    out = np.empty((len(index), steps, len(keep)), dtype="float32")
+    for symbol, rows in pos.groupby(level=1):
+        out[rows.to_numpy()] = window(frames[symbol], rows.index.get_level_values(0), steps)
     if not np.isfinite(out).all():
         raise ValueError("the window reaches past the start of a symbol's history — widen the warm-up")
     return out
+
+
+def ranked(frames: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]:
+    """The same per-symbol frames with every column replaced by its rank across the symbols.
+
+    Stacked into one panel, ranked per timestamp by `normalize.cross_rank`, and split back. Thin
+    timestamps leave the *index* rather than turning into NaN inside it: `window` reads the last
+    bar at or before each row, so a missing timestamp is the case it already handles, while a NaN
+    left sitting in place would trip the warm-up check in `sequences` and blame the wrong thing.
+    """
+    panel = pd.concat(frames, names=["symbol"]).swaplevel().sort_index()
+    n = panel.groupby(level=0)[panel.columns[0]].transform("size")
+    panel = normalize.cross_rank(panel[n >= normalize.MIN_SYMBOLS])
+    return {symbol: g.droplevel(1) for symbol, g in panel.groupby(level=1)}
 
 
 def cached_sequences(path: Path, index: pd.MultiIndex, **params) -> np.ndarray:
@@ -449,7 +480,9 @@ def _market_beta(pred: pd.Series, target: pd.Series) -> dict[str, float]:
     return metrics.signal(pred, target - target.groupby(level=0).transform("mean"))
 
 
-def save(path: Path, model: Net, x: Branches, branches: list[str], keep: list[str], label: str) -> None:
+def save(
+    path: Path, model: Net, x: Branches, branches: list[str], keep: list[str], label: str, rank: bool = False
+) -> None:
     """The weights and everything needed to feed them: the scaling of the train period, the
     columns, the branches and their widths. A model without its scaler is not a model."""
     torch.save(
@@ -462,6 +495,7 @@ def save(path: Path, model: Net, x: Branches, branches: list[str], keep: list[st
             "steps": STEPS,
             "shared": model.shared,
             "label": label,
+            "rank": rank,
         },
         path,
     )
@@ -488,6 +522,11 @@ def predict_frame(model: Net, checkpoint: dict, bars: pd.DataFrame) -> pd.Series
     """
     if len(checkpoint["branches"]) != 1:
         raise ValueError(f"the chart draws one branch, not {checkpoint['branches']}")
+    # A ranked feature is a statement about this symbol against the others trading at that instant,
+    # so there is nothing to compute from one series. The same thing is true of the cross-sectional
+    # label, and the chart draws that as a heatmap over the panel rather than as a line on one pair.
+    if checkpoint.get("rank"):
+        raise ValueError("this model reads cross-sectional ranks, which one pair cannot supply")
     f = features(bars, EXTREMA_WINDOW)[checkpoint["keep"]]
     x = apply(window(f.shift(1), bars.index, checkpoint["steps"]), checkpoint["stats"][0])
     ready = np.isfinite(x).all(axis=(1, 2))
@@ -502,8 +541,6 @@ def meta(path: Path = CACHE) -> pd.DataFrame:
     """Step 2's rows: the label, the purging horizon and each row's place in the tensor."""
     df = pd.read_parquet(path, columns=linear.META)
     return df.assign(row=np.arange(len(df)))
-
-
 
 
 def _selfcheck() -> None:
@@ -577,6 +614,23 @@ def _selfcheck() -> None:
     )
     assert smoothed(apart, 2).tolist() == [1.0, 3.0, 5.5, 16.5]
 
+    # The cross-sectional rank round-trip: three symbols on one grid, one of them always the
+    # largest, so its rank is the top of every cross-section it appears in.
+    grid = pd.date_range("2024", periods=6, freq="h", tz="UTC")
+    panels = {
+        "a": pd.DataFrame({"v": [3.0] * 6}, index=grid),
+        "b": pd.DataFrame({"v": [2.0] * 6}, index=grid),
+        "c": pd.DataFrame({"v": [1.0] * 5}, index=grid[:5]),  # one bar short, as a real pair is
+    }
+    r = ranked(panels)
+    assert set(r) == set(panels) and all(f.index.nlevels == 1 for f in r.values())
+    # Three symbols: pct ranks 1/3, 2/3, 1 about a mean of 2/3, so the top sits at +1/3.
+    assert np.allclose(r["a"].v, 1 / 3) and np.allclose(r["b"].v, 0.0), "top, middle and bottom of three"
+    # The last bar has only two symbols, so it leaves the index instead of becoming a NaN in it —
+    # which is what lets `window` read the previous bar there rather than propagating a hole.
+    assert len(r["a"]) == 5 and grid[-1] not in r["a"].index
+    assert r["a"].notna().all().all()
+
     # The window, which is the one place a bug would invent future information. A branch label
     # sits at `label + tf - 5m` on the 5m grid, so the 15m candle that closes at 10:00 becomes
     # readable at the 5m bar of 09:55 and not one bar earlier.
@@ -630,6 +684,11 @@ def main() -> None:
         default="separate",
         help="one GRU per branch, or one for all four plus a timeframe embedding",
     )
+    ap.add_argument(
+        "--rank",
+        action="store_true",
+        help="feed each feature as its percentile across the symbols of its own timestamp",
+    )
     ap.add_argument("--band", type=int, default=0, help="train only on rows within this many 5m bars of the pivot")
     ap.add_argument(
         "--z-target",
@@ -661,13 +720,25 @@ def main() -> None:
     branches = args.branches.split(",")
     if unknown := [tf for tf in branches if tf not in BRANCHES]:
         raise SystemExit(f"{unknown} is not a branch — pick from {BRANCHES}")
+    # The flag only reaches the cache stamp when it is on, and the ranked tensor lives under its
+    # own name. A run without it therefore still matches the tensors already on disk instead of
+    # asking for 1.7 GB to be rebuilt to record a False.
+    extra = {"rank": True} if args.rank else {}
     x = [
         cached_sequences(
-            TENSOR.with_stem(f"{TENSOR.stem}-{tf}-{args.features}"), df.index, keep=keep, tf=tf, steps=STEPS
+            TENSOR.with_stem(f"{TENSOR.stem}-{tf}-{args.features}{'-rank' if args.rank else ''}"),
+            df.index,
+            keep=keep,
+            tf=tf,
+            steps=STEPS,
+            **extra,
         )
         for tf in branches
     ]
-    print(f"{len(df):,} rows, {STEPS} steps x {len(keep)} features on {'+'.join(branches)}, {args.encoder}, {DEVICE}")
+    print(
+        f"{len(df):,} rows, {STEPS} steps x {len(keep)} features on {'+'.join(branches)}, "
+        f"{args.encoder}, {'cross-sectional ranks' if args.rank else 'levels'}, {DEVICE}"
+    )
 
     if args.save:
         # No folds: the walk-forward exists to measure, and what the app draws is one model fitted
@@ -678,7 +749,7 @@ def main() -> None:
         model = fit(
             z, inner, valid, epochs=args.epochs, delta=delta, shared=args.encoder == "shared", quiet=not args.verbose
         )
-        save(args.save, model, z, branches, keep, args.label)
+        save(args.save, model, z, branches, keep, args.label, args.rank)
         print(f"fitted on {len(inner):,} rows to {args.test_start} and saved to {args.save}")
         return
 
@@ -699,7 +770,9 @@ def main() -> None:
     )
     # Always written, whatever else the run was asked to print: the predictions are what every
     # economic reading is taken on, and retraining twenty models to look at them again is a waste.
-    predictions = STORE / f"pred-{args.label}-{args.features}-{'+'.join(branches)}.parquet"
+    predictions = (
+        STORE / f"pred-{args.label}-{args.features}{'-rank' if args.rank else ''}-{'+'.join(branches)}.parquet"
+    )
     out["pred"].rename("pred").to_frame().to_parquet(predictions)
     print(out["folds"].round(4).to_string())
     if args.seeds > 1:

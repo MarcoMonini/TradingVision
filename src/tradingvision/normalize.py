@@ -57,9 +57,14 @@ def cross_rank(x: pd.DataFrame, min_symbols: int = MIN_SYMBOLS) -> pd.DataFrame:
     needs peers, so live inference needs the panel of whatever is trading at that instant, and a
     single-pair chart cannot draw this any more than it could draw the label.
     """
-    n = x.groupby(level=0).transform("size")
-    ranked = x.groupby(level=0).rank(pct=True) - 0.5
-    return ranked.where(n >= min_symbols)
+    g = x.groupby(level=0)
+    ranked = g.rank(pct=True)
+    # Centred on the mean of its own timestamp and not by subtracting a flat 0.5: `rank(pct=True)`
+    # runs 1/n..1, whose mean is 0.5 + 1/(2n). With a cross-section that thins and fills as symbols
+    # gap in and out, a flat shift would leave a small offset that moves with the *count* of
+    # symbols — a time-varying signal made of nothing, fed to the model as if it were a feature.
+    ranked = ranked - ranked.groupby(level=0).transform("mean")
+    return ranked.where(g.transform("size") >= min_symbols)
 
 
 def fit(x: pd.DataFrame) -> pd.DataFrame:
@@ -139,7 +144,12 @@ if __name__ == "__main__":
     raw = pd.DataFrame({"v": np.tile([4.0, 1.0, 3.0, 2.0], len(when))}, index=idx)
     r = cross_rank(raw)
     assert r.v.between(-0.5, 0.5).all() and r.groupby(level=0).v.nunique().eq(4).all()
-    assert r.xs("a", level=1).v.eq(0.5).all() and r.xs("b", level=1).v.eq(-0.25).all()
+    # Four symbols: pct ranks 0.25..1.0 about a mean of 0.625, so the largest sits at +0.375.
+    assert r.xs("a", level=1).v.eq(0.375).all() and r.xs("b", level=1).v.eq(-0.375).all()
+    # Exactly centred, whatever the count — the reason the mean is subtracted rather than 0.5.
+    assert np.allclose(r.groupby(level=0).v.mean(), 0, atol=1e-12)
+    three = cross_rank(raw.drop(index=[(t, "d") for t in when]))
+    assert np.allclose(three.groupby(level=0).v.mean(), 0, atol=1e-12), "and with three of them too"
     # The property the transform exists for: any change common to a whole timestamp is invisible.
     # Multiplying a date by ten or shifting it by a hundred cannot move a single rank, which is
     # what makes the feature mean the same thing in a calm week and a violent one.
