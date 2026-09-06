@@ -78,6 +78,9 @@ def load_cross_target(symbol: str, timeframe: str, days: int, horizon: int):
     — the level is not the dataset's level and should not be read as one — but the shape on screen
     is the shape the model would be trained on, which is what the chart is for.
 
+    The whole panel comes back, not the one column: the label of a pair is defined by the others,
+    so the heatmap that shows all of them at once is the only view that shows what it says.
+
     Peers that Alpaca has no data for simply do not join the panel; the label falls back to NaN
     wherever fewer than three of them do.
     """
@@ -87,8 +90,7 @@ def load_cross_target(symbol: str, timeframe: str, days: int, horizon: int):
         if not bars.empty:
             closes[peer] = bars.close
     panel = pd.DataFrame(closes).sort_index()
-    z = cross_sectional_return(panel, horizon)
-    return (z[symbol] if symbol in z else pd.Series(np.nan, index=panel.index)).rename("target"), len(panel.columns)
+    return cross_sectional_return(panel, horizon)
 
 
 @st.cache_data(show_spinner=False)
@@ -117,6 +119,41 @@ def load_features(df, window: int, columns: tuple[str, ...]):
     them, and renaming or adding one re-keys the cache — Streamlit keys on this wrapper's source,
     which does not change when `features` does, so a running app would serve the old schema."""
     return features(df, window)[list(columns)]
+
+
+def heatmap(z, horizon: int):
+    """The cross-section itself: one row per pair, time across, colour the label.
+
+    The single-pair line above is a slice of this and cannot show what the label means, because
+    the quantity is defined by the pairs that are not on screen. Here it reads directly: at any
+    vertical slice, blue is what the basket is about to beat and red is what is about to beat the
+    basket. A column that is all one colour is a market move, and the label has already removed
+    it — so those columns are pale by construction, which is the property being drawn.
+
+    Clipped at +/- 2 sigma. The tails are a few percent of the rows and they set the colour scale
+    for everything else if left in; the sign and the ordering are what this view is for.
+    """
+    fig = go.Figure(
+        go.Heatmap(
+            z=z.T.to_numpy(),
+            x=z.index,
+            y=[c.split("/")[0] for c in z.columns],
+            colorscale="RdBu",
+            reversescale=True,
+            zmid=0,
+            zmin=-2,
+            zmax=2,
+            colorbar=dict(title="sigma", thickness=12),
+            hovertemplate="%{y} %{x}<br>%{z:.2f} sigma<extra></extra>",
+        )
+    )
+    fig.update_layout(
+        height=60 + 34 * len(z.columns),
+        margin=dict(l=0, r=0, t=30, b=0),
+        title_text=f"cross-section — excess return over the next {horizon} bars, per pair",
+        xaxis_rangeslider_visible=False,
+    )
+    return fig
 
 
 def chart(
@@ -335,9 +372,11 @@ def main() -> None:
         st.warning(f"No data for {fetched[0]} on {fetched[1]}.")
         return
     pivots = load_pivots(df.close, EXTREMA_WINDOW)
-    peers = 0
+    peers, panel = 0, None
     if label == CROSS:
-        target, peers = load_cross_target(fetched[0], fetched[1], fetched[2], horizon)
+        panel = load_cross_target(fetched[0], fetched[1], fetched[2], horizon)
+        peers = len(panel.columns)
+        target = (panel[fetched[0]] if fetched[0] in panel else pd.Series(np.nan, index=panel.index)).rename("target")
         target = target.reindex(df.index)
     else:
         target = load_target(df.close, EXTREMA_WINDOW, label, smoothing, significance)
@@ -372,6 +411,8 @@ def main() -> None:
         use_container_width=True,
         key="chart",
     )
+    if panel is not None and peers:
+        st.plotly_chart(heatmap(panel.dropna(how="all"), horizon), use_container_width=True, key="heatmap")
     st.caption(
         f"{len(df)} candles — {df.index[0]:%Y-%m-%d %H:%M} to {df.index[-1]:%Y-%m-%d %H:%M} UTC · "
         f"{len(pivots)} pivots, median leg {pivots.amplitude.median() * 100:.2f}% · "
