@@ -92,7 +92,7 @@ footer{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);color:v
 
 <header>
   <h1>Swing multi-timeframe — specifica e risultati</h1>
-  <p class="tagline">Prevedere quanta escursione resta prima che una gamba di prezzo finisca, su venti coppie crypto, con una rete ricorrente su quattro orizzonti temporali. Questo documento tiene le decisioni chiuse, i numeri misurati e ciò che resta aperto.</p>
+  <p class="tagline">Prevedere quanta escursione resta prima che una gamba di prezzo finisca, su venti coppie crypto, con una rete ricorrente sulla sequenza delle candele a 15 minuti — quattro orizzonti sono stati provati, e non pagano. Questo documento tiene le decisioni chiuse, i numeri misurati e ciò che resta aperto.</p>
   <div class="facts">
     <div class="fact"><b>20</b><span>coppie USDT</span></div>
     <div class="fact"><b>14,9M</b><span>candele 5m</span></div>
@@ -117,10 +117,31 @@ footer{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);color:v
         <tr><td class="num">2</td><td>GBM (LightGBM)</td><td>560 colonne appiattite</td><td class="num">0.156 ± 0.015</td><td class="num">0.578 ± 0.053</td><td>riferimento<span class="b b-ok">fatto</span></td></tr>
         <tr><td class="num">3</td><td>GRU ramo singolo</td><td>(B, 24, 12) — 15m</td><td class="num">0.154 ± 0.015</td><td class="num">0.567 ± 0.052</td><td>pareggia, non batte<span class="b b-no">no</span></td></tr>
         <tr class="hi"><td class="num">3</td><td>GRU ramo singolo</td><td>(B, 24, 28) — 15m</td><td class="num">0.1582 ± 0.0150</td><td class="num">0.586 ± 0.054</td><td>batte il GBM su tutti e 4 i fold<span class="b b-ok">5 seed</span></td></tr>
-        <tr><td class="num">4</td><td>GRU multi-ramo</td><td>4 × (B, 24, 28)</td><td class="num">—</td><td class="num">—</td><td>da fare, sul set completo<span class="b b-open">aperto</span></td></tr>
+        <tr><td class="num">4</td><td>GRU multi-ramo, encoder distinti</td><td>4 × (B, 24, 28)</td><td class="num">0.1530 ± 0.0137</td><td class="num">0.565 ± 0.044</td><td>perde sul singolo ramo, 4 fold su 4<span class="b b-no">no</span></td></tr>
+        <tr><td class="num">4</td><td>GRU multi-ramo, encoder condiviso</td><td>4 × (B, 24, 28) + embedding tf</td><td class="num">0.1537 ± 0.0147</td><td class="num">0.566 ± 0.050</td><td>indistinguibile dal precedente<span class="b b-no">no</span></td></tr>
       </tbody>
     </table>
   </div>
+
+  <h3>Il multi-ramo è stato misurato, e perde</h3>
+  <p>Lo step 4 era la premessa dell'intero progetto: quattro orizzonti, un encoder per ciascuno. Misurato sugli stessi quattro fold e cinque seed dello step 3, <strong>il solo ramo 15m vince su tutti e quattro i fold contro entrambe le varianti</strong> — la stessa regola con cui lo step 3 era stato promosso sul GBM (+0.0022 su 4 fold su 4), letta al contrario.</p>
+
+  <div class="tw">
+    <table>
+      <caption>Rank IC di test, fold per fold, stesso protocollo e stessi seed</caption>
+      <thead><tr><th>fold</th><th class="num">step 3 · solo 15m</th><th class="num">step 4 · distinti</th><th class="num">step 4 · condivisi</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td class="num pos">0.1534</td><td class="num">0.1448</td><td class="num">0.1429</td></tr>
+        <tr><td>2</td><td class="num pos">0.1651</td><td class="num">0.1589</td><td class="num">0.1643</td></tr>
+        <tr><td>3</td><td class="num pos">0.1399</td><td class="num">0.1391</td><td class="num">0.1393</td></tr>
+        <tr><td>4</td><td class="num pos">0.1745</td><td class="num">0.1693</td><td class="num">0.1683</td></tr>
+        <tr class="total"><td>media</td><td class="num">0.1582</td><td class="num">0.1530</td><td class="num">0.1537</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p><strong>Il gate lo aveva già detto.</strong> <code>close_position_in_window</code> vive sul solo ramo 15m: permutare gli altri tre costa 0.0027 su 0.1525 (punto 6). I tre encoder aggiuntivi non avevano niente da trovare e hanno speso la loro capacità sul rumore. Le fasce vicino al pivot escono leggermente <em>peggiori</em>, non migliori.</p>
+  <p><strong>Quello che lo step 3 ha comprato è la sequenza, non l'orizzonte.</strong> Il ramo 15m è quello su cui i pivot sono rilevati, ed è l'unico che il modello legge davvero. Le altre tre coperture — 2h, 12h, 24h — restano nel dataset e nel tensore, ma su questa etichetta non pagano il loro costo.</p>
 
   <h3>Il numero aggregato non basta</h3>
   <p>Scomposto per distanza dal pivot successivo, il Rank IC racconta una storia diversa da quella della media. <strong>Sotto le 24 barre è negativo in ogni modello provato</strong>: dove servirebbe un'uscita, il modello sbaglia direzione. Tutto il guadagno degli step 2 e 3 sta nelle fasce lontane.</p>
@@ -128,15 +149,15 @@ footer{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);color:v
   <div class="tw">
     <table>
       <caption>Rank IC di test per distanza dal pivot successivo, in barre da 5m, aggregato sui quattro fold</caption>
-      <thead><tr><th>barre al pivot</th><th class="num">bar</th><th class="num">step 1</th><th class="num">step 2</th><th class="num">step 3 · 12</th><th class="num">step 3 · 28</th></tr></thead>
+      <thead><tr><th>barre al pivot</th><th class="num">bar</th><th class="num">step 1</th><th class="num">step 2</th><th class="num">step 3 · 12</th><th class="num">step 3 · 28</th><th class="num">step 4 · 4 rami</th></tr></thead>
       <tbody>
-        <tr><td>0–6</td><td class="num">8.567</td><td class="num neg">−0.083</td><td class="num neg">−0.064</td><td class="num neg">−0.059</td><td class="num neg">−0.059</td></tr>
-        <tr><td>6–12</td><td class="num">8.464</td><td class="num neg">−0.076</td><td class="num neg">−0.085</td><td class="num neg">−0.100</td><td class="num neg">−0.107</td></tr>
-        <tr><td>12–24</td><td class="num">16.893</td><td class="num neg">−0.083</td><td class="num neg">−0.098</td><td class="num neg">−0.095</td><td class="num neg">−0.094</td></tr>
-        <tr><td>24–48</td><td class="num">31.924</td><td class="num neg">−0.041</td><td class="num neg">−0.034</td><td class="num neg">−0.030</td><td class="num neg">−0.029</td></tr>
-        <tr><td>48–96</td><td class="num">49.783</td><td class="num pos">+0.017</td><td class="num pos">+0.028</td><td class="num pos">+0.028</td><td class="num pos">+0.031</td></tr>
-        <tr><td>96–192</td><td class="num">55.052</td><td class="num pos">+0.022</td><td class="num pos">+0.041</td><td class="num pos">+0.051</td><td class="num pos">+0.054</td></tr>
-        <tr><td>oltre 192</td><td class="num">49.001</td><td class="num pos">+0.022</td><td class="num pos">+0.059</td><td class="num pos">+0.060</td><td class="num pos">+0.066</td></tr>
+        <tr><td>0–6</td><td class="num">8.567</td><td class="num neg">−0.083</td><td class="num neg">−0.064</td><td class="num neg">−0.059</td><td class="num neg">−0.059</td><td class="num neg">−0.069</td></tr>
+        <tr><td>6–12</td><td class="num">8.464</td><td class="num neg">−0.076</td><td class="num neg">−0.085</td><td class="num neg">−0.100</td><td class="num neg">−0.107</td><td class="num neg">−0.101</td></tr>
+        <tr><td>12–24</td><td class="num">16.893</td><td class="num neg">−0.083</td><td class="num neg">−0.098</td><td class="num neg">−0.095</td><td class="num neg">−0.094</td><td class="num neg">−0.090</td></tr>
+        <tr><td>24–48</td><td class="num">31.924</td><td class="num neg">−0.041</td><td class="num neg">−0.034</td><td class="num neg">−0.030</td><td class="num neg">−0.029</td><td class="num neg">−0.029</td></tr>
+        <tr><td>48–96</td><td class="num">49.783</td><td class="num pos">+0.017</td><td class="num pos">+0.028</td><td class="num pos">+0.028</td><td class="num pos">+0.031</td><td class="num pos">+0.032</td></tr>
+        <tr><td>96–192</td><td class="num">55.052</td><td class="num pos">+0.022</td><td class="num pos">+0.041</td><td class="num pos">+0.051</td><td class="num pos">+0.054</td><td class="num pos">+0.048</td></tr>
+        <tr><td>oltre 192</td><td class="num">49.001</td><td class="num pos">+0.022</td><td class="num pos">+0.059</td><td class="num pos">+0.060</td><td class="num pos">+0.066</td><td class="num pos">+0.059</td></tr>
       </tbody>
     </table>
   </div>
@@ -458,9 +479,10 @@ L = δ·(|e| − 0.5·δ)  altrimenti</pre>
     <p><code>L = huber(p,y) − λ·pearson(p,y)</code> avvicina l'objective alla metrica. Da valutare solo dopo un Rank IC stabilmente positivo con λ=0, con batch size già fissato e protocollo multi-seed: griglia (0, 0.1, 0.3, 0.5) × almeno 5 seed, con λ=0 dentro come controllo. Sul GBM non si implementa — la derivata di Pearson non è separabile per campione.</p>
   </div>
 
-  <div class="box open">
-    <h4>5 · Pesi condivisi fra rami</h4>
-    <p>I quattro encoder sono distinti ma operano su input strutturalmente identici: stesse colonne, stessa semantica, solo orizzonte diverso. Variante da testare allo step 4: un unico encoder condiviso più un embedding di timeframe concatenato allo stato finale. Stessa espressività, ~4× parametri in meno.</p>
+  <div class="box no">
+    <h4>5 · Pesi condivisi fra rami — irrilevante <span class="b b-msr">misurato</span></h4>
+    <p>Un encoder unico più un embedding di timeframe concatenato a ciascuno stato finale, ~4× parametri in meno. Misurato allo step 4: <strong>0.1537 contro 0.1530</strong>, cioè 0.0007 di scarto contro 0.0140 di dispersione fra fold.</p>
+    <p>Non è un pareggio da rompere con più seed: <strong>chiude come irrilevante, non come vincitore</strong>. I pesi condivisi non costano nulla e non guadagnano nulla perché la parametrizzazione degli encoder non era il vincolo — tre dei quattro rami non portano informazione, e condividerli o separarli non cambia quanto non c'è.</p>
   </div>
 
   <div class="box no">
@@ -479,7 +501,8 @@ L = δ·(|e| − 0.5·δ)  altrimenti</pre>
     </table>
     </div>
     <p><strong>Il concetto vive sul solo ramo 15m.</strong> Permutare gli altri tre e lasciare in piedi il 15m costa 0.0027 su 0.1525 — sotto il rumore di un singolo fold, e un ventesimo di quello che costa togliere il 15m. È il ramo su cui i pivot sono rilevati, ed è il ramo che il modello legge.</p>
-    <p><strong>Conseguenza per lo step 4:</strong> qualunque cosa guadagni il multi-ramo non può venire da questo indicatore sugli altri tre orizzonti, perché lì non c'è niente da guadagnare. Deve venire da indicatori troppo piccoli perché il passo 4 li risolva, o da una dinamica che solo la sequenza compone.</p>
+    <p><strong>Conseguenza per lo step 4:</strong> qualunque cosa guadagni il multi-ramo non può venire da questo indicatore sugli altri tre orizzonti, perché lì non c'è niente da guadagnare. Doveva venire da indicatori troppo piccoli perché il passo 4 li risolva, o da una dinamica che solo la sequenza compone.</p>
+    <p><strong>Non è venuta.</strong> Lo step 4 perde su tutti e quattro i fold contro il solo ramo 15m, con entrambe le architetture. La previsione fatta qui prima di costruirlo è quella che si è avverata.</p>
   </div>
 </section>
 
