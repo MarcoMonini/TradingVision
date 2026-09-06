@@ -12,6 +12,25 @@ pivot, 80 of 112 raw columns clear a measured noise floor, so the information is
 One branch and not four. Step 4 is the multi-branch model, and it only earns its cost if it beats
 this one; running the cheap architecture first is what makes that comparison mean anything.
 
+    uv run python -m tradingvision.gru --branches 5m,15m,30m,1h --features all --seeds 5
+
+Step 4 did not earn it. On the same four folds and five seeds, Rank IC and Rank ICIR:
+
+    15m alone            0.1582 +- 0.0150    0.5855 +- 0.0544
+    four branches        0.1530 +- 0.0137    0.5649 +- 0.0439
+    four, shared weights 0.1537 +- 0.0147    0.5664 +- 0.0496
+
+Per fold the single branch wins all four, against both variants — the same standard by which step 3
+was promoted over the GBM, reading the other way. The two step 4 architectures are 0.0007 apart
+against 0.0140 between folds, which closes open point 5 as irrelevant rather than as a winner: the
+shared encoder costs nothing and buys nothing, because the parameters were never the constraint.
+`--branch-of` had already said why. `close_position_in_window` lives on the 15m branch and
+permuting the other three costs 0.0027 of 0.1525, so the three extra encoders had nothing to find
+and spent their capacity on noise. The bands near the pivot come out slightly worse, not better.
+
+Which leaves the sequence, and not the horizon, as what step 3 bought — and open point 1 as the
+problem it did not touch.
+
 What it has to beat: Rank IC 0.156 and Rank ICIR 0.58, the same four walk-forward folds from
 2025-06 the GBM ran, *and* a visible improvement in the bands under 48 bars. The threshold is the
 full-set number and not the 0.1531 of the reduced one: step 3 has to beat the best step 2
