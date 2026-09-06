@@ -143,6 +143,8 @@ footer{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);color:v
   <p><strong>Il gate lo aveva già detto.</strong> <code>close_position_in_window</code> vive sul solo ramo 15m: permutare gli altri tre costa 0.0027 su 0.1525 (punto 6). I tre encoder aggiuntivi non avevano niente da trovare e hanno speso la loro capacità sul rumore. Le fasce vicino al pivot escono leggermente <em>peggiori</em>, non migliori.</p>
   <p><strong>Quello che lo step 3 ha comprato è la sequenza, non l'orizzonte.</strong> Il ramo 15m è quello su cui i pivot sono rilevati, ed è l'unico che il modello legge davvero. Le altre tre coperture — 2h, 12h, 24h — restano nel dataset e nel tensore, ma su questa etichetta non pagano il loro costo.</p>
 
+  <p>Anche l'etichetta è stata rimessa in discussione. Una GRU a ramo singolo su <code>swing_leg_target</code>, l'etichetta retrospettiva che il progetto aveva scartato, fa <strong>Rank IC 0.4215</strong> ed è positiva perfino nelle fasce vicino al pivot — ma la regola a soglia che ne segue guadagna solo sul lato corto in un mercato che scende, e perde sul lungo a ogni soglia. Il conto è nella sezione 3.</p>
+
   <h3>Il numero aggregato non basta</h3>
   <p>Scomposto per distanza dal pivot successivo, il Rank IC racconta una storia diversa da quella della media. <strong>Sotto le 24 barre è negativo in ogni modello provato</strong>: dove servirebbe un'uscita, il modello sbaglia direzione. Tutto il guadagno degli step 2 e 3 sta nelle fasce lontane.</p>
 
@@ -255,6 +257,33 @@ footer{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);color:v
         </table>
       </div>
     <p>Quattro quinti del segnale evaporano quando lo si misura su ciò che accade davvero, e chiedere direttamente la cosa giusta rende di più: 0.124 contro 0.075, stesse feature e stesso modello.</p>
+  </div>
+
+  <h3>La controprova economica <span class="b b-msr">misurato</span></h3>
+  <p>L'argomento sopra è una traduzione fra etichette. La domanda vera è un'altra — <strong>quell'etichetta produce trade?</strong> — e ora è misurata direttamente: una GRU a ramo singolo 15m con tutte e 28 le feature, addestrata su <code>swing_leg_target</code>, sugli stessi quattro fold e cinque seed di tutto il resto. In codice: <code>gru --label swing</code>, <code>threshold</code>.</p>
+  <p>Come misura di segnale è schiacciante: <strong>Rank IC 0.4215 ± 0.0154, Rank ICIR 1.74</strong> contro 0.1582 e 0.586 dell'etichetta predittiva. E — la cosa che nessun modello sull'altra etichetta era riuscito a fare — <strong>le fasce vicino al pivot sono positive e forti</strong>: +0.378 sotto le 6 barre, +0.587 fra 12 e 24, dove ogni altro modello sbagliava direzione. Sul grafico le due linee si inseguono a vista.</p>
+
+  <div class="tw">
+    <table>
+      <caption>regola a soglia sulle predizioni di test, 0,25% per lato, rendimenti log per anno per simbolo — soglie a quantili di |predizione|</caption>
+      <thead><tr><th class="num">q</th><th class="num">soglia</th><th class="num">quota long</th><th class="num">lordo long</th><th class="num">lordo short</th><th class="num">trade/anno</th><th class="num">commissioni</th><th class="num">netto</th><th class="num">win rate</th></tr></thead>
+      <tbody>
+        <tr><td class="num">0.00</td><td class="num">0.000</td><td class="num">0.50</td><td class="num neg">—</td><td class="num">—</td><td class="num">877</td><td class="num">4.383</td><td class="num neg">−4.487</td><td class="num">0.49</td></tr>
+        <tr><td class="num">0.70</td><td class="num">0.357</td><td class="num">0.50</td><td class="num neg">−0.198</td><td class="num pos">+0.289</td><td class="num">220</td><td class="num">1.096</td><td class="num neg">−1.004</td><td class="num">0.59</td></tr>
+        <tr><td class="num">0.95</td><td class="num">0.526</td><td class="num">0.48</td><td class="num neg">−0.224</td><td class="num pos">+0.269</td><td class="num">61</td><td class="num">0.303</td><td class="num neg">−0.258</td><td class="num">0.60</td></tr>
+        <tr class="hi"><td class="num">0.99</td><td class="num">0.607</td><td class="num">0.44</td><td class="num neg">−0.065</td><td class="num pos">+0.410</td><td class="num">19</td><td class="num">0.093</td><td class="num pos">+0.252</td><td class="num">0.63</td></tr>
+        <tr><td class="num">0.998</td><td class="num">0.664</td><td class="num">0.44</td><td class="num neg">−0.125</td><td class="num pos">+0.398</td><td class="num">6</td><td class="num">0.028</td><td class="num pos">+0.251</td><td class="num">0.58</td></tr>
+        <tr><td class="num">0.999</td><td class="num">0.685</td><td class="num">0.42</td><td class="num neg">—</td><td class="num">—</td><td class="num">3</td><td class="num">0.014</td><td class="num neg">−0.096</td><td class="num">0.54</td></tr>
+        <tr class="total"><td colspan="7">buy and hold sulle stesse righe</td><td class="num neg">−0.492</td><td class="num">—</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="box no">
+    <h4>Il +25% non è un edge</h4>
+    <p>Solo una fascia stretta di soglie è positiva — sotto il 98° percentile le commissioni dominano, sopra il 99,9° non restano abbastanza trade — e dentro quella fascia la scomposizione per lato dice cosa sta succedendo: <strong>tutto il lordo viene dal lato corto (+0.41 l'anno), e il lato lungo perde a ogni soglia della griglia</strong>. Su un periodo in cui il mercato scende del 49% l'anno, una regola corta metà del tempo guadagna senza prevedere niente.</p>
+    <p>Il netto non è nemmeno stabile: spezzando il periodo a metà, a q=0.99 fa +0.47 e poi +0.03, a q=0.998 fa +0.11 e poi +0.39. Due soglie adiacenti raccontano storie opposte sulle stesse due metà.</p>
+    <p><strong>Che è esattamente la previsione del cambio di etichetta, verificata con uno strumento diverso.</strong> Il Rank IC quasi triplica e il P&amp;L non ne segue niente, perché la parte di etichetta che il modello riproduce così bene è quella già nota a <em>t</em>. Sapere di essere a 0.9 della gamba non è un trade se lo si sa perché il prezzo è già salito.</p>
   </div>
 
   <h3>Rilevazione dei pivot</h3>
@@ -507,7 +536,7 @@ L = δ·(|e| − 0.5·δ)  altrimenti</pre>
 </section>
 
 <footer>
-  Moduli: <code>data.binance</code> · <code>data.pivots</code> · <code>data.target</code> · <code>features</code> · <code>dataset</code> · <code>normalize</code> · <code>split</code> · <code>metrics</code> · <code>oracle</code> · <code>linear</code> · <code>gbm</code> · <code>selection</code> · <code>nearpivot</code> · <code>gru</code>
+  Moduli: <code>data.binance</code> · <code>data.pivots</code> · <code>data.target</code> · <code>features</code> · <code>dataset</code> · <code>normalize</code> · <code>split</code> · <code>metrics</code> · <code>oracle</code> · <code>linear</code> · <code>gbm</code> · <code>selection</code> · <code>nearpivot</code> · <code>gru</code> · <code>threshold</code>
 </footer>
 
 </div>
