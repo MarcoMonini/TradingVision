@@ -119,6 +119,7 @@ EFFECTIVE_LAG = {
         "realized_volatility",
         "volatility_expansion",
         "log_volume_vs_median",
+        "log_dollar_volume",
         "signed_volume",
         "volume_trend",
         "on_balance_volume_zscore",
