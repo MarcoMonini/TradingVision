@@ -10,18 +10,33 @@ across each leg, the new one collapses to zero at every pivot and says how much 
 streamlit run src/tradingvision/app/chart.py
 """
 
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 
+from tradingvision import gru
 from tradingvision.data.candles import SYMBOLS, TIMEFRAMES, get_candles
 from tradingvision.data.pivots import EXTREMA_WINDOW, find_pivots
-from tradingvision.data.target import SMOOTHING, leg_significance, remaining_excursion, swing_leg_target
+from tradingvision.data.target import (
+    CROSS_HORIZON,
+    SMOOTHING,
+    cross_sectional_return,
+    leg_significance,
+    remaining_excursion,
+    swing_leg_target,
+)
 from tradingvision.features import COLUMNS, FAMILIES, LABELS, SELECTED, features
 from tradingvision.normalize import CLIP, SCALE, apply, fit
 from tradingvision.oracle import FEE, run
 
 MAX_DAYS = 365
+# What the saved model was fitted up to, shown so nobody reads a prediction over the train period
+# as if it were out of sample. It is the walk-forward's first cut and `gru`'s own default.
+TEST_START = "2025-06"
 
 # Downloads only happen on an explicit click, and only for a (symbol, timeframe, days) triplet
 # that is not already cached.
@@ -38,6 +53,10 @@ def load_pivots(close, window: int):
 # the dataset carries.
 PREDICTIVE = "remaining excursion (predictive)"
 RETROSPECTIVE = "swing leg position (retrospective)"
+CROSS = "cross-sectional return (predictive)"
+# `gru`'s name for each of them, as written into a checkpoint. No entry for `CROSS`: no model is
+# trained on it yet, which is what keeps the prediction from ever being drawn against it.
+TRAINED_ON = {"excursion": PREDICTIVE, "swing": RETROSPECTIVE}
 
 
 @st.cache_data(show_spinner=False)
@@ -50,9 +69,48 @@ def load_target(close, window: int, label: str, smoothing: float, significance: 
 
 
 @st.cache_data(show_spinner=False)
+def load_cross_target(symbol: str, timeframe: str, days: int, horizon: int):
+    """`cross_sectional_return` for one pair, and the peers it had to be measured against.
+
+    This label does not exist for a single series: it is the forward return of a symbol *relative
+    to the basket trading at the same instant*, so drawing it means fetching all of `SYMBOLS` and
+    keeping one column. Five pairs is a thin cross-section next to the twenty the dataset carries
+    — the level is not the dataset's level and should not be read as one — but the shape on screen
+    is the shape the model would be trained on, which is what the chart is for.
+
+    The whole panel comes back, not the one column: the label of a pair is defined by the others,
+    so the heatmap that shows all of them at once is the only view that shows what it says.
+
+    Peers that Alpaca has no data for simply do not join the panel; the label falls back to NaN
+    wherever fewer than three of them do.
+    """
+    closes = {}
+    for peer in SYMBOLS:
+        bars = get_candles(peer, timeframe, days)
+        if not bars.empty:
+            closes[peer] = bars.close
+    panel = pd.DataFrame(closes).sort_index()
+    return cross_sectional_return(panel, horizon)
+
+
+@st.cache_data(show_spinner=False)
 def load_significance(close, window: int):
     """The raw ratio behind the weighting, shown next to each pivot."""
     return leg_significance(close, load_pivots(close, window))
+
+
+@st.cache_resource(show_spinner=False)
+def load_model(path: str):
+    """The saved GRU, kept across reruns. `cache_resource` and not `cache_data`: a torch module is
+    not something to pickle and copy on every widget move."""
+    return gru.restore(Path(path))
+
+
+@st.cache_data(show_spinner="Predicting…")
+def load_prediction(df, path: str, _mtime: float):
+    """The model's output at every bar on screen. `_mtime` is in the key and unused in the body:
+    retraining the checkpoint has to invalidate this, and the path alone would not say so."""
+    return gru.predict_frame(*load_model(path), df)
 
 
 @st.cache_data(show_spinner="Computing features…")
@@ -63,8 +121,43 @@ def load_features(df, window: int, columns: tuple[str, ...]):
     return features(df, window)[list(columns)]
 
 
+def heatmap(z, horizon: int):
+    """The cross-section itself: one row per pair, time across, colour the label.
+
+    The single-pair line above is a slice of this and cannot show what the label means, because
+    the quantity is defined by the pairs that are not on screen. Here it reads directly: at any
+    vertical slice, blue is what the basket is about to beat and red is what is about to beat the
+    basket. A column that is all one colour is a market move, and the label has already removed
+    it — so those columns are pale by construction, which is the property being drawn.
+
+    Clipped at +/- 2 sd. The tails are a few percent of the rows and they set the colour scale
+    for everything else if left in; the sign and the ordering are what this view is for.
+    """
+    fig = go.Figure(
+        go.Heatmap(
+            z=z.T.to_numpy(),
+            x=z.index,
+            y=[c.split("/")[0] for c in z.columns],
+            colorscale="RdBu",
+            reversescale=True,
+            zmid=0,
+            zmin=-2,
+            zmax=2,
+            colorbar=dict(title="sd", thickness=12),
+            hovertemplate="%{y} %{x}<br>%{z:.2f} sd<extra></extra>",
+        )
+    )
+    fig.update_layout(
+        height=60 + 34 * len(z.columns),
+        margin=dict(l=0, r=0, t=30, b=0),
+        title_text=f"cross-section — excess return over the next {horizon} bars, per pair",
+        xaxis_rangeslider_visible=False,
+    )
+    return fig
+
+
 def chart(
-    df, pivots, target, significance, feats, symbol: str, uirevision: str, normalized=False, bounded=True
+    df, pivots, target, significance, feats, symbol: str, uirevision: str, normalized=False, bounded=True, pred=None
 ) -> go.Figure:
     # Price, then the label under it on the same x: the target is only readable against the leg it
     # describes. Volume next, it is context rather than subject, and the features under everything.
@@ -103,6 +196,24 @@ def chart(
         row=2,
         col=1,
     )
+    if pred is not None:
+        # On the target's own axis, because it is the target's own unit: the model is trained on
+        # `remaining_excursion` in sigma and nothing rescales its output. The two lines are
+        # directly comparable, and the gap between them is the error.
+        fig.add_trace(
+            go.Scatter(
+                x=pred.index,
+                y=pred,
+                mode="lines",
+                line=dict(width=1.5, color="#e67e22"),
+                name="prediction",
+                showlegend=False,
+                connectgaps=False,  # the warm-up has no window behind it and must read as a gap
+                hovertemplate="%{x}<br>prediction %{y:.2f}<extra></extra>",
+            ),
+            row=2,
+            col=1,
+        )
     for kind, color, position in ((1, "#e74c3c", "top center"), (-1, "#2ecc71", "bottom center")):
         p = pivots[pivots.kind == kind]
         # The same pivots on the label axis, where they sit at exactly +/-1 by construction.
@@ -156,7 +267,7 @@ def chart(
     # The retrospective label lives in [-1, +1] and is read against that ceiling; the predictive
     # one is in sigma of a 24-bar walk, unbounded and fat-tailed, so it gets a free axis.
     fig.update_yaxes(
-        title_text="target" if bounded else "target (sigma)",
+        title_text=("target vs prediction" if pred is not None else "target") + ("" if bounded else " (sigma)"),
         range=[-1.3, 1.3] if bounded else None,
         zeroline=True,
         zerolinecolor="#bbb",
@@ -188,12 +299,18 @@ def main() -> None:
     symbol = st.sidebar.selectbox("Pair", SYMBOLS)
     timeframe = st.sidebar.selectbox("Timeframe", list(TIMEFRAMES), index=1)
     days = st.sidebar.slider("History (days)", 1, MAX_DAYS, 30)
-    label = st.sidebar.radio("Label", [PREDICTIVE, RETROSPECTIVE], help="what the model is asked to output")
+    label = st.sidebar.radio("Label", [PREDICTIVE, RETROSPECTIVE, CROSS], help="what the model is asked to output")
     # Both controls shape the retrospective label only: the predictive one has no blend to weight
     # (a degenerate leg goes nowhere, so it scores near zero by itself).
     retrospective = label == RETROSPECTIVE
     smoothing = SMOOTHING
     significance = True
+    # Counted in bars of the timeframe on screen, like every other window here. 48 bars of 15m is
+    # the 12h the horizon sweep pointed at; on another timeframe the same number is another period,
+    # which is why it is a control and not a constant.
+    horizon = CROSS_HORIZON
+    if label == CROSS:
+        horizon = st.sidebar.slider("Forward horizon (bars)", 4, 288, CROSS_HORIZON, 4)
     if retrospective:
         # Unlike the window and the fee, this one is explicitly a tunable: 0.7 is a starting value.
         # 1.0 is a pure time ramp between pivots, 0.0 follows price alone.
@@ -211,6 +328,27 @@ def main() -> None:
     )
     picked = COLUMNS if full else [c for c in COLUMNS if c in SELECTED]
     normalized = st.sidebar.toggle("Normalized", value=True, help="clip((x - median) / IQR, ±5) × 0.1")
+
+    # The GRU, drawn over the label it was trained on. Three conditions, and each of them is a
+    # reason and not a guard: there has to be a checkpoint (`gru --features all --save` writes
+    # one), the chart has to be on the branch the model reads, and the label on screen has to be
+    # the one the model predicts — over the retrospective label the two lines share an axis
+    # without sharing a unit.
+    model_at = gru.CHECKPOINT if gru.CHECKPOINT.exists() else None
+    checkpoint = load_model(str(model_at))[1] if model_at else None
+    branch = checkpoint["branches"][0] if checkpoint else None
+    # Which of the two labels this checkpoint was fitted on. Older files predate the choice and
+    # were all fitted on the predictive one.
+    trained_on = TRAINED_ON[checkpoint.get("label", "excursion")] if checkpoint else None
+    predicting = False
+    if not model_at:
+        st.sidebar.caption("No model saved. `python -m tradingvision.gru --features all --save`")
+    elif timeframe == branch and label == trained_on:
+        predicting = st.sidebar.toggle("GRU prediction", value=True, help=f"{model_at.name}, trained to {TEST_START}")
+    else:
+        # Never drawn against a label it was not trained on: the two live on different scales, and
+        # two lines sharing an axis without sharing a unit is the one reading that misleads.
+        st.sidebar.caption(f"GRU prediction needs the **{branch}** timeframe and the **{trained_on}** label.")
 
     request = (symbol, timeframe, days)
     if st.sidebar.button("Fetch candles", type="primary", use_container_width=True):
@@ -234,9 +372,17 @@ def main() -> None:
         st.warning(f"No data for {fetched[0]} on {fetched[1]}.")
         return
     pivots = load_pivots(df.close, EXTREMA_WINDOW)
-    target = load_target(df.close, EXTREMA_WINDOW, label, smoothing, significance)
+    peers, panel = 0, None
+    if label == CROSS:
+        panel = load_cross_target(fetched[0], fetched[1], fetched[2], horizon)
+        peers = len(panel.columns)
+        target = (panel[fetched[0]] if fetched[0] in panel else pd.Series(np.nan, index=panel.index)).rename("target")
+        target = target.reindex(df.index)
+    else:
+        target = load_target(df.close, EXTREMA_WINDOW, label, smoothing, significance)
     strength = load_significance(df.close, EXTREMA_WINDOW)
     feats = load_features(df, EXTREMA_WINDOW, tuple(COLUMNS))[picked]
+    pred = load_prediction(df, str(model_at), model_at.stat().st_mtime) if predicting else None
     if normalized and len(feats.columns):
         # Fitted on the window on screen, which is what a chart can do and not what the dataset
         # does: there the statistics come from the train period alone.
@@ -250,10 +396,23 @@ def main() -> None:
     b.metric("Avg gross leg", f"{stats['gross_trade_pct']:.2f}%", f"{stats['win_rate'] * 100:.0f}% above fees")
 
     st.plotly_chart(
-        chart(df, pivots, target, strength, feats, fetched[0], "-".join(map(str, fetched)), normalized, retrospective),
+        chart(
+            df,
+            pivots,
+            target,
+            strength,
+            feats,
+            fetched[0],
+            "-".join(map(str, fetched)),
+            normalized,
+            retrospective,
+            pred,
+        ),
         use_container_width=True,
         key="chart",
     )
+    if panel is not None and peers:
+        st.plotly_chart(heatmap(panel.dropna(how="all"), horizon), use_container_width=True, key="heatmap")
     st.caption(
         f"{len(df)} candles — {df.index[0]:%Y-%m-%d %H:%M} to {df.index[-1]:%Y-%m-%d %H:%M} UTC · "
         f"{len(pivots)} pivots, median leg {pivots.amplitude.median() * 100:.2f}% · "
@@ -263,8 +422,24 @@ def main() -> None:
             f"median leg significance {strength.median():.2f}, "
             f"{(strength < 1).mean() * 100:.0f}% of legs below chance"
             if retrospective
-            else f"median |target| {target.abs().median():.2f} sigma, "
-            f"99th percentile {target.abs().quantile(0.99):.1f} sigma"
+            else (
+                f"{horizon}-bar forward return in excess of {peers} pairs, in cross-sectional sd · "
+                f"median |target| {target.abs().median():.2f}, "
+                f"99th percentile {target.abs().quantile(0.99):.1f} · "
+                f"|target| ~0.35 is roughly the {FEE * 200:.2f}% round trip"
+                if label == CROSS
+                else f"median |target| {target.abs().median():.2f} sigma, "
+                f"99th percentile {target.abs().quantile(0.99):.1f} sigma"
+            )
+        )
+        + (
+            f" · prediction on {pred.notna().sum()} bars, "
+            # Spearman on one symbol through time, which is not the Rank IC of the spec — that one
+            # is taken per timestamp across the twenty pairs, and is blind to the common level
+            # this one reads. It says the model is wired up, not how good it is.
+            f"Spearman {pred.corr(target, method='spearman'):.2f} through time on this pair alone"
+            if pred is not None
+            else ""
         )
         if len(pivots)
         else f"{len(df)} candles — no pivot at window {EXTREMA_WINDOW}"

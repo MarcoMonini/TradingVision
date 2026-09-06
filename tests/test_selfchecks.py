@@ -12,7 +12,7 @@ import sys
 
 import pytest
 
-from tradingvision import crosscheck, dataset, gbm, linear, nearpivot, selection
+from tradingvision import crosscheck, dataset, gbm, linear, nearpivot, selection, simulation
 
 SELF_CHECKED = [
     "tradingvision.data.pivots",
@@ -68,3 +68,8 @@ def test_selection_selfcheck():
 def test_crosscheck_selfcheck():
     """`crosscheck` keeps its checks in a function too: its `__main__` rebuilds both datasets."""
     crosscheck._selfcheck()
+
+
+def test_simulation_selfcheck():
+    """`simulation` keeps its checks in a function: its `__main__` sweeps the real store."""
+    simulation._selfcheck()

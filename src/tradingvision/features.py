@@ -47,6 +47,7 @@ FAMILIES: dict[str, tuple[str, ...]] = {
     ),
     "volume": (
         "log_volume_vs_median",
+        "log_dollar_volume",
         "signed_volume",
         "volume_trend",
         "on_balance_volume_zscore",
@@ -57,23 +58,39 @@ FAMILIES: dict[str, tuple[str, ...]] = {
 }
 COLUMNS = [c for cols in FAMILIES.values() for c in cols]
 
-# What survives the five passes of `tradingvision.selection` on the step 2 dataset — 12 of the 28
-# candidates, in the order above rather than by importance. It lives here and not in `selection`
-# because the chart app reads it and `selection` imports lightgbm, which the deployed image does
-# not carry. `selection.SELECTED` is the same list ranked by permutation importance.
+# What the cross-sectional label at 72h rewards. Two columns, and that is not a typo.
+#
+# The twelve that used to be here were selected by `tradingvision.selection` against
+# `remaining_excursion`, a label since measured to be *anti*-correlated with tradable money
+# (Rank IC -0.033 against the market-neutral forward return). A selection is only ever valid for
+# the target it was run against, so that list had to be redone rather than trimmed.
+#
+# Univariate Rank IC against the new label, measured on the train period alone (pre-2025, fifteen
+# symbols) and then confirmed on three walk-forward folds. Three families separate from the rest:
+#
+#     volatility  vol_24h -0.076, average_true_range_pct -0.073, realized_volatility -0.069
+#     liquidity   trades_24h +0.063, log_dollar_volume +0.062
+#     reversal    ret_72h -0.049, ret_7d -0.049
+#
+# and then a cliff: every momentum, trend and position column lands under 0.04, including
+# `close_position_in_window`, which was step 2's most important feature by a factor of thirty on
+# the old label. The volatility columns are one factor wearing five names (mutual |rho| > 0.9);
+# `realized_volatility` is the representative, on the same `n` as everything else here.
+#
+# Reversal is measured and then dropped, which is the one non-obvious call. It has a real
+# univariate signal, but added to the pair below it *lowers* the combined Rank IC from 0.121 to
+# 0.103 across the three folds — it is correlated with volatility and contributes noise where it
+# does not contribute information.
+#
+# Two more things this list assumes, both of them measured and neither of them in this file. The
+# features have to be ranked inside each timestamp before a model reads them: the label is a
+# ranking inside a timestamp, and the same LightGBM on the same columns goes from 0.054 to 0.098
+# on that transform alone. And past that, less machinery wins — an equal-weight composite of these
+# two ranked columns scores 0.121 +- 0.025 against 0.104 for a fitted tree on all 29. The set is a
+# factor pair, not a feature set, and no recurrent model has been re-measured on it yet.
 SELECTED = [
-    "cum_log_return_window",
-    "bar_range_pct",
-    "candle_body_pct",
-    "lower_wick_pct",
-    "close_position_in_bar",
-    "close_position_in_window",
-    "distance_from_window_high_pct",
-    "distance_from_window_low_pct",
-    "age_of_window_high",
-    "age_of_window_low",
-    "log_volume_vs_median",
-    "ema_slope",
+    "realized_volatility",
+    "log_dollar_volume",
 ]
 
 # Chart labels: the identifier is what the dataset carries, this is what a reader sees on a plot.
@@ -95,6 +112,7 @@ LABELS = {
     "age_of_window_high": "Age of Window High",
     "age_of_window_low": "Age of Window Low",
     "log_volume_vs_median": "Log Volume vs Median",
+    "log_dollar_volume": "Log Dollar Volume (N)",
     "signed_volume": "Signed Volume",
     "volume_trend": "Volume Trend",
     "on_balance_volume_zscore": "On-Balance Volume (z-score)",
@@ -153,6 +171,15 @@ def features(df: pd.DataFrame, n: int = EXTREMA_WINDOW) -> pd.DataFrame:
         # so a quantile scaler has to clip 2.4% of it against 0.02% for the log. The floor only
         # bites on bars with no trade at all, five per symbol in 2023+, where the ratio is 0.
         "log_volume_vs_median": np.log(volume_rel.clip(lower=1e-6)),
+        # The one column here whose *level* is the information, and so the one exception to the
+        # stationarity rule the rest of this file follows. Every other feature is scale free on
+        # purpose, which makes it comparable through time and useless for telling one symbol from
+        # another; this one says how big the symbol is, and size is the second of the two factors
+        # the cross-sectional label rewards (Rank IC +0.062 on train, +0.084 out of sample, against
+        # -0.002 for the self-normalised `log_volume_vs_median` right above it). Nothing downstream
+        # is harmed: `normalize` applies the same affine map to every symbol, and a monotone map
+        # leaves the ranking inside a timestamp — which is all the label reads — untouched.
+        "log_dollar_volume": np.log((v * c).rolling(n).mean()),
         "volume_trend": np.log(v.rolling(short).mean() / v.rolling(n).mean()),
         # Rolling, not cumulated from the start of the series: a running total is not stationary.
         "on_balance_volume_zscore": (obv - obv.rolling(n).mean()) / obv.rolling(n).std(),
@@ -195,7 +222,7 @@ if __name__ == "__main__":
         }
     )
     out = features(df)
-    assert list(out.columns) == COLUMNS and len(COLUMNS) == 28, "28 columns, spec order"
+    assert list(out.columns) == COLUMNS and len(COLUMNS) == 29, "29 columns, spec order"
     assert list(LABELS) == COLUMNS, "every column needs a chart label"
     tail = out.iloc[EXTREMA_WINDOW * 4 :]
     assert tail.notna().all().all(), f"NaN past warm-up: {tail.columns[tail.isna().any()].tolist()}"

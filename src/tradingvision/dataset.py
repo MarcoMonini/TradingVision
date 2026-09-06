@@ -41,11 +41,12 @@ import tempfile
 from pathlib import Path
 from typing import Callable
 
+import numpy as np
 import pandas as pd
 
 from tradingvision.data import binance
 from tradingvision.data.pivots import EXTREMA_WINDOW, find_pivots
-from tradingvision.data.target import remaining_excursion
+from tradingvision.data.target import CROSS_HORIZON, cross_sectional_return, remaining_excursion
 from tradingvision.features import features
 
 BRANCHES = ("5m", "15m", "30m", "1h")
@@ -96,6 +97,25 @@ def branch(
 LABEL: Callable[..., pd.Series] = remaining_excursion
 
 
+def pivots_on(symbol: str, idx: pd.DatetimeIndex, n: int = EXTREMA_WINDOW) -> pd.DataFrame:
+    """The `PIVOT_TF` pivots of `symbol`, carried onto the 5m grid `idx` and checked to land on it.
+
+    Its own function because the label is not the only thing that needs them: anything recomputing
+    a target on rows this module already produced has to use the same pivots, found the same way,
+    or it is labelling a different set of legs.
+    """
+    pivots = find_pivots(binance.load(symbol, PIVOT_TF).close, n)
+    pivots.index = pivots.index + _shift(PIVOT_TF)
+    pivots = pivots[(pivots.index >= idx[0]) & (pivots.index <= idx[-1])]
+    # Every 15m close is also a 5m close, so a pivot inside the range must land on an existing 5m
+    # bar. It always does today (measured: none missing on 2023+), but a gap in the 5m series
+    # would silently move the next pivot of the preceding bars one leg further and mislabel them.
+    missing = pivots.index.difference(idx)
+    if len(missing):
+        raise ValueError(f"{len(missing)} pivots have no 5m bar, first at {missing[0]}")
+    return pivots
+
+
 def symbol_frame(
     symbol: str,
     start: str | None = None,
@@ -109,21 +129,76 @@ def symbol_frame(
         bars = bars.loc[pd.Timestamp(start, tz="UTC") - WARMUP :]
     idx = bars.index
 
-    pivots = find_pivots(binance.load(symbol, PIVOT_TF).close, n)
-    pivots.index = pivots.index + _shift(PIVOT_TF)
-    pivots = pivots[(pivots.index >= idx[0]) & (pivots.index <= idx[-1])]
-    # Every 15m close is also a 5m close, so a pivot inside the range must land on an existing 5m
-    # bar. It always does today (measured: none missing on 2023+), but a gap in the 5m series
-    # would silently move the next pivot of the preceding bars one leg further and mislabel them.
-    missing = pivots.index.difference(idx)
-    if len(missing):
-        raise ValueError(f"{len(missing)} pivots have no 5m bar, first at {missing[0]}")
-
+    pivots = pivots_on(symbol, idx, n)
     out = pd.concat([branch(binance.load(symbol, tf), tf, idx, n, lags) for tf in BRANCHES], axis=1)
     out["target"] = label(bars.close, pivots, n)
     # Timestamp of the pivot that closes each bar's leg — the bar itself when it is a pivot.
     out["next_pivot"] = pd.Series(pivots.index, index=pivots.index).reindex(idx, method="bfill")
     return out.dropna()
+
+
+def relabel(index: pd.MultiIndex, label) -> pd.Series:
+    """`label` computed on the rows step 2 already chose, from the same bars and the same pivots.
+
+    Recomputing the label instead of rebuilding the dataset keeps the sample identical — same
+    timestamps, same symbols, same stride, same tensor — so the only thing that changes between
+    two runs is the question being asked. Rebuilding would move the rows too, and then the
+    difference would be measuring the sampling as well.
+
+    `next_pivot` is not recomputed and does not need to be: the legs are the same legs, so the
+    purging horizon of a row does not depend on which label is written on it.
+    """
+    # The same slice `dataset.symbol_frame` labels, and for its reason: earlier history has gaps
+    # where a 15m pivot lands on no 5m bar at all, and `pivots_on` refuses to label through one.
+    since = index.get_level_values(0).min() - WARMUP
+    out = pd.Series(np.nan, index=index, name="target")
+    for symbol, rows in pd.Series(np.arange(len(index)), index=index).groupby(level=1):
+        bars = binance.load(symbol, BASE_TF).loc[since:]
+        pivots = pivots_on(symbol, bars.index, EXTREMA_WINDOW)
+        y = label(bars.close, pivots, EXTREMA_WINDOW)
+        out.iloc[rows.to_numpy()] = y.reindex(rows.index.get_level_values(0)).to_numpy()
+    if out.isna().any():
+        raise ValueError(f"{out.isna().sum()} rows have no label — the pivots do not cover them")
+    return out
+
+
+def relabel_cross(df: pd.DataFrame, horizon: int = CROSS_HORIZON) -> pd.DataFrame:
+    """`df` with `cross_sectional_return` as its target, its purging horizon, and nothing else.
+
+    Its own function and not a `label` passed to `relabel`, because it is shaped differently in
+    both directions and pretending otherwise would hide the two things that matter.
+
+    It reads the panel, not one symbol. The label of a row is a statement about that symbol against
+    the others trading at that instant, so `relabel`'s loop — one symbol's closes at a time — has
+    nothing to compute. The panel is built once from every symbol the rows mention.
+
+    And it rewrites `next_pivot`. `relabel` leaves it alone and says why: the legs are the same
+    legs whichever pivot label is written on them. That reasoning ends here. This label reaches a
+    fixed `horizon` ahead and nowhere else, which is *longer* than the pivots — 72h against a p99
+    of 202 bars, about 17h — so purging on the old column would leave the last two and a half days
+    of every train side reading the test period. Under-purging is the failure that inflates a
+    metric quietly, so the horizon travels with the label that created it.
+
+    The horizon is counted in bars of the 15m grid the legs live on, and the panel here is 5m: the
+    same 72 hours is three times as many bars. `remaining_excursion` documents being bitten by
+    exactly this, so it is converted and not passed through.
+
+    Rows the label cannot reach come back dropped rather than raising, which is the other
+    difference: the last `horizon` of every symbol has no forward return, and that is the permanent
+    condition of the current bar rather than a fault in the data.
+    """
+    per_base = pd.Timedelta(PIVOT_TF) // pd.Timedelta(BASE_TF)
+    bars = horizon * per_base
+    since = df.index.get_level_values(0).min() - WARMUP
+    symbols = df.index.get_level_values(1).unique()
+    panel = pd.DataFrame({s: binance.load(s, BASE_TF).loc[since:].close for s in symbols}).sort_index()
+    y = cross_sectional_return(panel, bars)
+
+    target = pd.Series(np.nan, index=df.index, name="target")
+    for symbol, rows in pd.Series(np.arange(len(df)), index=df.index).groupby(level=1):
+        target.iloc[rows.to_numpy()] = y[symbol].reindex(rows.index.get_level_values(0)).to_numpy()
+    reach = df.index.get_level_values(0) + bars * pd.Timedelta(BASE_TF)
+    return df.assign(target=target, next_pivot=reach).dropna(subset=["target"])
 
 
 def build(
