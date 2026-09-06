@@ -188,6 +188,68 @@ def remaining_excursion(
     return out
 
 
+# Bars of the series passed in, like `remaining_excursion`'s own defaults. 48 is 12h on the 15m
+# grid the legs live on. Measured over four horizons on ten symbols, the Rank IC of a GBM against
+# this label rises with it — 0.039 at 3h, 0.050 at 24h, 0.067 at 72h — while the reactivity of the
+# signal falls, so 12-24h is where the two meet. Nothing about the formula fixes it.
+CROSS_HORIZON = 48
+# The metric already refuses a date with fewer than three symbols, so a label computed on two is a
+# number no evaluation would read. Same floor, stated once here.
+MIN_SYMBOLS = 3
+
+
+def cross_sectional_return(
+    panel: pd.DataFrame, horizon: int = CROSS_HORIZON, lookback: int = SIGNIFICANCE_LOOKBACK
+) -> pd.DataFrame:
+    """The forward log return over `horizon` bars, in excess of the basket, in units of own risk.
+
+        y(i, t) = [ log(close[i, t+h] / close[i, t]) - mean_t ] / (sigma_i * sqrt(h))
+
+    One column per symbol, NaN in the last `horizon` rows and wherever the cross-section is too
+    thin to have a mean worth removing.
+
+    **The numerator removes the market.** `swing_leg_target` and `remaining_excursion` both let a
+    model be paid for being short through a falling market, and over the twelve months from
+    2025-09 that is exactly where their P&L came from — 0.91 of it on the short side against 0.02
+    on the long. A model cannot earn a beta the label no longer contains, so what is left is what
+    it knows. This is the whole reason the label exists.
+
+    **The denominator is the symbol's own volatility, not the dispersion of the date.** The two
+    are not interchangeable and the difference decides what the label is usable for. Dividing by
+    `sd_t` makes a rank inside a timestamp: a portfolio quantity, meaningless on one pair, and it
+    inflates the small accidental gaps of a date whose symbols barely differ — the objection
+    `gru.cross_section` already makes to its own "z" mode, where it costs 0.007 of Rank IC.
+    Dividing by `sigma_i * sqrt(h)` keeps a per-symbol quantity in per-symbol risk units:
+    comparable through time, readable on a single-pair chart, and directly usable by
+    `threshold.positions`, which is the rule this project actually trades. Measured, the two carry
+    the same information — the top-to-bottom decile spread of the forward excess return is 4.64%
+    against 4.36% — so the per-symbol form costs nothing and buys the whole existing pipeline.
+
+    Causal denominator, future numerator, as in `remaining_excursion`: `sigma` is the trailing
+    volatility at `t` and nothing in it looks forward.
+
+    Not deadzoned, which was measured and rejected. Clipping the middle to zero -- the obvious way
+    to make BUY and SELL separate cleanly -- costs 42% of the Rank IC (0.024 against 0.041 on the
+    same rows). Under a squared loss a zeroed row is not a sharper decision, it is a deleted
+    gradient: the model spends capacity learning to output 0 and the informative rows that survive
+    are the tail, where the label is noisiest. Separation belongs in the rule that reads the
+    prediction, never in the label.
+
+    What one unit of it is worth, measured over ten symbols at h = 48 bars of 15m: y = +1 is
+    +1.0% of excess return over the next 12 hours, y = -1 is -1.2%, and the round trip costs
+    0.50%. So |y| ~ 0.5 is where a trade stops paying for itself, which is the threshold the rule
+    has to clear -- on the *prediction*, which shrinks towards zero, not on the label.
+
+    Purging is exact and fixed here: a row's label ends `horizon` bars later and nowhere else,
+    unlike the unbounded reach of `next_pivot` (p99 202 bars, max 754).
+    """
+    r = np.log(panel.shift(-horizon) / panel)
+    enough = r.notna().sum(axis=1) >= MIN_SYMBOLS
+    sigma = panel.apply(bar_sigma, lookback=lookback) * np.sqrt(horizon)
+    y = r.sub(r.mean(axis=1), axis=0) / sigma
+    return y.where(enough, np.nan).replace([np.inf, -np.inf], np.nan)
+
+
 if __name__ == "__main__":
     # Triangle wave: peaks every 20 bars, troughs halfway between. Price is piecewise linear in
     # time, so both advancements agree and the label is a clean ramp.
@@ -240,6 +302,35 @@ if __name__ == "__main__":
     # pivot to pivot, the new one resets at every pivot. Different shapes, not opposite signs.
     both = pd.DataFrame({"old": weighted, "new": rem}).dropna()
     assert abs(both.old.corr(both.new)) < 0.5
+
+    # The cross-sectional label. A shared noisy walk plus a per-symbol drift: the noise cancels
+    # in the demeaning, so the sign of each column is known in advance while the volatility that
+    # scales it is real.
+    rng = np.random.default_rng(0)
+    common = np.cumsum(rng.normal(0, 0.01, 400))
+    step = 0.001 * np.arange(400.0)
+    panel = pd.DataFrame(
+        {"up": np.exp(common + step), "flat": np.exp(common), "down": np.exp(common - step)},
+        index=pd.RangeIndex(400),
+    )
+    y = cross_sectional_return(panel, horizon=10, lookback=20)
+    assert (y.up.dropna() > 0).all() and (y.down.dropna() < 0).all(), "the sign is the relative move"
+    assert np.allclose(y.flat.dropna(), 0, atol=1e-12), "a symbol that is the basket scores zero"
+    assert y.iloc[-10:].isna().all().all(), "the last horizon bars have no forward return"
+    assert 0.1 < y.up.abs().median() < 10, "in units of risk, so O(1) and not O(0.01)"
+    # Market neutral, stated as the equality it is: a move common to every symbol -- any size, any
+    # sign -- leaves every label untouched. This is the property the whole label exists for.
+    shocked = panel.mul(np.exp(0.05 * np.arange(400.0)), axis=0)
+    assert np.allclose(
+        cross_sectional_return(shocked, horizon=10, lookback=20).dropna(),
+        y.dropna(),
+    ), "a common move is not information"
+    # Under three symbols there is no basket to be in excess of, and the metric drops the date anyway.
+    assert cross_sectional_return(panel[["up", "down"]], horizon=10, lookback=20).isna().all().all()
+    # A symbol with no volatility divides by zero. NaN and not inf: "unscorable" is a value the
+    # dropna of every caller already understands, an infinity is a number that poisons a mean.
+    still = panel.assign(still=1.0)
+    assert cross_sectional_return(still, horizon=10, lookback=20).still.isna().all()
 
     flat = pd.Series([1.0] * 600, index=pd.RangeIndex(600))
     assert swing_leg_target(flat, window=5).isna().all(), "no pivots, no label"

@@ -12,6 +12,8 @@ streamlit run src/tradingvision/app/chart.py
 
 from pathlib import Path
 
+import numpy as np
+import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
@@ -19,7 +21,14 @@ from plotly.subplots import make_subplots
 from tradingvision import gru
 from tradingvision.data.candles import SYMBOLS, TIMEFRAMES, get_candles
 from tradingvision.data.pivots import EXTREMA_WINDOW, find_pivots
-from tradingvision.data.target import SMOOTHING, leg_significance, remaining_excursion, swing_leg_target
+from tradingvision.data.target import (
+    CROSS_HORIZON,
+    SMOOTHING,
+    cross_sectional_return,
+    leg_significance,
+    remaining_excursion,
+    swing_leg_target,
+)
 from tradingvision.features import COLUMNS, FAMILIES, LABELS, SELECTED, features
 from tradingvision.normalize import CLIP, SCALE, apply, fit
 from tradingvision.oracle import FEE, run
@@ -44,7 +53,9 @@ def load_pivots(close, window: int):
 # the dataset carries.
 PREDICTIVE = "remaining excursion (predictive)"
 RETROSPECTIVE = "swing leg position (retrospective)"
-# `gru`'s name for each of them, as written into a checkpoint.
+CROSS = "cross-sectional return (predictive)"
+# `gru`'s name for each of them, as written into a checkpoint. No entry for `CROSS`: no model is
+# trained on it yet, which is what keeps the prediction from ever being drawn against it.
 TRAINED_ON = {"excursion": PREDICTIVE, "swing": RETROSPECTIVE}
 
 
@@ -55,6 +66,29 @@ def load_target(close, window: int, label: str, smoothing: float, significance: 
     if label == PREDICTIVE:
         return remaining_excursion(close, pivots, window)
     return swing_leg_target(close, pivots, smoothing=smoothing, significance=significance)
+
+
+@st.cache_data(show_spinner=False)
+def load_cross_target(symbol: str, timeframe: str, days: int, horizon: int):
+    """`cross_sectional_return` for one pair, and the peers it had to be measured against.
+
+    This label does not exist for a single series: it is the forward return of a symbol *relative
+    to the basket trading at the same instant*, so drawing it means fetching all of `SYMBOLS` and
+    keeping one column. Five pairs is a thin cross-section next to the twenty the dataset carries
+    — the level is not the dataset's level and should not be read as one — but the shape on screen
+    is the shape the model would be trained on, which is what the chart is for.
+
+    Peers that Alpaca has no data for simply do not join the panel; the label falls back to NaN
+    wherever fewer than three of them do.
+    """
+    closes = {}
+    for peer in SYMBOLS:
+        bars = get_candles(peer, timeframe, days)
+        if not bars.empty:
+            closes[peer] = bars.close
+    panel = pd.DataFrame(closes).sort_index()
+    z = cross_sectional_return(panel, horizon)
+    return (z[symbol] if symbol in z else pd.Series(np.nan, index=panel.index)).rename("target"), len(panel.columns)
 
 
 @st.cache_data(show_spinner=False)
@@ -228,12 +262,18 @@ def main() -> None:
     symbol = st.sidebar.selectbox("Pair", SYMBOLS)
     timeframe = st.sidebar.selectbox("Timeframe", list(TIMEFRAMES), index=1)
     days = st.sidebar.slider("History (days)", 1, MAX_DAYS, 30)
-    label = st.sidebar.radio("Label", [PREDICTIVE, RETROSPECTIVE], help="what the model is asked to output")
+    label = st.sidebar.radio("Label", [PREDICTIVE, RETROSPECTIVE, CROSS], help="what the model is asked to output")
     # Both controls shape the retrospective label only: the predictive one has no blend to weight
     # (a degenerate leg goes nowhere, so it scores near zero by itself).
     retrospective = label == RETROSPECTIVE
     smoothing = SMOOTHING
     significance = True
+    # Counted in bars of the timeframe on screen, like every other window here. 48 bars of 15m is
+    # the 12h the horizon sweep pointed at; on another timeframe the same number is another period,
+    # which is why it is a control and not a constant.
+    horizon = CROSS_HORIZON
+    if label == CROSS:
+        horizon = st.sidebar.slider("Forward horizon (bars)", 4, 288, CROSS_HORIZON, 4)
     if retrospective:
         # Unlike the window and the fee, this one is explicitly a tunable: 0.7 is a starting value.
         # 1.0 is a pure time ramp between pivots, 0.0 follows price alone.
@@ -295,7 +335,12 @@ def main() -> None:
         st.warning(f"No data for {fetched[0]} on {fetched[1]}.")
         return
     pivots = load_pivots(df.close, EXTREMA_WINDOW)
-    target = load_target(df.close, EXTREMA_WINDOW, label, smoothing, significance)
+    peers = 0
+    if label == CROSS:
+        target, peers = load_cross_target(fetched[0], fetched[1], fetched[2], horizon)
+        target = target.reindex(df.index)
+    else:
+        target = load_target(df.close, EXTREMA_WINDOW, label, smoothing, significance)
     strength = load_significance(df.close, EXTREMA_WINDOW)
     feats = load_features(df, EXTREMA_WINDOW, tuple(COLUMNS))[picked]
     pred = load_prediction(df, str(model_at), model_at.stat().st_mtime) if predicting else None
@@ -336,6 +381,11 @@ def main() -> None:
             f"median leg significance {strength.median():.2f}, "
             f"{(strength < 1).mean() * 100:.0f}% of legs below chance"
             if retrospective
+            else f"{horizon}-bar forward return in excess of {peers} pairs · "
+            f"median |target| {target.abs().median():.2f} sigma, "
+            f"99th percentile {target.abs().quantile(0.99):.1f} sigma · "
+            f"|target| 0.5 is roughly the {FEE * 200:.2f}% round trip"
+            if label == CROSS
             else f"median |target| {target.abs().median():.2f} sigma, "
             f"99th percentile {target.abs().quantile(0.99):.1f} sigma"
         )
