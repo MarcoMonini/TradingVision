@@ -54,10 +54,12 @@ import pandas as pd
 import torch
 from torch import nn
 
-from tradingvision import dataset, linear, metrics, nearpivot, normalize, split
+from tradingvision import dataset, linear, metrics, nearpivot, normalize, split, threshold
 from tradingvision.data.binance import STORE, load
 from tradingvision.data.pivots import EXTREMA_WINDOW
+from tradingvision.data.target import remaining_excursion, swing_leg_target
 from tradingvision.features import COLUMNS, SELECTED, features
+from tradingvision.oracle import FEE
 
 BRANCH = "15m"  # step 3's single branch, and the default of `--branches`
 BRANCHES = dataset.BRANCHES  # step 4: 5m -> 2h, 15m -> 6h, 30m -> 12h, 1h -> 24h
@@ -90,7 +92,14 @@ BATCH = 512
 GRAD_CLIP = 1.0
 EPOCHS = 100
 PATIENCE = 10  # on validation Rank IC, never on the loss
-DELTA = 2.1  # Huber, measured on this label over the train period — see `data.target`
+DELTA = 2.1  # Huber, measured on the default label over the train period — see `data.target`
+# The label to fit. `excursion` is the one the dataset carries and every measured number in the
+# spec is taken on; `swing` is the retrospective label it replaced, kept selectable rather than
+# deleted because the two are not comparable and reading one against the other is the point.
+# Their Rank ICs live on different scales: `crosscheck` puts an OLS at 0.38 on `swing` and 0.12 on
+# `excursion`, because most of `swing` is already known at t. A number on one is not a number on
+# the other, and nothing here converts between them.
+LABELS = {"excursion": remaining_excursion, "swing": swing_leg_target}
 # Huber for the cross-sectional target, measured the same way — the median of |z| over the train
 # period, 0.557. Delta lives in the units of the label, so it cannot be carried over or rescaled
 # by eye when the label changes.
@@ -440,7 +449,7 @@ def _market_beta(pred: pd.Series, target: pd.Series) -> dict[str, float]:
     return metrics.signal(pred, target - target.groupby(level=0).transform("mean"))
 
 
-def save(path: Path, model: Net, x: Branches, branches: list[str], keep: list[str]) -> None:
+def save(path: Path, model: Net, x: Branches, branches: list[str], keep: list[str], label: str) -> None:
     """The weights and everything needed to feed them: the scaling of the train period, the
     columns, the branches and their widths. A model without its scaler is not a model."""
     torch.save(
@@ -452,6 +461,7 @@ def save(path: Path, model: Net, x: Branches, branches: list[str], keep: list[st
             "keep": keep,
             "steps": STEPS,
             "shared": model.shared,
+            "label": label,
         },
         path,
     )
@@ -492,6 +502,31 @@ def meta(path: Path = CACHE) -> pd.DataFrame:
     """Step 2's rows: the label, the purging horizon and each row's place in the tensor."""
     df = pd.read_parquet(path, columns=linear.META)
     return df.assign(row=np.arange(len(df)))
+
+
+def relabel(index: pd.MultiIndex, label) -> pd.Series:
+    """`label` computed on the rows step 2 already chose, from the same bars and the same pivots.
+
+    Recomputing the label instead of rebuilding the dataset keeps the sample identical — same
+    timestamps, same symbols, same stride, same tensor — so the only thing that changes between
+    two runs is the question being asked. Rebuilding would move the rows too, and then the
+    difference would be measuring the sampling as well.
+
+    `next_pivot` is not recomputed and does not need to be: the legs are the same legs, so the
+    purging horizon of a row does not depend on which label is written on it.
+    """
+    # The same slice `dataset.symbol_frame` labels, and for its reason: earlier history has gaps
+    # where a 15m pivot lands on no 5m bar at all, and `pivots_on` refuses to label through one.
+    since = index.get_level_values(0).min() - dataset.WARMUP
+    out = pd.Series(np.nan, index=index, name="target")
+    for symbol, rows in pd.Series(np.arange(len(index)), index=index).groupby(level=1):
+        bars = load(symbol, dataset.BASE_TF).loc[since:]
+        pivots = dataset.pivots_on(symbol, bars.index, EXTREMA_WINDOW)
+        y = label(bars.close, pivots, EXTREMA_WINDOW)
+        out.iloc[rows.to_numpy()] = y.reindex(rows.index.get_level_values(0)).to_numpy()
+    if out.isna().any():
+        raise ValueError(f"{out.isna().sum()} rows have no label — the pivots do not cover them")
+    return out
 
 
 def _selfcheck() -> None:
@@ -542,6 +577,7 @@ def _selfcheck() -> None:
     assert multi["folds"].loc["mean", "rank_ic"] > 0.5, multi["folds"]
     # Same expressiveness, roughly a quarter of the parameters — the reason the variant exists.
     widths = [len(COLUMNS)] * len(BRANCHES)  # the real shape: at f=2 the head, shared either way, dominates
+
     def size(**how: bool) -> int:
         return sum(p.numel() for p in Net(widths, **how).parameters())
 
@@ -599,8 +635,15 @@ def main() -> None:
     ap.add_argument("--epochs", type=int, default=EPOCHS)
     ap.add_argument("--cache", type=Path, default=CACHE, help="step 2's dataset, read for its rows")
     ap.add_argument("--horizon", action="store_true", help="also split the test Rank IC by distance to the next pivot")
+    ap.add_argument("--pnl", action="store_true", help="also price the prediction as a threshold rule, fees included")
     ap.add_argument("--verbose", action="store_true", help="print the validation Rank IC each epoch")
     ap.add_argument("--features", choices=list(FEATURES), default="selected", help="which candidate set to feed")
+    ap.add_argument(
+        "--label",
+        choices=list(LABELS),
+        default="excursion",
+        help="which target to fit; `swing` is the retrospective one, on a scale of its own",
+    )
     ap.add_argument(
         "--branches", default=BRANCH, help=f"comma separated, from {','.join(BRANCHES)} — step 4 is all four"
     )
@@ -629,6 +672,14 @@ def main() -> None:
 
     _selfcheck()
     df = meta(args.cache)
+    delta = DELTA
+    if args.label != "excursion":
+        df = df.assign(target=relabel(df.index, LABELS[args.label]))
+        # Delta lives in the units of the label, so it is measured and never carried over: the
+        # median of |target| over the train period, the same criterion that fixed 2.1 for the
+        # default one. Train only, for the reason purging exists.
+        delta = float(split.temporal(df, args.test_start)[0].target.abs().median())
+        print(f"label {args.label}: |target| median {delta:.3f} on train, sd {df.target.std():.3f}")
     keep = FEATURES[args.features]
     branches = args.branches.split(",")
     if unknown := [tf for tf in branches if tf not in BRANCHES]:
@@ -647,8 +698,10 @@ def main() -> None:
         train, _ = split.temporal(df, args.test_start)
         inner, valid = split.temporal_fraction(train, VALID_FRACTION)
         z = Branches(x, inner.row.to_numpy())
-        model = fit(z, inner, valid, epochs=args.epochs, shared=args.encoder == "shared", quiet=not args.verbose)
-        save(args.save, model, z, branches, keep)
+        model = fit(
+            z, inner, valid, epochs=args.epochs, delta=delta, shared=args.encoder == "shared", quiet=not args.verbose
+        )
+        save(args.save, model, z, branches, keep, args.label)
         print(f"fitted on {len(inner):,} rows to {args.test_start} and saved to {args.save}")
         return
 
@@ -661,11 +714,16 @@ def main() -> None:
         args.folds,
         args.seeds,
         epochs=args.epochs,
+        delta=delta,
         z_target=args.z_target,
         band=args.band,
         shared=args.encoder == "shared",
         quiet=not args.verbose,
     )
+    # Always written, whatever else the run was asked to print: the predictions are what every
+    # economic reading is taken on, and retraining twenty models to look at them again is a waste.
+    predictions = STORE / f"pred-{args.label}-{args.features}-{'+'.join(branches)}.parquet"
+    out["pred"].rename("pred").to_frame().to_parquet(predictions)
     print(out["folds"].round(4).to_string())
     if args.seeds > 1:
         print("\nper seed\n")
@@ -679,6 +737,16 @@ def main() -> None:
     if args.horizon:
         print("\ntest Rank IC by bars to the next pivot, pooled over the folds\n")
         print(out["horizon"].round(4).to_string())
+    if args.pnl:
+        # The label says which way the trade points: `swing` is -1 at a low, so a low prediction
+        # is a buy, while `excursion` is already signed the way the position is.
+        sign = -1 if args.label == "swing" else 1
+        close = threshold.prices(out["pred"].index)
+        print(f"\nthreshold rule on the test folds — {FEE * 100:.2f}% per side, log returns per year\n")
+        print(threshold.sweep(out["pred"], close, sign=sign).round(4).to_string())
+        held = threshold.buy_and_hold(close)["net_per_year"]
+        print(f"\nbuy and hold on the same rows: {held * 100:+.1f}% per year")
+    print(f"\npredictions written to {predictions}")
 
 
 if __name__ == "__main__":

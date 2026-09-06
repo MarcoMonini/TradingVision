@@ -66,3 +66,16 @@ def test_symbol_frame_carries_the_purging_horizon():
     # tail is long (a leg can run for hundreds of bars) so this is a sanity bound, not a claim.
     assert df.target.abs().median() < 10, "the label should be O(1) sigma"
     assert not df.isna().any().any(), "warm-up and the undefined tail must be dropped"
+
+
+@pytest.mark.skipif(not (STORE / "BTCUSDT-5m.parquet").exists(), reason="needs the downloaded store")
+def test_relabelling_rows_reproduces_the_label_they_were_built_with():
+    """`gru.relabel` writes a different target on rows `dataset` already produced, which is only
+    honest if it agrees with `dataset` on the label they share. One symbol is enough: the loop is
+    per symbol, so a wrong slice or the wrong pivots would show here."""
+    from tradingvision import gru
+    from tradingvision.data.target import remaining_excursion
+
+    df = symbol_frame("BTC", start="2025-06").iloc[::240]
+    rows = pd.MultiIndex.from_arrays([df.index, ["BTC"] * len(df)])
+    assert np.allclose(gru.relabel(rows, remaining_excursion), df.target)

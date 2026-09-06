@@ -96,6 +96,25 @@ def branch(
 LABEL: Callable[..., pd.Series] = remaining_excursion
 
 
+def pivots_on(symbol: str, idx: pd.DatetimeIndex, n: int = EXTREMA_WINDOW) -> pd.DataFrame:
+    """The `PIVOT_TF` pivots of `symbol`, carried onto the 5m grid `idx` and checked to land on it.
+
+    Its own function because the label is not the only thing that needs them: anything recomputing
+    a target on rows this module already produced has to use the same pivots, found the same way,
+    or it is labelling a different set of legs.
+    """
+    pivots = find_pivots(binance.load(symbol, PIVOT_TF).close, n)
+    pivots.index = pivots.index + _shift(PIVOT_TF)
+    pivots = pivots[(pivots.index >= idx[0]) & (pivots.index <= idx[-1])]
+    # Every 15m close is also a 5m close, so a pivot inside the range must land on an existing 5m
+    # bar. It always does today (measured: none missing on 2023+), but a gap in the 5m series
+    # would silently move the next pivot of the preceding bars one leg further and mislabel them.
+    missing = pivots.index.difference(idx)
+    if len(missing):
+        raise ValueError(f"{len(missing)} pivots have no 5m bar, first at {missing[0]}")
+    return pivots
+
+
 def symbol_frame(
     symbol: str,
     start: str | None = None,
@@ -109,16 +128,7 @@ def symbol_frame(
         bars = bars.loc[pd.Timestamp(start, tz="UTC") - WARMUP :]
     idx = bars.index
 
-    pivots = find_pivots(binance.load(symbol, PIVOT_TF).close, n)
-    pivots.index = pivots.index + _shift(PIVOT_TF)
-    pivots = pivots[(pivots.index >= idx[0]) & (pivots.index <= idx[-1])]
-    # Every 15m close is also a 5m close, so a pivot inside the range must land on an existing 5m
-    # bar. It always does today (measured: none missing on 2023+), but a gap in the 5m series
-    # would silently move the next pivot of the preceding bars one leg further and mislabel them.
-    missing = pivots.index.difference(idx)
-    if len(missing):
-        raise ValueError(f"{len(missing)} pivots have no 5m bar, first at {missing[0]}")
-
+    pivots = pivots_on(symbol, idx, n)
     out = pd.concat([branch(binance.load(symbol, tf), tf, idx, n, lags) for tf in BRANCHES], axis=1)
     out["target"] = label(bars.close, pivots, n)
     # Timestamp of the pivot that closes each bar's leg — the bar itself when it is a pivot.

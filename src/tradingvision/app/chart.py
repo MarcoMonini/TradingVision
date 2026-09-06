@@ -44,6 +44,8 @@ def load_pivots(close, window: int):
 # the dataset carries.
 PREDICTIVE = "remaining excursion (predictive)"
 RETROSPECTIVE = "swing leg position (retrospective)"
+# `gru`'s name for each of them, as written into a checkpoint.
+TRAINED_ON = {"excursion": PREDICTIVE, "swing": RETROSPECTIVE}
 
 
 @st.cache_data(show_spinner=False)
@@ -194,7 +196,7 @@ def chart(
     # The retrospective label lives in [-1, +1] and is read against that ceiling; the predictive
     # one is in sigma of a 24-bar walk, unbounded and fat-tailed, so it gets a free axis.
     fig.update_yaxes(
-        title_text="target" if bounded else ("target vs prediction (sigma)" if pred is not None else "target (sigma)"),
+        title_text=("target vs prediction" if pred is not None else "target") + ("" if bounded else " (sigma)"),
         range=[-1.3, 1.3] if bounded else None,
         zeroline=True,
         zerolinecolor="#bbb",
@@ -256,14 +258,20 @@ def main() -> None:
     # the one the model predicts — over the retrospective label the two lines share an axis
     # without sharing a unit.
     model_at = gru.CHECKPOINT if gru.CHECKPOINT.exists() else None
-    branch = load_model(str(model_at))[1]["branches"][0] if model_at else None
+    checkpoint = load_model(str(model_at))[1] if model_at else None
+    branch = checkpoint["branches"][0] if checkpoint else None
+    # Which of the two labels this checkpoint was fitted on. Older files predate the choice and
+    # were all fitted on the predictive one.
+    trained_on = TRAINED_ON[checkpoint.get("label", "excursion")] if checkpoint else None
     predicting = False
-    if model_at and not retrospective and timeframe == branch:
-        predicting = st.sidebar.toggle("GRU prediction", value=True, help=f"{model_at.name}, trained to {TEST_START}")
-    elif model_at and not retrospective:
-        st.sidebar.caption(f"GRU prediction needs the **{branch}** timeframe — the branch the model reads.")
-    elif not model_at:
+    if not model_at:
         st.sidebar.caption("No model saved. `python -m tradingvision.gru --features all --save`")
+    elif timeframe == branch and label == trained_on:
+        predicting = st.sidebar.toggle("GRU prediction", value=True, help=f"{model_at.name}, trained to {TEST_START}")
+    else:
+        # Never drawn against a label it was not trained on: the two live on different scales, and
+        # two lines sharing an axis without sharing a unit is the one reading that misleads.
+        st.sidebar.caption(f"GRU prediction needs the **{branch}** timeframe and the **{trained_on}** label.")
 
     request = (symbol, timeframe, days)
     if st.sidebar.button("Fetch candles", type="primary", use_container_width=True):
