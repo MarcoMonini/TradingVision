@@ -188,11 +188,22 @@ def remaining_excursion(
     return out
 
 
-# Bars of the series passed in, like `remaining_excursion`'s own defaults. 48 is 12h on the 15m
-# grid the legs live on. Measured over four horizons on ten symbols, the Rank IC of a GBM against
-# this label rises with it — 0.039 at 3h, 0.050 at 24h, 0.067 at 72h — while the reactivity of the
-# signal falls, so 12-24h is where the two meet. Nothing about the formula fixes it.
-CROSS_HORIZON = 48
+# Bars of the series passed in, like `remaining_excursion`'s own defaults. 288 is 72h on the 15m
+# grid the legs live on. Measured over three walk-forward folds on fifteen symbols, with the label
+# horizon purged exactly out of each train side: Rank IC 0.0592 +- 0.0216 at 72h against
+# 0.0488 +- 0.0199 at 12h. The difference is inside the fold spread, but 72h wins each of the
+# three folds separately (0.056 / 0.040 / 0.082 against 0.043 / 0.032 / 0.071) — the same standard
+# by which step 3 was promoted over step 2.
+#
+# The horizon is not only a signal question, and this is the half that decides it. What a rule has
+# to clear is roughly `2c / sigma_H`, and `sigma_H` grows with sqrt(h): `simulation` puts the
+# break-even Rank IC at 25bp per side at 0.125 for a 12h label and 0.063 for a 72h one, at the same
+# threshold. Both terms move the right way at once, which nothing else on the list does.
+#
+# What it costs: 51 independent cross-sections a year instead of 306, so every number measured on
+# this label carries an error bar four times wider, and the naive Rank ICIR over dates overstates
+# its own significance by about sqrt(72). Read `simulation`'s blocked error, never the raw ratio.
+CROSS_HORIZON = 288
 # The metric already refuses a date with fewer than three symbols, so a label computed on two is a
 # number no evaluation would read. Same floor, stated once here.
 MIN_SYMBOLS = 3
