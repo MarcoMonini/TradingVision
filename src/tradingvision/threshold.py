@@ -54,6 +54,26 @@ def prices(index: pd.MultiIndex) -> pd.Series:
     return out
 
 
+def smoothed(pred: pd.Series, k: int) -> pd.Series:
+    """The last `k` predictions of each symbol, averaged — a low-pass on the output.
+
+    The place a filter belongs. Smoothing the *input* buys nothing: a GRU over 24 steps can
+    already learn any linear filter of the window, so a moving average upstream adds only its own
+    lag — the reason every smoothed indicator left the selection. Downstream is different: the
+    prediction carries the model's estimation noise on top of whatever signal it found, and that
+    noise is what an average over neighbouring bars removes. Causal, so it stays honest — the
+    value at `t` reads `t-k+1..t` and nothing later.
+    """
+    if k <= 1:
+        return pred
+    # Along each symbol's own rows, not along a shared timestamp grid. The symbols are not in
+    # phase — a gap in a series shifts its stride from that point, and 5% of the rows end up on
+    # timestamps no other symbol shares — so a rolling mean over an unstacked frame would average
+    # a symbol against its own absence and quietly return the input unchanged.
+    ordered = pred.sort_index(level=[1, 0])
+    return ordered.groupby(level=1).rolling(k, min_periods=1).mean().droplevel(0).reindex(pred.index)
+
+
 def positions(pred: pd.Series, threshold: float, sign: int = -1) -> pd.Series:
     """The held position at every row: +1 long, -1 short, 0 before the first signal.
 
@@ -179,6 +199,23 @@ def _selfcheck() -> None:
     assert table.in_market.iloc[0] == 1.0
     # On the saw both sides earn, because the signal really does read the turns. It is the
     # asymmetry on real data that means something, so the symmetric case has to hold here.
+    # The filter averages over time inside a symbol and never across symbols, and k=1 is identity.
+    one = pred
+    assert smoothed(one, 1).equals(one)
+    two = smoothed(one, 2)
+    assert two.index.equals(one.index) and two.notna().all()
+    first = one.xs("a", level=1).sort_index()
+    assert np.isclose(two.xs("a", level=1).sort_index().iloc[1], first.iloc[:2].mean())
+    assert np.isclose(two.xs("a", level=1).sort_index().iloc[0], first.iloc[0]), "no value before the first bar"
+    # Out of phase, as the real symbols are: each one is averaged along its own rows, and a
+    # timestamp grid it does not share cannot dilute it into a no-op.
+    when = pd.date_range("2024", periods=4, freq="h", tz="UTC")
+    apart = pd.Series(
+        [1.0, 3.0, 10.0, 30.0],
+        index=pd.MultiIndex.from_arrays([[when[0], when[1], when[2], when[3]], ["a", "b", "a", "b"]]),
+    )
+    assert smoothed(apart, 2).tolist() == [1.0, 3.0, 5.5, 16.5]
+
     both = pnl(pred, close, 0.9)
     assert both["gross_long"] > 0 and both["gross_short"] > 0, both
     assert 0.3 < both["long_share"] < 0.7, both

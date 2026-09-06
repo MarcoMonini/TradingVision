@@ -458,26 +458,6 @@ def run(
     }
 
 
-def smoothed(pred: pd.Series, k: int) -> pd.Series:
-    """The last `k` predictions of each symbol, averaged — a low-pass on the output.
-
-    The place a filter belongs. Smoothing the *input* buys nothing: a GRU over 24 steps can
-    already learn any linear filter of the window, so a moving average upstream adds only its own
-    lag — the reason every smoothed indicator left the selection. Downstream is different: the
-    prediction carries the model's estimation noise on top of whatever signal it found, and that
-    noise is what an average over neighbouring bars removes. Causal, so it stays honest — the
-    value at `t` reads `t-k+1..t` and nothing later.
-    """
-    if k <= 1:
-        return pred
-    # Along each symbol's own rows, not along a shared timestamp grid. The symbols are not in
-    # phase — a gap in a series shifts its stride from that point, and 5% of the rows end up on
-    # timestamps no other symbol shares — so a rolling mean over an unstacked frame would average
-    # a symbol against its own absence and quietly return the input unchanged.
-    ordered = pred.sort_index(level=[1, 0])
-    return ordered.groupby(level=1).rolling(k, min_periods=1).mean().droplevel(0).reindex(pred.index)
-
-
 def _market_beta(pred: pd.Series, target: pd.Series) -> dict[str, float]:
     """The same metrics against the target with its cross-sectional mean removed — step 2's
     diagnostic, repeated so the two steps are read the same way."""
@@ -601,22 +581,20 @@ def _selfcheck() -> None:
 
     assert size(shared=True) < size() / 3, (size(shared=True), size())
 
-    # The filter averages over time inside a symbol and never across symbols, and k=1 is identity.
-    one = out["pred"]
-    assert smoothed(one, 1).equals(one)
-    two = smoothed(one, 2)
-    assert two.index.equals(one.index) and two.notna().all()
-    first = one.xs("a", level=1).sort_index()
-    assert np.isclose(two.xs("a", level=1).sort_index().iloc[1], first.iloc[:2].mean())
-    assert np.isclose(two.xs("a", level=1).sort_index().iloc[0], first.iloc[0]), "no value before the first bar"
-    # Out of phase, as the real symbols are: each one is averaged along its own rows, and a
-    # timestamp grid it does not share cannot dilute it into a no-op.
-    when = pd.date_range("2024", periods=4, freq="h", tz="UTC")
-    apart = pd.Series(
-        [1.0, 3.0, 10.0, 30.0],
-        index=pd.MultiIndex.from_arrays([[when[0], when[1], when[2], when[3]], ["a", "b", "a", "b"]]),
-    )
-    assert smoothed(apart, 2).tolist() == [1.0, 3.0, 5.5, 16.5]
+    # The window, which is the one place a bug would invent future information. A branch label
+    # sits at `label + tf - 5m` on the 5m grid, so the 15m candle that closes at 10:00 becomes
+    # readable at the 5m bar of 09:55 and not one bar earlier.
+    labels = pd.date_range("2024-01-01 09:00", periods=8, freq="15min", tz="UTC")
+    frame = pd.DataFrame({"v": range(8)}, index=labels + pd.Timedelta("10min"), dtype="float64")
+    grid = pd.date_range("2024-01-01 09:50", periods=4, freq="5min", tz="UTC")  # 09:50 09:55 10:00 10:05
+    w = window(frame, grid, steps=3)
+    assert w.shape == (4, 3, 1)
+    assert w[0, -1, 0] == 2, "at 09:50 the last closed 15m candle is the one labelled 09:30"
+    assert w[1, -1, 0] == 3, "at 09:55 the candle labelled 09:45 has closed"
+    assert w[3, -1, 0] == 3, "at 10:05 the candle labelled 10:00 is still forming"
+    assert list(w[1, :, 0]) == [1.0, 2.0, 3.0], "oldest step first"
+    # Causal: truncating the frame after the grid leaves every value untouched.
+    assert np.array_equal(w, window(frame[frame.index <= grid[-1]], grid, steps=3))
 
     # The cross-sectional rank round-trip: three symbols on one grid, one of them always the
     # largest, so its rank is the top of every cross-section it appears in.
@@ -635,21 +613,6 @@ def _selfcheck() -> None:
     assert len(r["a"]) == 5 and grid[-1] not in r["a"].index
     assert r["a"].notna().all().all()
 
-    # The window, which is the one place a bug would invent future information. A branch label
-    # sits at `label + tf - 5m` on the 5m grid, so the 15m candle that closes at 10:00 becomes
-    # readable at the 5m bar of 09:55 and not one bar earlier.
-    labels = pd.date_range("2024-01-01 09:00", periods=8, freq="15min", tz="UTC")
-    frame = pd.DataFrame({"v": range(8)}, index=labels + pd.Timedelta("10min"), dtype="float64")
-    grid = pd.date_range("2024-01-01 09:50", periods=4, freq="5min", tz="UTC")  # 09:50 09:55 10:00 10:05
-    w = window(frame, grid, steps=3)
-    assert w.shape == (4, 3, 1)
-    assert w[0, -1, 0] == 2, "at 09:50 the last closed 15m candle is the one labelled 09:30"
-    assert w[1, -1, 0] == 3, "at 09:55 the candle labelled 09:45 has closed"
-    assert w[3, -1, 0] == 3, "at 10:05 the candle labelled 10:00 is still forming"
-    assert list(w[1, :, 0]) == [1.0, 2.0, 3.0], "oldest step first"
-    # Causal: truncating the frame after the grid leaves every value untouched.
-    assert np.array_equal(w, window(frame[frame.index <= grid[-1]], grid, steps=3))
-
     # The cross-sectional target: standardised inside each date, and — the reason for the whole
     # change — scoring identically under the metric, which is what makes dropping it free.
     z = cross_section(df.target)
@@ -657,8 +620,9 @@ def _selfcheck() -> None:
     assert np.allclose(per_date.mean(), 0, atol=1e-9) and np.allclose(per_date.std(), 1, atol=1e-9)
     d = cross_section(df.target, "demean")
     assert np.allclose(d.groupby(level=0).mean(), 0, atol=1e-9) and d.std() > 0.5, "demean keeps the dispersion"
+    p = out["pred"]
     assert np.isclose(
-        metrics.signal(one, z.loc[one.index])["rank_ic"], metrics.signal(one, df.target.loc[one.index])["rank_ic"]
+        metrics.signal(p, z.loc[p.index])["rank_ic"], metrics.signal(p, df.target.loc[p.index])["rank_ic"]
     )
 
 
@@ -797,7 +761,7 @@ def main() -> None:
         print(out["seeds"].round(4).to_string())
     if args.smooth:
         print("\nlow-pass on the prediction — Rank IC of the k-bar average, pooled over the folds\n")
-        rows = {k: metrics.signal(smoothed(out["pred"], k), out["target"]) for k in [1] + args.smooth}
+        rows = {k: metrics.signal(threshold.smoothed(out["pred"], k), out["target"]) for k in [1] + args.smooth}
         print(pd.DataFrame(rows).T.rename_axis("k").round(4).to_string())
     print("\nmarket beta — the same metrics once the cross-sectional mean is removed\n")
     print(out["market_beta"].round(4).to_string())
