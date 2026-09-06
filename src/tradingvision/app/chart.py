@@ -422,13 +422,15 @@ def main() -> None:
             f"median leg significance {strength.median():.2f}, "
             f"{(strength < 1).mean() * 100:.0f}% of legs below chance"
             if retrospective
-            else f"{horizon}-bar forward return in excess of {peers} pairs, in cross-sectional sd · "
-            f"median |target| {target.abs().median():.2f}, "
-            f"99th percentile {target.abs().quantile(0.99):.1f} · "
-            f"|target| ~0.35 is roughly the {FEE * 200:.2f}% round trip"
-            if label == CROSS
-            else f"median |target| {target.abs().median():.2f} sigma, "
-            f"99th percentile {target.abs().quantile(0.99):.1f} sigma"
+            else (
+                f"{horizon}-bar forward return in excess of {peers} pairs, in cross-sectional sd · "
+                f"median |target| {target.abs().median():.2f}, "
+                f"99th percentile {target.abs().quantile(0.99):.1f} · "
+                f"|target| ~0.35 is roughly the {FEE * 200:.2f}% round trip"
+                if label == CROSS
+                else f"median |target| {target.abs().median():.2f} sigma, "
+                f"99th percentile {target.abs().quantile(0.99):.1f} sigma"
+            )
         )
         + (
             f" · prediction on {pred.notna().sum()} bars, "

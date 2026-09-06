@@ -331,9 +331,9 @@ if __name__ == "__main__":
     # sign -- leaves every label untouched. This is the property the whole label exists for, and
     # with `sd_t` in the denominator it holds for a random common path and not only a smooth one.
     shocked = panel.mul(np.exp(np.cumsum(rng.normal(0.001, 0.004, 400))), axis=0)
-    assert np.allclose(cross_sectional_return(shocked, horizon=10).dropna(), y.dropna()), (
-        "a common move is not information"
-    )
+    assert np.allclose(
+        cross_sectional_return(shocked, horizon=10).dropna(), y.dropna()
+    ), "a common move is not information"
     # A market that moves as one has no dispersion and the label is 0/0. NaN and not 0 — "nothing
     # to rank here" is not the same statement as "this symbol is average", and only the first is true.
     same = pd.DataFrame({c: np.exp(0.002 * np.arange(50.0)) for c in "abc"})
