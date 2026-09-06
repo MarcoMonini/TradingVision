@@ -46,7 +46,7 @@ import pandas as pd
 
 from tradingvision.data import binance
 from tradingvision.data.pivots import EXTREMA_WINDOW, find_pivots
-from tradingvision.data.target import remaining_excursion
+from tradingvision.data.target import CROSS_HORIZON, cross_sectional_return, remaining_excursion
 from tradingvision.features import features
 
 BRANCHES = ("5m", "15m", "30m", "1h")
@@ -160,6 +160,45 @@ def relabel(index: pd.MultiIndex, label) -> pd.Series:
     if out.isna().any():
         raise ValueError(f"{out.isna().sum()} rows have no label — the pivots do not cover them")
     return out
+
+
+def relabel_cross(df: pd.DataFrame, horizon: int = CROSS_HORIZON) -> pd.DataFrame:
+    """`df` with `cross_sectional_return` as its target, its purging horizon, and nothing else.
+
+    Its own function and not a `label` passed to `relabel`, because it is shaped differently in
+    both directions and pretending otherwise would hide the two things that matter.
+
+    It reads the panel, not one symbol. The label of a row is a statement about that symbol against
+    the others trading at that instant, so `relabel`'s loop — one symbol's closes at a time — has
+    nothing to compute. The panel is built once from every symbol the rows mention.
+
+    And it rewrites `next_pivot`. `relabel` leaves it alone and says why: the legs are the same
+    legs whichever pivot label is written on them. That reasoning ends here. This label reaches a
+    fixed `horizon` ahead and nowhere else, which is *longer* than the pivots — 72h against a p99
+    of 202 bars, about 17h — so purging on the old column would leave the last two and a half days
+    of every train side reading the test period. Under-purging is the failure that inflates a
+    metric quietly, so the horizon travels with the label that created it.
+
+    The horizon is counted in bars of the 15m grid the legs live on, and the panel here is 5m: the
+    same 72 hours is three times as many bars. `remaining_excursion` documents being bitten by
+    exactly this, so it is converted and not passed through.
+
+    Rows the label cannot reach come back dropped rather than raising, which is the other
+    difference: the last `horizon` of every symbol has no forward return, and that is the permanent
+    condition of the current bar rather than a fault in the data.
+    """
+    per_base = pd.Timedelta(PIVOT_TF) // pd.Timedelta(BASE_TF)
+    bars = horizon * per_base
+    since = df.index.get_level_values(0).min() - WARMUP
+    symbols = df.index.get_level_values(1).unique()
+    panel = pd.DataFrame({s: binance.load(s, BASE_TF).loc[since:].close for s in symbols}).sort_index()
+    y = cross_sectional_return(panel, bars)
+
+    target = pd.Series(np.nan, index=df.index, name="target")
+    for symbol, rows in pd.Series(np.arange(len(df)), index=df.index).groupby(level=1):
+        target.iloc[rows.to_numpy()] = y[symbol].reindex(rows.index.get_level_values(0)).to_numpy()
+    reach = df.index.get_level_values(0) + bars * pd.Timedelta(BASE_TF)
+    return df.assign(target=target, next_pivot=reach).dropna(subset=["target"])
 
 
 def build(

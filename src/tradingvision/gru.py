@@ -57,7 +57,7 @@ from torch import nn
 from tradingvision import dataset, linear, metrics, nearpivot, normalize, split, threshold
 from tradingvision.data.binance import STORE, load
 from tradingvision.data.pivots import EXTREMA_WINDOW
-from tradingvision.data.target import remaining_excursion, swing_leg_target
+from tradingvision.data.target import cross_sectional_return, remaining_excursion, swing_leg_target
 from tradingvision.features import COLUMNS, SELECTED, features
 from tradingvision.oracle import FEE
 
@@ -99,7 +99,11 @@ DELTA = 2.1  # Huber, measured on the default label over the train period — se
 # Their Rank ICs live on different scales: `crosscheck` puts an OLS at 0.38 on `swing` and 0.12 on
 # `excursion`, because most of `swing` is already known at t. A number on one is not a number on
 # the other, and nothing here converts between them.
-LABELS = {"excursion": remaining_excursion, "swing": swing_leg_target}
+# `cross` is the third and reads the panel rather than one symbol, so `dataset` relabels it
+# through its own function; the entry is here so the CLI can name it and this comment can sit next
+# to the other two. Its scale is a third one again — a rank-free z inside each timestamp — and, like
+# the other pair, no number taken on one converts to another.
+LABELS = {"excursion": remaining_excursion, "swing": swing_leg_target, "cross": cross_sectional_return}
 # Huber for the cross-sectional target, measured the same way — the median of |z| over the train
 # period, 0.557. Delta lives in the units of the label, so it cannot be carried over or rescaled
 # by eye when the label changes.
@@ -673,7 +677,7 @@ def main() -> None:
         "--label",
         choices=list(LABELS),
         default="excursion",
-        help="which target to fit; `swing` is the retrospective one, on a scale of its own",
+        help="which target to fit; `cross` is the cross-sectional one, `swing` the retrospective",
     )
     ap.add_argument(
         "--branches", default=BRANCH, help=f"comma separated, from {','.join(BRANCHES)} — step 4 is all four"
@@ -708,9 +712,21 @@ def main() -> None:
 
     _selfcheck()
     df = meta(args.cache)
+    # The tensor is built on every row step 2 chose, whatever the label does to the frame
+    # afterwards. `row` points into it positionally, so a label that drops rows — `cross` drops the
+    # last 72h of each symbol — must not be allowed to move what those positions mean, and the
+    # cache stays shared between labels instead of forking per target.
+    rows = df.index
     delta = DELTA
-    if args.label != "excursion":
+    if args.label == "cross":
+        # Rewrites the purging horizon as well as the target, which is why it is not a `relabel`
+        # call: this label reaches a fixed 72h ahead, four times the pivots' typical reach.
+        before = len(df)
+        df = dataset.relabel_cross(df)
+        print(f"label cross: {before - len(df):,} of {before:,} rows dropped for want of a forward return")
+    elif args.label != "excursion":
         df = df.assign(target=dataset.relabel(df.index, LABELS[args.label]))
+    if args.label != "excursion":
         # Delta lives in the units of the label, so it is measured and never carried over: the
         # median of |target| over the train period, the same criterion that fixed 2.1 for the
         # default one. Train only, for the reason purging exists.
@@ -727,7 +743,7 @@ def main() -> None:
     x = [
         cached_sequences(
             TENSOR.with_stem(f"{TENSOR.stem}-{tf}-{args.features}{'-rank' if args.rank else ''}"),
-            df.index,
+            rows,
             keep=keep,
             tf=tf,
             steps=STEPS,
@@ -736,8 +752,9 @@ def main() -> None:
         for tf in branches
     ]
     print(
-        f"{len(df):,} rows, {STEPS} steps x {len(keep)} features on {'+'.join(branches)}, "
-        f"{args.encoder}, {'cross-sectional ranks' if args.rank else 'levels'}, {DEVICE}"
+        f"{len(rows):,} rows ({len(df):,} labelled), {STEPS} steps x {len(keep)} features on "
+        f"{'+'.join(branches)}, {args.encoder}, "
+        f"{'cross-sectional ranks' if args.rank else 'levels'}, {DEVICE}"
     )
 
     if args.save:

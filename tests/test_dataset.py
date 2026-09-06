@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 from tradingvision.data.binance import OHLC, STORE
-from tradingvision.dataset import BRANCHES, branch, relabel, symbol_frame
+from tradingvision.dataset import BRANCHES, branch, relabel, relabel_cross, symbol_frame
 
 
 def synthetic(bars: int = 3000, seed: int = 0) -> pd.DataFrame:
@@ -78,3 +78,36 @@ def test_relabelling_rows_reproduces_the_label_they_were_built_with():
     df = symbol_frame("BTC", start="2025-06").iloc[::240]
     rows = pd.MultiIndex.from_arrays([df.index, ["BTC"] * len(df)])
     assert np.allclose(relabel(rows, remaining_excursion), df.target)
+
+
+@pytest.mark.skipif(not (STORE / "BTCUSDT-5m.parquet").exists(), reason="needs the downloaded store")
+def test_cross_relabelling_carries_its_own_horizon_and_drops_what_it_cannot_reach():
+    """The cross-sectional label is the one that reaches a fixed distance ahead, so it owns the
+    purging column too — leaving the pivots' shorter reach in place would under-purge every fold.
+    Taken on the tail of the store, which is where the rows it cannot label actually are."""
+    from tradingvision.data.binance import load
+    from tradingvision.data.target import CROSS_HORIZON, cross_sectional_return
+    from tradingvision.dataset import BASE_TF, WARMUP
+
+    syms = ["BTC", "ETH", "SOL", "XRP"]
+    when = load("BTC", BASE_TF).index[-8000::240]
+    rows = pd.MultiIndex.from_product([when, syms])
+    df = pd.DataFrame({"row": np.arange(len(rows)), "next_pivot": rows.get_level_values(0)}, index=rows)
+    out = relabel_cross(df)
+
+    bars = CROSS_HORIZON * 3  # 15m bars of the constant, on the 5m grid the panel is built from
+    reach = out.next_pivot - out.index.get_level_values(0)
+    assert (reach == bars * pd.Timedelta("5min")).all() and reach.iloc[0] == pd.Timedelta("72h")
+    # Positions into the tensor survive the drop: they were assigned before it and must not move.
+    assert out.row.is_monotonic_increasing and set(out.row) <= set(df.row)
+    # The last 72h of the store has no forward return, and those rows leave rather than raise.
+    assert len(out) < len(df)
+    last = out.index.get_level_values(0).max()
+    assert when.max() - last >= pd.Timedelta("72h") - pd.Timedelta(BASE_TF)
+
+    # And the values are the panel's own, not something recomputed one symbol at a time.
+    since = df.index.get_level_values(0).min() - WARMUP
+    panel = pd.DataFrame({s: load(s, BASE_TF).loc[since:].close for s in syms}).sort_index()
+    y = cross_sectional_return(panel, bars)
+    at = out.xs("ETH", level=1)
+    assert np.allclose(at.target, y.ETH.reindex(at.index))
