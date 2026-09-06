@@ -277,19 +277,17 @@ def permutation_importance(
 # an ensemble of trees cannot use on flattened inputs is not necessarily a column a recurrent net
 # cannot use on the sequence. The seven that went out are still in `features.COLUMNS`, and going
 # back to the full set is one argument, not a rebuild.
+# Superseded, and kept as a list only because `features.SELECTED` and this one must agree. The
+# ordering here used to be permutation importance from the step 2 run; there is no permutation run
+# behind the current pair, whose order is univariate Rank IC on the train period — see the comment
+# on `features.SELECTED` for the measurement and for what it dropped.
+#
+# Re-running the five passes of this module against the cross-sectional label is worth doing and
+# has not been done: the redundancy clustering and the shadow floor would both say something about
+# a two-column set that a univariate scan cannot.
 SELECTED = [
-    "close_position_in_window",
-    "ema_slope",
-    "candle_body_pct",
-    "distance_from_window_low_pct",
-    "cum_log_return_window",
-    "age_of_window_high",
-    "lower_wick_pct",
-    "bar_range_pct",
-    "distance_from_window_high_pct",
-    "age_of_window_low",
-    "log_volume_vs_median",
-    "close_position_in_bar",
+    "realized_volatility",
+    "log_dollar_volume",
 ]
 
 
@@ -393,9 +391,14 @@ def _selfcheck() -> None:
 
     assert set(SIMPLICITY) == set(features.COLUMNS), "every candidate needs a place in the tie-break"
     assert set(SELECTED) == set(features.SELECTED), "the two orderings must hold the same set"
-    assert len(SELECTED) == 12 and not set(SELECTED) - set(features.COLUMNS), SELECTED
-    kept = select(pd.DataFrame(columns=["close_position_in_window_5m", "adx_trend_strength_1h", *linear.META]))
-    assert list(kept.columns) == ["close_position_in_window_5m", *linear.META]
+    # No count here on purpose: the size of the set is a result and changed once already, from the
+    # twelve this module chose against the old label to the two the cross-sectional one rewards.
+    # What has to hold is that every survivor is a real candidate.
+    assert SELECTED and not set(SELECTED) - set(features.COLUMNS), SELECTED
+    # A selected concept keeps every flattened variant of itself, an unselected one keeps none.
+    # The example column has to be one that is currently selected, so it moves when the set does.
+    kept = select(pd.DataFrame(columns=["realized_volatility_5m", "adx_trend_strength_1h", *linear.META]))
+    assert list(kept.columns) == ["realized_volatility_5m", *linear.META]
 
     # Complete linkage, and the reason for it: a-b and b-c are redundant, a-c is not. Single
     # linkage would chain the three into one cluster on the strength of b alone.
