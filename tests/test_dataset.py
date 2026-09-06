@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 from tradingvision.data.binance import OHLC, STORE
-from tradingvision.dataset import BRANCHES, branch, symbol_frame
+from tradingvision.dataset import BRANCHES, branch, relabel, symbol_frame
 
 
 def synthetic(bars: int = 3000, seed: int = 0) -> pd.DataFrame:
@@ -70,12 +70,11 @@ def test_symbol_frame_carries_the_purging_horizon():
 
 @pytest.mark.skipif(not (STORE / "BTCUSDT-5m.parquet").exists(), reason="needs the downloaded store")
 def test_relabelling_rows_reproduces_the_label_they_were_built_with():
-    """`gru.relabel` writes a different target on rows `dataset` already produced, which is only
+    """`relabel` writes a different target on rows `dataset` already produced, which is only
     honest if it agrees with `dataset` on the label they share. One symbol is enough: the loop is
     per symbol, so a wrong slice or the wrong pivots would show here."""
-    from tradingvision import gru
     from tradingvision.data.target import remaining_excursion
 
     df = symbol_frame("BTC", start="2025-06").iloc[::240]
     rows = pd.MultiIndex.from_arrays([df.index, ["BTC"] * len(df)])
-    assert np.allclose(gru.relabel(rows, remaining_excursion), df.target)
+    assert np.allclose(relabel(rows, remaining_excursion), df.target)

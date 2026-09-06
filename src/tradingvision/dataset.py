@@ -41,6 +41,7 @@ import tempfile
 from pathlib import Path
 from typing import Callable
 
+import numpy as np
 import pandas as pd
 
 from tradingvision.data import binance
@@ -134,6 +135,31 @@ def symbol_frame(
     # Timestamp of the pivot that closes each bar's leg — the bar itself when it is a pivot.
     out["next_pivot"] = pd.Series(pivots.index, index=pivots.index).reindex(idx, method="bfill")
     return out.dropna()
+
+
+def relabel(index: pd.MultiIndex, label) -> pd.Series:
+    """`label` computed on the rows step 2 already chose, from the same bars and the same pivots.
+
+    Recomputing the label instead of rebuilding the dataset keeps the sample identical — same
+    timestamps, same symbols, same stride, same tensor — so the only thing that changes between
+    two runs is the question being asked. Rebuilding would move the rows too, and then the
+    difference would be measuring the sampling as well.
+
+    `next_pivot` is not recomputed and does not need to be: the legs are the same legs, so the
+    purging horizon of a row does not depend on which label is written on it.
+    """
+    # The same slice `dataset.symbol_frame` labels, and for its reason: earlier history has gaps
+    # where a 15m pivot lands on no 5m bar at all, and `pivots_on` refuses to label through one.
+    since = index.get_level_values(0).min() - WARMUP
+    out = pd.Series(np.nan, index=index, name="target")
+    for symbol, rows in pd.Series(np.arange(len(index)), index=index).groupby(level=1):
+        bars = binance.load(symbol, BASE_TF).loc[since:]
+        pivots = pivots_on(symbol, bars.index, EXTREMA_WINDOW)
+        y = label(bars.close, pivots, EXTREMA_WINDOW)
+        out.iloc[rows.to_numpy()] = y.reindex(rows.index.get_level_values(0)).to_numpy()
+    if out.isna().any():
+        raise ValueError(f"{out.isna().sum()} rows have no label — the pivots do not cover them")
+    return out
 
 
 def build(
