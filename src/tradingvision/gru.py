@@ -634,7 +634,11 @@ def main() -> None:
     ap.add_argument("--epochs", type=int, default=EPOCHS)
     ap.add_argument("--cache", type=Path, default=CACHE, help="step 2's dataset, read for its rows")
     ap.add_argument("--horizon", action="store_true", help="also split the test Rank IC by distance to the next pivot")
-    ap.add_argument("--pnl", action="store_true", help="also price the prediction as a threshold rule, fees included")
+    ap.add_argument(
+        "--pnl",
+        action="store_true",
+        help="also price the prediction as a directional threshold rule, fees included; not for `cross`",
+    )
     ap.add_argument("--verbose", action="store_true", help="print the validation Rank IC each epoch")
     ap.add_argument("--features", choices=list(FEATURES), default="selected", help="which candidate set to feed")
     ap.add_argument(
@@ -673,6 +677,21 @@ def main() -> None:
         help="fit one model on the whole train period and write it here for the chart app, then stop",
     )
     args = ap.parse_args()
+    if args.pnl and args.label == "cross":
+        # Refused before anything is trained, rather than printed as a caveat under the table.
+        # `threshold.sweep` prices a directional, one-symbol-at-a-time rule with an absolute band.
+        # Applied to a cross-sectional prediction it produces a plausible number that means nothing:
+        # on the first `--label cross --rank` run it reported +0.51 a year with `long_share` at zero
+        # — a short-only book, over twelve months in which the basket fell 51%. That is the market
+        # being read back, not the signal. `simulation --pred` prices the same prediction on the
+        # dollar-neutral book the label describes, and puts it on the break-even table it has to
+        # clear. The predictions are written by every run, `--pnl` or not, so this costs one command
+        # and no retraining.
+        raise SystemExit(
+            "--pnl prices the directional rule, which a cross-sectional prediction has no business "
+            "in. Run without it, then:\n"
+            "  uv run python -m tradingvision.simulation --pred <the parquet this writes> --smooth 12"
+        )
 
     _selfcheck()
     df = meta(args.cache)
