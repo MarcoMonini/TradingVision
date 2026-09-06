@@ -130,7 +130,7 @@ def heatmap(z, horizon: int):
     basket. A column that is all one colour is a market move, and the label has already removed
     it — so those columns are pale by construction, which is the property being drawn.
 
-    Clipped at +/- 2 sigma. The tails are a few percent of the rows and they set the colour scale
+    Clipped at +/- 2 sd. The tails are a few percent of the rows and they set the colour scale
     for everything else if left in; the sign and the ordering are what this view is for.
     """
     fig = go.Figure(
@@ -143,8 +143,8 @@ def heatmap(z, horizon: int):
             zmid=0,
             zmin=-2,
             zmax=2,
-            colorbar=dict(title="sigma", thickness=12),
-            hovertemplate="%{y} %{x}<br>%{z:.2f} sigma<extra></extra>",
+            colorbar=dict(title="sd", thickness=12),
+            hovertemplate="%{y} %{x}<br>%{z:.2f} sd<extra></extra>",
         )
     )
     fig.update_layout(
@@ -422,10 +422,10 @@ def main() -> None:
             f"median leg significance {strength.median():.2f}, "
             f"{(strength < 1).mean() * 100:.0f}% of legs below chance"
             if retrospective
-            else f"{horizon}-bar forward return in excess of {peers} pairs · "
-            f"median |target| {target.abs().median():.2f} sigma, "
-            f"99th percentile {target.abs().quantile(0.99):.1f} sigma · "
-            f"|target| 0.5 is roughly the {FEE * 200:.2f}% round trip"
+            else f"{horizon}-bar forward return in excess of {peers} pairs, in cross-sectional sd · "
+            f"median |target| {target.abs().median():.2f}, "
+            f"99th percentile {target.abs().quantile(0.99):.1f} · "
+            f"|target| ~0.35 is roughly the {FEE * 200:.2f}% round trip"
             if label == CROSS
             else f"median |target| {target.abs().median():.2f} sigma, "
             f"99th percentile {target.abs().quantile(0.99):.1f} sigma"
