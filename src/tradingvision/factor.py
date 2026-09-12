@@ -58,6 +58,12 @@ The fee here is charged conservatively: every fold opens its own book from flat,
 this slow pays roughly half its measured turnover to an opening trade that a continuously run
 book would pay once.
 
+**The recurrent model, asked in its strongest form.** A GRU over 24 steps of all 29 ranked
+columns, on the corrected twenty-wide sample and the same four folds, scores 0.1057 +- 0.0187
+against 0.1118 +- 0.0193 for this two-column addition, at twice the dispersion between folds
+(0.0241 against 0.0124). Blended half and half the pair makes 0.1136 — plus 0.0018 against a
+standard error of 0.019. Thirty times the input and nothing to show for it; open point 2 closes.
+
 **What was measured and lost.** Seven more candidates, each ranked inside the date and then
 residualised against the composite, on train alone: `idiosyncratic_vol` (-0.029), `range_vol`
 (-0.026), `corr_to_basket` (+0.025), `beta_to_basket` (-0.004), `amihud` (+0.010), `drawdown`
