@@ -214,14 +214,30 @@ def build(
     `stride` subsamples the 5m grid — 12 keeps one row per hour. The rows are not independent
     anyway (consecutive samples share 23 of 24 steps, spec point 1), and the full grid at 20
     symbols does not fit in memory as a flat frame.
+
+    Sampled on the *clock* and not by position, which is the difference between twenty symbols
+    that share a timestamp and twenty that do not. `symbol_frame` ends in a `dropna`, and what it
+    drops differs per symbol — a zero-volume bar makes `log_volume_vs_median` infinite and the
+    rolling deviation of `lagged` turns that into NaN across the whole window — so `iloc[::stride]`
+    shifted the phase of a symbol permanently at its first dropped row. Measured on the previous
+    build: AVAX sat one bar off every other symbol for the entire period, 31,111 of 64,393
+    timestamps carried a single symbol, and no timestamp anywhere in the file held all twenty.
+    The cross-sectional label, the cross-sectional metric and the book all read a cross-section,
+    so that phase drift was not a sampling detail — it deleted a symbol from the panel and left
+    the evaluation reading nineteen at best.
+
+    A clock rule cannot drift: a dropped bar leaves a hole in that symbol at that hour and moves
+    nothing else. `floor` anchors on the epoch, so the grid is the same one for every symbol
+    whatever each of them is missing.
     """
     symbols = binance.SYMBOLS if symbols is None else symbols
+    step = stride * pd.Timedelta(BASE_TF)
     frames = {}
     for s in symbols:
         f = symbol_frame(s, start, n, label, lags)
         if start is not None:
             f = f.loc[pd.Timestamp(start, tz="UTC") :]
-        frames[s] = f.iloc[::stride]
+        frames[s] = f[f.index.floor(step) == f.index]
     return pd.concat(frames, names=["symbol"]).swaplevel().sort_index()
 
 
