@@ -67,6 +67,10 @@ def _shift(tf: str) -> pd.Timedelta:
 # step would be 24x the columns for a model that cannot use most of them.
 LAGS = (1, 4)
 
+# How `build` subsamples the 5m grid. Travels in the cache stamp, because it changes which rows a
+# file holds without changing any argument that would otherwise be recorded.
+SAMPLING = "clock"
+
 
 def lagged(f: pd.DataFrame, n: int = EXTREMA_WINDOW) -> pd.DataFrame:
     """`f` widened from value-at-t to value, lags and window statistics — 5 columns per input.
@@ -251,7 +255,14 @@ def cached(path: Path, **params) -> pd.DataFrame:
     """
     stamp = path.with_suffix(".json")
     # `LAGS` travels too: it is not an argument, and changing it changes every column in the file.
-    written = dict(params, symbols=sorted(params.get("symbols") or binance.SYMBOLS), lags_at=list(LAGS))
+    # So does `SAMPLING`. It is not an argument either, and it decides which rows exist: a file
+    # built when `build` used a positional stride holds the same `stride` in its stamp and a
+    # different set of rows, on a grid where the symbols are out of phase with each other. Without
+    # this key such a file would be read back as a match — which is the one thing the stamp exists
+    # to prevent — so the name is recorded and every cache built before the clock rule is refused.
+    written = dict(
+        params, symbols=sorted(params.get("symbols") or binance.SYMBOLS), lags_at=list(LAGS), sampling=SAMPLING
+    )
     if path.exists():
         if not stamp.exists():
             raise SystemExit(f"{path} has no {stamp.name} recording how it was built — delete it and rebuild")
@@ -291,8 +302,21 @@ def _selfcheck() -> None:
             except SystemExit:
                 break
             raise AssertionError("a cache with no stamp has to stop the run")
-        path.with_suffix(".json").write_text(json.dumps(dict(stride=12, symbols=["BTC"], lags_at=list(LAGS))))
+        path.with_suffix(".json").write_text(
+            json.dumps(dict(stride=12, symbols=["BTC"], lags_at=list(LAGS), sampling=SAMPLING))
+        )
         assert len(cached(path, stride=12, symbols=["BTC"])) == 1, "a matching stamp reads the file back"
+        # And a file built before the clock rule: same arguments, different rows, refused.
+        path.with_suffix(".json").write_text(json.dumps(dict(stride=12, symbols=["BTC"], lags_at=list(LAGS))))
+        try:
+            cached(path, stride=12, symbols=["BTC"])
+        except SystemExit:
+            pass
+        else:
+            raise AssertionError("a cache with no sampling rule recorded has to stop the run")
+        path.with_suffix(".json").write_text(
+            json.dumps(dict(stride=12, symbols=["BTC"], lags_at=list(LAGS), sampling=SAMPLING))
+        )
         for wrong in (dict(stride=6, symbols=["BTC"]), dict(stride=12, symbols=["ETH"])):
             try:
                 cached(path, **wrong)
