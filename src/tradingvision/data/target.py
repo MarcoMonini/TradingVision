@@ -202,7 +202,9 @@ def remaining_excursion(
 #
 # What it costs: 51 independent cross-sections a year instead of 306, so every number measured on
 # this label carries an error bar four times wider, and the naive Rank ICIR over dates overstates
-# its own significance by about sqrt(72). Read `simulation`'s blocked error, never the raw ratio.
+# its own significance by about sqrt(72). Measured on the first cross-sectional run: a naive t over
+# 10,944 dates reads 31.9, and the same numbers over 153 non-overlapping 72h blocks read 5.1.
+# `metrics.signal(..., horizon=...)` reports the blocked error; never read the raw ratio.
 CROSS_HORIZON = 288
 # The metric already refuses a date with fewer than three symbols, so a label computed on two is a
 # number no evaluation would read. Same floor, stated once here.
