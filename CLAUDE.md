@@ -53,6 +53,13 @@ between `remaining_excursion`, the retrospective `swing_leg_target`, and the cro
 `cross_sectional_return` without touching the pipeline. The spec's section 1 explains why the label
 changed twice; numbers taken on different labels are not comparable.
 
+**Sampled on the clock, never by position.** `build` keeps the rows whose timestamp is on the
+sampling grid (`index.floor(step) == index`). A positional `iloc[::stride]` over rows a per-symbol
+`dropna` has thinned shifts that symbol's phase permanently at its first dropped row, and the
+previous build shows what that costs: 31,111 of 64,393 timestamps carrying one symbol, no timestamp
+holding all twenty, AVAX absent from every cross-section. Related: `features` returns finite or NaN
+and never an infinity, because `dropna` does not see one.
+
 **The alignment rule, which is the one thing that must never break.** Every frame is indexed by the
 *open* time of its bar, so a bar labelled `b` on timeframe `tf` closes at `b + tf`. Branch columns
 are placed on the 5m grid at `label + tf - 5m` and forward filled. One bar of anticipation on the
@@ -68,10 +75,12 @@ early stopping. `split.walk_forward` repeats the cut for the four folds every co
 statistics (`normalize` fits quantiles on train and applies them unchanged), thresholds. Measuring a
 choice on the test slice is how a worthless column set gets promoted.
 
-**Metrics.** `metrics.signal` gives the four qlib metrics cross-sectionally; Rank ICIR is what
-decides a promotion. A single cross-section of 20 symbols has a standard error of ~0.24, so only the
-average over thousands of dates means anything, and a comparison without a dispersion across folds
-is not a comparison.
+**Metrics.** `metrics.signal` gives the four qlib metrics cross-sectionally. A single cross-section
+of 20 symbols has a standard error of ~0.24, so only the average over thousands of dates means
+anything, and a comparison without a dispersion across folds is not a comparison. On the 72h label
+the raw Rank ICIR is *not* a significance — adjacent dates share 71 of the 72 hours their labels are
+made of, so a naive t over 10,944 dates reads 31.9 where 153 non-overlapping blocks read 5.1. Pass
+`horizon=` to `signal` and read `rank_ic_t`.
 
 **Cached datasets carry their parameters.** `dataset.cached` writes a JSON stamp next to the Parquet
 and refuses to load a file built with different arguments. Don't defeat it — delete the file or pass

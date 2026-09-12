@@ -68,9 +68,22 @@ the two weights instead of adding them equally scores 0.1146 and wins three fold
 is inside the fold spread: the pair is kept equal-weighted because two parameters are not worth
 the third fold.
 
-    uv run python -m tradingvision.factor
-    uv run python -m tradingvision.factor --price
-    uv run python -m tradingvision.factor --save data/pred-factor.parquet
+    uv run python -m tradingvision.factor --price --baseline --by-quarter
+    uv run python -m tradingvision.factor --save
+    uv run python -m tradingvision.simulation --pred data/pred-factor.parquet
+
+The last line is the cross-check worth keeping. `--save` writes the prediction on the 5m labels
+the rest of the pipeline prices on, and `simulation --pred` — a different panel, a different
+clock, a different turnover accounting — reports +0.1791 net hedged at theta 0.2 and 25bp with a
+Sharpe of 1.2162, against +0.179 and 1.24 from `price` here. Two independent accountings on the
+same signal, agreeing to the third decimal.
+
+For scale, the best number the project had recorded before this, priced by that same tool: the
+GRU at k=12 and theta 0.5 makes +0.2300 at a Sharpe of 1.2530. It is not a like-for-like
+comparison and it flatters the older number twice — it is measured on the cross-sections eight
+symbols wide that `dataset` used to produce, and both `k` and `theta` were read off the test
+table rather than picked on a train side. The weighted book here makes +0.2379 with every
+parameter picked on train.
 """
 
 from __future__ import annotations
