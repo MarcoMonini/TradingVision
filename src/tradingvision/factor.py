@@ -38,6 +38,26 @@ skill. A rule that rebalances a noise estimate 173 times a year cannot pay 25bp 
 the table reaches, and the same signal measured over a horizon that matches the label pays at the
 fee the project already has.
 
+**And the band was throwing away the middle.** The label scores a whole ordering and the band
+reads only its ends. Weighting by the centred percentile instead, with a no-trade tolerance so a
+graded weight does not rebalance every hour for a few basis points, is the second half of the
+same idea. With every parameter picked on the train side of its own fold:
+
+    book        window       turnover    gross    net @25bp    Sharpe @25bp
+    band        24 (6h)          1.24    0.086       +0.076            0.69   <- where this started
+    band        train-picked     1.18    0.169       +0.160            1.14
+    weighted    24 (6h)        174.20    0.244       -1.142           -6.53
+    weighted    train-picked     2.03    0.254       +0.238            1.33   <- where it ends
+
+The third row is the whole study in one line: the same book on a six-hour window earns the same
+gross and loses 1.14 a year instead of making 0.24. Nothing about the signal changed — only how
+often a noise estimate made it trade. End to end the net triples and the Sharpe doubles, and both
+halves were parameters nobody had ever chosen against this label.
+
+The fee here is charged conservatively: every fold opens its own book from flat, so a strategy
+this slow pays roughly half its measured turnover to an opening trade that a continuously run
+book would pay once.
+
 **What was measured and lost.** Seven more candidates, each ranked inside the date and then
 residualised against the composite, on train alone: `idiosyncratic_vol` (-0.029), `range_vol`
 (-0.026), `corr_to_basket` (+0.025), `beta_to_basket` (-0.004), `amihud` (+0.010), `drawdown`
@@ -218,10 +238,57 @@ def predictions(sig: pd.Series) -> pd.Series:
 YEAR = pd.Timedelta("365D")
 FEES = (0.0025, 0.0010, 0.0005)
 THETAS = (0.2, 0.5, 0.8)
+# No-trade tolerance of the weighted book, in units of the weight. Picked on train; see `weighted`.
+TOLS = (0.1, 0.2, 0.3, 0.5, 0.8)
 
 
-def price(sig: pd.DataFrame, y_close: pd.DataFrame, test: np.ndarray, theta: float, step: int = 4) -> dict:
-    """The hedged book of one threshold, priced on the panel's own closes.
+def band(sig: pd.DataFrame, when: np.ndarray, theta: float) -> pd.DataFrame:
+    """The project's rule: +1 above the threshold, -1 below it, hold through the middle.
+
+    `theta` is in units of the cross-section of the day — `sig` becomes its centred percentile
+    first, so 0.2 means "the top and bottom 40% of whatever is trading now" on every pair and in
+    every regime. Hysteresis and not a flat band, as `threshold.positions` does it: a rule that
+    flattens whenever the signal is unremarkable pays a round trip for the privilege.
+    """
+    pct = sig[when].rank(axis=1, pct=True)
+    b = 2 * pct.sub(pct.mean(axis=1), axis=0)
+    pos = pd.DataFrame(np.nan, index=b.index, columns=b.columns)
+    pos[b <= -theta], pos[b >= theta] = -1.0, 1.0
+    return pos.ffill().fillna(0.0)
+
+
+def weighted(sig: pd.DataFrame, when: np.ndarray, tol: float) -> pd.DataFrame:
+    """Weight by distance from the centre of the cross-section, held until the target moves `tol`.
+
+    The band reads only the extremes of an ordering the label scores in full, and throwing the
+    middle away costs gross: measured on the same folds, weighting by the centred percentile
+    lifts the gross from 0.190 to 0.259. Naively it also loses the gain again, because a
+    continuous weight rebalances every hour for a few basis points of drift — 15.4 units of
+    turnover against 1.45, and the net falls to 0.136.
+
+    The missing half is the no-trade tolerance. A held weight is kept until the target has moved
+    more than `tol` away from it, which on a factor that ranks the same way for weeks means the
+    book adjusts a handful of times a year and keeps the gross. Picked on the train side out of
+    (0.1, 0.2, 0.3, 0.5, 0.8) it lands on 0.8 in all four folds: net 0.2379 at 25bp against
+    0.1789 for the best band, at a Sharpe of 1.33 against 1.24.
+
+    Scaled to one unit of gross notional per symbol per date, so a book of twenty and a book of
+    three are the same size and the fee stays comparable to the return.
+    """
+    pct = sig[when].rank(axis=1, pct=True)
+    w = 2 * pct.sub(pct.mean(axis=1), axis=0)
+    target = w.div(w.abs().sum(axis=1), axis=0).mul(w.notna().sum(axis=1), axis=0).fillna(0.0)
+    t = target.to_numpy()
+    out = np.empty_like(t)
+    held = t[0].copy()
+    for i in range(len(t)):
+        held = np.where(np.abs(t[i] - held) > tol, t[i], held)
+        out[i] = held
+    return pd.DataFrame(out, index=target.index, columns=target.columns)
+
+
+def price(pos: pd.DataFrame, close: pd.DataFrame, step: int = 4) -> dict:
+    """What a book of positions earns, hedged, on the panel's own closes.
 
     `step` is the decision interval in `TF` bars — 4 is the hour the rows are sampled at. The
     position taken at the close of a bar earns the return to the close one decision later, so no
@@ -230,34 +297,32 @@ def price(sig: pd.DataFrame, y_close: pd.DataFrame, test: np.ndarray, theta: flo
     Hedged and never naked: the label is a return in excess of the basket, so the basket leg is
     part of the trade the signal describes. `simulation` says the same thing at more length.
     """
-    forward = np.log(y_close.shift(-step) / y_close)
+    forward = np.log(close.shift(-step) / close)
     hedged = forward.sub(forward.mean(axis=1), axis=0)
-    pct = sig[test].rank(axis=1, pct=True)
-    band = 2 * pct.sub(pct.mean(axis=1), axis=0)
-    # Hysteresis, as `threshold.positions` does it: hold through the middle rather than flatten,
-    # or the book pays a round trip every time the signal is unremarkable.
-    pos = pd.DataFrame(np.nan, index=band.index, columns=band.columns)
-    pos[band <= -theta], pos[band >= theta] = -1.0, 1.0
-    pos = pos.ffill().fillna(0.0)
-
     span = (pos.index[-1] - pos.index[0]) / YEAR
-    turnover = pos.diff().fillna(pos).abs().to_numpy().sum() / pos.shape[1] / span
-    per_step = (pos * hedged[test].reindex_like(pos)).fillna(0.0).mean(axis=1)
+    # Units of position changed per symbol, before annualising: a book that never changes its
+    # mind still pays for opening, and this is the number that says so. `fillna(pos)` charges
+    # that opening trade, as `threshold.pnl` does.
+    turnover = pos.diff().fillna(pos).abs().to_numpy().sum() / pos.shape[1]
+    per_step = (pos * hedged.reindex_like(pos)).fillna(0.0).mean(axis=1)
     gross = per_step.sum() / span
     risk = per_step.std() * np.sqrt(len(per_step) / span)
     out = {
-        "theta": theta,
         "in_market": float((pos != 0).to_numpy().mean()),
-        # Units of position changed per symbol over the whole test, before any annualising: a book
-        # that never changes its mind still pays for opening, and this is the number that says so.
-        "turnover": turnover * span,
-        "trades_per_year": turnover / 2,
+        "turnover": turnover,
+        "trades_per_year": turnover / span / 2,
+        "gross_hedged": gross,
     }
-    out["gross_hedged"] = gross
     for fee in FEES:
-        out[f"net_{round(fee * 1e4)}bp"] = gross - turnover * fee
-    out["sharpe_25bp"] = (gross - turnover * FEES[0]) / risk if risk else np.nan
+        out[f"net_{round(fee * 1e4)}bp"] = gross - turnover / span * fee
+    out["sharpe_25bp"] = (gross - turnover / span * FEES[0]) / risk if risk else np.nan
     return out
+
+
+def best(sig: pd.DataFrame, train: np.ndarray, close: pd.DataFrame, grid, make) -> float:
+    """The grid value with the best *net* on the train side — the book's own parameter, chosen
+    the way the window is, on the side of the fold that is allowed to decide anything."""
+    return max(grid, key=lambda v: price(make(sig, train, v), close)["net_25bp"])
 
 
 def by_quarter(p: dict[str, pd.DataFrame], window: int, theta: float = 0.2, step: int = 4) -> pd.DataFrame:
@@ -284,11 +349,7 @@ def by_quarter(p: dict[str, pd.DataFrame], window: int, theta: float = 0.2, step
     forward = np.log(close.shift(-step) / close)
     hedged = forward.sub(forward.mean(axis=1), axis=0)
     clock = hourly(close.index)
-    pct = sig[clock].rank(axis=1, pct=True)
-    band = 2 * pct.sub(pct.mean(axis=1), axis=0)
-    pos = pd.DataFrame(np.nan, index=band.index, columns=band.columns)
-    pos[band <= -theta], pos[band >= theta] = -1.0, 1.0
-    pos = pos.ffill().fillna(0.0)
+    pos = band(sig, clock, theta)
     earned = pos * hedged[clock].reindex_like(pos)
     naked = pos * forward[clock].reindex_like(pos)
     basket = forward[clock].mean(axis=1)
@@ -357,14 +418,33 @@ def _selfcheck() -> None:
 
     # And the book: a perfect signal on a panel whose ranking never changes holds one position and
     # pays for it once, which is the property the whole window result rests on.
-    y = pd.DataFrame(np.tile([1.0, 0.0, -1.0], (n, 1)), index=when, columns=close.columns)
+    fixed = pd.DataFrame(np.tile([1.0, 0.0, -1.0], (n, 1)), index=when, columns=close.columns)
     everywhere = np.ones(n, dtype=bool)
-    out = price(y, close, everywhere, 0.5)
+    out = price(band(fixed, everywhere, 0.5), close)
     # A ranking that never changes pays exactly one side per held symbol and nothing after that,
     # which is the whole reason a thirty-day window costs what a six-hour one cannot.
     assert np.isclose(out["turnover"], out["in_market"]), out
-    churn = price(pd.DataFrame(rng.normal(size=(n, 3)), index=when, columns=close.columns), close, everywhere, 0.5)
+    noise = pd.DataFrame(rng.normal(size=(n, 3)), index=when, columns=close.columns)
+    churn = price(band(noise, everywhere, 0.5), close)
     assert churn["turnover"] > 50 * out["turnover"], (churn, out)
+
+    # The weighted book holds the middle of the cross-section, where the band holds nothing, and
+    # a tolerance nothing ever crosses turns it into the opening trade and no other. Four columns
+    # and not three: with an odd count the middle symbol sits exactly on the centre and weighs 0,
+    # which is correct and would make the point below untestable.
+    four = pd.DataFrame(np.tile([2.0, 1.0, -1.0, -2.0], (n, 1)), index=when, columns=list("abcd"))
+    w = weighted(four, everywhere, 0.5)
+    assert (w != 0).all().all(), "every symbol carries a weight, including the two in the middle"
+    assert (w.a > w.b).all() and (w.c > w.d).all(), "and it grows with the distance from the centre"
+    assert np.allclose(w.abs().sum(axis=1), w.shape[1]), "one unit of gross notional per symbol"
+    assert np.allclose(w.sum(axis=1), 0, atol=1e-12), "and it is dollar neutral inside its date"
+    assert (band(four, everywhere, 0.5) == 0).any().any(), "where the band holds nothing at all"
+    assert np.isclose(price(weighted(noise, everywhere, 99.0), close)["turnover"], 1.0)
+    assert price(weighted(noise, everywhere, 0.1), close)["turnover"] > 20, "a small one trades a lot"
+
+    # `best` reads the train side and nothing else — the same contract `pick` has for the window.
+    half = np.arange(n) < n // 2
+    assert best(fixed, half, close, TOLS, weighted) in TOLS
 
 
 def main() -> None:
@@ -393,16 +473,23 @@ def main() -> None:
         print(f"\nthe project's window, N={BASELINE_WINDOW}, on the same folds\n")
         print(base.round(4).to_string())
     if args.price:
-        y = p["close"]
-        print("\nhedged book, mean over the folds — log return per year per symbol\n")
+        close, y = p["close"], label(p)
+        print("\nhedged book, mean over the folds — every parameter picked on the train side\n")
         rows = []
-        grids = (("N picked on train", tuple(args.windows)), (f"N={BASELINE_WINDOW}", (BASELINE_WINDOW,)))
-        for theta in THETAS:
-            for name, windows in grids:
-                acc = []
-                for train, test in folds(p["close"].index, args.test_start, args.folds):
-                    acc.append(price(composite(p, pick(p, label(p), train, windows)), y, test, theta))
-                rows.append({"signal": name, **pd.DataFrame(acc).mean().to_dict()})
+        books = (("band", THETAS, band), ("weighted", TOLS, weighted))
+        grids = ((tuple(args.windows), "N on train"), ((BASELINE_WINDOW,), f"N={BASELINE_WINDOW}"))
+        for name, grid, make in books:
+            for windows, tag in grids:
+                acc, chose = [], []
+                for train, test in folds(close.index, args.test_start, args.folds):
+                    sig = composite(p, pick(p, y, train, windows))
+                    at = best(sig, train, close, grid, make)
+                    chose.append(at)
+                    acc.append(price(make(sig, test, at), close))
+                rows.append(
+                    {"book": name, "window": tag, "picked": "/".join(str(v) for v in chose)}
+                    | pd.DataFrame(acc).mean().to_dict()
+                )
         print(pd.DataFrame(rows).round(4).to_string(index=False))
     if args.by_quarter:
         window = max(set(chosen), key=chosen.count)

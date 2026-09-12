@@ -89,7 +89,8 @@ def book(pred: pd.Series) -> pd.Series:
     No threshold here on purpose: the transform is what makes a threshold mean the same thing
     everywhere, and `threshold.positions` is what applies one.
 
-    A raw prediction cannot carry a threshold of its own: its scale drifts with the model, with volatility, and between pairs. The
+    A raw prediction cannot carry a threshold of its own: its scale drifts with the model, with
+    volatility, and between pairs. The
     obvious fix — standardise each symbol over the period — reads the period it is trading, which
     is the leakage this project purges folds to avoid. The percentile inside a timestamp reads only
     the cross-section standing there at that instant, which is exactly what a rank-based label

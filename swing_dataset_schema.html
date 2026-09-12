@@ -98,7 +98,7 @@ footer{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);color:v
     <div class="fact"><b>14,9M</b><span>candele 5m</span></div>
     <div class="fact"><b>24</b><span>finestra_estremi</span></div>
     <div class="fact"><b>0.110</b><span>Rank IC, composito N=2880</span></div>
-    <div class="fact"><b>+0.18</b><span>netto/anno hedged, 25bp</span></div>
+    <div class="fact"><b>+0.24</b><span>netto/anno hedged, 25bp</span></div>
     <div class="fact"><b>75×</b><span>turnover tolto</span></div>
   </div>
 </header>
@@ -160,10 +160,28 @@ footer{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);color:v
       <tbody>
         <tr><td class="key">24 (6h)</td><td class="num">109,35</td><td class="num">174,0</td><td class="num">0.103</td><td class="num">−0.767</td><td class="num">−0.245</td><td class="num">−5,36</td></tr>
         <tr class="hi"><td class="key">2880 (30g)</td><td class="num">1,45</td><td class="num">2,3</td><td class="num">0.190</td><td class="num">+0.179</td><td class="num">+0.186</td><td class="num">+1,24</td></tr>
-        <tr><td colspan="7">la finestra lunga vince anche sul <em>lordo</em>, 0.190 contro 0.103: non è un trucco sui costi, è un segnale migliore che per giunta costa settantacinque volte meno</td></tr>
+        <tr><td colspan="7" class="foot">la finestra lunga vince anche sul <em>lordo</em>, 0.190 contro 0.103: non è un trucco sui costi, è un segnale migliore che per giunta costa settantacinque volte meno</td></tr>
       </tbody>
     </table>
   </div>
+
+  <h3>E la fascia buttava via il centro <span class="b b-msr">misurato</span></h3>
+  <p>L'etichetta punteggia un <em>ordinamento intero</em> e la fascia ne legge solo le estremità. Pesare per il percentile centrato invece di tenere ±1 alza il lordo da 0.190 a 0.259 — ma ingenuamente se lo rimangia tutto, perché un peso continuo ribilancia ogni ora per qualche punto base di deriva: 15,4 di turnover contro 1,45, e il netto scende a 0.136. La metà mancante è la <strong>tolleranza di non-scambio</strong>: il peso tenuto resta tale finché il bersaglio non si allontana di più di <code>tol</code>. Scelta su train fra (0,1 … 0,8) cade su 0,8 in tutti e quattro i fold.</p>
+
+  <div class="tw">
+    <table>
+      <caption>ogni parametro scelto sul lato train del proprio fold — 25 bp per lato, media sui quattro fold</caption>
+      <thead><tr><th>libro</th><th>finestra</th><th class="num">turnover</th><th class="num">lordo</th><th class="num">netto 25bp</th><th class="num">Sharpe</th></tr></thead>
+      <tbody>
+        <tr><td class="key">fascia</td><td>24 (6h)</td><td class="num">1,24</td><td class="num">0.086</td><td class="num">+0.076</td><td class="num">0,69</td></tr>
+        <tr><td class="key">fascia</td><td>scelta su train</td><td class="num">1,18</td><td class="num">0.169</td><td class="num">+0.160</td><td class="num">1,14</td></tr>
+        <tr><td class="key">pesato</td><td>24 (6h)</td><td class="num">174,20</td><td class="num">0.244</td><td class="num">−1.142</td><td class="num">−6,53</td></tr>
+        <tr class="hi"><td class="key">pesato</td><td>scelta su train</td><td class="num">2,03</td><td class="num">0.254</td><td class="num">+0.238</td><td class="num">1,33</td></tr>
+        <tr><td colspan="6" class="foot">la terza riga è tutto lo studio in una riga sola: lo stesso libro su una finestra da sei ore fa <em>lo stesso lordo</em> e perde 1,14 l'anno invece di guadagnare 0,24. Del segnale non è cambiato niente — solo quanto spesso una stima rumorosa lo faceva scambiare</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Da capo a fondo il netto <strong>triplica</strong> (+0.076 → +0.238) e lo Sharpe raddoppia (0,69 → 1,33), e nessuna delle due metà era un parametro che qualcuno avesse mai scelto <em>contro questa etichetta</em>. La commissione è per giunta contata al peggio: ogni fold apre il libro da piatto, quindi una strategia così lenta paga circa metà del turnover misurato a un trade di apertura che un libro tenuto in continuità pagherebbe una volta sola.</p>
 
   <div class="box why">
     <h4>Il punto aperto 1 aveva una terza leva <span class="b b-ok">chiuso</span></h4>
@@ -699,8 +717,8 @@ L = δ·(|e| − 0.5·δ)  altrimenti</pre>
 
   <div class="box why">
     <h4>1 · Il divario fra IC e commissione <span class="b b-ok">chiuso, ma non come previsto</span></h4>
-    <p>Il punto cercava la soluzione in due leve — più abilità o un venue più economico — e nessuna delle due era necessaria. <strong>Il break-even non è una proprietà del segnale, è una proprietà della coppia (segnale, regola)</strong>, e metà del divario stava nella regola: il composito misurato su sei ore ribilancia 174 volte l'anno per simbolo e paga −0.767 di commissioni; lo stesso composito su trenta giorni ne fa 2,3, e a θ=0.2 — la fascia <em>più larga</em>, non la più selettiva — porta a casa <strong>+0.179 netti a 25 bp, Sharpe 1,24</strong>.</p>
-    <p>Due cose questo <em>non</em> dice. Il lordo resta modesto in assoluto (0.190 l'anno per simbolo), e il libro a θ=0.2 tiene il 97% del tempo una posizione su quasi tutti i venti: è un'inclinazione lenta low-vol/size, non una strategia di trading. Il nome giusto per ciò che è stato misurato è <em>tilt factor portfolio</em>, e va letto con i limiti di quella classe.</p>
+    <p>Il punto cercava la soluzione in due leve — più abilità o un venue più economico — e nessuna delle due era necessaria. <strong>Il break-even non è una proprietà del segnale, è una proprietà della coppia (segnale, regola)</strong>, e metà del divario stava nella regola: il composito misurato su sei ore ribilancia 174 volte l'anno per simbolo e paga −0.767 di commissioni; lo stesso composito su trenta giorni ne fa 2,3, e a θ=0.2 — la fascia <em>più larga</em>, non la più selettiva — porta a casa <strong>+0.238 netti a 25 bp, Sharpe 1,33</strong> una volta che il libro pesa per rango invece di sogliare.</p>
+    <p>Due cose questo <em>non</em> dice. Il lordo resta modesto in assoluto (0.254 l'anno per simbolo), e il libro a θ=0.2 tiene il 97% del tempo una posizione su quasi tutti i venti: è un'inclinazione lenta low-vol/size, non una strategia di trading. Il nome giusto per ciò che è stato misurato è <em>tilt factor portfolio</em>, e va letto con i limiti di quella classe.</p>
   </div>
 
   <div class="box why">
@@ -726,6 +744,19 @@ L = δ·(|e| − 0.5·δ)  altrimenti</pre>
     <p>Era peggio di come il punto lo descriveva. Misurato sul file costruito: <strong>31.111 dei 64.393 timestamp portavano un simbolo solo</strong>, e <em>nessun</em> timestamp del file ne portava venti. AVAX stava una barra fuori fase da tutti gli altri per l'intero periodo — cioè il ventesimo simbolo era semplicemente assente da ogni cross-section, metrica e libro compresi.</p>
     <p>La catena: una barra senza scambi manda a infinito <code>log_volume_vs_median</code>; la deviazione rolling di <code>lagged</code> trasforma quell'infinito in 24 righe NaN; <code>dropna</code> le toglie; e <code>iloc[::stride]</code>, che è posizionale, sposta la fase di quel simbolo <strong>per sempre</strong> da lì in avanti. Il pannello grezzo non c'entra: 128.731 barre da 15m × 20 simboli, zero buchi.</p>
     <p>Due correzioni, entrambe di una riga. <code>build</code> campiona sull'orologio (<code>index.floor(step) == index</code>), così una barra persa lascia un buco in quel simbolo a quell'ora e non muove nient'altro. E <code>features</code> restituisce finito o NaN, mai un infinito — un NaN la pipeline lo gestisce, un infinito passa <code>dropna</code>, sopravvive a un fit di quantili e arriva al modello come un estremo.</p>
+    <p><strong>Cosa è cambiato, misurato onestamente.</strong> Lo stesso segnale sullo stesso periodo di test, letto sulle righe dei due file: la Rank IC praticamente non si muove (0.1108 ± 0.0203 contro 0.1080 ± 0.0193), la <em>struttura</em> sì. Il file vecchio aveva 27.813 date di cui solo il 39% punteggiabile e una breadth di 7,86; il nuovo ne ha 10.945, tutte punteggiabili, con breadth 19,99. Il numero aggregato sopravviveva perché le date sottili finivano scartate; quello che non sopravviveva era il libro, che sogliava percentili dentro cross-section da otto invece che da venti, e il ventesimo simbolo, che non c'era.</p>
+  </div>
+
+  <div class="tw">
+    <table>
+      <caption>lo stesso composito sulle righe dei due file, test 2025-06 → 2026-09</caption>
+      <thead><tr><th>build</th><th class="num">righe</th><th class="num">date</th><th class="num">breadth</th><th class="num">date punteggiabili</th><th class="num">Rank IC</th></tr></thead>
+      <tbody>
+        <tr><td class="key">stride posizionale</td><td class="num">218.499</td><td class="num">27.813</td><td class="num">7,86</td><td class="num">10.944 (39%)</td><td class="num">0.1108 ± 0.0203</td></tr>
+        <tr class="hi"><td class="key">orologio</td><td class="num">218.762</td><td class="num">10.945</td><td class="num">19,99</td><td class="num">10.945 (100%)</td><td class="num">0.1080 ± 0.0193</td></tr>
+        <tr><td colspan="6" class="foot">643.242 righe contro 642.961: non è stato buttato via niente, le righe sono state solo rimesse su un orologio comune. 32.032 dei 32.175 timestamp portano tutti e venti i simboli, contro <strong>zero</strong> di prima</td></tr>
+      </tbody>
+    </table>
   </div>
 
   <div class="box open">
@@ -735,8 +766,8 @@ L = δ·(|e| − 0.5·δ)  altrimenti</pre>
 
   <div class="box open">
     <h4>8 · Il lordo, non più il costo <span class="b b-open">il nuovo problema principale</span></h4>
-    <p>Chiuso il punto 1, il vincolo si è spostato ed è cambiato di natura. A 25 bp il costo ora è 0.011 su un lordo di 0.190 — <strong>il 6%</strong>, contro il 745% che era. Ogni guadagno futuro deve venire dal lordo, e il lordo è 0.190 l'anno per simbolo su un libro che sta dentro il 97% del tempo: è un premio al fattore, non un edge di trading.</p>
-    <p>Le tre strade, in ordine di rapporto fra evidenza e costo. <strong>(a) Più simboli.</strong> La breadth è venti; l'errore standard di una cross-section va come 1/√(n−3), e il fattore low-vol/size è documentato su universi di centinaia. Venti coppie sono un campione, non un universo, e ampliarlo è l'unica leva che alza il lordo senza inventare un segnale. <strong>(b) Dimensionare invece di sogliare.</strong> La regola tiene ±1 o 0; pesare per la distanza dal centro della cross-section usa tutta l'informazione dell'ordinamento invece dei soli estremi, e su un fattore lento costa poco turnover. <strong>(c) Un secondo fattore davvero ortogonale.</strong> I sette provati non lo erano — la loro parte residua è fra 0.004 e 0.029 e nessuno sopravvive alla combinazione. Servirebbe qualcosa che non sia una funzione di volatilità e volume: funding rate dei perpetual, open interest, flussi on-chain. Nessuno dei tre è nel dataset oggi.</p>
+    <p>Chiuso il punto 1, il vincolo si è spostato ed è cambiato di natura. A 25 bp il costo ora è 0.016 su un lordo di 0.254 — <strong>il 6%</strong>, contro il 1330% che era. Ogni guadagno futuro deve venire dal lordo, e il lordo è 0.254 l'anno per simbolo su un libro che sta dentro il 98% del tempo: è un premio al fattore, non un edge di trading.</p>
+    <p>Le tre strade, in ordine di rapporto fra evidenza e costo. <strong>(a) Più simboli.</strong> La breadth è venti; l'errore standard di una cross-section va come 1/√(n−3), e il fattore low-vol/size è documentato su universi di centinaia. Venti coppie sono un campione, non un universo, e ampliarlo è l'unica leva che alza il lordo senza inventare un segnale. <strong>(b) Dimensionare invece di sogliare</strong> — <em>fatto</em>, e vale +33% di netto; quello che resta aperto è la forma del peso, che qui è lineare nel percentile e non è stata confrontata con niente. <strong>(c) Un secondo fattore davvero ortogonale.</strong> I sette provati non lo erano — la loro parte residua è fra 0.004 e 0.029 e nessuno sopravvive alla combinazione. Servirebbe qualcosa che non sia una funzione di volatilità e volume: funding rate dei perpetual, open interest, flussi on-chain. Nessuno dei tre è nel dataset oggi.</p>
   </div>
 
   <div class="box open">
