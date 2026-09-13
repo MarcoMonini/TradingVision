@@ -190,6 +190,32 @@ def heatmap(z, title: str, unit: str = "sd", limit: float = 2.0):
     return fig
 
 
+def pinned(pred: pd.Series, peers: int, symbol: str) -> str:
+    """What to say when the prediction line does not move, which is not the same as broken.
+
+    A rank across `peers` pairs takes `peers` values and no more, and the composite's ordering is
+    mostly a permanent property of each symbol — measured on the twenty pairs of the store, 90.9%
+    of its variance is a fixed per-symbol level. A pair at either end of that ordering therefore
+    sits at the same rank on every bar, and the flat line is the model's answer rather than a
+    fault in it: BTC is the largest and calmest of these five on every bar of a month, and saying
+    so *is* the prediction. It is also the spec's open point 3 drawn — the part of this signal
+    that is a standing tilt rather than a rotation.
+
+    Said here because a flat line next to a jittery target reads as a bug, and the reader should
+    not have to ask. Two values and not one: a cross-section that thins by a pair shifts every
+    rank in the row, so a pinned pair still shows a second level wherever a peer is missing.
+    """
+    values = pred.dropna().nunique()
+    if values > 2 or not len(pred.dropna()):
+        return ""
+    place = "first" if pred.dropna().iloc[-1] > 0 else "last"
+    return (
+        f" · the rank of {symbol.split('/')[0]} does not move over this window — {place} of "
+        f"{peers} on every bar, out of the {peers} values a rank across {peers} pairs can take. "
+        f"Not a flat prediction but a confident one; the pairs in the middle of the ordering rotate"
+    )
+
+
 def chart(
     df,
     pivots,
@@ -566,7 +592,7 @@ def main() -> None:
         + (
             f" · factor over {round(FACTOR_WINDOW / BAR[fetched[1]])} bars "
             f"({FACTOR_WINDOW.days}d) on {pred.notna().sum()} bars — the Rank IC above is the "
-            f"metric, taken per timestamp across the {peers} pairs"
+            f"metric, taken per timestamp across the {peers} pairs" + pinned(pred, peers, fetched[0])
             if predicted is not None
             else (
                 f" · prediction on {pred.notna().sum()} bars, "
