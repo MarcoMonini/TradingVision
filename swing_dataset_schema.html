@@ -276,6 +276,57 @@ footer{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);color:v
     <p><strong>2. La relazione cambia segno vicino al pivot.</strong> <code>close_position_in_window_15m</code> vale +0.157 di Rank IC su tutto il train e −0.063 dentro le 24 barre; 66 colonne su 112 invertono allo stesso modo. Una mappa unica e incondizionata non può tenere entrambi i rami, e fitta la massa — dove sta l'84% delle righe.</p>
     <p><strong>3. Non è instabilità, è una variabile mancante.</strong> Dentro le 48 barre la Rank IC per colonna su train e su test <strong>correla a 0.924</strong>, e solo 8 colonne su 112 cambiano segno. L'informazione in banda generalizza benissimo: quello che manca è la variabile che dice al modello in quale dei due regimi si trova.</p>
   </div>
+
+  <div class="box why">
+    <h4>Step 7 · La strategia swing, resa tradabile — e il tetto che ha trovato <span class="b b-msr">misurato</span></h4>
+    <p>La domanda era diretta: prendere <code>swing_leg_target</code>, renderlo una strategia, e arrivare a un rendimento netto pari a circa <strong>metà di quello dell'oracolo</strong>. Tre misure fatte <em>prima</em> di addestrare qualsiasi cosa hanno cambiato il piano, e la terza ha cambiato l'obiettivo.</p>
+    <p><strong>Quanto vale l'etichetta se la si conoscesse esattamente.</strong> Tradando <code>swing_leg_target</code> stesso, con conoscenza perfetta e la soglia migliore, si fanno 5.46 log l'anno contro i 10.20 dell'oracolo sugli stessi otto simboli: <strong>il 54%</strong>. Non è una coincidenza ed è il tetto dell'approccio — l'etichetta interpola la gamba, quindi chi la legge perfettamente entra comunque dopo il minimo ed esce prima del massimo. <em>Metà dell'oracolo è esattamente ciò che compra la conoscenza perfetta dell'etichetta.</em></p>
+    <p><strong>Quanto vale la conoscenza imperfetta.</strong> La stessa etichetta corrotta a correlazione 0.9 col vero rende 3.68; a 0.7, 1.25; a 0.5 <strong>perde</strong> 0.95. Il pareggio sta fra 0.5 e 0.7. Una ridge sulle 29 colonne di <code>features</code> arriva a 0.577, con lo stato causale della gamba di <code>legs</code> a 0.623 — oltre il pareggio nominale — e perde ancora 0.29 l'anno.</p>
+    <p><strong>E il tetto vero, che non è l'oracolo.</strong> Un pivot di una finestra centrata da <em>N</em> barre è conoscibile solo <em>N</em> barre dopo che è stampato. Lo stesso oracolo che riempie a <code>lag=24</code> — identificazione perfetta, azione alla prima barra in cui è possibile — rende <strong>0.40 log l'anno contro 4.12</strong>: <strong>meno del 10%</strong>. Tutto ciò che rende enorme il numero dell'oracolo è la finestra di futuro che legge. Quindi il 50% dell'oracolo di preveggenza sta <strong>cinque volte sopra</strong> ciò che un rilevatore di pivot <em>perfetto</em> e causale incassa: non è un obiettivo difficile, è un obiettivo che nessun modello può raggiungere. Da qui in avanti la colonna da leggere è <code>reachable</code>.</p>
+  </div>
+
+  <div class="tw">
+    <table>
+      <caption>step 7 — barre 4h, venti simboli, quattro fold walk-forward, test 2023-01 → 2026-09, 0,25% per lato</caption>
+      <thead><tr><th>regola</th><th class="num">lordo</th><th class="num">netto</th><th class="num">trade/anno</th><th class="num">in mercato</th><th class="num">% del raggiungibile</th><th class="num">batte l'hold</th></tr></thead>
+      <tbody>
+        <tr><td class="key">oracolo, preveggenza (lag 0)</td><td class="num">—</td><td class="num">4.123</td><td class="num">116</td><td class="num">~50%</td><td class="num">—</td><td class="num">20/20</td></tr>
+        <tr><td class="key">oracolo, alla conferma (lag 24)</td><td class="num">—</td><td class="num">0.399</td><td class="num">116</td><td class="num">~50%</td><td class="num">100%</td><td class="num">—</td></tr>
+        <tr class="hi"><td class="key">rsi_centered &gt; 0.3 — una colonna</td><td class="num">0.182</td><td class="num">+0.126</td><td class="num">11,1</td><td class="num">18%</td><td class="num">32%</td><td class="num">11/20</td></tr>
+        <tr><td class="key">GRU, etichetta + rinforzo sul P&amp;L</td><td class="num">0.192</td><td class="num">+0.063</td><td class="num">25,7</td><td class="num">27%</td><td class="num">16%</td><td class="num">12/20</td></tr>
+        <tr><td class="key">GRU, sola etichetta + banda su validation</td><td class="num">0.095</td><td class="num">+0.060</td><td class="num">6,8</td><td class="num">35%</td><td class="num">15%</td><td class="num">11/20</td></tr>
+        <tr><td class="key">compra e tieni</td><td class="num">—</td><td class="num">+0.057</td><td class="num">—</td><td class="num">100%</td><td class="num">14%</td><td class="num">—</td></tr>
+        <tr><td class="key">close_position_in_window &gt; 0.5</td><td class="num">0.089</td><td class="num">−0.145</td><td class="num">46,4</td><td class="num">42%</td><td class="num">−36%</td><td class="num">3/20</td></tr>
+        <tr><td colspan="7" class="foot">la deviazione standard del netto <em>fra simboli</em> è <strong>0.207</strong>: con venti coppie che condividono quasi tutta la loro varianza col mercato, le prime cinque righe non sono distinguibili fra loro. Il confronto onesto non è quale vince, è che <strong>nessun modello batte una colonna sola</strong></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="box why">
+    <h4>Perché il modello viene addestrato due volte <span class="b b-ok">fatto</span></h4>
+    <p>La riga che ha deciso l'architettura è la ridge a 0.623 che perde soldi. <strong>La correlazione con l'etichetta non è l'obiettivo, e ottimizzarla non porta ai soldi</strong>: un modello può correlare 0.62 e perdere, perché i suoi errori non sono sparsi uniformemente — si concentrano sulle svolte, che è esattamente dove ogni trade viene aperto e chiuso. Una Huber sull'etichetta spende il gradiente sul mezzo delle gambe, che è l'80% delle righe e nessuna delle decisioni.</p>
+    <p>Quindi <code>swing.fit_label</code> mette la struttura della gamba nell'encoder, e <code>swing.fit_policy</code> ottimizza <em>direttamente il denaro</em>: la posizione è funzione differenziabile dell'output, la ricompensa è il rendimento log che incassa meno la commissione su ogni unità di posizione cambiata, e il gradiente è esatto perché il prezzo è esogeno. È il rinforzo diretto di Moody e Saffell, ed è lo strumento giusto per una ragione specifica: obiettivo e metrica diventano la stessa quantità, quindi un passo di gradiente non può più migliorare il fit dell'etichetta e peggiorare il P&amp;L insieme.</p>
+    <p>Due dettagli che sembravano di contorno e non lo erano. La ricompensa si paga su rendimenti <strong>detrendizzati</strong>: senza, la policy migliore è comprare e tenere, e la trova — la prima versione finiva sempre long al 100%. E la nitidezza del sigmoid è fissata a <strong>2</strong> per misura: a 4 satura, il gradiente sparisce e lo stadio scappa nel minimo locale "sempre fuori mercato" a ogni learning rate provato. Il <code>_selfcheck</code> pinza entrambe con una sega costruita apposta perché il prior supervisionato sia <em>sbagliato</em>: parte da −8.1 log/anno e deve finire sopra zero.</p>
+  </div>
+
+  <div class="box no">
+    <h4>Quattro varianti provate sullo stesso stadio, tutte dentro il rumore <span class="b b-msr">misurato</span></h4>
+    <p><strong>Straight-through sulla posizione</strong> (la ricompensa pagata sulla posizione binaria davvero eseguita, gradiente dal sigmoid dietro): sembrava ovviamente giusto, perché su una posizione morbida la commissione viene addebitata su un sigmoid che va da 0.48 a 0.52 e non costa nulla. Misurato è <em>peggio</em>: −0.042 netti a 111 trade contro +0.063 a 94. La ragione è la stessa saturazione — lo stimatore consegna al termine di commissione la derivata del sigmoid, che è minima proprio dove la posizione è più decisa.</p>
+    <p><strong>Banda e segno sul punteggio della policy, scelti su validation</strong>: −0.006 di lordo. Tre numeri scelti su una coda di validation di cinque mesi con settantadue combinazioni: ha trovato quella che si adattava a cinque mesi. <strong>Spostando la scelta su tutto il lato train</strong> il sovradattamento sparisce e il risultato resta sotto (+0.034 con tre semi). <strong>Media su tre semi</strong>: non ha aiutato.</p>
+    <p>Il punto non è quale variante vince. È che la dispersione fra queste è più piccola della dispersione fra simboli, e che <em>tutte</em> perdono contro <code>rsi_centered &gt; 0.3</code>. Su questo pannello e in questo periodo, il GRU su 65 colonne non estrae più di quanto estragga un indicatore.</p>
+  </div>
+
+  <div class="box why">
+    <h4>Il pivot ha un gemello causale, e la differenza non è cosmetica <span class="b b-ok">nuovo modulo</span></h4>
+    <p><code>data.pivots.find_pivots</code> è centrato ed è il lato <em>etichetta</em> del problema. <code>legs.confirmed</code> è la linea del tempo che un lettore dal vivo avrebbe tenuto: ogni estremo grezzo diventa visibile <em>N</em> barre dopo, e la fusione delle serie dello stesso segno è applicata <strong>in ordine di arrivo</strong> — quando stampa un massimo più alto, quello precedente smette di essere il pivot da quel momento, non retroattivamente.</p>
+    <p>Traslare di <em>N</em> il frame centrato sembra equivalente e non lo è: il passaggio centrato ha <em>già cancellato</em> il massimo più basso su cui il lettore stava agendo nelle ore intermedie. Il <code>_selfcheck</code> del modulo costruisce il caso: due massimi di fila, il secondo più alto, e <code>find_pivots</code> ha già perso il primo mentre la linea del tempo lo tiene fino alla barra 20. La proprietà che conta è affermata come tale — troncare la serie dopo la barra <em>t</em> non può cambiare nessuna riga fino a <em>t</em>.</p>
+  </div>
+
+  <div class="box open">
+    <h4>9 · La finestra fissa è il vincolo, e non è stata sostituita <span class="b b-open">nuovo</span></h4>
+    <p>Tutto lo step 7 sta dentro una sola disuguaglianza: una finestra di <em>N</em> barre significa <em>N</em> barre di ritardo di conferma, e a quel ritardo l'oracolo tiene il 10% di sé stesso. Le alternative misurate finora non aiutano. Una gamba a soglia di volatilità (<em>zigzag</em> a <em>k</em> log), dove la conferma è un evento e non un'attesa, è peggio: si conferma per costruzione <em>k</em> sotto il massimo, quindi regala 2<em>k</em> per gamba e alla conferma rende da −0.19 a −1.11 contro il +0.40 della finestra centrata. Finestre più corte (6, 12) non cambiano il tetto: 0.43, 0.39, 0.48.</p>
+    <p><strong>Strade.</strong> Una definizione di gamba la cui conferma costi meno di quanto costi aspettare — per esempio una soglia asimmetrica, stretta in entrata e larga in uscita. Un modello che <em>anticipi</em> la svolta invece di leggerne lo stato: è il punto aperto 4 riletto, e le sei colonne di esaurimento di <code>legs.exhaustion</code> sono la sua strada, ancora non isolate dalle altre. E la leva che non è modellistica: <strong>0,25% per lato è taker</strong>; a 0,15% maker il giro costa il 40% in meno, che su questi margini è più di qualunque variante provata sopra.</p>
+  </div>
 </section>
 
 <section>

@@ -18,7 +18,7 @@ import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 
-from tradingvision import factor, gru, metrics
+from tradingvision import factor, gru, metrics, swing
 from tradingvision.data import candles
 from tradingvision.data.candles import SYMBOLS, TIMEFRAMES, get_candles
 from tradingvision.data.pivots import EXTREMA_WINDOW, find_pivots
@@ -143,6 +143,23 @@ def load_prediction(df, path: str, _mtime: float):
     return gru.predict_frame(*load_model(path), df)
 
 
+@st.cache_resource(show_spinner=False)
+def load_swing_model(path: str, _mtime: float):
+    """The saved swing model. `cache_resource` for the same reason the GRU uses it, and `_mtime`
+    in the key because retraining has to invalidate a checkpoint the path alone cannot date."""
+    return swing.restore(Path(path))
+
+
+@st.cache_data(show_spinner="Running the swing model…")
+def load_swing(df, path: str, _mtime: float):
+    """`label`, `logit` and `position` at every bar on screen — the model of step 7.
+
+    Unlike the GRU this one needs no store: its inputs are computed from the candles on screen and
+    its scaler is fitted on their own history, so it runs on a pair the training set never held.
+    """
+    return swing.predict_frame(*load_swing_model(path, _mtime), df)
+
+
 @st.cache_data(show_spinner="Computing features…")
 def load_features(df, window: int, columns: tuple[str, ...]):
     """Cached on (frame, window, columns): picking different columns to draw does not recompute
@@ -190,7 +207,13 @@ def heatmap(z, title: str, unit: str = "sd", limit: float = 2.0):
     return fig
 
 
-def book(per: pd.DataFrame, weight: pd.Series | None, symbol: str) -> go.Figure:
+def book(
+    per: pd.DataFrame,
+    weight: pd.Series | None,
+    symbol: str,
+    what: str = "weight",
+    benchmark: str = "basket, equal weight, long only",
+) -> go.Figure:
     """What the factor's book earned over the fetched period, and this pair's weight inside it.
 
     The heatmaps say whether the ordering was right; this says what holding it was worth, which is
@@ -207,7 +230,10 @@ def book(per: pd.DataFrame, weight: pd.Series | None, symbol: str) -> go.Figure:
         shared_xaxes=True,
         row_heights=[2, 1],
         vertical_spacing=0.05,
-        subplot_titles=["book — cumulative return over the fetched period", f"weight on {symbol.split('/')[0]}"],
+        subplot_titles=[
+            "book — cumulative return over the fetched period",
+            f"{what} on {symbol.split('/')[0]}",
+        ],
     )
     for name, y, color, dash, width, on in (
         ("net of fees", per.gross - per.traded * FEE, "#2ecc71", "solid", 2.0, True),
@@ -218,7 +244,7 @@ def book(per: pd.DataFrame, weight: pd.Series | None, symbol: str) -> go.Figure:
         # hidden — it is the metric above, in the same period and the same units — and one click
         # on the legend puts it back on the axis for anyone who wants the shape rather than the
         # number.
-        ("basket, equal weight, long only", per.basket, "#34495e", "dash", 1.0, "legendonly"),
+        (benchmark, per.basket, "#34495e", "dash", 1.0, "legendonly"),
     ):
         fig.add_trace(
             go.Scatter(
@@ -241,10 +267,10 @@ def book(per: pd.DataFrame, weight: pd.Series | None, symbol: str) -> go.Figure:
                 x=weight.index,
                 y=weight,
                 mode="lines",
-                name="weight",
+                name=what,
                 line=dict(color="#e67e22", width=1.5, shape="hv"),
                 showlegend=False,
-                hovertemplate="%{x}<br>weight %{y:+.2f}<extra></extra>",
+                hovertemplate="%{x}<br>" + what + " %{y:+.2f}<extra></extra>",
             ),
             row=2,
             col=1,
@@ -425,6 +451,9 @@ def chart(
         # was taken on, which is the price that decision actually paid.
         moved = trades.diff().fillna(trades)
         moved = moved[(moved != 0) & (moved.index >= df.index[0]) & (moved.index <= df.index[-1])]
+        # A long/flat book has only two states, so its markers say what was done rather than what
+        # the weight became; a graded one has no "in" and "out" and says the level instead.
+        binary = set(trades.dropna().unique()) <= {0.0, 1.0}
         for up, color, shape, position in (
             (True, "#2ecc71", "triangle-up", "bottom center"),
             (False, "#e74c3c", "triangle-down", "top center"),
@@ -438,10 +467,11 @@ def chart(
                     y=df.close.reindex(side.index, method="ffill"),
                     mode="markers+text",
                     marker=dict(size=9, color=color, symbol=shape),
-                    text=[f"{v:+.2f}" for v in trades.reindex(side.index)],
+                    text=[("buy" if up else "sell") if binary else f"{v:+.2f}" for v in trades.reindex(side.index)],
                     textposition=position,
                     textfont=dict(size=9, color=color),
                     name="buy" if up else "sell",
+                    marker_size=11 if binary else 9,
                     showlegend=False,
                     hovertemplate="%{x}<br>%{y}<extra></extra>",
                 ),
@@ -552,6 +582,25 @@ def main() -> None:
         # two lines sharing an axis without sharing a unit is the one reading that misleads.
         st.sidebar.caption(f"GRU prediction needs the **{branch}** timeframe and the **{trained_on}** label.")
 
+    # The swing model of step 7 — the one that trades. It is drawn against the retrospective
+    # label because that is the label it predicts, and only on the timeframe it was fitted on:
+    # its inputs are windows of that bar and nothing rescales them between one bar and another.
+    swing_at = swing.CHECKPOINT if swing.CHECKPOINT.exists() else None
+    swing_card = load_swing_model(str(swing_at), swing_at.stat().st_mtime)[1] if swing_at else None
+    swinging = False
+    if not swing_at:
+        st.sidebar.caption("No swing model. `python -m tradingvision.swing --save`")
+    elif label != RETROSPECTIVE:
+        st.sidebar.caption(f"The swing model predicts the **{RETROSPECTIVE}** label.")
+    elif timeframe != swing_card["timeframe"]:
+        st.sidebar.caption(f"The swing model reads **{swing_card['timeframe']}** candles.")
+    else:
+        swinging = st.sidebar.toggle(
+            "Swing trades",
+            value=True,
+            help=f"{swing_at.name}, stage {swing_card['stage']}, trained to {swing_card['test_start']}",
+        )
+
     # The composite of step 6, which *is* drawable where the GRU is not: it reads the panel this
     # page already fetches for the label, and there is no checkpoint to be missing.
     factoring = False
@@ -635,11 +684,27 @@ def main() -> None:
                 weight = pos[fetched[0]] if fetched[0] in pos else None
     else:
         target = load_target(df.close, EXTREMA_WINDOW, label, smoothing, significance)
+    swung = load_swing(df, str(swing_at), swing_at.stat().st_mtime) if swinging else None
+    if swung is not None and not swung.position.notna().any():
+        # Not an error and not an empty chart: the model reads 24 bars of history through features
+        # that need another hundred behind them, so a short window leaves nothing to score. Said
+        # here rather than drawn as a flat line, which would read as "the model does nothing".
+        st.info(
+            f"The swing model needs about {swing.MIN_BARS} scorable {fetched[1]} bars behind the "
+            f"window — this one has {len(df)} candles in total. Widen **History (days)**."
+        )
+        swung = None
+    swing_pos = swung.position.fillna(0.0) if swung is not None else None
     strength = load_significance(df.close, EXTREMA_WINDOW)
     feats = load_features(df, EXTREMA_WINDOW, tuple(COLUMNS))[picked]
     # The two models never draw together: each predicts a different label, and the sidebar only
     # offers whichever one the label on screen belongs to.
     pred = factor_pred if factor_pred is not None else None
+    if pred is None and swung is not None:
+        # Calibrated back onto the label's own range on the way out of the model, so the two lines
+        # in the second row share a unit as well as an axis. The map is fitted on the train period
+        # and stored in the checkpoint; it is monotone, so it moved no decision on the way here.
+        pred = swung.label.rename("prediction")
     if pred is None and predicting:
         pred = load_prediction(df, str(model_at), model_at.stat().st_mtime)
     if normalized and len(feats.columns):
@@ -680,6 +745,39 @@ def main() -> None:
             f"Trades on {fetched[0].split('/')[0]}", f"{moves}", f"{per.traded.sum():.2f} units traded per pair"
         )
 
+    if swung is not None:
+        # What the model made on the window on screen, against the two oracles. The first is the
+        # hindsight one the page has always shown; the second is the same oracle filling `W` bars
+        # later, which is the earliest a pivot of a centred window can be known to anybody and
+        # therefore the only one of the two a causal rule could reach. Measured over twenty pairs
+        # the second is 7% of the first, and quoting the model against the first alone would
+        # describe a 7x gap that no model can close.
+        span = float((df.index[-1] - df.index[0]) / swing.YEAR)
+        got = swing.price(swing_pos.to_numpy(), df.close.to_numpy(), span, FEE)
+        reachable = run(df.close, EXTREMA_WINDOW, FEE, pivots=pivots, lag=EXTREMA_WINDOW)
+        mine = got["log_per_year"] * span
+        best = stats["log_per_year"] * span
+        near = reachable["log_per_year"] * span
+        row = st.columns(4)
+        row[0].metric(
+            "Swing net return",
+            f"{np.expm1(mine) * 100:+.1f}%",
+            f"{got['trades']} trades"
+            + (f", {got['win_rate'] * 100:.0f}% win" if got["trades"] else "")
+            + f", {got['in_market'] * 100:.0f}% in market",
+        )
+        row[1].metric("Buy and hold", f"{(df.close.iloc[-1] / df.close.iloc[0] - 1) * 100:+.1f}%", "same window")
+        row[2].metric(
+            "Of the reachable oracle",
+            f"{mine / near * 100:+.0f}%" if near else "—",
+            f"{np.expm1(near) * 100:+.0f}% filling {EXTREMA_WINDOW} bars after each pivot",
+        )
+        row[3].metric(
+            "Of the hindsight oracle",
+            f"{mine / best * 100:+.1f}%" if best else "—",
+            f"{np.expm1(best) * 100:,.0f}% — it reads the future",
+        )
+
     st.plotly_chart(
         chart(
             df,
@@ -693,11 +791,41 @@ def main() -> None:
             retrospective or bool(unit),
             pred,
             unit,
-            weight,
+            weight if weight is not None else swing_pos,
         ),
         use_container_width=True,
         key="chart",
     )
+    if swung is not None:
+        # The same figure the factor book gets, on the only benchmark a single pair has: holding
+        # it. Three curves and the two gaps between them — gross to net is the fee, net to hold is
+        # the whole of what timing the legs was worth.
+        ret = np.log(df.close.shift(-1) / df.close).fillna(0.0)
+        per = pd.DataFrame(
+            {"gross": swing_pos * ret, "traded": swing_pos.diff().fillna(swing_pos).abs(), "basket": ret}
+        )
+        st.plotly_chart(
+            book(per, swing_pos, fetched[0], "position", "buy and hold"),
+            use_container_width=True,
+            key="swing-book",
+        )
+        held = swing.trades(swing_pos.to_numpy(), df.close.to_numpy(), FEE)
+        st.caption(
+            f"Long or flat, one unit, entered and exited at the close of the bar the model decided "
+            f"on — the oracle's own shape, so the two are priced by the same arithmetic. "
+            f"{len(held)} round trips over this window"
+            + (
+                f", median {held.leg.median() * 100:+.2f}% and {held.bars.median():.0f} bars, "
+                f"{(held.leg > 0).mean() * 100:.0f}% of them positive"
+                if len(held)
+                else ""
+            )
+            + f". {FEE * 100:.2f}% per side is charged on both fills. Stage "
+            f"**{swing_card['stage']}**: the encoder is fitted on the leg label and, past that, "
+            f"the position itself is trained on the money — rewarded by what it earned, charged "
+            f"for every change of mind at the fee it would really pay."
+        )
+
     if realised is not None and peers:
         # Prediction above, outcome below, on one x. The line two rows up is a slice of these and
         # cannot show what either quantity means, because both are defined by the pairs that are
