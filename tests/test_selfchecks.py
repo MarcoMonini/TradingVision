@@ -15,6 +15,7 @@ import pytest
 from tradingvision import crosscheck, dataset, factor, gbm, linear, nearpivot, selection, simulation
 
 SELF_CHECKED = [
+    "tradingvision.data.candles",
     "tradingvision.data.pivots",
     "tradingvision.data.target",
     "tradingvision.features",
