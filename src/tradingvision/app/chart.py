@@ -190,6 +190,98 @@ def heatmap(z, title: str, unit: str = "sd", limit: float = 2.0):
     return fig
 
 
+def book(per: pd.DataFrame, weight: pd.Series | None, symbol: str) -> go.Figure:
+    """What the factor's book earned over the fetched period, and this pair's weight inside it.
+
+    The heatmaps say whether the ordering was right; this says what holding it was worth, which is
+    a different question with a different answer — a Rank IC is a correlation and a book pays fees.
+    Three curves, and the gaps between them are the whole reading: gross to net is the fee the
+    sidebar quotes, net to basket is the reason the label is an *excess* return at all. A
+    market-neutral curve that trails a rising basket has not failed, it was never long the market.
+
+    Cumulative log returns shown as percentages, so the curve compounds the way an account does.
+    """
+    fig = make_subplots(
+        rows=2,
+        cols=1,
+        shared_xaxes=True,
+        row_heights=[2, 1],
+        vertical_spacing=0.05,
+        subplot_titles=["book — cumulative return over the fetched period", f"weight on {symbol.split('/')[0]}"],
+    )
+    for name, y, color, dash, width, on in (
+        ("net of fees", per.gross - per.traded * FEE, "#2ecc71", "solid", 2.0, True),
+        ("gross", per.gross, "#95a5a6", "dot", 1.5, True),
+        # Off until asked for, alone among the three. A hedged book earns single digits where a
+        # month of this market moves tens, so drawn by default the basket sets the axis and the
+        # two curves this figure exists for collapse onto the zero line. The comparison is not
+        # hidden — it is the metric above, in the same period and the same units — and one click
+        # on the legend puts it back on the axis for anyone who wants the shape rather than the
+        # number.
+        ("basket, equal weight, long only", per.basket, "#34495e", "dash", 1.0, "legendonly"),
+    ):
+        fig.add_trace(
+            go.Scatter(
+                x=per.index,
+                y=np.expm1(y.cumsum()) * 100,
+                mode="lines",
+                name=name,
+                visible=on,
+                line=dict(color=color, dash=dash, width=width),
+                hovertemplate="%{x}<br>" + name + " %{y:+.2f}%<extra></extra>",
+            ),
+            row=1,
+            col=1,
+        )
+    if weight is not None:
+        # A step and not a line: the weight is held between decisions and interpolating it would
+        # draw a position that was never carried.
+        fig.add_trace(
+            go.Scatter(
+                x=weight.index,
+                y=weight,
+                mode="lines",
+                name="weight",
+                line=dict(color="#e67e22", width=1.5, shape="hv"),
+                showlegend=False,
+                hovertemplate="%{x}<br>weight %{y:+.2f}<extra></extra>",
+            ),
+            row=2,
+            col=1,
+        )
+        moved = weight.diff().fillna(weight)
+        moved = moved[moved != 0]
+        fig.add_trace(
+            go.Scatter(
+                x=moved.index,
+                y=weight.reindex(moved.index),
+                mode="markers",
+                name="trade",
+                marker=dict(size=7, symbol="diamond", color=np.where(moved > 0, "#2ecc71", "#e74c3c")),
+                showlegend=False,
+                hovertemplate="%{x}<br>to %{y:+.2f}<extra></extra>",
+            ),
+            row=2,
+            col=1,
+        )
+    fig.update_annotations(font_size=11, x=0, xanchor="left")
+    fig.update_yaxes(title_text="%", zeroline=True, zerolinecolor="#bbb", row=1, col=1)
+    fig.update_yaxes(title_text="units", zeroline=True, zerolinecolor="#bbb", row=2, col=1)
+    if weight is not None and len(weight.dropna()):
+        # Symmetric around zero and with room for the markers, which otherwise sit half off the
+        # floor. Symmetric because the book is long and short of the same size by construction,
+        # and an axis fitted to the data would draw a tilt the position does not have.
+        limit = float(np.abs(weight).max()) * 1.3 or 1.0
+        fig.update_yaxes(range=[-limit, limit], row=2, col=1)
+    fig.update_layout(
+        height=460,
+        margin=dict(l=0, r=0, t=30, b=0),
+        legend=dict(orientation="h", y=-0.12, font=dict(size=10)),
+        xaxis_rangeslider_visible=False,
+    )
+    return fig
+
+
 def pinned(pred: pd.Series, peers: int, symbol: str) -> str:
     """What to say when the prediction line does not move, which is not the same as broken.
 
@@ -228,6 +320,7 @@ def chart(
     bounded=True,
     pred=None,
     unit: str = "",
+    trades=None,
 ) -> go.Figure:
     # Price, then the label under it on the same x: the target is only readable against the leg it
     # describes. Volume next, it is context rather than subject, and the features under everything.
@@ -325,6 +418,36 @@ def chart(
             row=1,
             col=1,
         )
+    if trades is not None:
+        # Where and when, on the price itself. The book is graded rather than on/off, so there is
+        # no "entry" and "exit" to mark — only more and less, and the arrow says which way while
+        # the text says the weight it moved to. Markers sit at the close of the bar the decision
+        # was taken on, which is the price that decision actually paid.
+        moved = trades.diff().fillna(trades)
+        moved = moved[(moved != 0) & (moved.index >= df.index[0]) & (moved.index <= df.index[-1])]
+        for up, color, shape, position in (
+            (True, "#2ecc71", "triangle-up", "bottom center"),
+            (False, "#e74c3c", "triangle-down", "top center"),
+        ):
+            side = moved[moved > 0] if up else moved[moved < 0]
+            fig.add_trace(
+                go.Scatter(
+                    x=side.index,
+                    # Forward filled: a pair that did not trade in a bar has no candle there, and
+                    # the decision still happened at the last price the panel carried.
+                    y=df.close.reindex(side.index, method="ffill"),
+                    mode="markers+text",
+                    marker=dict(size=9, color=color, symbol=shape),
+                    text=[f"{v:+.2f}" for v in trades.reindex(side.index)],
+                    textposition=position,
+                    textfont=dict(size=9, color=color),
+                    name="buy" if up else "sell",
+                    showlegend=False,
+                    hovertemplate="%{x}<br>%{y}<extra></extra>",
+                ),
+                row=1,
+                col=1,
+            )
     fig.add_trace(go.Bar(x=df.index, y=df.volume, name="volume", marker_color="#888", showlegend=False), row=3, col=1)
     for row, (_, cols) in enumerate(groups, start=4):
         for col in cols:
@@ -464,6 +587,7 @@ def main() -> None:
         return
     pivots = load_pivots(df.close, EXTREMA_WINDOW)
     peers, realised, predicted, factor_pred, skill, unit = 0, None, None, None, None, ""
+    per, weight, decision = None, None, ""
     if label == CROSS:
         panel = load_panel(fetched[1], fetched[2], FACTOR_WINDOW.days)
         realised = load_cross_target(panel, horizon)
@@ -492,6 +616,23 @@ def main() -> None:
             on_screen = realised.index.isin(df.index)
             per_date = factor.rank_ic(predicted, realised, on_screen)
             skill = metrics.blocked(per_date, horizon * BAR[fetched[1]]) if len(per_date) else None
+            # The book, priced on the panel's own closes. One decision an hour is the clock the
+            # study measured on and the stride `dataset` samples at; on a timeframe coarser than
+            # an hour the bar is the clock, because there is nothing finer to decide on.
+            step = max(1, round(factor.DECISION / BAR[fetched[1]]))
+            decision = "hour" if step > 1 else fetched[1]
+            at = factor.hourly(predicted.index, BAR[fetched[1]], step * BAR[fetched[1]])
+            # `predicted` is already ranked and `weighted` ranks again — a rank of a rank is the
+            # same ordering, so this is the book the study prices off the raw composite.
+            pos = factor.weighted(predicted, at, factor.TOL)
+            # Priced from the first decision the composite exists on and not from the start of the
+            # warm-up: the rows in front of it are flat by construction and would only dilute the
+            # period the numbers are quoted over. The opening trade is charged at that first row.
+            live = pos.index[(pos != 0).any(axis=1)]
+            if len(live):
+                pos = pos.loc[live[0] :]
+                per = factor.pnl(pos, panel["close"], step)
+                weight = pos[fetched[0]] if fetched[0] in pos else None
     else:
         target = load_target(df.close, EXTREMA_WINDOW, label, smoothing, significance)
     strength = load_significance(df.close, EXTREMA_WINDOW)
@@ -519,6 +660,25 @@ def main() -> None:
         # panel cannot say anything that precise.
         columns[2].metric("Rank IC on screen", f"{skill['mean']:+.3f}", f"± {skill['se']:.3f} (se)")
         columns[3].metric("t on blocks", f"{skill['t']:+.2f}", f"{skill['blocks']} independent blocks")
+    if per is not None:
+        # What the ordering above was worth to hold, which the Rank IC does not say. Net of the
+        # fee on the left, the basket next to it: a hedged book is not competing with the market,
+        # and quoting its return without what the market did over the same hours invites the
+        # comparison anyway — better to draw it than to leave it implied.
+        net = per.gross - per.traded * FEE
+        moves = int((weight.diff().fillna(weight) != 0).sum()) if weight is not None else 0
+        row = st.columns(3)
+        row[0].metric(
+            "Book net return", f"{np.expm1(net.sum()) * 100:+.2f}%", f"gross {np.expm1(per.gross.sum()) * 100:+.2f}%"
+        )
+        row[1].metric(
+            "Basket, same period",
+            f"{np.expm1(per.basket.sum()) * 100:+.2f}%",
+            f"{peers} pairs, equal weight, long only",
+        )
+        row[2].metric(
+            f"Trades on {fetched[0].split('/')[0]}", f"{moves}", f"{per.traded.sum():.2f} units traded per pair"
+        )
 
     st.plotly_chart(
         chart(
@@ -533,6 +693,7 @@ def main() -> None:
             retrospective or bool(unit),
             pred,
             unit,
+            weight,
         ),
         use_container_width=True,
         key="chart",
@@ -562,6 +723,31 @@ def main() -> None:
             ),
             use_container_width=True,
             key="heatmap",
+        )
+    if per is not None:
+        st.plotly_chart(book(per, weight, fetched[0]), use_container_width=True, key="book")
+        # What one swap in the ordering moves a weight by, which is the unit the tolerance is
+        # quoted in and the number that does not survive a thin cross-section.
+        swap = factor.swap(peers)
+        span = (pos.index[-1] - pos.index[0]) / factor.YEAR
+        st.caption(
+            f"Rank-weighted book, one unit of gross notional per pair, dollar neutral inside each "
+            f"decision and rebalanced only when a target weight moves more than {factor.TOL} — the "
+            f"rule and the tolerance `factor` picked on the train side of all four folds, where it "
+            f"made +0.238 a year against +0.179 for the band. One decision per {decision} over "
+            f"{len(per)} of them, {FEE * 100:.2f}% per side charged on every unit traded, the "
+            f"opening trade included."
+            + (
+                f" Read the turnover with the width of the cross-section in mind: across "
+                f"{peers} pairs one swap in the ordering already moves a weight by {swap:.2f}, "
+                f"more than the {factor.TOL} tolerance, so this book rebalances on every swap — "
+                f"{per.traded.sum() / span:.0f} units a year, against 6.5 for the same rule on "
+                f"the twenty pairs it was measured on, where {factor.TOL} is four swaps wide. "
+                f"The rule is the one that was chosen; the panel under it is a quarter of the "
+                f"width, and thinness costs fees before it costs anything else."
+                if swap > factor.TOL
+                else ""
+            )
         )
     st.caption(
         f"{len(df)} candles — {df.index[0]:%Y-%m-%d %H:%M} to {df.index[-1]:%Y-%m-%d %H:%M} UTC · "

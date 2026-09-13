@@ -160,15 +160,19 @@ def composite(p: dict[str, pd.DataFrame], n: int) -> pd.DataFrame:
     return cross_rank(size) - cross_rank(volatility)
 
 
-def hourly(index: pd.DatetimeIndex) -> np.ndarray:
-    """The `TF` bars that close on a clock hour — one decision an hour, the same one for everyone.
+def hourly(index: pd.DatetimeIndex, bar: pd.Timedelta = BAR, decision: pd.Timedelta = DECISION) -> np.ndarray:
+    """The bars that close on a clock hour — one decision an hour, the same one for everyone.
 
     On the clock and never by position: a positional stride drifts the moment a symbol loses a
-    bar, and `dataset.build` records what that cost. `TF` labels are open times, so the bar that
-    closes at the hour is the one labelled one `TF` before it.
+    bar, and `dataset.build` records what that cost. Labels are open times, so the bar that closes
+    at the hour is the one labelled one bar before it.
+
+    The two arguments exist for the chart page, which draws this book on whichever timeframe is on
+    screen; the study only ever calls it on `TF` at `DECISION`. A decision cannot come round more
+    often than the bars do, so above an hour the caller passes the bar as the decision interval.
     """
-    closes = index + BAR
-    return np.asarray(closes.floor(DECISION) == closes)
+    closes = index + bar
+    return np.asarray(closes.floor(decision) == closes)
 
 
 def label(p: dict[str, pd.DataFrame], horizon: int = CROSS_HORIZON) -> pd.DataFrame:
@@ -259,6 +263,7 @@ FEES = (0.0025, 0.0010, 0.0005)
 THETAS = (0.2, 0.5, 0.8)
 # No-trade tolerance of the weighted book, in units of the weight. Picked on train; see `weighted`.
 TOLS = (0.1, 0.2, 0.3, 0.5, 0.8)
+TOL = 0.8  # what `best` lands on in all four folds; what anything outside a fold should use
 
 
 def band(sig: pd.DataFrame, when: np.ndarray, theta: float) -> pd.DataFrame:
@@ -306,24 +311,54 @@ def weighted(sig: pd.DataFrame, when: np.ndarray, tol: float) -> pd.DataFrame:
     return pd.DataFrame(out, index=target.index, columns=target.columns)
 
 
-def price(pos: pd.DataFrame, close: pd.DataFrame, step: int = 4) -> dict:
-    """What a book of positions earns, hedged, on the panel's own closes.
+def pnl(pos: pd.DataFrame, close: pd.DataFrame, step: int = 4) -> pd.DataFrame:
+    """The three per-decision series every number in `price` is a sum of.
 
     `step` is the decision interval in `TF` bars — 4 is the hour the rows are sampled at. The
     position taken at the close of a bar earns the return to the close one decision later, so no
     second clock enters and there is nowhere for a bar of anticipation to hide.
 
     Hedged and never naked: the label is a return in excess of the basket, so the basket leg is
-    part of the trade the signal describes. `simulation` says the same thing at more length.
+    part of the trade the signal describes. `simulation` says the same thing at more length, and
+    `basket` is that leg on its own — carried here because a market-neutral return only means
+    something next to what the market did over the same hours.
+
+    Split out of `price` because a total says whether a strategy works and a curve says *when*:
+    which month carried it, which week gave it back, whether the whole thing is one early trade.
+    The chart page draws these; `price` sums them.
     """
     forward = np.log(close.shift(-step) / close)
     hedged = forward.sub(forward.mean(axis=1), axis=0)
+    return pd.DataFrame(
+        {
+            "gross": (pos * hedged.reindex_like(pos)).fillna(0.0).mean(axis=1),
+            # Units of position changed per symbol: a book that never changes its mind still pays
+            # for opening, and this is the number that says so. `fillna(pos)` charges that opening
+            # trade, as `threshold.pnl` does.
+            "traded": pos.diff().fillna(pos).abs().mean(axis=1),
+            "basket": forward.mean(axis=1).reindex(pos.index),
+        }
+    )
+
+
+def swap(n: int) -> float:
+    """How far a single swap in the ordering moves a weight in `weighted`, across `n` symbols.
+
+    The unit `TOL` is quoted in, and the one number that does not survive a thin panel: across
+    twenty the tolerance is four swaps wide and the book trades twice a year, across five it is
+    narrower than one swap and the same rule rebalances on every rotation. Nothing about the rule
+    changed — the width of the cross-section it is running on did.
+    """
+    w = 2 * (np.arange(1, n + 1) / n - (n + 1) / (2 * n))
+    return float(np.diff(w / np.abs(w).sum() * n)[0])
+
+
+def price(pos: pd.DataFrame, close: pd.DataFrame, step: int = 4) -> dict:
+    """What a book of positions earns, hedged, on the panel's own closes — `pnl`, annualised."""
+    per = pnl(pos, close, step)
     span = (pos.index[-1] - pos.index[0]) / YEAR
-    # Units of position changed per symbol, before annualising: a book that never changes its
-    # mind still pays for opening, and this is the number that says so. `fillna(pos)` charges
-    # that opening trade, as `threshold.pnl` does.
-    turnover = pos.diff().fillna(pos).abs().to_numpy().sum() / pos.shape[1]
-    per_step = (pos * hedged.reindex_like(pos)).fillna(0.0).mean(axis=1)
+    turnover = float(per["traded"].sum())
+    per_step = per["gross"]
     gross = per_step.sum() / span
     risk = per_step.std() * np.sqrt(len(per_step) / span)
     out = {
@@ -458,12 +493,30 @@ def _selfcheck() -> None:
     assert np.allclose(w.abs().sum(axis=1), w.shape[1]), "one unit of gross notional per symbol"
     assert np.allclose(w.sum(axis=1), 0, atol=1e-12), "and it is dollar neutral inside its date"
     assert (band(four, everywhere, 0.5) == 0).any().any(), "where the band holds nothing at all"
+    # A swap is the grid the held weights sit on, so `weighted` cannot produce a gap smaller than
+    # one — and `TOL` is four of them across the twenty symbols it was picked on, under one across
+    # five. That inequality is the whole reason a chart of five pairs trades more than the study.
+    assert np.isclose(swap(20), 0.2) and swap(5) > TOL > swap(20), (swap(5), swap(20))
+    steps = np.diff(np.sort(np.unique(np.round(weighted(four, everywhere, 0.0).to_numpy(), 9))))
+    assert np.allclose(steps, swap(4)), (steps, swap(4))
     assert np.isclose(price(weighted(noise, everywhere, 99.0), close)["turnover"], 1.0)
     assert price(weighted(noise, everywhere, 0.1), close)["turnover"] > 20, "a small one trades a lot"
 
     # `best` reads the train side and nothing else — the same contract `pick` has for the window.
     half = np.arange(n) < n // 2
     assert best(fixed, half, close, TOLS, weighted) in TOLS
+
+    # `pnl` is what `price` sums and what the chart page draws. If the two ever drift apart, the
+    # curve on screen stops being the number in the table, which is the failure nobody would see.
+    real = weighted(noise, everywhere, 0.3)
+    per, totals = pnl(real, close), price(real, close)
+    span = (real.index[-1] - real.index[0]) / YEAR
+    assert np.isclose(per["traded"].sum(), totals["turnover"])
+    assert np.isclose(per["gross"].sum() / span, totals["gross_hedged"])
+    assert np.isclose((per["gross"] - per["traded"] * FEES[0]).sum() / span, totals["net_25bp"])
+    # The hedge is the whole of the difference: a dollar-neutral book on returns that sum to zero
+    # inside each date cannot be earning the basket, whatever the basket did.
+    assert not np.isclose(per["basket"].std(), 0) and abs(per["gross"].corr(per["basket"])) < 0.2
 
 
 def main() -> None:
