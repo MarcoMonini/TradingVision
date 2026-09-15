@@ -114,6 +114,37 @@ VALID_FRACTION = 0.2  # the same tail the GBM holds out, purged against its own 
 # stopping patience, so the rate gets one chance to help before the run is stopped.
 LR_PATIENCE, LR_FACTOR = 5, 0.5
 
+# `--weight`: what the Huber is asked to care about, per row. The loss weights every row the same
+# today, so a bar sitting on a leg that goes nowhere pushes the gradient as hard as one sitting
+# before a move worth trading — and the rows that go nowhere are the mass. The weight is
+# `|remaining_excursion|`, the size of the move still to come in units of a walk of the same
+# volatility, which is "how big is what happens next" and nothing else.
+#
+# Weights may read the future. They are a training-time statistic, applied to rows whose label is
+# already the future, and they never touch a feature or reach the test slice — so this is not the
+# leakage the alignment rule exists to stop. The thing that *would* be leakage is selecting the
+# rows a prediction is *scored* on by the same criterion, which is why `by_move` reports every
+# bucket rather than the one the weighting was aimed at.
+WEIGHTS = ("none", "excursion", "rank")
+# Clip on the raw scheme, in medians. The excursion is fat-tailed — its whole point is that the
+# denominator is a walk of the same volatility, so a real move is several of them — and an
+# unclipped weight hands one bar of one symbol the gradient of fifty. `rank` needs no clip and is
+# the gentler scheme for that reason: bounded influence by construction, at the cost of not
+# telling a big move from a very big one.
+WEIGHT_CLIP = 5.0
+# `--finetune`: the second training phase, on the rows the weight scheme scores highest. A tenth
+# of the rate, because the point is to specialise a fitted model and not to refit it from its own
+# weights — at the full rate the first phase is simply overwritten and the flag measures nothing
+# that `--band` did not already measure.
+FINETUNE_LR = 0.1
+FINETUNE_Q = 0.8  # keep the top fifth by `move`
+FINETUNE_PATIENCE = 5
+# Quantile buckets `by_move` splits the test Rank IC into. Quantiles and not fixed edges: the
+# excursion's scale moves with the label and with the volatility of the period, so a fixed edge
+# would put a different share of the rows in each bucket on every run and the columns would not
+# be comparable between them.
+MOVE_BUCKETS = 5
+
 DEVICE = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 
 
@@ -274,6 +305,43 @@ def cross_section(y: pd.Series, mode: str = "z") -> pd.Series:
     return out.replace([np.inf, -np.inf], np.nan).dropna()
 
 
+def weights_of(move: pd.Series, scheme: str = "none", clip: float = WEIGHT_CLIP) -> np.ndarray | None:
+    """Per-row loss weights from the size of the move still to come, normalised to mean 1.
+
+    Mean 1 is not cosmetic. AdamW's step is not scale free across a run — the weight decay is
+    applied against a gradient whose size the weighting changes — so a scheme whose weights
+    averaged 3 would be measuring a larger effective rate as much as a different emphasis, and the
+    comparison against `none` would not be a comparison. Normalised, the only thing that moves
+    between two runs is which rows the same total gradient is spent on.
+
+    `excursion` is the size itself, in medians of the train rows and clipped: it says a move twice
+    as large is worth twice the attention. `rank` is its percentile, which says only that a larger
+    move is worth more attention than a smaller one. The second is the weaker claim and the one to
+    reach for first — the label is fat-tailed, and a scheme that believes the tail is a scheme that
+    fits a handful of bars.
+
+    `none` returns None and the training loop takes the unweighted path, which is bit-for-bit what
+    it did before this argument existed. `_selfcheck` asserts that.
+    """
+    if scheme == "none":
+        return None
+    if scheme not in WEIGHTS:
+        raise ValueError(f"{scheme} is not a weighting — pick from {WEIGHTS}")
+    if scheme == "rank":
+        w = move.rank(pct=True).to_numpy("float64")
+    else:
+        # The median and not the mean, for the reason the clip exists: the mean of a fat-tailed
+        # column is a statistic about its tail, and dividing by it would compress everything else
+        # into a corner before the clip ever bites.
+        mid = float(move.median())
+        if not mid > 0:
+            raise ValueError("the median move is zero — every row would weigh the same or nothing")
+        w = np.clip(move.to_numpy("float64") / mid, 0.0, clip)
+    if not w.sum() > 0:
+        raise ValueError("every weight came out zero")
+    return (w / w.mean()).astype("float32")
+
+
 class Net(nn.Module):
     """A GRU per branch, concatenated final states, dropout, linear head. No activation on output.
 
@@ -348,28 +416,53 @@ def fit(
     delta: float = DELTA,
     shared: bool = False,
     quiet: bool = True,
+    weight: np.ndarray | None = None,
+    model: Net | None = None,
+    lr: float = LEARNING_RATE,
 ) -> Net:
     """One model, stopped when the validation Rank IC stops improving.
 
     Model selection and early stopping read Rank IC and never the loss: the Huber anchors the
     scale of the prediction and every metric downstream reads only its ordering, so the round with
-    the best loss is not the round with the best signal.
+    the best loss is not the round with the best signal. That is also why a weighting cannot be
+    judged by the loss it reaches — it changes what the loss *means*, so two weighted runs are only
+    comparable through the metric, which the weights do not touch.
+
+    `weight` is one number per row of `train`, positionally aligned with it, or None for the
+    unweighted path this took before the argument existed. `model` continues from a fitted net
+    instead of building one, which with a reduced `lr` is the second phase `--finetune` runs; the
+    early stopping still restores the best epoch of *this* phase, so a specialisation that only
+    makes things worse returns the state it started from rather than the last thing it tried.
     """
     torch.manual_seed(seed)
-    model = Net(x.widths, shared=shared).to(DEVICE)
-    opt = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
+    if model is None:
+        model = Net(x.widths, shared=shared).to(DEVICE)
+    opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=WEIGHT_DECAY)
     sched = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, mode="max", factor=LR_FACTOR, patience=LR_PATIENCE)
-    loss_fn = nn.HuberLoss(delta=delta)
+    # `reduction="none"` and an explicit mean, so the unweighted path is the same arithmetic the
+    # built-in reduction did and the weighted one is the only thing that differs.
+    loss_fn = nn.HuberLoss(delta=delta, reduction="none")
 
     at = train.row.to_numpy()
     y = torch.from_numpy(train.target.to_numpy("float32"))
+    if weight is not None:
+        if len(weight) != len(train):
+            raise ValueError(f"{len(weight)} weights for {len(train)} rows")
+        weight = torch.from_numpy(np.asarray(weight, dtype="float32"))
     rng = np.random.default_rng(seed)
     best, best_state, since = -np.inf, None, 0
     for epoch in range(epochs):
         model.train()
         for batch in np.array_split(rng.permutation(len(at)), max(1, len(at) // batch_size)):
             opt.zero_grad()
-            loss = loss_fn(model(x[at[batch]]), y[batch].to(DEVICE))
+            per_row = loss_fn(model(x[at[batch]]), y[batch].to(DEVICE))
+            # Divided by the mean weight *of the batch*, not of the run: a batch that happens to
+            # draw quiet rows would otherwise take a smaller step for no reason but the draw.
+            if weight is None:
+                loss = per_row.mean()
+            else:
+                w = weight[batch].to(DEVICE)
+                loss = (per_row * w).sum() / w.sum().clamp_min(1e-8)
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP)
             opt.step()
@@ -399,6 +492,9 @@ def fold(
     seed: int = 0,
     z_target: str = "off",
     band: int = 0,
+    weight: str = "none",
+    finetune: int = 0,
+    finetune_q: float = FINETUNE_Q,
     **kw,
 ) -> pd.Series:
     """Fit on one fold's train side and predict its test slice.
@@ -406,6 +502,16 @@ def fold(
     The validation tail is cut out of the train side and purged against its own boundary, exactly
     as the GBM does it: an unpurged valid lets early stopping pick the epoch that best reads
     labels it has already seen.
+
+    `weight` and `finetune` are the two ways of asking the fit to care more about the bars where a
+    large move follows, and they are not the same bet. Weighting keeps every row and changes how
+    much each one pulls, so the model still learns the relation over the whole support and is
+    applied to the support it learned. `finetune` trains a second phase on the top `finetune_q`
+    rows alone, which is the stronger version and carries the failure `--band` already measured:
+    a model fitted on a subset learns `E[y | x, x in S]` and is then asked about rows outside `S`,
+    with nothing at inference time able to say which it is looking at. The specialisation is
+    validated on the same subset of the valid tail — early stopping has to read what the phase is
+    for — and `by_move` is what says whether the trade it made was worth it.
     """
     inner, valid = split.temporal_fraction(train, VALID_FRACTION)
     if band:
@@ -421,7 +527,32 @@ def fold(
         # result is judged on — which the transform leaves unchanged anyway.
         y = cross_section(inner.target, z_target)
         inner, kw = inner.loc[y.index].assign(target=y), dict(kw, delta=Z_DELTA[z_target])
-    return predict(fit(z, inner, valid, seed, **kw), z, test.row.to_numpy(), test.index)
+    # Normalised over this fold's own inner-train rows and never over the run: the weight is a
+    # statistic of the training set, and a fold that reaches a calmer period should not inherit
+    # the scale of one that did not.
+    model = fit(z, inner, valid, seed, weight=weights_of(inner.move, weight) if weight != "none" else None, **kw)
+    if finetune:
+        # Checked here rather than left to pandas: the message a bad cut deserves names the flag,
+        # and 1.0 is as wrong as 1.1 — it keeps a single row and calls it a training set.
+        if not 0.0 <= finetune_q < 1.0:
+            raise ValueError(f"{finetune_q} is not a quantile of move to keep — it must be in [0, 1)")
+        cut = float(inner.move.quantile(finetune_q))
+        big, big_valid = inner[inner.move >= cut], valid[valid.move >= cut]
+        if not len(big_valid):
+            raise ValueError(f"no validation row reaches the {finetune_q} quantile of move ({cut:.3f})")
+        model = fit(
+            z,
+            big,
+            big_valid,
+            seed,
+            model=model,
+            lr=LEARNING_RATE * FINETUNE_LR,
+            epochs=finetune,
+            patience=min(FINETUNE_PATIENCE, finetune),
+            weight=weights_of(big.move, weight) if weight != "none" else None,
+            **{k: v for k, v in kw.items() if k not in ("epochs", "patience")},
+        )
+    return predict(model, z, test.row.to_numpy(), test.index)
 
 
 def run(
@@ -454,8 +585,36 @@ def run(
         "pred": pred,
         "target": test.target,
         "horizon": linear.by_horizon(test, pred),
+        "move": by_move(test, pred) if "move" in test else None,
         "market_beta": pd.DataFrame({"vs residual target": _market_beta(pred, test.target)}).T,
     }
+
+
+def by_move(test: pd.DataFrame, pred: pd.Series, buckets: int = MOVE_BUCKETS) -> pd.DataFrame:
+    """Test Rank IC split by the size of the move still to come — the reading that judges a
+    weighting or a fine-tune, because it is the axis they were aimed at.
+
+    `linear.by_horizon` splits by *when* the leg ends and this splits by *how far it travels*, and
+    the two are close to independent: a long leg that drifts and a short one that jumps land in
+    the same horizon bucket and opposite move buckets. That is the whole reason the flag exists as
+    its own reading rather than as another row of the horizon table.
+
+    Every bucket is reported, including the small-move ones the weighting spent attention to get
+    away from. A scheme that lifts the top bucket and drops the rest has not improved the model,
+    it has moved where it is wrong — and the aggregate Rank IC, which is what promotes anything in
+    this project, will already have said so. The bucket table is what says *why*.
+    """
+    bucket = pd.qcut(test.move, buckets, labels=False, duplicates="drop")
+    rows = {}
+    for b, rows_in in test.groupby(bucket, observed=True).groups.items():
+        per_date = metrics.by_date(pred.loc[rows_in], test.target.loc[rows_in], rank=True).dropna()
+        lo, hi = test.move.loc[rows_in].min(), test.move.loc[rows_in].max()
+        rows[f"q{int(b) + 1} [{lo:.2f}, {hi:.2f}]"] = {
+            "bars": len(rows_in),
+            "dates": len(per_date),
+            "rank_ic": per_date.mean(),
+        }
+    return pd.DataFrame(rows).T
 
 
 def _market_beta(pred: pd.Series, target: pd.Series) -> dict[str, float]:
@@ -625,6 +784,72 @@ def _selfcheck() -> None:
         metrics.signal(p, z.loc[p.index])["rank_ic"], metrics.signal(p, df.target.loc[p.index])["rank_ic"]
     )
 
+    # Weighting. The first thing to establish is that the flag costs nothing when it is off: the
+    # loss was rewritten to `reduction="none"` and an explicit mean, and every number the project
+    # has measured came out of the built-in reduction. Same seed, same rows, same weights out.
+    half = np.arange(n // 2)
+    one = dict(epochs=2, patience=2, batch_size=128)
+    a = fit(Branches([x], half), df.iloc[: n // 2], df.iloc[n // 2 :], seed=0, **one)
+    b = fit(Branches([x], half), df.iloc[: n // 2], df.iloc[n // 2 :], seed=0, weight=None, **one)
+    assert torch.allclose(a.head.weight, b.head.weight), "weight=None must be the unweighted path"
+    # And a vector of ones is the same arithmetic again, which is what says the weighted branch is
+    # a weighting and not a second, subtly different loss.
+    ones = fit(Branches([x], half), df.iloc[: n // 2], df.iloc[n // 2 :], seed=0, weight=np.ones(n // 2), **one)
+    assert torch.allclose(a.head.weight, ones.head.weight, atol=1e-6), "unit weights must change nothing"
+
+    move = pd.Series(np.abs(rng.normal(size=n)) + 0.01, index=idx)
+    assert weights_of(move, "none") is None
+    for scheme in ("excursion", "rank"):
+        w = weights_of(move, scheme)
+        assert len(w) == n and np.isclose(w.mean(), 1.0, atol=1e-5), (scheme, w.mean())
+        assert (w >= 0).all() and w.dtype == np.float32
+        # Monotone in the move, which is the one property both schemes must share: a bigger move
+        # never weighs less. The schemes differ in how much more, not in the direction.
+        order = np.argsort(move.to_numpy())
+        assert np.all(np.diff(w[order]) >= -1e-6), scheme
+    # `excursion` believes the tail up to the clip and `rank` does not, which is the whole of the
+    # choice between them.
+    assert weights_of(move, "excursion").max() > 2 * weights_of(move, "rank").max()
+    fat = pd.Series(np.r_[np.ones(n - 1), 1e6], index=idx)
+    assert (
+        weights_of(fat, "excursion").max()
+        <= WEIGHT_CLIP / np.mean(np.clip(np.r_[np.ones(n - 1), 1e6], 0, WEIGHT_CLIP)) + 1e-3
+    )
+    try:
+        weights_of(move, "sqrt")
+    except ValueError as e:
+        assert "not a weighting" in str(e)
+    else:
+        raise AssertionError("an unknown scheme should not silently weigh nothing")
+
+    # A weighting moves the fit — otherwise the flag is decoration — and a fine-tune continues
+    # from the model it was handed rather than starting over. Both checked through `fold`, which
+    # is where the plumbing actually has to line up.
+    wide = df.assign(move=np.abs(x[:, 0, 0]))
+    train, test = wide.iloc[: n // 2], wide.iloc[n // 2 :]
+    plain = fold([x], train, test, seed=0, **one)
+    heavy = fold([x], train, test, seed=0, weight="rank", **one)
+    assert not np.allclose(plain.to_numpy(), heavy.to_numpy()), "a weighting that changes nothing is not one"
+    tuned = fold([x], train, test, seed=0, finetune=2, finetune_q=0.5, **one)
+    assert not np.allclose(plain.to_numpy(), tuned.to_numpy()), "a second phase that changes nothing is not one"
+    assert tuned.index.equals(plain.index) and np.isfinite(tuned.to_numpy()).all()
+    # A cut no validation row clears is an error and not an empty second phase quietly skipped.
+    try:
+        fold([x], train, test, seed=0, finetune=2, finetune_q=1.1, **one)
+    except ValueError as e:
+        assert "quantile of move" in str(e)
+    else:
+        raise AssertionError("an impossible fine-tune cut should raise")
+
+    # `by_move` buckets every row and reports each one, including the small moves a weighting
+    # spends attention to get away from.
+    table = by_move(test, plain, buckets=4)
+    assert len(table) == 4 and table.bars.sum() == len(test), table
+    assert (table.bars > 0).all() and table.rank_ic.notna().all()
+    # And the whole reading is wired through `run`, which is where the flag is read from.
+    assert run([x], wide, "2024-01-25", **kw)["move"] is not None
+    assert run([x], df, "2024-01-25", **kw)["move"] is None, "no move column, no bucket table"
+
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
@@ -662,6 +887,20 @@ def main() -> None:
         help="feed each feature as its percentile across the symbols of its own timestamp",
     )
     ap.add_argument("--band", type=int, default=0, help="train only on rows within this many 5m bars of the pivot")
+    ap.add_argument(
+        "--weight",
+        choices=list(WEIGHTS),
+        default="none",
+        help="weight the loss by the size of the move still to come; 'rank' is the gentler scheme",
+    )
+    ap.add_argument(
+        "--finetune",
+        type=int,
+        default=0,
+        help="epochs of a second phase on the largest moves alone, continuing from the fitted model",
+    )
+    ap.add_argument("--finetune-q", type=float, default=FINETUNE_Q, help="quantile of move the second phase keeps")
+    ap.add_argument("--by-move", action="store_true", help="also split the test Rank IC by the size of the move")
     ap.add_argument(
         "--z-target",
         choices=["off", "demean", "z"],
@@ -715,6 +954,16 @@ def main() -> None:
         # default one. Train only, for the reason purging exists.
         delta = float(split.temporal(df, args.test_start)[0].target.abs().median())
         print(f"label {args.label}: |target| median {delta:.3f} on train, sd {df.target.std():.3f}")
+    # `move` is needed by the weighting, by the fine-tune cut and by the bucket table, and it is
+    # the same column for all three: `|remaining_excursion|`, the size of the move between the bar
+    # and the pivot that closes its leg, in units of a walk of the same volatility. Computed on the
+    # rows the label left standing, so a run that dropped rows for `cross` does not mis-align it.
+    if args.weight != "none" or args.finetune or args.by_move:
+        df = df.assign(move=dataset.relabel(df.index, remaining_excursion).abs())
+        on_train = split.temporal(df, args.test_start)[0].move
+        print(f"move: median {on_train.median():.3f}, p90 {on_train.quantile(0.9):.3f} on train")
+    elif "move" in df:
+        df = df.drop(columns="move")
     keep = FEATURES[args.features]
     branches = args.branches.split(",")
     if unknown := [tf for tf in branches if tf not in BRANCHES]:
@@ -765,6 +1014,9 @@ def main() -> None:
         delta=delta,
         z_target=args.z_target,
         band=args.band,
+        weight=args.weight,
+        finetune=args.finetune,
+        finetune_q=args.finetune_q,
         shared=args.encoder == "shared",
         quiet=not args.verbose,
     )
@@ -787,6 +1039,9 @@ def main() -> None:
     if args.horizon:
         print("\ntest Rank IC by bars to the next pivot, pooled over the folds\n")
         print(out["horizon"].round(4).to_string())
+    if args.by_move and out["move"] is not None:
+        print("\ntest Rank IC by the size of the move still to come, pooled over the folds\n")
+        print(out["move"].round(4).to_string())
     if args.pnl:
         # The label says which way the trade points: `swing` is -1 at a low, so a low prediction
         # is a buy, while `excursion` is already signed the way the position is.
