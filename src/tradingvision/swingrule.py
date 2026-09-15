@@ -215,9 +215,62 @@ def buy_and_hold(close: pd.Series) -> dict:
     return {"net_per_year": float(per_symbol.mean() / span), "trades_per_year": 1 / span}
 
 
+def rotation_null(pred: pd.Series, close: pd.Series, buy, sell, n: int = 500, seed: int = 0, sign: int = -1) -> dict:
+    """Is the gross return the rule's *timing*, or just the time it spends in the market?
+
+    `buy_and_hold` cannot answer that. It holds every bar, so the comparison mixes two different
+    things: a rule in the market half the time earns roughly half the drift whatever it picks,
+    and against a falling basket that alone looks like skill. Rotating each symbol's position
+    vector by a random offset holds the exposure fixed *exactly* — the same bars held, the same
+    number of trades, the same holding-period structure — and destroys only the alignment with
+    price. What is left in the spread is the null that the real gross has to clear.
+
+    Measured on `pred-swing-all-15m.parquet`, twenty symbols, 2025-09 onward, at the 0.80 band:
+    real gross -0.4151 a year against a null of -0.4098 +/- 0.0949, z -0.06, p 0.55. The rule's
+    entry timing is indistinguishable from rolling the same positions to a random offset; the
+    whole of the gross is exposure to a basket that fell 81% over the slice. Fees then take it
+    from -0.415 to -0.790. This is the number that says the rule has no edge to price, and it is
+    the reason the comparison against `buy_and_hold` alone was not enough to see it.
+
+    Rotation, not a reshuffle, on purpose: shuffling the positions bar by bar would break the
+    runs into noise and compare against a null that trades thousands of times a year instead of
+    seventy-five. Only a rotation keeps the trade structure and moves the phase.
+    """
+    r = threshold.forward_return(close).fillna(0.0)
+    sym = pred.index.get_level_values(1)
+    when = pred.index.get_level_values(0)
+    span = (when.max() - when.min()) / YEAR
+    pos = positions(pred, buy, sell, sign)
+
+    def gross(p: pd.Series) -> float:
+        return float((p * r).groupby(sym).sum().mean() / span)
+
+    rng = np.random.default_rng(seed)
+    null = np.array(
+        [
+            gross(
+                pos.groupby(sym, group_keys=False).transform(
+                    lambda s: pd.Series(np.roll(s.to_numpy(), rng.integers(1, len(s))), index=s.index)
+                )
+            )
+            for _ in range(n)
+        ]
+    )
+    real = gross(pos)
+    return {
+        "exposure": float((pos != 0).mean()),
+        "gross_per_year": real,
+        "null_mean": float(null.mean()),
+        "null_sd": float(null.std()),
+        "z": float((real - null.mean()) / null.std()) if null.std() else np.nan,
+        "p_rule_better": float((null >= real).mean()),
+    }
+
+
 def _selfcheck() -> None:
     """A saw the prediction reads perfectly: the rule has to take the up legs and skip the downs."""
     n = 800
+    rng_noise = np.random.default_rng(7).normal(size=n) - 0.4  # no timing, but still takes positions
     when = pd.date_range("2025-01-01", periods=n, freq="h", tz="UTC")
     idx = pd.MultiIndex.from_arrays([when, ["a"] * n])
     phase = np.arange(n) % 40
@@ -286,6 +339,29 @@ def _selfcheck() -> None:
     empty = pnl(pred, close, 5.0, 5.0)
     assert empty["trades"] == 0 and empty["in_market"] == 0.0 and np.isnan(empty["win_rate"])
 
+    # The rotation null, on a signal that genuinely times: reading the saw exactly has to beat
+    # holding the same bars at a random phase, and by a wide margin. On this saw every rotation
+    # that is not a multiple of the 40-bar cycle lands partly on the down legs, so the real gross
+    # sits far above the null -- which is what `p_rule_better` near zero means.
+    null = rotation_null(pred, close, 0.9, 0.9, n=100)
+    assert null["p_rule_better"] < 0.05, null
+    # `z` is deliberately *not* asserted here, and the reason is worth keeping. On a strictly
+    # periodic saw the null is bimodal, not bell shaped: a rotation near a multiple of the 40-bar
+    # cycle re-earns the whole signal, one half a cycle away earns its negative, and almost
+    # nothing lands in between. The spread is therefore enormous (sd ~2.6 against a real gross of
+    # ~4.2) and z reads 1.8 for a rule that only 4 rotations in 100 beat. Real price is not
+    # periodic and its null came out near Gaussian -- sd 0.095, z and p agreeing -- but the
+    # percentile is the statistic that survives both shapes, so it is the one the assert uses.
+    # Exposure is held fixed by construction: that is the whole point of rotating rather than
+    # reshuffling, and it is what separates timing from time spent in the market.
+    assert np.isclose(null["exposure"], (positions(pred, 0.9, 0.9) != 0).mean())
+    assert np.isclose(null["gross_per_year"], pnl(pred, close, 0.9, 0.9)["gross_per_year"])
+    # A prediction carrying no timing at all cannot clear its own null, whatever it earns: the
+    # same positions rotated are the same kind of bet. Constant-sign noise, so exposure survives.
+    noise = pd.Series(rng_noise, index=pred.index)
+    flat = rotation_null(noise, close, 0.9, 0.9, n=100)
+    assert 0.05 < flat["p_rule_better"] < 0.95, flat
+
     # `spread` recovers the shrinkage it is there to explain: a prediction correlated `rho` with
     # the label has `rho` times its spread, which is the whole of the [-0.5, +0.5] question.
     rng = np.random.default_rng(0)
@@ -307,6 +383,7 @@ def main() -> None:
     ap.add_argument("--fee", type=float, default=FEE, help="per side; the default is Alpaca taker tier 1")
     ap.add_argument("--smooth", type=int, default=1, help="output low-pass over each symbol's own rows")
     ap.add_argument("--sign", type=int, default=-1, choices=[-1, 1], help="-1 for the swing label, +1 for excursion")
+    ap.add_argument("--rotations", type=int, default=500, help="draws for the rotation null; 0 skips it")
     args = ap.parse_args()
 
     _selfcheck()
@@ -334,6 +411,13 @@ def main() -> None:
         print(pd.DataFrame(rows).T.rename_axis("threshold").round(4).to_string())
     bh = buy_and_hold(close)
     print(f"\nbuy and hold, same rows: {bh['net_per_year'] * 100:.1f}% log per year")
+    # Buy-and-hold answers "is holding better", which against a falling basket a rule that is
+    # flat half the time wins by doing nothing. The rotation null answers the other question,
+    # the one about skill: same exposure, same trades, phase destroyed.
+    q = max(args.quantiles)
+    t = band(pred, q, args.window)
+    print(f"\nrotation null at the {q} band, {args.rotations} rotations\n")
+    print(pd.Series(rotation_null(pred, close, t, t, args.rotations, sign=args.sign)).round(4).to_string())
 
 
 if __name__ == "__main__":
