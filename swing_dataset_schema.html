@@ -762,6 +762,31 @@ L = δ·(|e| − 0.5·δ)  altrimenti</pre>
     <p><strong>Le cross-section sono spesse otto simboli, non venti.</strong> 218.497 righe su 27.812 timestamp distinti: il campionamento a stride posizionale sfasa i simboli in modo permanente (punto aperto 2), e la breadth reale è molto sotto quella nominale.</p>
     <p><strong>Nessuno slippage, nessun impatto</strong>, e la gamba hedged presuppone che il paniere venga davvero shortato, che sui perpetual costa funding.</p>
   </div>
+
+  <h3>La regola long-only sull'etichetta swing, e il controllo che la chiude <span class="b b-msr">misurato</span></h3>
+  <p><code>swingrule</code> prezza la regola che l'etichetta swing descrive — compra vicino al minimo della gamba, tieni, vendi vicino al massimo, poi <em>aspetta</em>. Venti simboli, 2025-09 → 2026-09, 25 bp per lato, banda dinamica come quantile espandente di |pred| sulle righe passate di ogni simbolo.</p>
+
+  <div class="tw">
+    <table>
+      <caption>la regola long-only, venti simboli, ultimo anno — banda dinamica</caption>
+      <thead><tr><th class="num">quantile</th><th class="num">in mercato</th><th class="num">trade/anno</th><th class="num">lordo</th><th class="num">commissioni</th><th class="num">netto</th><th class="num">win rate</th><th class="num">trade</th></tr></thead>
+      <tbody>
+        <tr class="hi"><td class="num">0.80</td><td class="num">0.490</td><td class="num">75.2</td><td class="num">−0.415</td><td class="num">0.375</td><td class="num">−0.790</td><td class="num">0.543 ± 0.013</td><td class="num">1511</td></tr>
+        <tr><td class="num">0.90</td><td class="num">0.490</td><td class="num">46.6</td><td class="num">−0.483</td><td class="num">0.232</td><td class="num">−0.715</td><td class="num">0.531 ± 0.016</td><td class="num">936</td></tr>
+        <tr><td class="num">0.95</td><td class="num">0.473</td><td class="num">28.6</td><td class="num">−0.527</td><td class="num">0.142</td><td class="num">−0.669</td><td class="num">0.522 ± 0.021</td><td class="num">575</td></tr>
+        <tr><td class="num">0.99</td><td class="num">0.417</td><td class="num">9.8</td><td class="num">−0.299</td><td class="num">0.048</td><td class="num">−0.347</td><td class="num">0.500 ± 0.036</td><td class="num">196</td></tr>
+        <tr><td colspan="8" class="foot">buy and hold sulle stesse righe: <strong>−0.813</strong> l'anno. Il netto della regola lo batte solo perché sta fuori mercato metà del tempo</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="box why">
+    <h4>Il win rate sopra 0,5 non è un edge, e il controllo che lo dimostra <span class="b b-msr">misurato</span></h4>
+    <p>Il win rate è <strong>0,543 ± 0,013</strong> su 1511 trade: tre errori standard sopra la moneta, e il trade mediano è positivo (+0.0042). Sembra abilità. Non lo è: il <em>medio</em> per trade è −0.0105, cioè tante vincite piccole e poche perdite grandi, e soprattutto il lordo non sopravvive al controllo giusto.</p>
+    <p><code>buy_and_hold</code> era l'unico controllo che la regola aveva, e risponde alla domanda sbagliata. Tiene <em>ogni</em> barra, quindi confonde due cose diverse: una regola che sta in mercato metà del tempo incassa circa metà della deriva <em>qualunque</em> barra scelga, e contro un paniere che è sceso dell'81% stare flat metà del tempo somiglia a bravura. <code>rotation_null</code> tiene invece l'esposizione <strong>fissa per costruzione</strong>: ruota il vettore di posizione di ogni simbolo di uno sfasamento casuale, così restano identici le barre tenute, il numero di trade e la struttura delle durate, e si distrugge solo l'allineamento col prezzo.</p>
+    <p><strong>Il numero.</strong> Banda 0.80, 500 rotazioni: lordo reale <strong>−0.4151</strong> l'anno contro un null di <strong>−0.4098 ± 0.0949</strong>, z −0.06, <strong>p 0,55</strong>. Il timing d'ingresso è indistinguibile dal ruotare le stesse posizioni a una fase casuale. Tutto il lordo è esposizione; le commissioni lo portano poi da −0.415 a −0.790. Su BTC da solo si legge uguale: p 0,62. L'aritmetica lo conferma — 0,490 di esposizione × −0.813 di buy-and-hold fa −0.398, contro −0.415 misurati.</p>
+    <p>Una rotazione e non un rimescolamento, di proposito: mescolare barra per barra spezzerebbe le run in rumore e confronterebbe con un null che fa migliaia di trade l'anno invece di settantacinque. Solo la rotazione conserva la struttura dei trade e sposta la fase.</p>
+  </div>
 </section>
 
 <section>
