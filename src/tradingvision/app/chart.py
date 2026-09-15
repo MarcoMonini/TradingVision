@@ -18,7 +18,8 @@ import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 
-from tradingvision import gru
+from tradingvision import factor, gru, metrics, swing
+from tradingvision.data import candles
 from tradingvision.data.candles import SYMBOLS, TIMEFRAMES, get_candles
 from tradingvision.data.pivots import EXTREMA_WINDOW, find_pivots
 from tradingvision.data.target import (
@@ -34,6 +35,20 @@ from tradingvision.normalize import CLIP, SCALE, apply, fit
 from tradingvision.oracle import FEE, run
 
 MAX_DAYS = 365
+# The composite's window, as the duration it was measured as rather than as a count of bars: 2880
+# bars of 15m is thirty days, and `factor` picked it on the train side of every fold. Stated in
+# time so the same lens holds on whichever timeframe is on screen — a rolling deviation over
+# thirty days of 1h bars and over thirty days of 15m bars are the same statistic sampled twice.
+FACTOR_WINDOW = pd.Timedelta("30D")
+# `TIMEFRAMES` keys as durations. Spelled out rather than parsed: `pd.Timedelta("15m")` is minutes
+# but deprecated, and `pd.date_range(freq="15m")` is *months* — not an ambiguity to leave implicit.
+BAR = {
+    "5m": pd.Timedelta("5min"),
+    "15m": pd.Timedelta("15min"),
+    "1h": pd.Timedelta("1h"),
+    "4h": pd.Timedelta("4h"),
+    "1d": pd.Timedelta("1D"),
+}
 # What the saved model was fitted up to, shown so nobody reads a prediction over the train period
 # as if it were out of sample. It is the walk-forward's first cut and `gru`'s own default.
 TEST_START = "2025-06"
@@ -68,29 +83,44 @@ def load_target(close, window: int, label: str, smoothing: float, significance: 
     return swing_leg_target(close, pivots, smoothing=smoothing, significance=significance)
 
 
-@st.cache_data(show_spinner=False)
-def load_cross_target(symbol: str, timeframe: str, days: int, horizon: int):
-    """`cross_sectional_return` for one pair, and the peers it had to be measured against.
+@st.cache_data(show_spinner="Fetching the panel…")
+def load_panel(timeframe: str, days: int, warmup_days: int):
+    """`candles.panel` over every peer, with the model's window fetched in front of the display.
 
-    This label does not exist for a single series: it is the forward return of a symbol *relative
-    to the basket trading at the same instant*, so drawing it means fetching all of `SYMBOLS` and
-    keeping one column. Five pairs is a thin cross-section next to the twenty the dataset carries
-    — the level is not the dataset's level and should not be read as one — but the shape on screen
-    is the shape the model would be trained on, which is what the chart is for.
+    Neither of the two quantities this page draws for the cross-sectional label exists for a
+    single series. The label is a forward return *relative to the basket trading at that instant*
+    and the model is a rank *inside that instant*, so both need every pair, and one fetch serves
+    both. Five pairs is a thin cross-section next to the twenty the dataset carries — the level on
+    screen is not the dataset's level — but the shape is the shape the model was measured on,
+    which is what a chart is for.
 
-    The whole panel comes back, not the one column: the label of a pair is defined by the others,
-    so the heatmap that shows all of them at once is the only view that shows what it says.
-
-    Peers that Alpaca has no data for simply do not join the panel; the label falls back to NaN
-    wherever fewer than three of them do.
+    `warmup_days` is fetched in front of the displayed period and never trimmed here: the
+    composite reads thirty days back, so without it the model would be NaN over exactly the range
+    the user asked to see. The consumers crop to the display range once the windows are filled.
     """
-    closes = {}
-    for peer in SYMBOLS:
-        bars = get_candles(peer, timeframe, days)
-        if not bars.empty:
-            closes[peer] = bars.close
-    panel = pd.DataFrame(closes).sort_index()
-    return cross_sectional_return(panel, horizon)
+    return candles.panel(SYMBOLS, timeframe, days + warmup_days, BAR[timeframe])
+
+
+def load_cross_target(panel: dict, horizon: int):
+    """`cross_sectional_return` over the whole panel, one column per pair."""
+    return cross_sectional_return(panel["close"], horizon)
+
+
+def load_factor(panel: dict, window: int):
+    """The step-6 composite over the panel on screen — `-rank(volatility) + rank(dollar volume)`.
+
+    This is the model, and unlike the GRU it is drawable. A cross-sectional rank is a statement
+    about a symbol *against the others trading at that instant*, so a ranked GRU checkpoint has
+    nothing to compute from one series and `gru.predict_frame` refuses it. The composite has the
+    same requirement and the chart already meets it: the panel is fetched to build the label, and
+    the same panel builds the prediction. No checkpoint, no torch, no training — two columns and
+    an addition.
+
+    Read with the cross-section's thinness in mind. `factor` measures on the twenty Binance pairs
+    of the store; here there are as many pairs as Alpaca serves, which is five. The mechanism is
+    the same and the level is not the project's level.
+    """
+    return factor.composite(panel, window)
 
 
 @st.cache_data(show_spinner=False)
@@ -113,6 +143,23 @@ def load_prediction(df, path: str, _mtime: float):
     return gru.predict_frame(*load_model(path), df)
 
 
+@st.cache_resource(show_spinner=False)
+def load_swing_model(path: str, _mtime: float):
+    """The saved swing model. `cache_resource` for the same reason the GRU uses it, and `_mtime`
+    in the key because retraining has to invalidate a checkpoint the path alone cannot date."""
+    return swing.restore(Path(path))
+
+
+@st.cache_data(show_spinner="Running the swing model…")
+def load_swing(df, path: str, _mtime: float):
+    """`label`, `logit` and `position` at every bar on screen — the model of step 7.
+
+    Unlike the GRU this one needs no store: its inputs are computed from the candles on screen and
+    its scaler is fitted on their own history, so it runs on a pair the training set never held.
+    """
+    return swing.predict_frame(*load_swing_model(path, _mtime), df)
+
+
 @st.cache_data(show_spinner="Computing features…")
 def load_features(df, window: int, columns: tuple[str, ...]):
     """Cached on (frame, window, columns): picking different columns to draw does not recompute
@@ -121,7 +168,7 @@ def load_features(df, window: int, columns: tuple[str, ...]):
     return features(df, window)[list(columns)]
 
 
-def heatmap(z, horizon: int):
+def heatmap(z, title: str, unit: str = "sd", limit: float = 2.0):
     """The cross-section itself: one row per pair, time across, colour the label.
 
     The single-pair line above is a slice of this and cannot show what the label means, because
@@ -130,8 +177,12 @@ def heatmap(z, horizon: int):
     basket. A column that is all one colour is a market move, and the label has already removed
     it — so those columns are pale by construction, which is the property being drawn.
 
-    Clipped at +/- 2 sd. The tails are a few percent of the rows and they set the colour scale
+    Clipped at +/- `limit`. The tails are a few percent of the rows and they set the colour scale
     for everything else if left in; the sign and the ordering are what this view is for.
+
+    Drawn twice when the model is on — once for what it predicted and once for what happened —
+    and the two together are the only honest picture of a cross-sectional model. Reading them is
+    reading whether the reds and blues line up column by column, which is what Rank IC scores.
     """
     fig = go.Figure(
         go.Heatmap(
@@ -141,23 +192,161 @@ def heatmap(z, horizon: int):
             colorscale="RdBu",
             reversescale=True,
             zmid=0,
-            zmin=-2,
-            zmax=2,
-            colorbar=dict(title="sd", thickness=12),
-            hovertemplate="%{y} %{x}<br>%{z:.2f} sd<extra></extra>",
+            zmin=-limit,
+            zmax=limit,
+            colorbar=dict(title=unit, thickness=12),
+            hovertemplate="%{y} %{x}<br>%{z:.2f} " + unit + "<extra></extra>",
         )
     )
     fig.update_layout(
         height=60 + 34 * len(z.columns),
         margin=dict(l=0, r=0, t=30, b=0),
-        title_text=f"cross-section — excess return over the next {horizon} bars, per pair",
+        title_text=title,
         xaxis_rangeslider_visible=False,
     )
     return fig
 
 
+def book(
+    per: pd.DataFrame,
+    weight: pd.Series | None,
+    symbol: str,
+    what: str = "weight",
+    benchmark: str = "basket, equal weight, long only",
+) -> go.Figure:
+    """What the factor's book earned over the fetched period, and this pair's weight inside it.
+
+    The heatmaps say whether the ordering was right; this says what holding it was worth, which is
+    a different question with a different answer — a Rank IC is a correlation and a book pays fees.
+    Three curves, and the gaps between them are the whole reading: gross to net is the fee the
+    sidebar quotes, net to basket is the reason the label is an *excess* return at all. A
+    market-neutral curve that trails a rising basket has not failed, it was never long the market.
+
+    Cumulative log returns shown as percentages, so the curve compounds the way an account does.
+    """
+    fig = make_subplots(
+        rows=2,
+        cols=1,
+        shared_xaxes=True,
+        row_heights=[2, 1],
+        vertical_spacing=0.05,
+        subplot_titles=[
+            "book — cumulative return over the fetched period",
+            f"{what} on {symbol.split('/')[0]}",
+        ],
+    )
+    for name, y, color, dash, width, on in (
+        ("net of fees", per.gross - per.traded * FEE, "#2ecc71", "solid", 2.0, True),
+        ("gross", per.gross, "#95a5a6", "dot", 1.5, True),
+        # Off until asked for, alone among the three. A hedged book earns single digits where a
+        # month of this market moves tens, so drawn by default the basket sets the axis and the
+        # two curves this figure exists for collapse onto the zero line. The comparison is not
+        # hidden — it is the metric above, in the same period and the same units — and one click
+        # on the legend puts it back on the axis for anyone who wants the shape rather than the
+        # number.
+        (benchmark, per.basket, "#34495e", "dash", 1.0, "legendonly"),
+    ):
+        fig.add_trace(
+            go.Scatter(
+                x=per.index,
+                y=np.expm1(y.cumsum()) * 100,
+                mode="lines",
+                name=name,
+                visible=on,
+                line=dict(color=color, dash=dash, width=width),
+                hovertemplate="%{x}<br>" + name + " %{y:+.2f}%<extra></extra>",
+            ),
+            row=1,
+            col=1,
+        )
+    if weight is not None:
+        # A step and not a line: the weight is held between decisions and interpolating it would
+        # draw a position that was never carried.
+        fig.add_trace(
+            go.Scatter(
+                x=weight.index,
+                y=weight,
+                mode="lines",
+                name=what,
+                line=dict(color="#e67e22", width=1.5, shape="hv"),
+                showlegend=False,
+                hovertemplate="%{x}<br>" + what + " %{y:+.2f}<extra></extra>",
+            ),
+            row=2,
+            col=1,
+        )
+        moved = weight.diff().fillna(weight)
+        moved = moved[moved != 0]
+        fig.add_trace(
+            go.Scatter(
+                x=moved.index,
+                y=weight.reindex(moved.index),
+                mode="markers",
+                name="trade",
+                marker=dict(size=7, symbol="diamond", color=np.where(moved > 0, "#2ecc71", "#e74c3c")),
+                showlegend=False,
+                hovertemplate="%{x}<br>to %{y:+.2f}<extra></extra>",
+            ),
+            row=2,
+            col=1,
+        )
+    fig.update_annotations(font_size=11, x=0, xanchor="left")
+    fig.update_yaxes(title_text="%", zeroline=True, zerolinecolor="#bbb", row=1, col=1)
+    fig.update_yaxes(title_text="units", zeroline=True, zerolinecolor="#bbb", row=2, col=1)
+    if weight is not None and len(weight.dropna()):
+        # Symmetric around zero and with room for the markers, which otherwise sit half off the
+        # floor. Symmetric because the book is long and short of the same size by construction,
+        # and an axis fitted to the data would draw a tilt the position does not have.
+        limit = float(np.abs(weight).max()) * 1.3 or 1.0
+        fig.update_yaxes(range=[-limit, limit], row=2, col=1)
+    fig.update_layout(
+        height=460,
+        margin=dict(l=0, r=0, t=30, b=0),
+        legend=dict(orientation="h", y=-0.12, font=dict(size=10)),
+        xaxis_rangeslider_visible=False,
+    )
+    return fig
+
+
+def pinned(pred: pd.Series, peers: int, symbol: str) -> str:
+    """What to say when the prediction line does not move, which is not the same as broken.
+
+    A rank across `peers` pairs takes `peers` values and no more, and the composite's ordering is
+    mostly a permanent property of each symbol — measured on the twenty pairs of the store, 90.9%
+    of its variance is a fixed per-symbol level. A pair at either end of that ordering therefore
+    sits at the same rank on every bar, and the flat line is the model's answer rather than a
+    fault in it: BTC is the largest and calmest of these five on every bar of a month, and saying
+    so *is* the prediction. It is also the spec's open point 3 drawn — the part of this signal
+    that is a standing tilt rather than a rotation.
+
+    Said here because a flat line next to a jittery target reads as a bug, and the reader should
+    not have to ask. Two values and not one: a cross-section that thins by a pair shifts every
+    rank in the row, so a pinned pair still shows a second level wherever a peer is missing.
+    """
+    values = pred.dropna().nunique()
+    if values > 2 or not len(pred.dropna()):
+        return ""
+    place = "first" if pred.dropna().iloc[-1] > 0 else "last"
+    return (
+        f" · the rank of {symbol.split('/')[0]} does not move over this window — {place} of "
+        f"{peers} on every bar, out of the {peers} values a rank across {peers} pairs can take. "
+        f"Not a flat prediction but a confident one; the pairs in the middle of the ordering rotate"
+    )
+
+
 def chart(
-    df, pivots, target, significance, feats, symbol: str, uirevision: str, normalized=False, bounded=True, pred=None
+    df,
+    pivots,
+    target,
+    significance,
+    feats,
+    symbol: str,
+    uirevision: str,
+    normalized=False,
+    bounded=True,
+    pred=None,
+    unit: str = "",
+    trades=None,
 ) -> go.Figure:
     # Price, then the label under it on the same x: the target is only readable against the leg it
     # describes. Volume next, it is context rather than subject, and the features under everything.
@@ -197,9 +386,13 @@ def chart(
         col=1,
     )
     if pred is not None:
-        # On the target's own axis, because it is the target's own unit: the model is trained on
-        # `remaining_excursion` in sigma and nothing rescales its output. The two lines are
-        # directly comparable, and the gap between them is the error.
+        # On the target's own axis, and `unit` is what says the two lines share one. For the GRU
+        # over `remaining_excursion` they do by construction — the model is trained in sigma and
+        # nothing rescales its output, so the gap between the lines is the error. For the
+        # cross-sectional composite they do not: the label is in the dispersion of its date and
+        # the model is a centred percentile, so `main` ranks *both* before passing them here and
+        # the axis says so. Ranking both is not a cosmetic choice — it is the transform Rank IC
+        # applies, so what the eye compares is exactly what the metric scores.
         fig.add_trace(
             go.Scatter(
                 x=pred.index,
@@ -251,6 +444,40 @@ def chart(
             row=1,
             col=1,
         )
+    if trades is not None:
+        # Where and when, on the price itself. The book is graded rather than on/off, so there is
+        # no "entry" and "exit" to mark — only more and less, and the arrow says which way while
+        # the text says the weight it moved to. Markers sit at the close of the bar the decision
+        # was taken on, which is the price that decision actually paid.
+        moved = trades.diff().fillna(trades)
+        moved = moved[(moved != 0) & (moved.index >= df.index[0]) & (moved.index <= df.index[-1])]
+        # A long/flat book has only two states, so its markers say what was done rather than what
+        # the weight became; a graded one has no "in" and "out" and says the level instead.
+        binary = set(trades.dropna().unique()) <= {0.0, 1.0}
+        for up, color, shape, position in (
+            (True, "#2ecc71", "triangle-up", "bottom center"),
+            (False, "#e74c3c", "triangle-down", "top center"),
+        ):
+            side = moved[moved > 0] if up else moved[moved < 0]
+            fig.add_trace(
+                go.Scatter(
+                    x=side.index,
+                    # Forward filled: a pair that did not trade in a bar has no candle there, and
+                    # the decision still happened at the last price the panel carried.
+                    y=df.close.reindex(side.index, method="ffill"),
+                    mode="markers+text",
+                    marker=dict(size=9, color=color, symbol=shape),
+                    text=[("buy" if up else "sell") if binary else f"{v:+.2f}" for v in trades.reindex(side.index)],
+                    textposition=position,
+                    textfont=dict(size=9, color=color),
+                    name="buy" if up else "sell",
+                    marker_size=11 if binary else 9,
+                    showlegend=False,
+                    hovertemplate="%{x}<br>%{y}<extra></extra>",
+                ),
+                row=1,
+                col=1,
+            )
     fig.add_trace(go.Bar(x=df.index, y=df.volume, name="volume", marker_color="#888", showlegend=False), row=3, col=1)
     for row, (_, cols) in enumerate(groups, start=4):
         for col in cols:
@@ -267,7 +494,8 @@ def chart(
     # The retrospective label lives in [-1, +1] and is read against that ceiling; the predictive
     # one is in sigma of a 24-bar walk, unbounded and fat-tailed, so it gets a free axis.
     fig.update_yaxes(
-        title_text=("target vs prediction" if pred is not None else "target") + ("" if bounded else " (sigma)"),
+        title_text=("target vs prediction" if pred is not None else "target")
+        + (unit or ("" if bounded else " (sigma)")),
         range=[-1.3, 1.3] if bounded else None,
         zeroline=True,
         zerolinecolor="#bbb",
@@ -339,16 +567,51 @@ def main() -> None:
     branch = checkpoint["branches"][0] if checkpoint else None
     # Which of the two labels this checkpoint was fitted on. Older files predate the choice and
     # were all fitted on the predictive one.
-    trained_on = TRAINED_ON[checkpoint.get("label", "excursion")] if checkpoint else None
+    # `.get` and not `[...]`: a checkpoint written by `gru --label cross` names a label this page
+    # has no line for, and the old subscript turned that into a KeyError on import of the sidebar.
+    trained_on = TRAINED_ON.get(checkpoint.get("label", "excursion")) if checkpoint else None
     predicting = False
     if not model_at:
         st.sidebar.caption("No model saved. `python -m tradingvision.gru --features all --save`")
+    elif trained_on is None:
+        st.sidebar.caption("The saved GRU reads cross-sectional ranks, which one pair cannot supply.")
     elif timeframe == branch and label == trained_on:
         predicting = st.sidebar.toggle("GRU prediction", value=True, help=f"{model_at.name}, trained to {TEST_START}")
     else:
         # Never drawn against a label it was not trained on: the two live on different scales, and
         # two lines sharing an axis without sharing a unit is the one reading that misleads.
         st.sidebar.caption(f"GRU prediction needs the **{branch}** timeframe and the **{trained_on}** label.")
+
+    # The swing model of step 7 — the one that trades. It is drawn against the retrospective
+    # label because that is the label it predicts, and only on the timeframe it was fitted on:
+    # its inputs are windows of that bar and nothing rescales them between one bar and another.
+    swing_at = swing.CHECKPOINT if swing.CHECKPOINT.exists() else None
+    swing_card = load_swing_model(str(swing_at), swing_at.stat().st_mtime)[1] if swing_at else None
+    swinging = False
+    if not swing_at:
+        st.sidebar.caption("No swing model. `python -m tradingvision.swing --save`")
+    elif label != RETROSPECTIVE:
+        st.sidebar.caption(f"The swing model predicts the **{RETROSPECTIVE}** label.")
+    elif timeframe != swing_card["timeframe"]:
+        st.sidebar.caption(f"The swing model reads **{swing_card['timeframe']}** candles.")
+    else:
+        swinging = st.sidebar.toggle(
+            "Swing trades",
+            value=True,
+            help=f"{swing_at.name}, stage {swing_card['stage']}, trained to {swing_card['test_start']}",
+        )
+
+    # The composite of step 6, which *is* drawable where the GRU is not: it reads the panel this
+    # page already fetches for the label, and there is no checkpoint to be missing.
+    factoring = False
+    if label == CROSS:
+        factoring = st.sidebar.toggle(
+            "Factor prediction",
+            value=True,
+            help=f"-rank(volatility) + rank(dollar volume) over {FACTOR_WINDOW.days} days — the step 6 model",
+        )
+    else:
+        st.sidebar.caption(f"The factor predicts the **{CROSS}** label.")
 
     request = (symbol, timeframe, days)
     if st.sidebar.button("Fetch candles", type="primary", use_container_width=True):
@@ -372,17 +635,78 @@ def main() -> None:
         st.warning(f"No data for {fetched[0]} on {fetched[1]}.")
         return
     pivots = load_pivots(df.close, EXTREMA_WINDOW)
-    peers, panel = 0, None
+    peers, realised, predicted, factor_pred, skill, unit = 0, None, None, None, None, ""
+    per, weight, decision = None, None, ""
     if label == CROSS:
-        panel = load_cross_target(fetched[0], fetched[1], fetched[2], horizon)
-        peers = len(panel.columns)
-        target = (panel[fetched[0]] if fetched[0] in panel else pd.Series(np.nan, index=panel.index)).rename("target")
+        panel = load_panel(fetched[1], fetched[2], FACTOR_WINDOW.days)
+        realised = load_cross_target(panel, horizon)
+        peers = len(realised.columns)
+        target = (realised[fetched[0]] if fetched[0] in realised else pd.Series(np.nan, index=realised.index)).rename(
+            "target"
+        )
         target = target.reindex(df.index)
+        if factoring and peers:
+            # The window as a count of this timeframe's bars, from the duration it was measured
+            # as. Two at the floor so a rolling deviation is defined at all.
+            bars = max(2, round(FACTOR_WINDOW / BAR[fetched[1]]))
+            predicted = load_factor(panel, bars)
+            # Both sides ranked inside their own instant before anything is drawn or scored. That
+            # is the transform Rank IC applies, and it is the only way the two lines share a unit:
+            # the label is in the dispersion of its date, the composite is a sum of two centred
+            # percentiles, and neither converts to the other.
+            realised, predicted = factor.cross_rank(realised), factor.cross_rank(predicted)
+            target = realised[fetched[0]].reindex(df.index).rename("target")
+            factor_pred = predicted[fetched[0]].reindex(df.index).rename("prediction")
+            unit = " (cross-sectional rank)"
+            # Scored over the panel and over the range on screen — not `pred.corr(target)` down in
+            # the caption, which is a correlation through time on one pair and blind to the only
+            # thing this label says. The error bar is over non-overlapping blocks of the horizon,
+            # because adjacent dates share all but one bar of their label.
+            on_screen = realised.index.isin(df.index)
+            per_date = factor.rank_ic(predicted, realised, on_screen)
+            skill = metrics.blocked(per_date, horizon * BAR[fetched[1]]) if len(per_date) else None
+            # The book, priced on the panel's own closes. One decision an hour is the clock the
+            # study measured on and the stride `dataset` samples at; on a timeframe coarser than
+            # an hour the bar is the clock, because there is nothing finer to decide on.
+            step = max(1, round(factor.DECISION / BAR[fetched[1]]))
+            decision = "hour" if step > 1 else fetched[1]
+            at = factor.hourly(predicted.index, BAR[fetched[1]], step * BAR[fetched[1]])
+            # `predicted` is already ranked and `weighted` ranks again — a rank of a rank is the
+            # same ordering, so this is the book the study prices off the raw composite.
+            pos = factor.weighted(predicted, at, factor.TOL)
+            # Priced from the first decision the composite exists on and not from the start of the
+            # warm-up: the rows in front of it are flat by construction and would only dilute the
+            # period the numbers are quoted over. The opening trade is charged at that first row.
+            live = pos.index[(pos != 0).any(axis=1)]
+            if len(live):
+                pos = pos.loc[live[0] :]
+                per = factor.pnl(pos, panel["close"], step)
+                weight = pos[fetched[0]] if fetched[0] in pos else None
     else:
         target = load_target(df.close, EXTREMA_WINDOW, label, smoothing, significance)
+    swung = load_swing(df, str(swing_at), swing_at.stat().st_mtime) if swinging else None
+    if swung is not None and not swung.position.notna().any():
+        # Not an error and not an empty chart: the model reads 24 bars of history through features
+        # that need another hundred behind them, so a short window leaves nothing to score. Said
+        # here rather than drawn as a flat line, which would read as "the model does nothing".
+        st.info(
+            f"The swing model needs about {swing.MIN_BARS} scorable {fetched[1]} bars behind the "
+            f"window — this one has {len(df)} candles in total. Widen **History (days)**."
+        )
+        swung = None
+    swing_pos = swung.position.fillna(0.0) if swung is not None else None
     strength = load_significance(df.close, EXTREMA_WINDOW)
     feats = load_features(df, EXTREMA_WINDOW, tuple(COLUMNS))[picked]
-    pred = load_prediction(df, str(model_at), model_at.stat().st_mtime) if predicting else None
+    # The two models never draw together: each predicts a different label, and the sidebar only
+    # offers whichever one the label on screen belongs to.
+    pred = factor_pred if factor_pred is not None else None
+    if pred is None and swung is not None:
+        # Calibrated back onto the label's own range on the way out of the model, so the two lines
+        # in the second row share a unit as well as an axis. The map is fitted on the train period
+        # and stored in the checkpoint; it is monotone, so it moved no decision on the way here.
+        pred = swung.label.rename("prediction")
+    if pred is None and predicting:
+        pred = load_prediction(df, str(model_at), model_at.stat().st_mtime)
     if normalized and len(feats.columns):
         # Fitted on the window on screen, which is what a chart can do and not what the dataset
         # does: there the statistics come from the train period alone.
@@ -391,9 +715,68 @@ def main() -> None:
 
     # Oracle: what a perfect-hindsight trader would have made on this window over this period.
     stats = run(df.close, EXTREMA_WINDOW, FEE, pivots=pivots)
-    a, b = st.columns(2)
-    a.metric("Oracle net return", f"{stats['net_return'] * 100:,.1f}%", f"{stats['trades']} legs")
-    b.metric("Avg gross leg", f"{stats['gross_trade_pct']:.2f}%", f"{stats['win_rate'] * 100:.0f}% above fees")
+    columns = st.columns(4 if skill else 2)
+    columns[0].metric("Oracle net return", f"{stats['net_return'] * 100:,.1f}%", f"{stats['trades']} legs")
+    columns[1].metric("Avg gross leg", f"{stats['gross_trade_pct']:.2f}%", f"{stats['win_rate'] * 100:.0f}% above fees")
+    if skill:
+        # The error bar is the headline and not a footnote. Over this window and five pairs the
+        # standard error is wide enough to contain zero, and a Rank IC quoted without it would
+        # read as a result — the project measures 0.110 on twenty pairs over four folds, and this
+        # panel cannot say anything that precise.
+        columns[2].metric("Rank IC on screen", f"{skill['mean']:+.3f}", f"± {skill['se']:.3f} (se)")
+        columns[3].metric("t on blocks", f"{skill['t']:+.2f}", f"{skill['blocks']} independent blocks")
+    if per is not None:
+        # What the ordering above was worth to hold, which the Rank IC does not say. Net of the
+        # fee on the left, the basket next to it: a hedged book is not competing with the market,
+        # and quoting its return without what the market did over the same hours invites the
+        # comparison anyway — better to draw it than to leave it implied.
+        net = per.gross - per.traded * FEE
+        moves = int((weight.diff().fillna(weight) != 0).sum()) if weight is not None else 0
+        row = st.columns(3)
+        row[0].metric(
+            "Book net return", f"{np.expm1(net.sum()) * 100:+.2f}%", f"gross {np.expm1(per.gross.sum()) * 100:+.2f}%"
+        )
+        row[1].metric(
+            "Basket, same period",
+            f"{np.expm1(per.basket.sum()) * 100:+.2f}%",
+            f"{peers} pairs, equal weight, long only",
+        )
+        row[2].metric(
+            f"Trades on {fetched[0].split('/')[0]}", f"{moves}", f"{per.traded.sum():.2f} units traded per pair"
+        )
+
+    if swung is not None:
+        # What the model made on the window on screen, against the two oracles. The first is the
+        # hindsight one the page has always shown; the second is the same oracle filling `W` bars
+        # later, which is the earliest a pivot of a centred window can be known to anybody and
+        # therefore the only one of the two a causal rule could reach. Measured over twenty pairs
+        # the second is 7% of the first, and quoting the model against the first alone would
+        # describe a 7x gap that no model can close.
+        span = float((df.index[-1] - df.index[0]) / swing.YEAR)
+        got = swing.price(swing_pos.to_numpy(), df.close.to_numpy(), span, FEE)
+        reachable = run(df.close, EXTREMA_WINDOW, FEE, pivots=pivots, lag=EXTREMA_WINDOW)
+        mine = got["log_per_year"] * span
+        best = stats["log_per_year"] * span
+        near = reachable["log_per_year"] * span
+        row = st.columns(4)
+        row[0].metric(
+            "Swing net return",
+            f"{np.expm1(mine) * 100:+.1f}%",
+            f"{got['trades']} trades"
+            + (f", {got['win_rate'] * 100:.0f}% win" if got["trades"] else "")
+            + f", {got['in_market'] * 100:.0f}% in market",
+        )
+        row[1].metric("Buy and hold", f"{(df.close.iloc[-1] / df.close.iloc[0] - 1) * 100:+.1f}%", "same window")
+        row[2].metric(
+            "Of the reachable oracle",
+            f"{mine / near * 100:+.0f}%" if near else "—",
+            f"{np.expm1(near) * 100:+.0f}% filling {EXTREMA_WINDOW} bars after each pivot",
+        )
+        row[3].metric(
+            "Of the hindsight oracle",
+            f"{mine / best * 100:+.1f}%" if best else "—",
+            f"{np.expm1(best) * 100:,.0f}% — it reads the future",
+        )
 
     st.plotly_chart(
         chart(
@@ -405,14 +788,95 @@ def main() -> None:
             fetched[0],
             "-".join(map(str, fetched)),
             normalized,
-            retrospective,
+            retrospective or bool(unit),
             pred,
+            unit,
+            weight if weight is not None else swing_pos,
         ),
         use_container_width=True,
         key="chart",
     )
-    if panel is not None and peers:
-        st.plotly_chart(heatmap(panel.dropna(how="all"), horizon), use_container_width=True, key="heatmap")
+    if swung is not None:
+        # The same figure the factor book gets, on the only benchmark a single pair has: holding
+        # it. Three curves and the two gaps between them — gross to net is the fee, net to hold is
+        # the whole of what timing the legs was worth.
+        ret = np.log(df.close.shift(-1) / df.close).fillna(0.0)
+        per = pd.DataFrame(
+            {"gross": swing_pos * ret, "traded": swing_pos.diff().fillna(swing_pos).abs(), "basket": ret}
+        )
+        st.plotly_chart(
+            book(per, swing_pos, fetched[0], "position", "buy and hold"),
+            use_container_width=True,
+            key="swing-book",
+        )
+        held = swing.trades(swing_pos.to_numpy(), df.close.to_numpy(), FEE)
+        st.caption(
+            f"Long or flat, one unit, entered and exited at the close of the bar the model decided "
+            f"on — the oracle's own shape, so the two are priced by the same arithmetic. "
+            f"{len(held)} round trips over this window"
+            + (
+                f", median {held.leg.median() * 100:+.2f}% and {held.bars.median():.0f} bars, "
+                f"{(held.leg > 0).mean() * 100:.0f}% of them positive"
+                if len(held)
+                else ""
+            )
+            + f". {FEE * 100:.2f}% per side is charged on both fills. Stage "
+            f"**{swing_card['stage']}**: the encoder is fitted on the leg label and, past that, "
+            f"the position itself is trained on the money — rewarded by what it earned, charged "
+            f"for every change of mind at the fee it would really pay."
+        )
+
+    if realised is not None and peers:
+        # Prediction above, outcome below, on one x. The line two rows up is a slice of these and
+        # cannot show what either quantity means, because both are defined by the pairs that are
+        # not on it. Side by side they read directly: where the two panels agree column by column
+        # the model was right about the ordering, and that agreement *is* the Rank IC above.
+        limit, u = (0.5, "rank") if unit else (2.0, "sd")
+        # Both cropped to the range on screen. The panel reaches `FACTOR_WINDOW` further back to
+        # fill the model's window, and drawing that warm-up would put the two panels on different
+        # x — which is the one thing that makes them unreadable next to each other.
+        window = realised.index.isin(df.index)
+        if predicted is not None:
+            st.plotly_chart(
+                heatmap(predicted[window], "prediction — the factor's ordering, per pair", u, limit),
+                use_container_width=True,
+                key="predicted",
+            )
+        st.plotly_chart(
+            heatmap(
+                realised[window],
+                f"outcome — excess return over the next {horizon} bars, per pair",
+                u,
+                limit,
+            ),
+            use_container_width=True,
+            key="heatmap",
+        )
+    if per is not None:
+        st.plotly_chart(book(per, weight, fetched[0]), use_container_width=True, key="book")
+        # What one swap in the ordering moves a weight by, which is the unit the tolerance is
+        # quoted in and the number that does not survive a thin cross-section.
+        swap = factor.swap(peers)
+        span = (pos.index[-1] - pos.index[0]) / factor.YEAR
+        st.caption(
+            f"Rank-weighted book, one unit of gross notional per pair, dollar neutral inside each "
+            f"decision and rebalanced only when a target weight moves more than {factor.TOL} — the "
+            f"rule and the tolerance `factor` picked on the train side of all four folds, where it "
+            f"made +0.238 a year against +0.179 for the band. One decision per {decision} over "
+            f"{len(per)} of them, {FEE * 100:.2f}% per side charged on every unit traded, the "
+            f"opening trade included."
+            + (
+                f" Read the turnover with the width of the cross-section in mind: across "
+                f"{peers} pairs one swap in the ordering already moves a weight by {swap:.2f}, "
+                f"more than the {factor.TOL} tolerance, so this book rebalances on every swap — "
+                f"{per.traded.sum() / span:.0f} units a year, against 6.5 for the same rule on "
+                f"the twenty pairs it was measured on, where {factor.TOL} is four swaps wide. "
+                f"The rule is the one that was chosen; the panel under it is a quarter of the "
+                f"width, and thinness costs fees before it costs anything else."
+                if swap > factor.TOL
+                else ""
+            )
+        )
     st.caption(
         f"{len(df)} candles — {df.index[0]:%Y-%m-%d %H:%M} to {df.index[-1]:%Y-%m-%d %H:%M} UTC · "
         f"{len(pivots)} pivots, median leg {pivots.amplitude.median() * 100:.2f}% · "
@@ -423,23 +887,36 @@ def main() -> None:
             f"{(strength < 1).mean() * 100:.0f}% of legs below chance"
             if retrospective
             else (
-                f"{horizon}-bar forward return in excess of {peers} pairs, in cross-sectional sd · "
-                f"median |target| {target.abs().median():.2f}, "
-                f"99th percentile {target.abs().quantile(0.99):.1f} · "
-                f"|target| ~0.35 is roughly the {FEE * 200:.2f}% round trip"
+                f"{horizon}-bar forward return in excess of {peers} pairs"
+                + (
+                    ", as its rank inside each instant — the transform Rank IC scores, "
+                    "and the only unit the two lines share"
+                    if unit
+                    else (
+                        f", in cross-sectional sd · median |target| {target.abs().median():.2f}, "
+                        f"99th percentile {target.abs().quantile(0.99):.1f} · "
+                        f"|target| ~0.35 is roughly the {FEE * 200:.2f}% round trip"
+                    )
+                )
                 if label == CROSS
                 else f"median |target| {target.abs().median():.2f} sigma, "
                 f"99th percentile {target.abs().quantile(0.99):.1f} sigma"
             )
         )
         + (
-            f" · prediction on {pred.notna().sum()} bars, "
-            # Spearman on one symbol through time, which is not the Rank IC of the spec — that one
-            # is taken per timestamp across the twenty pairs, and is blind to the common level
-            # this one reads. It says the model is wired up, not how good it is.
-            f"Spearman {pred.corr(target, method='spearman'):.2f} through time on this pair alone"
-            if pred is not None
-            else ""
+            f" · factor over {round(FACTOR_WINDOW / BAR[fetched[1]])} bars "
+            f"({FACTOR_WINDOW.days}d) on {pred.notna().sum()} bars — the Rank IC above is the "
+            f"metric, taken per timestamp across the {peers} pairs" + pinned(pred, peers, fetched[0])
+            if predicted is not None
+            else (
+                f" · prediction on {pred.notna().sum()} bars, "
+                # Spearman on one symbol through time, which is not the Rank IC of the spec — that
+                # one is taken per timestamp across the twenty pairs, and is blind to the common
+                # level this one reads. It says the model is wired up, not how good it is.
+                f"Spearman {pred.corr(target, method='spearman'):.2f} through time on this pair alone"
+                if pred is not None
+                else ""
+            )
         )
         if len(pivots)
         else f"{len(df)} candles — no pivot at window {EXTREMA_WINDOW}"

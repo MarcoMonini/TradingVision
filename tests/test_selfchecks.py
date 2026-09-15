@@ -12,9 +12,22 @@ import sys
 
 import pytest
 
-from tradingvision import crosscheck, dataset, gbm, legcheck, linear, nearpivot, selection, simulation, swingrule
+from tradingvision import (
+    crosscheck,
+    dataset,
+    factor,
+    gbm,
+    legcheck,
+    linear,
+    nearpivot,
+    selection,
+    simulation,
+    swingrule,
+)
 
 SELF_CHECKED = [
+    "tradingvision.data.candles",
+    "tradingvision.legs",
     "tradingvision.data.pivots",
     "tradingvision.data.target",
     "tradingvision.features",
@@ -83,3 +96,17 @@ def test_swingrule_selfcheck():
 def test_simulation_selfcheck():
     """`simulation` keeps its checks in a function: its `__main__` sweeps the real store."""
     simulation._selfcheck()
+
+
+def test_factor_selfcheck():
+    """`factor` keeps its checks in a function too: its `__main__` reads the whole panel."""
+    factor._selfcheck()
+
+
+def test_swing_selfcheck():
+    """In its own process, for the reason `gru` is: it imports torch, and lightgbm is in here too.
+
+    It trains two small models on a saw, which makes it the second slow test in this file.
+    """
+    code = "from tradingvision import swing; swing._selfcheck()"
+    subprocess.run([sys.executable, "-c", code], check=True)

@@ -39,6 +39,8 @@ uv run python -m tradingvision.gbm --horizon         # step 2: reference IC + bu
 uv run python -m tradingvision.selection             # step 2: the 28 -> ~12 column cut
 uv run python -m tradingvision.gru --seeds 5         # step 3/4: the model
 uv run python -m tradingvision.simulation --pred data/pred-*.parquet   # what it is worth in money
+uv run python -m tradingvision.factor --price --baseline --by-quarter # step 6: the cross-sectional factor
+uv run python -m tradingvision.swing --timeframe 4h --baseline        # step 7: the tradable swing rule
 uv run python -m tradingvision.swingrule --pred data/pred-swing-*.parquet  # the long-only rule on the swing label
 uv run python -m tradingvision.legcheck  --pred data/pred-swing-*.parquet  # does the prediction lead, or only summarise?
 ```
@@ -58,6 +60,13 @@ between `remaining_excursion`, the retrospective `swing_leg_target`, and the cro
 `cross_sectional_return` without touching the pipeline. The spec's section 1 explains why the label
 changed twice; numbers taken on different labels are not comparable.
 
+**Sampled on the clock, never by position.** `build` keeps the rows whose timestamp is on the
+sampling grid (`index.floor(step) == index`). A positional `iloc[::stride]` over rows a per-symbol
+`dropna` has thinned shifts that symbol's phase permanently at its first dropped row, and the
+previous build shows what that costs: 31,111 of 64,393 timestamps carrying one symbol, no timestamp
+holding all twenty, AVAX absent from every cross-section. Related: `features` returns finite or NaN
+and never an infinity, because `dropna` does not see one.
+
 **The alignment rule, which is the one thing that must never break.** Every frame is indexed by the
 *open* time of its bar, so a bar labelled `b` on timeframe `tf` closes at `b + tf`. Branch columns
 are placed on the 5m grid at `label + tf - 5m` and forward filled. One bar of anticipation on the
@@ -73,10 +82,34 @@ early stopping. `split.walk_forward` repeats the cut for the four folds every co
 statistics (`normalize` fits quantiles on train and applies them unchanged), thresholds. Measuring a
 choice on the test slice is how a worthless column set gets promoted.
 
-**Metrics.** `metrics.signal` gives the four qlib metrics cross-sectionally; Rank ICIR is what
-decides a promotion. A single cross-section of 20 symbols has a standard error of ~0.24, so only the
-average over thousands of dates means anything, and a comparison without a dispersion across folds
-is not a comparison.
+**The oracle has two readings and only one of them is a target.** `oracle.run(..., lag=0)` buys
+every pivot low with hindsight and is enormous — 4.1 log a year on 4h bars, 12.6 on 15m. The same
+oracle at `lag=EXTREMA_WINDOW` is the earliest any reader can *know* a pivot of a centred window,
+and it is 0.40 a year: **under 10% of the first**. Everything that makes the hindsight number huge
+is the window of future it reads. Quote a causal strategy against the second (`swing` calls it
+`reachable`) and mention the first only to say what it is. Trading `swing_leg_target` itself, known
+perfectly, earns 54-61% of the hindsight oracle — so "half the oracle" is not an ambitious target,
+it is the definition of knowing the label exactly.
+
+**Correlation with the label is not the objective.** A ridge on the features plus the causal leg
+state reaches 0.62 time-series correlation with `swing_leg_target` and still loses money, because
+its residual concentrates at the turns, which is where every trade is opened and closed. `swing`
+therefore trains twice: a Huber on the label to put leg structure in the encoder, then direct
+policy optimisation on the net P&L with the fee inside the reward (`swing.fit_policy`). The reward
+is paid on *detrended* returns — otherwise the best policy is buy and hold and the stage finds it.
+
+**Pivots have a causal twin.** `data.pivots.find_pivots` is centred and is the label's side of the
+problem; `legs.confirmed` is the timeline a live reader would have held, with each turn dated from
+its own confirmation and the merge of same-kind runs applied in arrival order. Never approximate
+the second by shifting the first — the centred pass has already deleted the lower high a live
+reader was acting on for the hours in between.
+
+**Metrics.** `metrics.signal` gives the four qlib metrics cross-sectionally. A single cross-section
+of 20 symbols has a standard error of ~0.24, so only the average over thousands of dates means
+anything, and a comparison without a dispersion across folds is not a comparison. On the 72h label
+the raw Rank ICIR is *not* a significance — adjacent dates share 71 of the 72 hours their labels are
+made of, so a naive t over 10,944 dates reads 31.9 where 153 non-overlapping blocks read 5.1. Pass
+`horizon=` to `signal` and read `rank_ic_t`.
 
 **Cached datasets carry their parameters.** `dataset.cached` writes a JSON stamp next to the Parquet
 and refuses to load a file built with different arguments. Don't defeat it — delete the file or pass
@@ -87,6 +120,11 @@ both aborts with `OMP: Error #15`. `gru` deliberately does not import `gbm`; the
 coexist is `tests/test_selfchecks.py`, which runs the GRU check in a subprocess.
 
 ## Conventions
+
+**A strategy that cannot beat one indicator is not a strategy.** `swing --baseline` prices four
+one-column rules on exactly the rows the walk-forward tested. `rsi_centered` above 0.3 nets +0.116
+log a year on 4h bars against +0.063 for the two-stage model at three times its turnover; keep that
+row in front of any claim about the model.
 
 Self-checks live at the bottom of each module as asserts under `if __name__ == "__main__"` (or a
 `_selfcheck()` function when the `__main__` is the real run), not in a mirrored test file.

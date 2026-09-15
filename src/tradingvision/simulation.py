@@ -82,12 +82,15 @@ def skilled(y: pd.DataFrame, rho: float, rng: np.random.Generator, span: int) ->
     return pred.groupby(level=1).transform(lambda v: (v - v.mean()) / v.std()).sort_index()
 
 
-def book(pred: pd.Series, theta: float) -> pd.Series:
+def book(pred: pd.Series) -> pd.Series:
     """A prediction turned into the signal the rule reads: its centred percentile inside its own
     timestamp, in [-1, +1].
 
-    A threshold has to mean the same thing on every symbol and in every regime, and a raw
-    prediction does not: its scale drifts with the model, with volatility, and between pairs. The
+    No threshold here on purpose: the transform is what makes a threshold mean the same thing
+    everywhere, and `threshold.positions` is what applies one.
+
+    A raw prediction cannot carry a threshold of its own: its scale drifts with the model, with
+    volatility, and between pairs. The
     obvious fix — standardise each symbol over the period — reads the period it is trading, which
     is the leakage this project purges folds to avoid. The percentile inside a timestamp reads only
     the cross-section standing there at that instant, which is exactly what a rank-based label
@@ -106,7 +109,7 @@ def run(pred: pd.Series, forward: pd.DataFrame, theta: float, fee: float, span: 
     `forward` is the return of each symbol over one decision step. Hedged subtracts the mean of the
     row, which is the basket leg of the trade the label describes.
     """
-    pos = threshold.positions(book(pred, theta), theta, sign=1)
+    pos = threshold.positions(book(pred), theta, sign=1)
     pos = pos.unstack(level=1).reindex(columns=forward.columns).fillna(0.0)
     # Per symbol and per year, in units of position: a flip from long to short is 2. `fillna(pos)`
     # charges the opening trade, as `threshold.pnl` does — the first row has no diff, not no cost.
@@ -129,8 +132,11 @@ def run(pred: pd.Series, forward: pd.DataFrame, theta: float, fee: float, span: 
         # Annualised on the decision step, with the fee spread evenly over it. An upper bound and
         # nothing more: constant skill and frictionless fills both flatter it. A threshold no
         # prediction ever reaches holds nothing and has no ratio, rather than a zero divided by one.
+        # Both terms are already per year — `gross` is divided by the span above and `risk` is
+        # scaled up by it — so the ratio is the ratio and nothing divides by the span twice.
         risk = per_step.std() * np.sqrt(len(per_step) / span)
-        out[f"sharpe_{name}"] = net / span / risk if risk > 0 else np.nan
+        out[f"risk_{name}"] = risk
+        out[f"sharpe_{name}"] = net / risk if risk > 0 else np.nan
     return out
 
 
@@ -196,7 +202,7 @@ def price(pred: pd.Series, thetas=THETAS, fees=FEES, smooth: int = 1) -> pd.Data
 
     rows = []
     for theta in thetas:
-        pos = threshold.positions(book(p, theta), theta, sign=1)
+        pos = threshold.positions(book(p), theta, sign=1)
         turnover = pos.groupby(symbol).diff().fillna(pos).abs().groupby(symbol).sum().mean() / span
         out = {
             "theta": theta,
@@ -278,9 +284,9 @@ def _selfcheck() -> None:
     # happens to predict on cannot move a single position.
     idx = pd.MultiIndex.from_product([pd.date_range("2025", periods=4, freq="h", tz="UTC"), list("abc")])
     raw = pd.Series([1.0, 5.0, 9.0] * 4, index=idx)
-    b = book(raw, 0.5)
+    b = book(raw)
     assert b.between(-1, 1).all() and np.allclose(b.groupby(level=0).mean(), 0, atol=1e-12)
-    assert np.allclose(book(np.exp(raw * 3) * 100, 0.5), b), "a monotone map per date changes nothing"
+    assert np.allclose(book(np.exp(raw * 3) * 100), b), "a monotone map per date changes nothing"
 
     # A wider band trades less. This is the only lever the rule itself has against the fee.
     wide = sweep(close, horizon=16, rhos=(1.0,), thetas=(0.2, 0.9), fees=(FEE,))
@@ -297,6 +303,12 @@ def _selfcheck() -> None:
     b = sweep(shocked, horizon=16, rhos=(1.0,), thetas=(0.5,), fees=(0.0,)).iloc[0]
     assert np.isclose(a.gross_hedged, b.gross_hedged, rtol=1e-6), (a.gross_hedged, b.gross_hedged)
     assert not np.isclose(a.gross_naked, b.gross_naked, rtol=1e-3), "the naked leg does move"
+
+    # The ratio is annual return over annual risk, with nothing dividing by the span a second
+    # time — the form `price` uses on a real prediction, so the two tables read on one scale.
+    one = sweep(close, horizon=16, rhos=(1.0,), thetas=(0.5,), fees=(0.0,)).iloc[0]
+    assert np.isclose(one.sharpe_hedged, one.net_hedged / one.risk_hedged), one.to_dict()
+    assert one.sharpe_hedged > 1, one.to_dict()
 
     # And the output the module is for: a break-even sits between the skills that bracket it.
     grid = sweep(close, horizon=16, rhos=(0.0, 0.05, 0.2, 1.0), thetas=(0.5,), fees=(FEE,))
