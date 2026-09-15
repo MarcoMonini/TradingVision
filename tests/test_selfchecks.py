@@ -15,6 +15,7 @@ import pytest
 from tradingvision import (
     crosscheck,
     dataset,
+    exhaustcheck,
     factor,
     gbm,
     legcheck,
@@ -81,6 +82,11 @@ def test_selection_selfcheck():
 def test_crosscheck_selfcheck():
     """`crosscheck` keeps its checks in a function too: its `__main__` rebuilds both datasets."""
     crosscheck._selfcheck()
+
+
+def test_exhaustcheck_selfcheck():
+    """`exhaustcheck` keeps its checks in a function: its `__main__` builds the whole panel."""
+    exhaustcheck._selfcheck()
 
 
 def test_legcheck_selfcheck():
