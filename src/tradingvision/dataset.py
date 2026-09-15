@@ -67,6 +67,10 @@ def _shift(tf: str) -> pd.Timedelta:
 # step would be 24x the columns for a model that cannot use most of them.
 LAGS = (1, 4)
 
+# How `build` subsamples the 5m grid. Travels in the cache stamp, because it changes which rows a
+# file holds without changing any argument that would otherwise be recorded.
+SAMPLING = "clock"
+
 
 def lagged(f: pd.DataFrame, n: int = EXTREMA_WINDOW) -> pd.DataFrame:
     """`f` widened from value-at-t to value, lags and window statistics — 5 columns per input.
@@ -214,14 +218,30 @@ def build(
     `stride` subsamples the 5m grid — 12 keeps one row per hour. The rows are not independent
     anyway (consecutive samples share 23 of 24 steps, spec point 1), and the full grid at 20
     symbols does not fit in memory as a flat frame.
+
+    Sampled on the *clock* and not by position, which is the difference between twenty symbols
+    that share a timestamp and twenty that do not. `symbol_frame` ends in a `dropna`, and what it
+    drops differs per symbol — a zero-volume bar makes `log_volume_vs_median` infinite and the
+    rolling deviation of `lagged` turns that into NaN across the whole window — so `iloc[::stride]`
+    shifted the phase of a symbol permanently at its first dropped row. Measured on the previous
+    build: AVAX sat one bar off every other symbol for the entire period, 31,111 of 64,393
+    timestamps carried a single symbol, and no timestamp anywhere in the file held all twenty.
+    The cross-sectional label, the cross-sectional metric and the book all read a cross-section,
+    so that phase drift was not a sampling detail — it deleted a symbol from the panel and left
+    the evaluation reading nineteen at best.
+
+    A clock rule cannot drift: a dropped bar leaves a hole in that symbol at that hour and moves
+    nothing else. `floor` anchors on the epoch, so the grid is the same one for every symbol
+    whatever each of them is missing.
     """
     symbols = binance.SYMBOLS if symbols is None else symbols
+    step = stride * pd.Timedelta(BASE_TF)
     frames = {}
     for s in symbols:
         f = symbol_frame(s, start, n, label, lags)
         if start is not None:
             f = f.loc[pd.Timestamp(start, tz="UTC") :]
-        frames[s] = f.iloc[::stride]
+        frames[s] = f[f.index.floor(step) == f.index]
     return pd.concat(frames, names=["symbol"]).swaplevel().sort_index()
 
 
@@ -235,7 +255,14 @@ def cached(path: Path, **params) -> pd.DataFrame:
     """
     stamp = path.with_suffix(".json")
     # `LAGS` travels too: it is not an argument, and changing it changes every column in the file.
-    written = dict(params, symbols=sorted(params.get("symbols") or binance.SYMBOLS), lags_at=list(LAGS))
+    # So does `SAMPLING`. It is not an argument either, and it decides which rows exist: a file
+    # built when `build` used a positional stride holds the same `stride` in its stamp and a
+    # different set of rows, on a grid where the symbols are out of phase with each other. Without
+    # this key such a file would be read back as a match — which is the one thing the stamp exists
+    # to prevent — so the name is recorded and every cache built before the clock rule is refused.
+    written = dict(
+        params, symbols=sorted(params.get("symbols") or binance.SYMBOLS), lags_at=list(LAGS), sampling=SAMPLING
+    )
     if path.exists():
         if not stamp.exists():
             raise SystemExit(f"{path} has no {stamp.name} recording how it was built — delete it and rebuild")
@@ -275,8 +302,21 @@ def _selfcheck() -> None:
             except SystemExit:
                 break
             raise AssertionError("a cache with no stamp has to stop the run")
-        path.with_suffix(".json").write_text(json.dumps(dict(stride=12, symbols=["BTC"], lags_at=list(LAGS))))
+        path.with_suffix(".json").write_text(
+            json.dumps(dict(stride=12, symbols=["BTC"], lags_at=list(LAGS), sampling=SAMPLING))
+        )
         assert len(cached(path, stride=12, symbols=["BTC"])) == 1, "a matching stamp reads the file back"
+        # And a file built before the clock rule: same arguments, different rows, refused.
+        path.with_suffix(".json").write_text(json.dumps(dict(stride=12, symbols=["BTC"], lags_at=list(LAGS))))
+        try:
+            cached(path, stride=12, symbols=["BTC"])
+        except SystemExit:
+            pass
+        else:
+            raise AssertionError("a cache with no sampling rule recorded has to stop the run")
+        path.with_suffix(".json").write_text(
+            json.dumps(dict(stride=12, symbols=["BTC"], lags_at=list(LAGS), sampling=SAMPLING))
+        )
         for wrong in (dict(stride=6, symbols=["BTC"]), dict(stride=12, symbols=["ETH"])):
             try:
                 cached(path, **wrong)

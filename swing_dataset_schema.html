@@ -97,15 +97,16 @@ footer{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);color:v
     <div class="fact"><b>20</b><span>coppie USDT</span></div>
     <div class="fact"><b>14,9M</b><span>candele 5m</span></div>
     <div class="fact"><b>24</b><span>finestra_estremi</span></div>
-    <div class="fact"><b>0.106</b><span>Rank IC, etichetta cross-sez.</span></div>
-    <div class="fact"><b>+0.23</b><span>netto/anno hedged, 25bp</span></div>
+    <div class="fact"><b>0.110</b><span>Rank IC, composito N=2880</span></div>
+    <div class="fact"><b>+0.24</b><span>netto/anno hedged, 25bp</span></div>
+    <div class="fact"><b>75×</b><span>turnover tolto</span></div>
   </div>
 </header>
 
 <section>
   <h2><span class="n">1</span> · Risultati</h2>
   <p class="h2sub">Dove siamo</p>
-  <p class="lead">Ogni step deve battere il precedente sulle metriche di segnale out-of-sample, sugli stessi quattro fold walk-forward dal 2025-06. Rank ICIR è la metrica su cui si decide una promozione.</p>
+  <p class="lead">Ogni step deve battere il precedente sulle metriche di segnale out-of-sample, sugli stessi quattro fold walk-forward dal 2025-06. Rank ICIR è la metrica su cui si decideva una promozione; sull'etichetta a 72 ore è stata sostituita dal <em>t</em> su blocchi non sovrapposti, perché l'ICIR grezzo su date che condividono 71 ore su 72 non è una significatività (sezione 8).</p>
 
   <div class="tw">
     <table>
@@ -120,7 +121,10 @@ footer{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);color:v
         <tr><td class="num">4</td><td>GRU multi-ramo, encoder distinti</td><td>4 × (B, 24, 28)</td><td class="num">0.1530 ± 0.0137</td><td class="num">0.565 ± 0.044</td><td>perde sul singolo ramo, 4 fold su 4<span class="b b-no">no</span></td></tr>
         <tr><td class="num">4</td><td>GRU multi-ramo, encoder condiviso</td><td>4 × (B, 24, 28) + embedding tf</td><td class="num">0.1537 ± 0.0147</td><td class="num">0.566 ± 0.050</td><td>indistinguibile dal precedente<span class="b b-no">no</span></td></tr>
         <tr><td class="num">5</td><td colspan="5"><em>cambio di etichetta — i numeri sopra e sotto non sono confrontabili</em></td></tr>
-        <tr class="hi"><td class="num">5</td><td>GRU ramo singolo, rank cross-sez.</td><td>(B, 24, 2) — 15m</td><td class="num">0.106</td><td class="num">0.305</td><td>primo numero rivolto ai soldi<span class="b b-ok">2 fold</span></td></tr>
+        <tr><td class="num">5</td><td>GRU ramo singolo, rank cross-sez.</td><td>(B, 24, 2) — 15m</td><td class="num">0.106</td><td class="num">0.305</td><td>primo numero rivolto ai soldi<span class="b b-ok">2 fold</span></td></tr>
+        <tr><td class="num">6</td><td>GRU ramo singolo, tutte le colonne</td><td>(B, 24, 29) rankate — 15m</td><td class="num">0.1059 ± 0.0241</td><td class="num">—</td><td>perde sul composito a due colonne<span class="b b-no">no</span></td></tr>
+        <tr><td class="num">6</td><td>composito, finestra del progetto</td><td>2 colonne rankate, N=24</td><td class="num">0.0985 ± 0.0187</td><td class="num">t = 2.74</td><td>la riga da battere<span class="b b-ok">4 fold</span></td></tr>
+        <tr class="hi"><td class="num">6</td><td>composito, finestra scelta su train</td><td>2 colonne rankate, N=2880</td><td class="num">0.1099 ± 0.0124</td><td class="num">t = 2.88</td><td>batte N=24 su 4 fold su 4, e il netto passa da −0.77 a +0.18<span class="b b-ok">0 parametri</span></td></tr>
       </tbody>
     </table>
   </div>
@@ -142,6 +146,65 @@ footer{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);color:v
       </tbody>
     </table>
   </div>
+
+  <div class="box why">
+    <h4>La finestra apparteneva al problema sbagliato <span class="b b-msr">misurato</span></h4>
+    <p><code>N = finestra_estremi = 24</code> barre è stato misurato con cura — sul problema della <em>gamba</em>, cioè quale oscillazione conta come swing una volta pagato il ritardo di rilevazione. Ogni feature del file eredita quella finestra. Ma l'etichetta non è più una gamba: è un rendimento cross-sezionale a 72 ore, e <strong>nessuno aveva mai verificato che sei ore di storia siano la lente giusta per leggerlo</strong>. Non lo sono.</p>
+    <p>La finestra viene scelta dentro ogni fold sulla sola Rank IC di train, fra 96, 288, 672 e 2880 barre da 15m, e cade su <strong>2880 (30 giorni)</strong> in tutti e quattro. 24 è anche il peggiore della griglia su train, quindi non è stata letta nessuna fetta di test per arrivarci. Su test: 0.1099 ± 0.0124 contro 0.0985 ± 0.0187, e vince <strong>quattro fold su quattro</strong> — lo stesso standard con cui lo step 3 era stato promosso sul GBM.</p>
+    <p>La metà grossa però è nei soldi. Una stima di volatilità a sei ore è quasi tutta rumore di stima: il suo ordinamento cambia ogni ora e il libro paga quel rimescolamento. A trenta giorni l'ordinamento resta lo stesso per settimane. A θ=0.2 — la fascia più larga, il libro più diversificato che la regola sappia tenere — le due finestre non sono affatto la stessa strategia.</p>
+  </div>
+
+  <div class="tw">
+    <table>
+      <caption>θ=0.2, rendimento log hedged per anno, media sui quattro fold</caption>
+      <thead><tr><th>finestra</th><th class="num">turnover</th><th class="num">trade/anno</th><th class="num">lordo</th><th class="num">netto 25bp</th><th class="num">netto 10bp</th><th class="num">Sharpe 25bp</th></tr></thead>
+      <tbody>
+        <tr><td class="key">24 (6h)</td><td class="num">109,35</td><td class="num">174,0</td><td class="num">0.103</td><td class="num">−0.767</td><td class="num">−0.245</td><td class="num">−5,36</td></tr>
+        <tr class="hi"><td class="key">2880 (30g)</td><td class="num">1,45</td><td class="num">2,3</td><td class="num">0.190</td><td class="num">+0.179</td><td class="num">+0.186</td><td class="num">+1,24</td></tr>
+        <tr><td colspan="7" class="foot">la finestra lunga vince anche sul <em>lordo</em>, 0.190 contro 0.103: non è un trucco sui costi, è un segnale migliore che per giunta costa settantacinque volte meno</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>E la fascia buttava via il centro <span class="b b-msr">misurato</span></h3>
+  <p>L'etichetta punteggia un <em>ordinamento intero</em> e la fascia ne legge solo le estremità. Pesare per il percentile centrato invece di tenere ±1 alza il lordo da 0.190 a 0.259 — ma ingenuamente se lo rimangia tutto, perché un peso continuo ribilancia ogni ora per qualche punto base di deriva: 15,4 di turnover contro 1,45, e il netto scende a 0.136. La metà mancante è la <strong>tolleranza di non-scambio</strong>: il peso tenuto resta tale finché il bersaglio non si allontana di più di <code>tol</code>. Scelta su train fra (0,1 … 0,8) cade su 0,8 in tutti e quattro i fold.</p>
+
+  <div class="tw">
+    <table>
+      <caption>ogni parametro scelto sul lato train del proprio fold — 25 bp per lato, media sui quattro fold</caption>
+      <thead><tr><th>libro</th><th>finestra</th><th class="num">turnover</th><th class="num">lordo</th><th class="num">netto 25bp</th><th class="num">Sharpe</th></tr></thead>
+      <tbody>
+        <tr><td class="key">fascia</td><td>24 (6h)</td><td class="num">1,24</td><td class="num">0.086</td><td class="num">+0.076</td><td class="num">0,69</td></tr>
+        <tr><td class="key">fascia</td><td>scelta su train</td><td class="num">1,18</td><td class="num">0.169</td><td class="num">+0.160</td><td class="num">1,14</td></tr>
+        <tr><td class="key">pesato</td><td>24 (6h)</td><td class="num">174,20</td><td class="num">0.244</td><td class="num">−1.142</td><td class="num">−6,53</td></tr>
+        <tr class="hi"><td class="key">pesato</td><td>scelta su train</td><td class="num">2,03</td><td class="num">0.254</td><td class="num">+0.238</td><td class="num">1,33</td></tr>
+        <tr><td colspan="6" class="foot">la terza riga è tutto lo studio in una riga sola: lo stesso libro su una finestra da sei ore fa <em>lo stesso lordo</em> e perde 1,14 l'anno invece di guadagnare 0,24. Del segnale non è cambiato niente — solo quanto spesso una stima rumorosa lo faceva scambiare</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Da capo a fondo il netto <strong>triplica</strong> (+0.076 → +0.238) e lo Sharpe raddoppia (0,69 → 1,33), e nessuna delle due metà era un parametro che qualcuno avesse mai scelto <em>contro questa etichetta</em>. La commissione è per giunta contata al peggio: ogni fold apre il libro da piatto, quindi una strategia così lenta paga circa metà del turnover misurato a un trade di apertura che un libro tenuto in continuità pagherebbe una volta sola.</p>
+
+  <div class="box why">
+    <h4>Il punto aperto 1 aveva una terza leva <span class="b b-ok">chiuso</span></h4>
+    <p>Il punto diceva: Rank IC 0.106 contro un break-even di 0.184 a θ=0.5, due leve — più abilità, o un venue più economico. Ce n'era una terza, e non era sull'abilità. <strong>Una regola che ribilancia una stima rumorosa 174 volte l'anno non paga 25 bp per lato a nessuna Rank IC della tabella</strong>; lo stesso segnale misurato su un orizzonte che somiglia a quello dell'etichetta paga alla commissione che il progetto ha già.</p>
+    <p>Il break-even non è una proprietà del segnale. È una proprietà della coppia (segnale, regola), e metà del divario era nella regola.</p>
+  </div>
+
+  <h3>Il composito è un fattore, non un'allocazione fissa <span class="b b-msr">misurato</span></h3>
+  <p>Il sospetto ovvio: a trenta giorni l'ordinamento quasi non ruota — il 90,9% della varianza del composito è un livello permanente per simbolo — quindi il libro potrebbe essere una sola scommessa tenuta per anni, e quindici trimestri non sarebbero quindici osservazioni. Il controllo è diretto: si congela il rango medio di ogni simbolo sul <em>solo</em> periodo di train e lo si applica invariato su tutto il test.</p>
+
+  <div class="tw">
+    <table>
+      <caption>congelato contro dinamico, stesso test, θ=0.2, 25 bp per lato</caption>
+      <thead><tr><th>segnale</th><th class="num">Rank IC</th><th class="num">turnover</th><th class="num">lordo hedged</th><th class="num">netto</th></tr></thead>
+      <tbody>
+        <tr><td class="key">congelato (media di train)</td><td class="num">0.0906 ± 0.0180</td><td class="num">0,80</td><td class="num">+0.060</td><td class="num">+0.058</td></tr>
+        <tr class="hi"><td class="key">dinamico N=2880</td><td class="num">0.1082 ± 0.0193</td><td class="num">2,90</td><td class="num">+0.185</td><td class="num">+0.179</td></tr>
+        <tr><td colspan="5">la parte che si muove è il 9% della varianza e fa <strong>tre volte</strong> il lordo del livello fisso, al costo di due unità di turnover: 0.005 di commissioni</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>L'inclinazione di base è quella che ci si aspetta — il rango medio su train va da BTC +0,91 ed ETH +0,79 giù fino a SUSHI −0,65 — cioè lungo le large cap e corto le small. Quella metà è il regime del 2025-26 e può invertirsi. La rotazione no: è la metà che porta i soldi ed è quella che il punto aperto 3 temeva non esistesse.</p>
 
   <h3>Il multi-ramo è stato misurato, e perde</h3>
   <p>Lo step 4 era la premessa dell'intero progetto: quattro orizzonti, un encoder per ciascuno. Misurato sugli stessi quattro fold e cinque seed dello step 3, <strong>il solo ramo 15m vince su tutti e quattro i fold contro entrambe le varianti</strong> — la stessa regola con cui lo step 3 era stato promosso sul GBM (+0.0022 su 4 fold su 4), letta al contrario.</p>
@@ -197,6 +260,11 @@ footer{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);color:v
         <tr><td>passa-basso sulla predizione, k=2</td><td class="num">0.1284</td><td class="num">0.476</td><td>monotono nella direzione sbagliata (0.097 a k=4, 0.041 a k=12): la variazione nel tempo è segnale</td></tr>
         <tr><td>addestramento solo su h &lt; 48</td><td class="num">0.1334</td><td class="num">0.484</td><td>migliora ogni fascia vicina, nessuna passa lo zero</td></tr>
         <tr><td>solo h &lt; 48, set a 28</td><td class="num">0.1332</td><td class="num">0.485</td><td>fascia 0–6 a −0.019, il meglio mai visto, ancora negativo</td></tr>
+        <tr><td class="key">composito su più finestre insieme</td><td class="num">0.1144</td><td class="num">—</td><td>media di 288+672+2880: <strong>alza la Rank IC</strong> (0.1099 → 0.1144) e <strong>abbassa il netto</strong> (+0.179 → +0.127), perché il turnover quasi raddoppia. È il caso in cui le due metriche ordinano in senso opposto, e i soldi decidono</td></tr>
+        <tr><td class="key">sette fattori in più, ridge su train</td><td class="num">0.083–0.095</td><td class="num">—</td><td>idio_vol, beta, corr, amihud, range_vol, downside, drawdown e i rendimenti trascinati: ognuno ha segnale univariato, tutti insieme perdono. 0.095 con <code>corr</code>, 0.087 con quattro, 0.083 con nove, contro 0.110 della coppia equipesata</td></tr>
+        <tr><td class="key">pesi fittati sulla coppia</td><td class="num">0.1146</td><td class="num">—</td><td>vince tre fold su quattro invece di quattro: dentro la dispersione fra fold, quindi due parametri non comprano il quarto fold</td></tr>
+        <tr><td class="key">GRU mescolata al composito</td><td class="num">0.1153</td><td class="num">—</td><td>correlazione 0,838 col composito a 30 giorni; il peso migliore dà +0.0006 contro un errore di 0.020</td></tr>
+        <tr><td class="key">GRU su tutte le 29 colonne rankate</td><td class="num">0.1057</td><td class="num">—</td><td>la forma più forte della domanda, sul campione corretto a venti simboli: 24 step × 29 colonne contro due colonne sommate, <strong>0.1057 ± 0.0187 contro 0.1118 ± 0.0193</strong>, e una dispersione fra fold doppia (0.0241 contro 0.0124). Mescolate al 50/50 fanno 0.1136, cioè +0.0018 su un errore di 0.019 — punto aperto 2, chiuso</td></tr>
         <tr><td colspan="4" class="foot">lo specialista sulla banda è il <strong>limite superiore</strong> di qualunque condizionamento sul regime — una loss pesata, una testa multi-task o una miscela di esperti sono versioni più deboli della stessa idea, perché lo specialista ha già tutta la capacità e l'early stopping sulla banda. Il suo fallimento le esclude tutte in una misura sola</td></tr>
       </tbody>
     </table>
@@ -207,6 +275,57 @@ footer{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);color:v
     <p><strong>1. La selezione delle feature non si trasferisce fra modelli.</strong> I 12 indicatori scelti col GBM costano 0.005 di Rank IC e 0.022 di ICIR a una ricorrente. Dentro le 48 barre dal pivot i due predittori più forti sono <code>tsi_momentum</code> (0.072 su train, 0.067 su test) e <code>rsi_centered</code> (0.068 / 0.063), entrambi scartati dal passo 4 perché su colonne appiattite sono ridondanti.</p>
     <p><strong>2. La relazione cambia segno vicino al pivot.</strong> <code>close_position_in_window_15m</code> vale +0.157 di Rank IC su tutto il train e −0.063 dentro le 24 barre; 66 colonne su 112 invertono allo stesso modo. Una mappa unica e incondizionata non può tenere entrambi i rami, e fitta la massa — dove sta l'84% delle righe.</p>
     <p><strong>3. Non è instabilità, è una variabile mancante.</strong> Dentro le 48 barre la Rank IC per colonna su train e su test <strong>correla a 0.924</strong>, e solo 8 colonne su 112 cambiano segno. L'informazione in banda generalizza benissimo: quello che manca è la variabile che dice al modello in quale dei due regimi si trova.</p>
+  </div>
+
+  <div class="box why">
+    <h4>Step 7 · La strategia swing, resa tradabile — e il tetto che ha trovato <span class="b b-msr">misurato</span></h4>
+    <p>La domanda era diretta: prendere <code>swing_leg_target</code>, renderlo una strategia, e arrivare a un rendimento netto pari a circa <strong>metà di quello dell'oracolo</strong>. Tre misure fatte <em>prima</em> di addestrare qualsiasi cosa hanno cambiato il piano, e la terza ha cambiato l'obiettivo.</p>
+    <p><strong>Quanto vale l'etichetta se la si conoscesse esattamente.</strong> Tradando <code>swing_leg_target</code> stesso, con conoscenza perfetta e la soglia migliore, si fanno 5.46 log l'anno contro i 10.20 dell'oracolo sugli stessi otto simboli: <strong>il 54%</strong>. Non è una coincidenza ed è il tetto dell'approccio — l'etichetta interpola la gamba, quindi chi la legge perfettamente entra comunque dopo il minimo ed esce prima del massimo. <em>Metà dell'oracolo è esattamente ciò che compra la conoscenza perfetta dell'etichetta.</em></p>
+    <p><strong>Quanto vale la conoscenza imperfetta.</strong> La stessa etichetta corrotta a correlazione 0.9 col vero rende 3.68; a 0.7, 1.25; a 0.5 <strong>perde</strong> 0.95. Il pareggio sta fra 0.5 e 0.7. Una ridge sulle 29 colonne di <code>features</code> arriva a 0.577, con lo stato causale della gamba di <code>legs</code> a 0.623 — oltre il pareggio nominale — e perde ancora 0.29 l'anno.</p>
+    <p><strong>E il tetto vero, che non è l'oracolo.</strong> Un pivot di una finestra centrata da <em>N</em> barre è conoscibile solo <em>N</em> barre dopo che è stampato. Lo stesso oracolo che riempie a <code>lag=24</code> — identificazione perfetta, azione alla prima barra in cui è possibile — rende <strong>0.40 log l'anno contro 4.12</strong>: <strong>meno del 10%</strong>. Tutto ciò che rende enorme il numero dell'oracolo è la finestra di futuro che legge. Quindi il 50% dell'oracolo di preveggenza sta <strong>cinque volte sopra</strong> ciò che un rilevatore di pivot <em>perfetto</em> e causale incassa: non è un obiettivo difficile, è un obiettivo che nessun modello può raggiungere. Da qui in avanti la colonna da leggere è <code>reachable</code>.</p>
+  </div>
+
+  <div class="tw">
+    <table>
+      <caption>step 7 — barre 4h, venti simboli, quattro fold walk-forward, test 2023-01 → 2026-09, 0,25% per lato</caption>
+      <thead><tr><th>regola</th><th class="num">lordo</th><th class="num">netto</th><th class="num">trade/anno</th><th class="num">in mercato</th><th class="num">% del raggiungibile</th><th class="num">batte l'hold</th></tr></thead>
+      <tbody>
+        <tr><td class="key">oracolo, preveggenza (lag 0)</td><td class="num">—</td><td class="num">4.123</td><td class="num">116</td><td class="num">~50%</td><td class="num">—</td><td class="num">20/20</td></tr>
+        <tr><td class="key">oracolo, alla conferma (lag 24)</td><td class="num">—</td><td class="num">0.399</td><td class="num">116</td><td class="num">~50%</td><td class="num">100%</td><td class="num">—</td></tr>
+        <tr class="hi"><td class="key">rsi_centered &gt; 0.3 — una colonna</td><td class="num">0.182</td><td class="num">+0.126</td><td class="num">11,1</td><td class="num">18%</td><td class="num">32%</td><td class="num">11/20</td></tr>
+        <tr><td class="key">GRU, etichetta + rinforzo sul P&amp;L</td><td class="num">0.192</td><td class="num">+0.063</td><td class="num">25,7</td><td class="num">27%</td><td class="num">16%</td><td class="num">12/20</td></tr>
+        <tr><td class="key">GRU, sola etichetta + banda su validation</td><td class="num">0.095</td><td class="num">+0.060</td><td class="num">6,8</td><td class="num">35%</td><td class="num">15%</td><td class="num">11/20</td></tr>
+        <tr><td class="key">compra e tieni</td><td class="num">—</td><td class="num">+0.057</td><td class="num">—</td><td class="num">100%</td><td class="num">14%</td><td class="num">—</td></tr>
+        <tr><td class="key">close_position_in_window &gt; 0.5</td><td class="num">0.089</td><td class="num">−0.145</td><td class="num">46,4</td><td class="num">42%</td><td class="num">−36%</td><td class="num">3/20</td></tr>
+        <tr><td colspan="7" class="foot">la deviazione standard del netto <em>fra simboli</em> è <strong>0.207</strong>: con venti coppie che condividono quasi tutta la loro varianza col mercato, le prime cinque righe non sono distinguibili fra loro. Il confronto onesto non è quale vince, è che <strong>nessun modello batte una colonna sola</strong></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="box why">
+    <h4>Perché il modello viene addestrato due volte <span class="b b-ok">fatto</span></h4>
+    <p>La riga che ha deciso l'architettura è la ridge a 0.623 che perde soldi. <strong>La correlazione con l'etichetta non è l'obiettivo, e ottimizzarla non porta ai soldi</strong>: un modello può correlare 0.62 e perdere, perché i suoi errori non sono sparsi uniformemente — si concentrano sulle svolte, che è esattamente dove ogni trade viene aperto e chiuso. Una Huber sull'etichetta spende il gradiente sul mezzo delle gambe, che è l'80% delle righe e nessuna delle decisioni.</p>
+    <p>Quindi <code>swing.fit_label</code> mette la struttura della gamba nell'encoder, e <code>swing.fit_policy</code> ottimizza <em>direttamente il denaro</em>: la posizione è funzione differenziabile dell'output, la ricompensa è il rendimento log che incassa meno la commissione su ogni unità di posizione cambiata, e il gradiente è esatto perché il prezzo è esogeno. È il rinforzo diretto di Moody e Saffell, ed è lo strumento giusto per una ragione specifica: obiettivo e metrica diventano la stessa quantità, quindi un passo di gradiente non può più migliorare il fit dell'etichetta e peggiorare il P&amp;L insieme.</p>
+    <p>Due dettagli che sembravano di contorno e non lo erano. La ricompensa si paga su rendimenti <strong>detrendizzati</strong>: senza, la policy migliore è comprare e tenere, e la trova — la prima versione finiva sempre long al 100%. E la nitidezza del sigmoid è fissata a <strong>2</strong> per misura: a 4 satura, il gradiente sparisce e lo stadio scappa nel minimo locale "sempre fuori mercato" a ogni learning rate provato. Il <code>_selfcheck</code> pinza entrambe con una sega costruita apposta perché il prior supervisionato sia <em>sbagliato</em>: parte da −8.1 log/anno e deve finire sopra zero.</p>
+  </div>
+
+  <div class="box no">
+    <h4>Quattro varianti provate sullo stesso stadio, tutte dentro il rumore <span class="b b-msr">misurato</span></h4>
+    <p><strong>Straight-through sulla posizione</strong> (la ricompensa pagata sulla posizione binaria davvero eseguita, gradiente dal sigmoid dietro): sembrava ovviamente giusto, perché su una posizione morbida la commissione viene addebitata su un sigmoid che va da 0.48 a 0.52 e non costa nulla. Misurato è <em>peggio</em>: −0.042 netti a 111 trade contro +0.063 a 94. La ragione è la stessa saturazione — lo stimatore consegna al termine di commissione la derivata del sigmoid, che è minima proprio dove la posizione è più decisa.</p>
+    <p><strong>Banda e segno sul punteggio della policy, scelti su validation</strong>: −0.006 di lordo. Tre numeri scelti su una coda di validation di cinque mesi con settantadue combinazioni: ha trovato quella che si adattava a cinque mesi. <strong>Spostando la scelta su tutto il lato train</strong> il sovradattamento sparisce e il risultato resta sotto (+0.034 con tre semi). <strong>Media su tre semi</strong>: non ha aiutato.</p>
+    <p>Il punto non è quale variante vince. È che la dispersione fra queste è più piccola della dispersione fra simboli, e che <em>tutte</em> perdono contro <code>rsi_centered &gt; 0.3</code>. Su questo pannello e in questo periodo, il GRU su 65 colonne non estrae più di quanto estragga un indicatore.</p>
+  </div>
+
+  <div class="box why">
+    <h4>Il pivot ha un gemello causale, e la differenza non è cosmetica <span class="b b-ok">nuovo modulo</span></h4>
+    <p><code>data.pivots.find_pivots</code> è centrato ed è il lato <em>etichetta</em> del problema. <code>legs.confirmed</code> è la linea del tempo che un lettore dal vivo avrebbe tenuto: ogni estremo grezzo diventa visibile <em>N</em> barre dopo, e la fusione delle serie dello stesso segno è applicata <strong>in ordine di arrivo</strong> — quando stampa un massimo più alto, quello precedente smette di essere il pivot da quel momento, non retroattivamente.</p>
+    <p>Traslare di <em>N</em> il frame centrato sembra equivalente e non lo è: il passaggio centrato ha <em>già cancellato</em> il massimo più basso su cui il lettore stava agendo nelle ore intermedie. Il <code>_selfcheck</code> del modulo costruisce il caso: due massimi di fila, il secondo più alto, e <code>find_pivots</code> ha già perso il primo mentre la linea del tempo lo tiene fino alla barra 20. La proprietà che conta è affermata come tale — troncare la serie dopo la barra <em>t</em> non può cambiare nessuna riga fino a <em>t</em>.</p>
+  </div>
+
+  <div class="box open">
+    <h4>9 · La finestra fissa è il vincolo, e non è stata sostituita <span class="b b-open">nuovo</span></h4>
+    <p>Tutto lo step 7 sta dentro una sola disuguaglianza: una finestra di <em>N</em> barre significa <em>N</em> barre di ritardo di conferma, e a quel ritardo l'oracolo tiene il 10% di sé stesso. Le alternative misurate finora non aiutano. Una gamba a soglia di volatilità (<em>zigzag</em> a <em>k</em> log), dove la conferma è un evento e non un'attesa, è peggio: si conferma per costruzione <em>k</em> sotto il massimo, quindi regala 2<em>k</em> per gamba e alla conferma rende da −0.19 a −1.11 contro il +0.40 della finestra centrata. Finestre più corte (6, 12) non cambiano il tetto: 0.43, 0.39, 0.48.</p>
+    <p><strong>Strade.</strong> Una definizione di gamba la cui conferma costi meno di quanto costi aspettare — per esempio una soglia asimmetrica, stretta in entrata e larga in uscita. Un modello che <em>anticipi</em> la svolta invece di leggerne lo stato: è il punto aperto 4 riletto, e le sei colonne di esaurimento di <code>legs.exhaustion</code> sono la sua strada, ancora non isolate dalle altre. E la leva che non è modellistica: <strong>0,25% per lato è taker</strong>; a 0,15% maker il giro costa il 40% in meno, che su questi margini è più di qualunque variante provata sopra.</p>
   </div>
 </section>
 
@@ -451,6 +570,10 @@ footer{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);color:v
   </div>
 
   <div class="box why">
+    <h4>…e N non appartiene a questa etichetta <span class="b b-msr">misurato</span></h4>
+    <p>Tutto il resto di questa sezione fissa <em>quali</em> colonne. La domanda che viene prima non era mai stata posta: <strong>su quanto tempo si misurano</strong>. <code>N = finestra_estremi = 24</code> è stato misurato sul problema della gamba — quale oscillazione è tradabile una volta pagato il ritardo di rilevazione — e ogni finestra del file lo eredita. L'etichetta però non è più una gamba, e la coppia superstite letta su trenta giorni invece che su sei ore vince quattro fold su quattro e porta il netto da −0.767 a +0.179. Il dettaglio è nella sezione 1; qui conta la regola che ne segue: <strong>la finestra è un parametro dell'etichetta, non del dataset</strong>, e va riscelta ogni volta che l'etichetta cambia, come δ della Huber e come la selezione delle colonne. <code>features</code> la prende già come argomento, quindi non cambia niente nel file — cambia chi la sceglie, e <code>factor</code> la sceglie dentro ogni fold sulla sola Rank IC di train.</p>
+    <p>Questo non tocca l'argomento qui sotto, che riguarda il rapporto <em>fra</em> i rami e resta valido. Sposta solo il valore di N.</p>
+
     <h4>N in barre, non in ore</h4>
     <p>N = 24 <em>barre del ramo</em> su ogni ramo, non 6h ovunque. Con la regola oraria il ramo 5m avrebbe N=72 e misurerebbe la stessa cosa del ramo 15m a N=24, solo campionata più fitta: quattro rami che guardano tutti 6h sono quattro copie rumorose di un ramo solo. È N in barre che li rende complementari, con copertura 2h / 6h / 12h / 24h. Conseguenza pratica: parametri identici sui quattro rami, e nessun pavimento da imporre — con la regola oraria il ramo 1h finirebbe a N=6, dove ATR, ADX, KAMA e TSI non misurano nulla.</p>
     <p><strong>Unica eccezione onesta:</strong> step e max_step di PSAR sono accelerazioni, non finestre, e <code>finestra_estremi</code> non li determina. 0.02 / 0.2 resta convenzione — l'unico parametro arbitrario del progetto, e l'indicatore è comunque uscito dalla selezione.</p>
@@ -579,6 +702,22 @@ L = δ·(|e| − 0.5·δ)  altrimenti</pre>
 </section>
 
 <section>
+  <h3>L'ICIR grezzo non è una significatività <span class="b b-msr">misurato</span></h3>
+  <p>A 72 ore di etichetta su una griglia oraria, due date adiacenti condividono 71 delle 72 ore di cui è fatta la loro etichetta. La serie delle IC per data è liscia per costruzione — autocorrelazione 0,956 a un'ora, che attraversa lo zero esattamente a 72 — quindi la dispersione al denominatore dell'ICIR è quella di una media mobile a 72 punti, e il conteggio di date per cui si divide implicitamente è sbagliato dello stesso fattore.</p>
+
+  <div class="tw">
+    <table>
+      <caption>la stessa predizione, letta nei due modi — <code>metrics.blocked</code></caption>
+      <thead><tr><th>lettura</th><th class="num">osservazioni</th><th class="num">Rank IC</th><th class="num">errore</th><th class="num">t</th></tr></thead>
+      <tbody>
+        <tr><td class="key">per data, grezza</td><td class="num">10.944</td><td class="num">0.1064</td><td class="num">—</td><td class="num">31,9</td></tr>
+        <tr class="hi"><td class="key">blocchi di 72h non sovrapposti</td><td class="num">153</td><td class="num">0.1026</td><td class="num">0.0200</td><td class="num">5,1</td></tr>
+        <tr><td colspan="5" class="foot">la media sopravvive, la barra d'errore no: <strong>6,2 volte</strong> di scarto sul <em>t</em>, vicino al √72 che il punto sull'orizzonte aveva previsto</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p><code>metrics.signal(pred, target, horizon=...)</code> aggiunge <code>rank_ic_se</code>, <code>rank_ic_t</code> e <code>blocks</code>. <code>rank_icir</code> resta invariato, perché ogni numero già misurato nel progetto è stato preso su di lui — ma non è il numero su cui promuovere uno step a questa etichetta. Con 0.1026 ± 0.0200, il 95% di confidenza va da 0.063 a 0.142: il break-even di 0.062 a θ=0.8 ci sta dentro, quello di 0.184 a θ=0.5 è fuori.</p>
+
   <h2><span class="n">9</span> · Economia</h2>
   <p class="h2sub">Quanto serve saperne perché paghi<span class="b b-ok">simulation</span></p>
   <p class="lead">Rank IC dice se l'ordinamento porta informazione. Non dice se tradarci sopra paga. <code>threshold</code> prezza una predizione che esiste; <code>simulation</code> prezza una che <em>non esiste ancora</em> — sintetizza un segnale di abilità nota, <code>ρ·y + √(1−ρ²)·rumore</code>, e lo fa girare sulla stessa regola e sugli stessi prezzi. Risponde alla domanda che nessuna misura su un modello addestrato può: quanto deve diventare bravo il modello prima che valga la pena.</p>
@@ -623,42 +762,142 @@ L = δ·(|e| − 0.5·δ)  altrimenti</pre>
     <p><strong>Le cross-section sono spesse otto simboli, non venti.</strong> 218.497 righe su 27.812 timestamp distinti: il campionamento a stride posizionale sfasa i simboli in modo permanente (punto aperto 2), e la breadth reale è molto sotto quella nominale.</p>
     <p><strong>Nessuno slippage, nessun impatto</strong>, e la gamba hedged presuppone che il paniere venga davvero shortato, che sui perpetual costa funding.</p>
   </div>
+
+  <h3>La regola long-only sull'etichetta swing, e il controllo che la chiude <span class="b b-msr">misurato</span></h3>
+  <p><code>swingrule</code> prezza la regola che l'etichetta swing descrive — compra vicino al minimo della gamba, tieni, vendi vicino al massimo, poi <em>aspetta</em>. Venti simboli, 2025-09 → 2026-09, 25 bp per lato, banda dinamica come quantile espandente di |pred| sulle righe passate di ogni simbolo.</p>
+
+  <div class="tw">
+    <table>
+      <caption>la regola long-only, venti simboli, ultimo anno — banda dinamica</caption>
+      <thead><tr><th class="num">quantile</th><th class="num">in mercato</th><th class="num">trade/anno</th><th class="num">lordo</th><th class="num">commissioni</th><th class="num">netto</th><th class="num">win rate</th><th class="num">trade</th></tr></thead>
+      <tbody>
+        <tr class="hi"><td class="num">0.80</td><td class="num">0.490</td><td class="num">75.2</td><td class="num">−0.415</td><td class="num">0.375</td><td class="num">−0.790</td><td class="num">0.543 ± 0.013</td><td class="num">1511</td></tr>
+        <tr><td class="num">0.90</td><td class="num">0.490</td><td class="num">46.6</td><td class="num">−0.483</td><td class="num">0.232</td><td class="num">−0.715</td><td class="num">0.531 ± 0.016</td><td class="num">936</td></tr>
+        <tr><td class="num">0.95</td><td class="num">0.473</td><td class="num">28.6</td><td class="num">−0.527</td><td class="num">0.142</td><td class="num">−0.669</td><td class="num">0.522 ± 0.021</td><td class="num">575</td></tr>
+        <tr><td class="num">0.99</td><td class="num">0.417</td><td class="num">9.8</td><td class="num">−0.299</td><td class="num">0.048</td><td class="num">−0.347</td><td class="num">0.500 ± 0.036</td><td class="num">196</td></tr>
+        <tr><td colspan="8" class="foot">buy and hold sulle stesse righe: <strong>−0.813</strong> l'anno. Il netto della regola lo batte solo perché sta fuori mercato metà del tempo</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="box why">
+    <h4>Il win rate sopra 0,5 non è un edge, e il controllo che lo dimostra <span class="b b-msr">misurato</span></h4>
+    <p>Il win rate è <strong>0,543 ± 0,013</strong> su 1511 trade: tre errori standard sopra la moneta, e il trade mediano è positivo (+0.0042). Sembra abilità. Non lo è: il <em>medio</em> per trade è −0.0105, cioè tante vincite piccole e poche perdite grandi, e soprattutto il lordo non sopravvive al controllo giusto.</p>
+    <p><code>buy_and_hold</code> era l'unico controllo che la regola aveva, e risponde alla domanda sbagliata. Tiene <em>ogni</em> barra, quindi confonde due cose diverse: una regola che sta in mercato metà del tempo incassa circa metà della deriva <em>qualunque</em> barra scelga, e contro un paniere che è sceso dell'81% stare flat metà del tempo somiglia a bravura. <code>rotation_null</code> tiene invece l'esposizione <strong>fissa per costruzione</strong>: ruota il vettore di posizione di ogni simbolo di uno sfasamento casuale, così restano identici le barre tenute, il numero di trade e la struttura delle durate, e si distrugge solo l'allineamento col prezzo.</p>
+    <p><strong>Il numero.</strong> Banda 0.80, 500 rotazioni: lordo reale <strong>−0.4151</strong> l'anno contro un null di <strong>−0.4098 ± 0.0949</strong>, z −0.06, <strong>p 0,55</strong>. Il timing d'ingresso è indistinguibile dal ruotare le stesse posizioni a una fase casuale. Tutto il lordo è esposizione; le commissioni lo portano poi da −0.415 a −0.790. Su BTC da solo si legge uguale: p 0,62. L'aritmetica lo conferma — 0,490 di esposizione × −0.813 di buy-and-hold fa −0.398, contro −0.415 misurati.</p>
+    <p>Una rotazione e non un rimescolamento, di proposito: mescolare barra per barra spezzerebbe le run in rumore e confronterebbe con un null che fa migliaia di trade l'anno invece di settantacinque. Solo la rotazione conserva la struttura dei trade e sposta la fase.</p>
+  </div>
+
+  <h3>Lo strumento senza regola: la predizione guida, o riassume? <span class="b b-msr">misurato</span></h3>
+  <p><code>legcheck</code> toglie di mezzo ogni regola e ogni commissione e chiede la sola cosa che conta: il rendimento forward, per decile di predizione. Misurato sulle predizioni ricostruite dopo la correzione del campionamento — <strong>breadth 19,95</strong>, 10.648 timestamp su 11.010 con tutti e venti i simboli, contro la breadth 7,82 del file precedente su cui una neutralizzazione cross-sectional non voleva dire niente.</p>
+
+  <div class="tw">
+    <table>
+      <caption>rendimento forward market-neutral per decile di predizione, venti simboli, 219.135 righe</caption>
+      <thead><tr><th class="num">decile</th><th class="num">pred medio</th><th class="num">fwd 6 barre</th><th class="num">t</th><th class="num">fwd 24 barre</th><th class="num">t</th><th class="num">fwd 72 barre</th><th class="num">t</th></tr></thead>
+      <tbody>
+        <tr class="hi"><td class="num">0 (compra)</td><td class="num">−0.491</td><td class="num">+0.00006</td><td class="num">0.68</td><td class="num">−0.00053</td><td class="num"><strong>−3.55</strong></td><td class="num">−0.00074</td><td class="num"><strong>−2.91</strong></td></tr>
+        <tr><td class="num">4</td><td class="num">−0.051</td><td class="num">−0.00001</td><td class="num">−0.10</td><td class="num">+0.00014</td><td class="num">0.98</td><td class="num">+0.00001</td><td class="num">0.05</td></tr>
+        <tr><td class="num">5</td><td class="num">+0.065</td><td class="num">−0.00007</td><td class="num">−0.95</td><td class="num">−0.00006</td><td class="num">−0.39</td><td class="num">+0.00008</td><td class="num">0.31</td></tr>
+        <tr class="hi"><td class="num">9 (vendi)</td><td class="num">+0.506</td><td class="num">+0.00009</td><td class="num">0.86</td><td class="num">+0.00004</td><td class="num">0.21</td><td class="num">−0.00013</td><td class="num">−0.40</td></tr>
+        <tr><td colspan="8" class="foot">Rank IC contro il rendimento forward: <strong>−0.0405</strong> a 6 barre, <strong>−0.0279</strong> a 24, <strong>−0.0145</strong> a 72</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="box why">
+    <h4>Il numero che chiude la domanda <span class="b b-msr">misurato</span></h4>
+    <p><strong>Rank IC 0,4114 contro l'etichetta, −0,0405 contro il prezzo.</strong> Lo stesso modello, le stesse righe, la stessa run. Il modello predice l'etichetta quasi perfettamente e il prezzo per niente — anzi, leggermente al contrario.</p>
+    <p>Il criterio era fissato <em>prima</em> di guardare: il decile 0 (dove la regola compra) doveva avere rendimento forward positivo con |t| &gt; 2, e il decile 9 negativo con |t| &gt; 2. Esce l'opposto. Il decile 0 è <strong>negativo</strong> e significativo a 24 barre (t −3,55) e a 72 (t −2,91); il decile 9 non si distingue da zero a nessun orizzonte. Comprare dove l'etichetta dice "minimo della gamba" è, se mai, leggermente peggio del caso. Il resto della tabella è piatto: nessuna monotonia, tutti gli altri |t| sotto 2.</p>
+    <p>La spiegazione è già nello spec e questa misura la conferma sul campo. <code>SMOOTHING = 0.7</code> pesa il termine temporale, quindi l'etichetta è ≈ <code>elapsed / (elapsed + remaining)</code>, e <code>elapsed</code> — distanza dal pivot precedente — è passato e noto. La correlazione fra la predizione e il controllo puramente causale <code>elapsed_position</code> è <strong>0,34</strong>, e togliendola la Rank IC non migliora: <code>ic_residual</code> −0,0363 contro <code>ic_raw</code> −0,0405. Non c'è una metà buona da isolare.</p>
+    <p><strong>Perché questa misura non si poteva fare prima.</strong> Il file di predizioni precedente veniva dal build a stride posizionale: breadth 7,82, <em>zero</em> timestamp con venti simboli e 15.989 timestamp con un simbolo solo — dove la neutralizzazione cross-sectional demedia un valore contro sé stesso e restituisce esattamente zero. Quelle righe erano il 7,3% del totale, abbastanza da diluire e non abbastanza da spiegare il risultato: sulle righe corrette il verdetto è lo stesso, un po' più netto.</p>
+  </div>
 </section>
 
 <section>
   <h2><span class="n">10</span> · Punti aperti</h2>
   <p class="h2sub">Solo ciò che è davvero indeciso</p>
 
-  <div class="box open">
-    <h4>1 · Il divario fra IC e commissione <span class="b b-open">il problema principale</span></h4>
-    <p>Rank IC misurata 0.106; break-even a 25 bp/lato 0.062 a θ=0.8 e 0.184 a θ=0.5. Si passa solo restando molto selettivi, e a quella selettività il libro fa meno di un trade all'anno per simbolo — cioè non è più una strategia. <strong>Due leve, e solo una ha una data certa:</strong> portare la Rank IC da 0.106 a ~0.18, che è ricerca aperta; o la commissione da 25 bp a 5–10 bp, che è un cambio di venue e sposta il break-even di un ordine di grandezza. La volatilità crypto è il motivo per cui il mercato è stato scelto, e una fee del 25 bp per lato annulla esattamente quel vantaggio.</p>
+  <div class="box why">
+    <h4>1 · Il divario fra IC e commissione <span class="b b-ok">chiuso, ma non come previsto</span></h4>
+    <p>Il punto cercava la soluzione in due leve — più abilità o un venue più economico — e nessuna delle due era necessaria. <strong>Il break-even non è una proprietà del segnale, è una proprietà della coppia (segnale, regola)</strong>, e metà del divario stava nella regola: il composito misurato su sei ore ribilancia 174 volte l'anno per simbolo e paga −0.767 di commissioni; lo stesso composito su trenta giorni ne fa 2,3, e a θ=0.2 — la fascia <em>più larga</em>, non la più selettiva — porta a casa <strong>+0.238 netti a 25 bp, Sharpe 1,33</strong> una volta che il libro pesa per rango invece di sogliare.</p>
+    <p>Due cose questo <em>non</em> dice. Il lordo resta modesto in assoluto (0.254 l'anno per simbolo), e il libro a θ=0.2 tiene il 97% del tempo una posizione su quasi tutti i venti: è un'inclinazione lenta low-vol/size, non una strategia di trading. Il nome giusto per ciò che è stato misurato è <em>tilt factor portfolio</em>, e va letto con i limiti di quella classe.</p>
+  </div>
+
+  <div class="box why">
+    <h4>2 · Nessun modello ricorrente è stato misurato contro il composito <span class="b b-ok">chiuso</span></h4>
+    <p>Ora lo è, in tre modi. Il più forte per ultimo: una GRU con <strong>tutte</strong> le 29 colonne rankate, 24 step, sui quattro fold del campione corretto, fa <strong>0.1057 ± 0.0187</strong> contro <strong>0.1118 ± 0.0193</strong> del composito a due colonne e zero parametri — con una dispersione fra fold doppia, 0.0241 contro 0.0124. Mescolarle al 50/50 dà 0.1136: +0.0018 su un errore standard di 0.019, cioè un decimo di sigma. La ricorrente ha avuto trenta volte l'informazione e non ne ha ricavato niente.</p>
+    <p>Gli altri due modi. Sulle stesse righe di test la GRU dà 0.1064 e il composito a 30 giorni 0.1147, con una <strong>correlazione cross-sezionale di 0,838</strong> fra i due; mescolarli al peso migliore vale 0.1153, cioè +0.0006 contro un errore standard di 0.020. Sulle sue stesse due colonne, la GRU riproduce il composito equipesato a <strong>0,925</strong> di correlazione: settemila parametri, ventiquattro step di sequenza, AdamW ed early stopping per riscoprire <code>−rank(vol) + rank(volume)</code>.</p>
+    <p>La legge del progetto regge un livello più in giù: sette fattori aggiuntivi, ognuno con segnale univariato reale, fittati per ridge sul solo train, <strong>perdono tutti</strong> (0.083–0.095 contro 0.110). E anche fittare i due pesi invece di sommarli perde un fold su quattro. Con ~150 blocchi indipendenti da 72h in tre anni, due parametri sono già il tetto.</p>
+  </div>
+
+  <div class="box why">
+    <h4>3 · Un test solo, un regime solo <span class="b b-msr">misurato, molto meglio di prima</span></h4>
+    <p>Ora il segnale è stato letto trimestre per trimestre su tutto il 2023+: <strong>Rank IC positiva in tutti e quindici i trimestri</strong> (da 0.028 a 0.158) e lordo hedged positivo in <strong>tredici su quindici</strong>, compresi <strong>sei dei sette trimestri in cui il paniere è salito</strong>. Non è più "ha funzionato in un mercato che scendeva".</p>
+    <p>Quello che resta vero, ed è il residuo onesto del punto: il 90,9% della varianza del composito a 30 giorni è un livello permanente per simbolo, e quel livello è essenzialmente l'ordine di capitalizzazione (BTC +0,91, ETH +0,79, … SUSHI −0,65). Quella metà <em>è</em> il regime del 2025-26 e può invertirsi. La prova che non è solo quella: l'allocazione congelata sulla media di train rende +0.060 di lordo, la versione dinamica +0.185 — la rotazione, che è il 9% della varianza, fa tre quarti dei soldi.</p>
   </div>
 
   <div class="box open">
-    <h4>2 · Nessun modello ricorrente è stato misurato contro il composito <span class="b b-open">nuovo</span></h4>
-    <p>Su tre fold, l'ordine è: LightGBM sulle 35 rankate 0.104, ridge sulle 4 rankate 0.113, composito equipesato di 2 colonne 0.121, fattore singolo 0.126. <strong>Ogni pezzo di macchinario che si toglie migliora il risultato</strong> — la firma di un problema a basso rapporto segnale/rumore con ~150 blocchi indipendenti da 72h in tre anni. La GRU sull'etichetta cross-sezionale dà 0.106 su due fold, cioè dentro quel gruppo ma non sopra. Resta da misurare se il modello ricorrente aggiunge qualcosa al composito, o se sta sottraendo.</p>
-  </div>
-
-  <div class="box open">
-    <h4>3 · Un test solo, un regime solo <span class="b b-open">nuovo</span></h4>
-    <p>Tutti i numeri economici vengono da quindici mesi in cui il paniere è sceso del 51%. Low-volatility e size sono entrambi noti per essere dipendenti dal regime, e il size in particolare — "le big cap battono le small cap" — è stato <em>il</em> regime crypto del 2025-26 e può invertirsi bruscamente. <code>log_dollar_volume</code> ha una quota cross-sezionale della varianza di 0.89: il suo ordinamento quasi non ruota, quindi le sue "51 cross-section indipendenti all'anno" sono più vicine a poche scommesse ripetute.</p>
-  </div>
-
-  <div class="box open">
-    <h4>4 · La banda vicino al pivot <span class="b b-open">ereditato, ora fuori scena</span></h4>
+    <h4>4 · La banda vicino al pivot <span class="b b-msr">la strada è stata percorsa, e misurata</span></h4>
     <p>Sotto le 24 barre dal pivot ogni modello provato sbaglia direzione, e non per mancanza di architettura: lo specialista addestrato solo sulla banda, con tutte le 28 colonne, arriva a −0.019 e non passa lo zero. L'informazione in banda esiste e generalizza (0.924 di correlazione fra train e test per colonna), ma il suo segno è opposto a quello che vale sulla massa e nessuna variabile disponibile dice al modello in quale regime si trova.</p>
     <p><strong>Strada:</strong> feature di esaurimento — divergenza, climax di volume, asimmetria dei wick agli estremi — invece che di momentum. In alternativa una testa condizionata sulla distanza stimata dal pivot, ma quella distanza è prevedibile appena (0.044 di Rank IC al meglio, contro 0.157 sul target).</p>
+    <p><strong>La strada è stata percorsa.</strong> <code>exhaustcheck</code> isola le sei colonne di <code>legs.exhaustion</code> una per una, contro il <em>rendimento forward</em> e non contro un'etichetta. <strong>Quattro su sei tengono il segno su tutti e quattro i fold</strong>, e nella direzione che la storia dell'esaurimento prevede: <code>stretch</code> −0.0433, <code>divergence</code> −0.0255 a 24 barre, <code>streak</code> −0.0229, <code>rejection</code> +0.0185. <code>volume_climax</code> e <code>deceleration</code> sono rumore (2 fold su 4).</p>
+    <p><strong>Non è microstruttura.</strong> L'obiezione ovvia a una reversione a 6 barre è il rimbalzo bid-ask. Ritardando ogni feature di una barra intera, <code>divergence</code> e <code>rejection</code> non perdono <em>niente</em> (−0.0253 e +0.0186 a 24 barre): sono un lead. <code>stretch</code> tiene l'82%, <code>streak</code> metà ed è quindi in buona parte rimbalzo. Il composito equipesato delle quattro colonne firmate dà <strong>+0.0376</strong> a 24 barre e <strong>+0.0325 ± 0.0100</strong> con la barra di ritardo, positivo su tutti e quattro i fold. Per la prima volta nel progetto un segnale causale punta <em>dalla parte giusta</em> del prezzo, dove il modello fittato sull'etichetta punta all'indietro.</p>
+    <p><strong>E non si può tradare.</strong> Prezzato con lo stesso libro, le stesse commissioni e le stesse decisioni orarie del punto 1:</p>
+  </div>
+
+  <div class="tw">
+    <table>
+      <caption>il composito di esaurimento prezzato come libro, tolleranza scelta su train</caption>
+      <thead><tr><th>cadenza</th><th class="num">trade/anno</th><th class="num">lordo hedged</th><th class="num">netto 25bp</th><th class="num">netto 10bp</th><th class="num">fee break-even</th></tr></thead>
+      <tbody>
+        <tr><td class="key">1h</td><td class="num">2413.7</td><td class="num">+0.4087</td><td class="num">−11.660</td><td class="num">−4.419</td><td class="num">0.85 bp</td></tr>
+        <tr><td class="key">6h</td><td class="num">636.4</td><td class="num">−0.0134</td><td class="num">−3.195</td><td class="num">−1.286</td><td class="num">—</td></tr>
+        <tr><td class="key">1D</td><td class="num">200.5</td><td class="num">+0.0163</td><td class="num">−0.986</td><td class="num">−0.385</td><td class="num">0.41 bp</td></tr>
+        <tr class="hi"><td class="key">3D</td><td class="num">70.2</td><td class="num">+0.0247</td><td class="num">−0.326</td><td class="num">−0.116</td><td class="num"><strong>1.76 bp</strong></td></tr>
+        <tr><td class="key">7D</td><td class="num">29.7</td><td class="num">+0.0009</td><td class="num">−0.148</td><td class="num">−0.058</td><td class="num">0.15 bp</td></tr>
+        <tr><td class="key">30D</td><td class="num">8.4</td><td class="num">+0.0007</td><td class="num">−0.041</td><td class="num">−0.016</td><td class="num">0.40 bp</td></tr>
+        <tr><td colspan="6" class="foot">la migliore cadenza chiede <strong>1,76 bp per lato</strong>; Alpaca taker è 25 bp e un maker realistico ~10. Da 6× a 170× sotto</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="box why">
+    <h4>Perché questo chiude il punto e non lo riapre <span class="b b-msr">misurato</span></h4>
+    <p>Il punto 1 aveva insegnato che il break-even è una proprietà della <em>coppia</em> (segnale, regola), e che rallentare il ribilanciamento aveva salvato il composito fattoriale — da −0.767 di commissioni a sei ore fino a +0.238 netti a trenta giorni. Qui la stessa leva non salva niente, e la ragione è visibile nella forma della tabella: <strong>il lordo cala alla stessa velocità delle commissioni</strong>. Un segnale che sopravvive al rallentamento mostra il netto che migliora finché non passa lo zero; questo mostra ogni cadenza come la stessa operazione in perdita a taglie diverse, perché il segnale <em>è</em> veloce — decade a +0.0009 entro sette giorni.</p>
+    <p>Quindi: la strada indicata dal punto 4 esiste davvero, il lead è reale e sopravvive a una barra di ritardo, ed è <strong>uno o due ordini di grandezza</strong> sotto il costo della propria esecuzione. Non è un problema di architettura, di soglia o di venue.</p>
+    <p><strong>Cosa resta aperto, onestamente.</strong> Le letture sono univariate, quindi una colonna che funziona solo in combinazione qui sembra piatta; e l'orizzonte è un rendimento forward grezzo, non condizionato all'essere vicino a una svolta, che è il regime per cui le feature sono pensate. Entrambe sono ragioni per cui un risultato negativo qui pesa meno di quanto avrebbe pesato un positivo.</p>
+  </div>
+
+  <div class="box why">
+    <h4>5 · Fase di campionamento e barre a volume zero <span class="b b-ok">corretto</span></h4>
+    <p>Era peggio di come il punto lo descriveva. Misurato sul file costruito: <strong>31.111 dei 64.393 timestamp portavano un simbolo solo</strong>, e <em>nessun</em> timestamp del file ne portava venti. AVAX stava una barra fuori fase da tutti gli altri per l'intero periodo — cioè il ventesimo simbolo era semplicemente assente da ogni cross-section, metrica e libro compresi.</p>
+    <p>La catena: una barra senza scambi manda a infinito <code>log_volume_vs_median</code>; la deviazione rolling di <code>lagged</code> trasforma quell'infinito in 24 righe NaN; <code>dropna</code> le toglie; e <code>iloc[::stride]</code>, che è posizionale, sposta la fase di quel simbolo <strong>per sempre</strong> da lì in avanti. Il pannello grezzo non c'entra: 128.731 barre da 15m × 20 simboli, zero buchi.</p>
+    <p>Due correzioni, entrambe di una riga. <code>build</code> campiona sull'orologio (<code>index.floor(step) == index</code>), così una barra persa lascia un buco in quel simbolo a quell'ora e non muove nient'altro. E <code>features</code> restituisce finito o NaN, mai un infinito — un NaN la pipeline lo gestisce, un infinito passa <code>dropna</code>, sopravvive a un fit di quantili e arriva al modello come un estremo.</p>
+    <p><strong>Cosa è cambiato, misurato onestamente.</strong> Lo stesso segnale sullo stesso periodo di test, letto sulle righe dei due file: la Rank IC praticamente non si muove (0.1108 ± 0.0203 contro 0.1080 ± 0.0193), la <em>struttura</em> sì. Il file vecchio aveva 27.813 date di cui solo il 39% punteggiabile e una breadth di 7,86; il nuovo ne ha 10.945, tutte punteggiabili, con breadth 19,99. Il numero aggregato sopravviveva perché le date sottili finivano scartate; quello che non sopravviveva era il libro, che sogliava percentili dentro cross-section da otto invece che da venti, e il ventesimo simbolo, che non c'era.</p>
+  </div>
+
+  <div class="tw">
+    <table>
+      <caption>lo stesso composito sulle righe dei due file, test 2025-06 → 2026-09</caption>
+      <thead><tr><th>build</th><th class="num">righe</th><th class="num">date</th><th class="num">breadth</th><th class="num">date punteggiabili</th><th class="num">Rank IC</th></tr></thead>
+      <tbody>
+        <tr><td class="key">stride posizionale</td><td class="num">218.499</td><td class="num">27.813</td><td class="num">7,86</td><td class="num">10.944 (39%)</td><td class="num">0.1108 ± 0.0203</td></tr>
+        <tr class="hi"><td class="key">orologio</td><td class="num">218.762</td><td class="num">10.945</td><td class="num">19,99</td><td class="num">10.945 (100%)</td><td class="num">0.1080 ± 0.0193</td></tr>
+        <tr><td colspan="6" class="foot">643.242 righe contro 642.961: non è stato buttato via niente, le righe sono state solo rimesse su un orologio comune. 32.032 dei 32.175 timestamp portano tutti e venti i simboli, contro <strong>zero</strong> di prima</td></tr>
+      </tbody>
+    </table>
   </div>
 
   <div class="box open">
-    <h4>5 · Fase di campionamento e barre a volume zero <span class="b b-open">più grave di prima</span></h4>
-    <p><code>build</code> sottocampiona con uno stride <em>posizionale</em>, quindi ogni riga che sparisce sfasa quel simbolo per sempre. Il risultato: solo il 6,3% delle righe sta sul minuto :00, e <strong>circa il 5% finisce su timestamp che nessun altro simbolo condivide</strong>, dove la metrica cross-sectional non è calcolabile.</p>
-    <p>Con un'etichetta cross-sezionale questo smette di essere un dettaglio: le predizioni misurate stanno su 27.812 timestamp distinti per venti simboli, cioè <strong>otto simboli per istante invece di venti</strong>, e sia il label sia il rank delle feature sia il libro leggono quella cross-section. La causa non sono i buchi dei dati — ce n'è uno solo, simultaneo su tutti — ma le righe rimosse dal <code>dropna</code> a valle: il dataset ha <strong>28.615 barre a volume zero</strong> (SUSHI da solo 4.556) che diventano infiniti nel logaritmo del volume e vengono cancellate per simbolo. Due correzioni indipendenti: campionare a orologio, e decidere cosa significa una barra senza scambi invece di lasciarla sparire.</p>
+    <h4>6 · Regolarizzazione <span class="b b-open">subordinato al punto 2</span></h4>
+    <p>Dropout 0.2, weight decay 1e-4 e grad clip 1.0 sono ereditati da convenzione, non scelti per misura. Con rapporto segnale/rumore basso conta — anche se il plateau alla seconda epoca suggerisce che il vincolo attuale sia altrove. Ora però ha un prerequisito: il punto 2 dice che la ricorrente riproduce un composito a due colonne, quindi tarare la sua regolarizzazione è tarare la strada per arrivare a un numero che si ottiene senza addestrare niente. Prima serve un motivo per cui una ricorrente debba esistere.</p>
   </div>
 
   <div class="box open">
-    <h4>6 · Regolarizzazione</h4>
-    <p>Dropout 0.2, weight decay 1e-4 e grad clip 1.0 sono ereditati da convenzione, non scelti per misura. Con rapporto segnale/rumore basso conta — anche se il plateau alla seconda epoca suggerisce che il vincolo attuale sia altrove.</p>
+    <h4>8 · Il lordo, non più il costo <span class="b b-open">il nuovo problema principale</span></h4>
+    <p>Chiuso il punto 1, il vincolo si è spostato ed è cambiato di natura. A 25 bp il costo ora è 0.016 su un lordo di 0.254 — <strong>il 6%</strong>, contro il 1330% che era. Ogni guadagno futuro deve venire dal lordo, e il lordo è 0.254 l'anno per simbolo su un libro che sta dentro il 98% del tempo: è un premio al fattore, non un edge di trading.</p>
+    <p>Le tre strade, in ordine di rapporto fra evidenza e costo. <strong>(a) Più simboli.</strong> La breadth è venti; l'errore standard di una cross-section va come 1/√(n−3), e il fattore low-vol/size è documentato su universi di centinaia. Venti coppie sono un campione, non un universo, e ampliarlo è l'unica leva che alza il lordo senza inventare un segnale. E la larghezza non entra solo dall'errore standard: la tolleranza del libro è in unità di peso e uno scambio nell'ordinamento ne vale 4/n, quindi su venti coppie 0.8 è largo quattro scambi e il libro gira <strong>6,5 unità l'anno</strong>, mentre su cinque è più stretto di un solo scambio e la stessa identica regola ne gira <strong>89</strong> — misurato sulla pagina Streamlit, che disegna questo libro sul pannello Alpaca. Una cross-section sottile costa commissioni prima ancora di costare precisione. <strong>(b) Dimensionare invece di sogliare</strong> — <em>fatto</em>, e vale +33% di netto; quello che resta aperto è la forma del peso, che qui è lineare nel percentile e non è stata confrontata con niente. <strong>(c) Un secondo fattore davvero ortogonale.</strong> I sette provati non lo erano — la loro parte residua è fra 0.004 e 0.029 e nessuno sopravvive alla combinazione. Servirebbe qualcosa che non sia una funzione di volatilità e volume: funding rate dei perpetual, open interest, flussi on-chain. Nessuno dei tre è nel dataset oggi.</p>
   </div>
 
   <div class="box open">
@@ -694,7 +933,7 @@ L = δ·(|e| − 0.5·δ)  altrimenti</pre>
 </section>
 
 <footer>
-  Moduli: <code>data.binance</code> · <code>data.pivots</code> · <code>data.target</code> · <code>features</code> · <code>dataset</code> · <code>normalize</code> · <code>split</code> · <code>metrics</code> · <code>oracle</code> · <code>linear</code> · <code>gbm</code> · <code>selection</code> · <code>nearpivot</code> · <code>gru</code> · <code>threshold</code>
+  Moduli: <code>data.binance</code> · <code>data.pivots</code> · <code>data.target</code> · <code>features</code> · <code>dataset</code> · <code>normalize</code> · <code>split</code> · <code>metrics</code> · <code>oracle</code> · <code>linear</code> · <code>gbm</code> · <code>selection</code> · <code>nearpivot</code> · <code>gru</code> · <code>factor</code> · <code>threshold</code>
 </footer>
 
 </div>

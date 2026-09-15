@@ -14,6 +14,10 @@ spec's families; the definitions are unchanged.
 
 These 28 are candidates, not the final set: the spec reduces them by correlation and permutation
 importance, expecting 7-12 survivors.
+
+Every column comes back finite or NaN, never an infinity. NaN is a value the pipeline handles —
+`dataset` drops the row — while an infinity is one nothing downstream sees: it passes `dropna`,
+survives a quantile fit and reaches the model as an extreme.
 """
 
 from __future__ import annotations
@@ -204,7 +208,15 @@ def features(df: pd.DataFrame, n: int = EXTREMA_WINDOW) -> pd.DataFrame:
     # log1p, not the log above: the magnitude has to stay non-negative or the sign of the column
     # stops meaning the direction of the bar.
     f["signed_volume"] = np.sign(ret) * np.log1p(volume_rel)
-    return pd.DataFrame(f)[COLUMNS]
+    # Infinities out, NaN in — the contract this file owes everything downstream. A bar with no
+    # trade at all makes `volume_rel` infinite whenever the window median is zero (`clip` bounds
+    # the ratio from below and cannot bound it from above), and `volume_trend` divides two means
+    # that can both be zero. Nothing downstream drops an infinity: `dropna` does not see one,
+    # `normalize.fit` takes quantiles that survive it, and LightGBM bins it as an extreme. It only
+    # disappeared by accident, through the rolling deviation of `dataset.lagged`, which turned one
+    # infinite bar into 24 NaN rows and was the mechanism that shifted a symbol's sampling phase.
+    # Measured on 2023+: 8,712 zero-volume bars on BAT and 9,269 on YFI, against 14 on BTC.
+    return pd.DataFrame(f)[COLUMNS].replace([np.inf, -np.inf], np.nan)
 
 
 if __name__ == "__main__":
@@ -227,6 +239,14 @@ if __name__ == "__main__":
     tail = out.iloc[EXTREMA_WINDOW * 4 :]
     assert tail.notna().all().all(), f"NaN past warm-up: {tail.columns[tail.isna().any()].tolist()}"
     assert np.isfinite(tail.to_numpy()).all(), "infinities"
+    # A run of bars with no trade at all: the window median goes to zero and the volume ratios
+    # blow up. They have to come back NaN, which `dropna` removes, and never as an infinity, which
+    # it does not — the silent path that used to reach the model.
+    dead = df.copy()
+    dead.iloc[200:240, dead.columns.get_loc("volume")] = 0.0
+    v = features(dead).iloc[200:260]
+    assert np.isfinite(v.to_numpy()[~np.isnan(v.to_numpy())]).all(), "a dead window must not leave an infinity"
+    assert v.log_volume_vs_median.isna().any(), "and it has to say so, rather than read as typical"
     assert tail.close_position_in_bar.between(0, 1).all() and tail.close_position_in_window.between(-1, 1).all()
     assert tail.distance_from_window_high_pct.le(1e-12).all() and tail.distance_from_window_low_pct.ge(-1e-12).all()
     assert tail.age_of_window_high.between(0, 1).all() and tail.adx_trend_strength.between(0, 1).all()
