@@ -37,6 +37,7 @@ uv run python -m tradingvision.selection             # step 2: the 28 -> ~12 col
 uv run python -m tradingvision.gru --seeds 5         # step 3/4: the model
 uv run python -m tradingvision.simulation --pred data/pred-*.parquet   # what it is worth in money
 uv run python -m tradingvision.swingrule --pred data/pred-swing-*.parquet  # the long-only rule on the swing label
+uv run python -m tradingvision.legcheck  --pred data/pred-swing-*.parquet  # does the prediction lead, or only summarise?
 ```
 
 `gru --save` writes `data/gru.pt`, which is what the chart page draws predictions from.
