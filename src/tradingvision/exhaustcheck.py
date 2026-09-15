@@ -128,6 +128,63 @@ def table(frame: pd.DataFrame, horizon: int, neutral: bool = True, lag: int = 0)
     return pd.DataFrame({c: ic_by_fold(v, fwd) for c, v in cols.items()}).T.rename_axis("column")
 
 
+CADENCES = ("1h", "6h", "1D", "3D", "7D", "30D")
+TOLS = (0.1, 0.2, 0.3, 0.5, 0.8)
+
+
+def priced(cadences=CADENCES, tols=TOLS) -> pd.DataFrame:
+    """What the composite is worth, on the same book `factor` already prices.
+
+    Same hourly-grid panel, same rank weighting, same no-trade tolerance, same hedged accounting
+    and the same fees, so the row lands next to the project's +0.238 net at 25bp and means the
+    same thing. The tolerance is chosen on the train side of each fold only.
+
+    The cadence sweep is the lever open point 1 identified: the composite there paid -0.767 in
+    fees rebalanced six-hourly and made money at thirty days, so the question is where the two
+    curves cross. For this signal they never do. Hourly it earns a gross of +0.4087 a year -- more
+    than the project's own book at 0.254 -- on 2,414 trades a year; slowed down, the gross
+    collapses faster than the turnover does, to +0.0007 at thirty days, and at six hours it is
+    already negative. The break-even fee never exceeds **1.76 bp per side** at any cadence
+    measured, against 25 bp taker and perhaps 10 bp maker on the best venue this project can
+    reach. The signal is real, delay-robust, and one to two orders of magnitude too small to pay
+    for its own execution.
+
+    The shape matters more than any single row. A signal whose gross survived slowing down would
+    show a net improving as the cadence lengthens until it turned positive; this one shows the
+    gross falling at the same rate as the fees, so every cadence is the same losing trade at a
+    different size. That is what it means for a lead to be real and untradable at once.
+    """
+    from tradingvision import factor
+    from tradingvision.data.binance import load
+
+    p = factor.panel()
+    close = p["close"]
+    wide = {c: pd.DataFrame({s: legs.exhaustion(load(s, factor.TF))[c] for s in close.columns}) for c in SIGNED}
+    sig = factor.cross_rank(sum(v * factor.cross_rank(wide[c].reindex(close.index)) for c, v in SIGNED.items()))
+
+    rows = {}
+    for dec in cadences:
+        when = factor.hourly(close.index, decision=pd.Timedelta(dec))
+        k = max(1, int(pd.Timedelta(dec) / factor.BAR))
+        slow = sig.rolling(k, min_periods=1).mean() if k > 1 else sig
+        per = []
+        for train, test in factor.folds(close.index):
+            tol = factor.best(slow, train, close, tols, lambda s, w, t: factor.weighted(s, w, t))
+            per.append(factor.price(factor.weighted(slow, when & test, tol), close))
+        t = pd.DataFrame(per).mean()
+        turnover = (t.gross_hedged - t.net_25bp) / 0.0025
+        rows[dec] = {
+            "trades_per_year": t.trades_per_year,
+            "gross_hedged": t.gross_hedged,
+            "net_25bp": t.net_25bp,
+            "net_10bp": t.net_10bp,
+            # The fee per side at which the net crosses zero -- the one number that says whether a
+            # cheaper venue could ever rescue this, and it says no.
+            "breakeven_bp": t.gross_hedged / turnover * 1e4 if turnover else np.nan,
+        }
+    return pd.DataFrame(rows).T.rename_axis("cadence")
+
+
 def _selfcheck() -> None:
     """A column built to lead the price has to show it here, and a column of noise must not."""
     n, sym = 600, ["a", "b"]
@@ -203,6 +260,7 @@ def main() -> None:
     ap.add_argument("--horizons", type=int, nargs="+", default=list(HORIZONS))
     ap.add_argument("--raw", action="store_true", help="skip the market-neutral step")
     ap.add_argument("--lag", type=int, default=0, help="delay the features by N bars: the bounce-vs-lead check")
+    ap.add_argument("--price", action="store_true", help="also price the composite as a book, per cadence")
     args = ap.parse_args()
 
     _selfcheck()
@@ -219,6 +277,11 @@ def main() -> None:
         print(f"--- {h} bars ahead ---\n")
         print(table(frame, h, not args.raw, args.lag).round(4).to_string())
         print()
+
+    if args.price:
+        print("--- the composite priced as a book, tolerance chosen on train ---\n")
+        print(priced().round(4).to_string())
+        print("\nbreakeven_bp is the fee per side at which the net reaches zero; Alpaca taker is 25 bp\n")
 
 
 if __name__ == "__main__":

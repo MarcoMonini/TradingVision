@@ -1,6 +1,7 @@
 # Handoff — ramo `claude/fervent-knuth-se8cw5`
 
-Stato in una riga: **le misure sono state fatte, e la risposta è no.** La predizione che ottiene
+Stato in una riga: **le misure sono state fatte.** La predizione non guida il prezzo; le feature
+di esaurimento sì, ma di un fattore 6-170 sotto il costo di eseguirle. La predizione che ottiene
 Rank IC 0,4114 contro l'etichetta swing ottiene **−0,0405 contro il rendimento forward**. Il ramo
 `book-on-screen` è stato mergiato. Lo spec è aggiornato con tutti i numeri.
 
@@ -115,7 +116,49 @@ le commissioni lo portano poi da −0,359 a −0,750.
 
 ---
 
-## 5. Cosa NON è stato misurato
+## 5. Le feature di esaurimento — la strada del punto aperto 4, percorsa
+
+`exhaustcheck` isola le sei colonne di `legs.exhaustion` contro il **rendimento forward** e non
+contro un'etichetta. È l'unica strada che poteva cambiare il *segno* del risultato, e in parte
+lo cambia.
+
+**Quattro su sei tengono il segno su tutti e quattro i fold**, nella direzione che l'esaurimento
+prevede: `stretch` −0.0433, `divergence` −0.0255 (24 barre), `streak` −0.0229, `rejection`
++0.0185. `volume_climax` e `deceleration` sono rumore (2 fold su 4).
+
+**Non è microstruttura.** Ritardando ogni feature di una barra intera — il test che separa un lead
+da un rimbalzo bid-ask — `divergence` e `rejection` non perdono niente (−0.0253, +0.0186).
+`stretch` tiene l'82%, `streak` metà. Il composito equipesato delle quattro colonne firmate:
+**+0.0376** a 24 barre, **+0.0325 ± 0.0100** con il ritardo, positivo su 4 fold su 4.
+
+Per la prima volta un segnale causale punta dalla parte **giusta** del prezzo, dove il modello
+fittato sull'etichetta punta all'indietro (−0.0279 alle stesse 24 barre).
+
+### E non si può tradare — `exhaustcheck --price`
+
+| cadenza | trade/anno | lordo hedged | netto 25bp | fee break-even |
+|---|---|---|---|---|
+| 1h | 2413.7 | +0.4087 | −11.660 | 0.85 bp |
+| 1D | 200.5 | +0.0163 | −0.986 | 0.41 bp |
+| **3D** | 70.2 | +0.0247 | −0.326 | **1.76 bp** |
+| 7D | 29.7 | +0.0009 | −0.148 | 0.15 bp |
+| 30D | 8.4 | +0.0007 | −0.041 | 0.40 bp |
+
+La leva che aveva salvato il composito fattoriale del punto 1 — rallentare il ribilanciamento —
+qui non salva niente, e la forma della tabella dice perché: **il lordo cala alla stessa velocità
+delle commissioni**. Il segnale è veloce e decade a +0.0009 entro sette giorni. Ogni cadenza è la
+stessa operazione in perdita a taglie diverse.
+
+La cadenza migliore chiede **1,76 bp per lato**. Alpaca taker è 25 bp, un maker realistico ~10.
+
+**Limiti, dichiarati.** Letture univariate, quindi una colonna che funziona solo in combinazione
+qui sembra piatta; e l'orizzonte è un forward grezzo, non condizionato all'essere vicino a una
+svolta, che è il regime per cui le feature sono pensate. Un negativo qui pesa meno di quanto
+avrebbe pesato un positivo.
+
+---
+
+## 6. Cosa NON è stato misurato
 
 **La Misura 3 (`--weight rank`, `--weight excursion`, `--finetune 20`) non è stata lanciata.**
 Sono quattro run da ~55 min ciascuna, ~3,7 ore di GPU, e il motivo per fermarsi è la Misura 1:
@@ -132,7 +175,7 @@ non arriva all'inizio di gambe lunghe fino a 754 barre.
 
 ---
 
-## 6. Cosa è stato aggiunto al codice
+## 7. Cosa è stato aggiunto al codice
 
 - **Merge di `book-on-screen`** (12 commit): il libro fattoriale cross-sectional (`factor.py`), la
   regola swing tradabile (`swing.py`, `legs.py`), la pagina chart, e — la parte che è servita
@@ -140,6 +183,9 @@ non arriva all'inizio di gambe lunghe fino a 754 barre.
   entrambi registri (`CLAUDE.md`, `tests/test_selfchecks.py`) e sono stati risolti a unione.
 - **`swingrule.rotation_null`** — il controllo a esposizione fissa descritto sopra, col suo
   self-check e la voce `--rotations` nella CLI.
+- **`exhaustcheck.py`** — l'isolamento delle sei colonne di esaurimento, il controllo `--lag` che
+  separa il lead dal rimbalzo, il composito firmato, e `--price` che lo prezza come libro con la
+  macchina di `factor`. Registrato in `tests/test_selfchecks.py`.
 - **Spec aggiornato**: sezione 9 ha ora la regola long-only prezzata, la rotation null, e la
   tabella per decile di `legcheck` col verdetto.
 
@@ -155,7 +201,7 @@ su macOS richiede root, quindi non è una via d'uscita.
 
 ---
 
-## 7. Cosa non rifare
+## 8. Cosa non rifare
 
 Tutto quello che il vecchio handoff elencava resta chiuso. Si aggiunge:
 
@@ -165,6 +211,8 @@ Tutto quello che il vecchio handoff elencava resta chiuso. Si aggiunge:
   non vale niente, perché il trade medio è negativo e il lordo non batte il suo null.
 - **Confrontare una regola long-only col solo buy-and-hold** su un periodo in discesa. Serve un
   controllo a esposizione fissa; ora c'è.
+- **Ripartire dalle feature di esaurimento sperando in una soglia migliore.** Il lead c'è ed è
+  reale; manca un fattore 6-170 sul costo di esecuzione, che nessuna regola recupera.
 - **Fidarsi di un file `pred-*.parquet` senza controllarne la breadth.** Una riga:
   `d.groupby(d.index.get_level_values(0)).size().mean()`. Se non è ~20, il file è precedente alla
   correzione del campionamento e ogni metrica cross-sectional letta su di esso è diluita.

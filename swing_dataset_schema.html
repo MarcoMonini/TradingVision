@@ -838,9 +838,35 @@ L = δ·(|e| − 0.5·δ)  altrimenti</pre>
   </div>
 
   <div class="box open">
-    <h4>4 · La banda vicino al pivot <span class="b b-open">ereditato, ora fuori scena</span></h4>
+    <h4>4 · La banda vicino al pivot <span class="b b-msr">la strada è stata percorsa, e misurata</span></h4>
     <p>Sotto le 24 barre dal pivot ogni modello provato sbaglia direzione, e non per mancanza di architettura: lo specialista addestrato solo sulla banda, con tutte le 28 colonne, arriva a −0.019 e non passa lo zero. L'informazione in banda esiste e generalizza (0.924 di correlazione fra train e test per colonna), ma il suo segno è opposto a quello che vale sulla massa e nessuna variabile disponibile dice al modello in quale regime si trova.</p>
     <p><strong>Strada:</strong> feature di esaurimento — divergenza, climax di volume, asimmetria dei wick agli estremi — invece che di momentum. In alternativa una testa condizionata sulla distanza stimata dal pivot, ma quella distanza è prevedibile appena (0.044 di Rank IC al meglio, contro 0.157 sul target).</p>
+    <p><strong>La strada è stata percorsa.</strong> <code>exhaustcheck</code> isola le sei colonne di <code>legs.exhaustion</code> una per una, contro il <em>rendimento forward</em> e non contro un'etichetta. <strong>Quattro su sei tengono il segno su tutti e quattro i fold</strong>, e nella direzione che la storia dell'esaurimento prevede: <code>stretch</code> −0.0433, <code>divergence</code> −0.0255 a 24 barre, <code>streak</code> −0.0229, <code>rejection</code> +0.0185. <code>volume_climax</code> e <code>deceleration</code> sono rumore (2 fold su 4).</p>
+    <p><strong>Non è microstruttura.</strong> L'obiezione ovvia a una reversione a 6 barre è il rimbalzo bid-ask. Ritardando ogni feature di una barra intera, <code>divergence</code> e <code>rejection</code> non perdono <em>niente</em> (−0.0253 e +0.0186 a 24 barre): sono un lead. <code>stretch</code> tiene l'82%, <code>streak</code> metà ed è quindi in buona parte rimbalzo. Il composito equipesato delle quattro colonne firmate dà <strong>+0.0376</strong> a 24 barre e <strong>+0.0325 ± 0.0100</strong> con la barra di ritardo, positivo su tutti e quattro i fold. Per la prima volta nel progetto un segnale causale punta <em>dalla parte giusta</em> del prezzo, dove il modello fittato sull'etichetta punta all'indietro.</p>
+    <p><strong>E non si può tradare.</strong> Prezzato con lo stesso libro, le stesse commissioni e le stesse decisioni orarie del punto 1:</p>
+  </div>
+
+  <div class="tw">
+    <table>
+      <caption>il composito di esaurimento prezzato come libro, tolleranza scelta su train</caption>
+      <thead><tr><th>cadenza</th><th class="num">trade/anno</th><th class="num">lordo hedged</th><th class="num">netto 25bp</th><th class="num">netto 10bp</th><th class="num">fee break-even</th></tr></thead>
+      <tbody>
+        <tr><td class="key">1h</td><td class="num">2413.7</td><td class="num">+0.4087</td><td class="num">−11.660</td><td class="num">−4.419</td><td class="num">0.85 bp</td></tr>
+        <tr><td class="key">6h</td><td class="num">636.4</td><td class="num">−0.0134</td><td class="num">−3.195</td><td class="num">−1.286</td><td class="num">—</td></tr>
+        <tr><td class="key">1D</td><td class="num">200.5</td><td class="num">+0.0163</td><td class="num">−0.986</td><td class="num">−0.385</td><td class="num">0.41 bp</td></tr>
+        <tr class="hi"><td class="key">3D</td><td class="num">70.2</td><td class="num">+0.0247</td><td class="num">−0.326</td><td class="num">−0.116</td><td class="num"><strong>1.76 bp</strong></td></tr>
+        <tr><td class="key">7D</td><td class="num">29.7</td><td class="num">+0.0009</td><td class="num">−0.148</td><td class="num">−0.058</td><td class="num">0.15 bp</td></tr>
+        <tr><td class="key">30D</td><td class="num">8.4</td><td class="num">+0.0007</td><td class="num">−0.041</td><td class="num">−0.016</td><td class="num">0.40 bp</td></tr>
+        <tr><td colspan="6" class="foot">la migliore cadenza chiede <strong>1,76 bp per lato</strong>; Alpaca taker è 25 bp e un maker realistico ~10. Da 6× a 170× sotto</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="box why">
+    <h4>Perché questo chiude il punto e non lo riapre <span class="b b-msr">misurato</span></h4>
+    <p>Il punto 1 aveva insegnato che il break-even è una proprietà della <em>coppia</em> (segnale, regola), e che rallentare il ribilanciamento aveva salvato il composito fattoriale — da −0.767 di commissioni a sei ore fino a +0.238 netti a trenta giorni. Qui la stessa leva non salva niente, e la ragione è visibile nella forma della tabella: <strong>il lordo cala alla stessa velocità delle commissioni</strong>. Un segnale che sopravvive al rallentamento mostra il netto che migliora finché non passa lo zero; questo mostra ogni cadenza come la stessa operazione in perdita a taglie diverse, perché il segnale <em>è</em> veloce — decade a +0.0009 entro sette giorni.</p>
+    <p>Quindi: la strada indicata dal punto 4 esiste davvero, il lead è reale e sopravvive a una barra di ritardo, ed è <strong>uno o due ordini di grandezza</strong> sotto il costo della propria esecuzione. Non è un problema di architettura, di soglia o di venue.</p>
+    <p><strong>Cosa resta aperto, onestamente.</strong> Le letture sono univariate, quindi una colonna che funziona solo in combinazione qui sembra piatta; e l'orizzonte è un rendimento forward grezzo, non condizionato all'essere vicino a una svolta, che è il regime per cui le feature sono pensate. Entrambe sono ragioni per cui un risultato negativo qui pesa meno di quanto avrebbe pesato un positivo.</p>
   </div>
 
   <div class="box why">
