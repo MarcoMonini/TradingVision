@@ -8,6 +8,9 @@ A research pipeline, not a trading system. It measures whether a recurrent net o
 crypto candles can predict which of 20 USDT pairs beats the basket. The deployed artefact is only
 the Streamlit chart page; everything else runs by hand as a module.
 
+`HANDOFF.md` is the state of the current branch: what was added, what has *not* been measured yet,
+and the order the measurements go in. Read it before starting work here.
+
 `swing_dataset_schema.html` (Italian) is the spec and the lab notebook: closed decisions, measured
 numbers, open points, and the table of what was tried and failed. **Read it before changing
 anything about the label, the windows, or the protocol** — most "obvious" ideas are in it with the
