@@ -787,6 +787,31 @@ L = δ·(|e| − 0.5·δ)  altrimenti</pre>
     <p><strong>Il numero.</strong> Banda 0.80, 500 rotazioni: lordo reale <strong>−0.4151</strong> l'anno contro un null di <strong>−0.4098 ± 0.0949</strong>, z −0.06, <strong>p 0,55</strong>. Il timing d'ingresso è indistinguibile dal ruotare le stesse posizioni a una fase casuale. Tutto il lordo è esposizione; le commissioni lo portano poi da −0.415 a −0.790. Su BTC da solo si legge uguale: p 0,62. L'aritmetica lo conferma — 0,490 di esposizione × −0.813 di buy-and-hold fa −0.398, contro −0.415 misurati.</p>
     <p>Una rotazione e non un rimescolamento, di proposito: mescolare barra per barra spezzerebbe le run in rumore e confronterebbe con un null che fa migliaia di trade l'anno invece di settantacinque. Solo la rotazione conserva la struttura dei trade e sposta la fase.</p>
   </div>
+
+  <h3>Lo strumento senza regola: la predizione guida, o riassume? <span class="b b-msr">misurato</span></h3>
+  <p><code>legcheck</code> toglie di mezzo ogni regola e ogni commissione e chiede la sola cosa che conta: il rendimento forward, per decile di predizione. Misurato sulle predizioni ricostruite dopo la correzione del campionamento — <strong>breadth 19,95</strong>, 10.648 timestamp su 11.010 con tutti e venti i simboli, contro la breadth 7,82 del file precedente su cui una neutralizzazione cross-sectional non voleva dire niente.</p>
+
+  <div class="tw">
+    <table>
+      <caption>rendimento forward market-neutral per decile di predizione, venti simboli, 219.135 righe</caption>
+      <thead><tr><th class="num">decile</th><th class="num">pred medio</th><th class="num">fwd 6 barre</th><th class="num">t</th><th class="num">fwd 24 barre</th><th class="num">t</th><th class="num">fwd 72 barre</th><th class="num">t</th></tr></thead>
+      <tbody>
+        <tr class="hi"><td class="num">0 (compra)</td><td class="num">−0.491</td><td class="num">+0.00006</td><td class="num">0.68</td><td class="num">−0.00053</td><td class="num"><strong>−3.55</strong></td><td class="num">−0.00074</td><td class="num"><strong>−2.91</strong></td></tr>
+        <tr><td class="num">4</td><td class="num">−0.051</td><td class="num">−0.00001</td><td class="num">−0.10</td><td class="num">+0.00014</td><td class="num">0.98</td><td class="num">+0.00001</td><td class="num">0.05</td></tr>
+        <tr><td class="num">5</td><td class="num">+0.065</td><td class="num">−0.00007</td><td class="num">−0.95</td><td class="num">−0.00006</td><td class="num">−0.39</td><td class="num">+0.00008</td><td class="num">0.31</td></tr>
+        <tr class="hi"><td class="num">9 (vendi)</td><td class="num">+0.506</td><td class="num">+0.00009</td><td class="num">0.86</td><td class="num">+0.00004</td><td class="num">0.21</td><td class="num">−0.00013</td><td class="num">−0.40</td></tr>
+        <tr><td colspan="8" class="foot">Rank IC contro il rendimento forward: <strong>−0.0405</strong> a 6 barre, <strong>−0.0279</strong> a 24, <strong>−0.0145</strong> a 72</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="box why">
+    <h4>Il numero che chiude la domanda <span class="b b-msr">misurato</span></h4>
+    <p><strong>Rank IC 0,4114 contro l'etichetta, −0,0405 contro il prezzo.</strong> Lo stesso modello, le stesse righe, la stessa run. Il modello predice l'etichetta quasi perfettamente e il prezzo per niente — anzi, leggermente al contrario.</p>
+    <p>Il criterio era fissato <em>prima</em> di guardare: il decile 0 (dove la regola compra) doveva avere rendimento forward positivo con |t| &gt; 2, e il decile 9 negativo con |t| &gt; 2. Esce l'opposto. Il decile 0 è <strong>negativo</strong> e significativo a 24 barre (t −3,55) e a 72 (t −2,91); il decile 9 non si distingue da zero a nessun orizzonte. Comprare dove l'etichetta dice "minimo della gamba" è, se mai, leggermente peggio del caso. Il resto della tabella è piatto: nessuna monotonia, tutti gli altri |t| sotto 2.</p>
+    <p>La spiegazione è già nello spec e questa misura la conferma sul campo. <code>SMOOTHING = 0.7</code> pesa il termine temporale, quindi l'etichetta è ≈ <code>elapsed / (elapsed + remaining)</code>, e <code>elapsed</code> — distanza dal pivot precedente — è passato e noto. La correlazione fra la predizione e il controllo puramente causale <code>elapsed_position</code> è <strong>0,34</strong>, e togliendola la Rank IC non migliora: <code>ic_residual</code> −0,0363 contro <code>ic_raw</code> −0,0405. Non c'è una metà buona da isolare.</p>
+    <p><strong>Perché questa misura non si poteva fare prima.</strong> Il file di predizioni precedente veniva dal build a stride posizionale: breadth 7,82, <em>zero</em> timestamp con venti simboli e 15.989 timestamp con un simbolo solo — dove la neutralizzazione cross-sectional demedia un valore contro sé stesso e restituisce esattamente zero. Quelle righe erano il 7,3% del totale, abbastanza da diluire e non abbastanza da spiegare il risultato: sulle righe corrette il verdetto è lo stesso, un po' più netto.</p>
+  </div>
 </section>
 
 <section>
