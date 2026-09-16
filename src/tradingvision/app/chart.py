@@ -451,7 +451,10 @@ def chart(
                 x=p.index,
                 y=p.close,
                 mode="markers",
-                marker=dict(size=9, color=color, symbol="square-open", line=dict(width=2, color=color)),
+                # Small and thin on purpose. The oracle marks every pivot in the window and the
+                # rule marks a handful of fills, so at equal weight the squares are what the eye
+                # reads first and the trades disappear into them. The squares are the backdrop.
+                marker=dict(size=5, color=color, symbol="square-open", line=dict(width=1, color=color)),
                 name="pivot",
                 showlegend=False,
                 hovertemplate="%{x}<br>%{y}<extra></extra>",
@@ -484,12 +487,20 @@ def chart(
                     # the decision still happened at the last price the panel carried.
                     y=df.close.reindex(side.index, method="ffill"),
                     mode="markers+text",
-                    marker=dict(size=9, color=color, symbol=shape),
+                    # Big, filled, and outlined in the page's own background: a bright triangle
+                    # sitting on a green candle needs the halo to read as a separate mark. The
+                    # graded factor book prints a weight next to every change and would turn a
+                    # size that suits eight fills into a wall, so it keeps the smaller one.
+                    marker=dict(
+                        size=16 if binary else 9,
+                        color=color,
+                        symbol=shape,
+                        line=dict(width=1.5, color="#0e1117"),
+                    ),
                     text=[("buy" if up else "sell") if binary else f"{v:+.2f}" for v in trades.reindex(side.index)],
                     textposition=position,
-                    textfont=dict(size=9, color=color),
+                    textfont=dict(size=12 if binary else 9, color=color),
                     name="buy" if up else "sell",
-                    marker_size=11 if binary else 9,
                     showlegend=False,
                     hovertemplate="%{x}<br>%{y}<extra></extra>",
                 ),
