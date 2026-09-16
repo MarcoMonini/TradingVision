@@ -20,7 +20,7 @@ measurements, and commit subjects are written that way ("Four branches lose to o
 ## Commands
 
 ```bash
-uv sync                              # installs dev group too (torch, lightgbm)
+uv sync                              # installs dev group too (lightgbm); torch is a runtime dep
 uv run pytest -q
 uv run pytest tests/test_dataset.py::test_branches_never_read_an_unclosed_bar -q
 uv run ruff check . && uv run black --check .    # what CI runs, line-length 120

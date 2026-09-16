@@ -10,13 +10,22 @@ dependencies = [
     # `pd.Timedelta("30D")` — every duration constant in this project, plus the timeframe strings
     # `dataset` and `legcheck` parse at runtime, which have no literal form to rewrite. The warning
     # is pandas' to fix and pandas 3 does; until this project moves to it, the last numpy that does
-    # not raise it is the one to build against. Nothing here is spelled wrong.
-    "numpy==2.4.0",
+    # not raise it is the one to build against — 2.4.3 and not 2.4.0, which PyPI has yanked.
+    # Nothing here is spelled wrong.
+    "numpy==2.4.3",
     "alpaca-py==0.42.0",
     "streamlit==1.47.1",
     "plotly==6.2.0",
     "ta==0.11.0",
     "requests==2.34.2",
+    # Runtime and not dev, because the chart page imports `gru` and `swing` at module scope and
+    # both import torch at theirs: without it the deployed image raises ModuleNotFoundError before
+    # Streamlit draws a thing. It was in the dev group while the page drew only candles, pivots
+    # and features, and moving it is what makes `data/gru.pt` and `data/swing.pt` worth shipping.
+    # The cost is the image: a few hundred MB of tensor machinery on a slim base. `tool.uv.sources`
+    # below is what keeps it from being gigabytes — on Linux the wheel comes from the CPU index,
+    # so the CUDA build and the 73 nvidia wheels behind it never enter the build.
+    "torch==2.14.0",
 ]
 
 [build-system]
@@ -38,15 +47,16 @@ target-version = "py312"
 select = ["E", "F", "I"]
 
 [dependency-groups]
-# lightgbm and torch sit here and not in the runtime dependencies: the deployed image serves the
-# chart app and never trains anything, and the wheels pull an OpenMP runtime and a few hundred MB
-# of CUDA-less tensor machinery the slim base image lacks.
+# lightgbm sits here and not in the runtime dependencies: it is the step-2 reference model and
+# nothing the page draws goes near it, so the deployed image has no reason to carry its OpenMP
+# runtime. Keeping it out is also what keeps the rule of `CLAUDE.md` true where it matters most —
+# torch and lightgbm each ship their own libomp and abort with `OMP: Error #15` in one process,
+# and the image now has torch in it.
 dev = [
     "black>=26.5.1",
     "lightgbm==4.7.0",
     "pytest>=9.1.1",
     "ruff>=0.16.6",
-    "torch==2.14.0",
 ]
 
 # torch on Linux would pull the CUDA build and 73 nvidia wheels behind it — a few gigabytes for a

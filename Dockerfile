@@ -17,6 +17,14 @@ COPY data/gru.pt data/swing.pt ./data/
 COPY src ./src
 RUN uv sync --frozen --no-dev
 
+# The build fails here rather than at the first request. Two things this asserts that nothing else
+# can: that `--no-dev` really carries torch, which `gru` and `swing` import at module scope and
+# whose absence used to take the page down before Streamlit drew anything; and that the checkpoints
+# landed where `binance.STORE` looks for them, which is /app/data off the editable install and is
+# a path no unit test can check. Both were broken at once and neither showed up in CI, because the
+# image job builds the container and never starts it.
+RUN python -c "from tradingvision import gru, swing; assert gru.CHECKPOINT.exists() and swing.CHECKPOINT.exists()"
+
 # Stateless apart from those two files: the page draws Alpaca downloads live and computes the
 # label, the pivots and the features on them. It never opens the Parquet store — that is read by
 # the Binance fetcher and the pipeline, neither of which runs here — so no disk is mounted and
