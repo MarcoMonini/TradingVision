@@ -17,12 +17,25 @@ the other, and a rule that flattens whenever the signal is unremarkable would pa
 several times inside a single leg. Costs are `oracle.FEE` per side, charged on every unit of
 position changed, so a flip from long to short pays twice.
 
+That rule is "always in": once it has fired once it is long or short at every bar and never
+flat, so a flip pays two sides and the short leg is a position and not an absence. `--at` prices
+it at raw numbers rather than at quantiles of the output — `--at 0.4` is the -0.4/+0.4 pair spelled
+the way a live system would have to commit to it, and the gap to the quantile grid is how far that
+constant drifts from the share of bars it was meant to hold. On `pred-swing-all-15m.parquet`,
+twenty symbols, 2025-06 to 2026-09, |pred| clears 0.4 on 23.7% of the rows, so the pair sits near
+the 0.76 quantile of the grid below it.
+
+One number and not two, on purpose. The label is symmetric around zero by construction, so a rule
+that puts its entry and its exit at different distances is asserting an asymmetry the label does
+not carry; `sign` already handles which end means long. Two numbers are one edit away if a
+measurement ever asks for them, and until then the grid is the honest way to move the band.
+
 Two honesties about the measurement. The rows are step 2's, one per hour per symbol, so this
 trades hourly and never inside the hour. And each symbol is one unit, equally weighted, with no
 sizing and no risk limit — the question is whether the edge clears the fee, not what a portfolio
 would do with it.
 
-    uv run python -m tradingvision.threshold --pred data/pred-swing-all.parquet
+    uv run python -m tradingvision.threshold --pred data/pred-swing-all-15m.parquet --at 0.4
 """
 
 from __future__ import annotations
@@ -220,6 +233,25 @@ def _selfcheck() -> None:
     assert both["gross_long"] > 0 and both["gross_short"] > 0, both
     assert 0.3 < both["long_share"] < 0.7, both
 
+    # The always-in rule at a raw pair, which is what `--at` prices: long at or below the lower
+    # number, short at or above the upper one, and in between it holds what it already had. The
+    # third state is the absence of a third state — there is no flat leg to be wrong about.
+    at = positions(pred, 0.4)
+    assert (at[pred <= -0.4] == 1.0).all() and (at[pred >= 0.4] == -1.0).all()
+    assert (at != 0).all(), "always in: the saw fires on its first bar and never stands aside"
+    # A raw number decides nothing the grid could not reach: it is the band at whatever quantile of
+    # |pred| it lands on, which is why `--at` reports that quantile next to it and why the two
+    # spellings never need reconciling. What a raw number adds is that it stops moving.
+    wide = pnl(pred, close, 0.4)
+    assert wide["threshold"] == 0.4 and wide["in_market"] == 1.0
+    # Wider is not always better: a band past the label's own range never fires and holds nothing,
+    # which is the one way this rule can report a zero rather than a loss.
+    assert positions(pred, 1.5).eq(0.0).all() and pnl(pred, close, 1.5)["in_market"] == 0.0
+
+    # The control the always-in rule is read against. The saw ends a twentieth of a leg above where
+    # it started, so holding it earns nothing and every cent of the rule's gross above is timing.
+    assert abs(buy_and_hold(close)["net_per_year"] * span) < 0.01, buy_and_hold(close)
+
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
@@ -239,6 +271,12 @@ def main() -> None:
         choices=[-1, 1],
         help="-1 for the swing label (low means long), +1 for remaining excursion",
     )
+    ap.add_argument(
+        "--at",
+        type=float,
+        nargs="+",
+        help="price these raw thresholds too, e.g. --at 0.4 for the -0.4/+0.4 pair",
+    )
     args = ap.parse_args()
 
     _selfcheck()
@@ -247,6 +285,11 @@ def main() -> None:
     print(f"{len(pred):,} rows, {pred.index.get_level_values(1).nunique()} symbols, fee {args.fee * 100:.2f}% per side")
     print(f"{pred.index.get_level_values(0).min():%Y-%m-%d} to {pred.index.get_level_values(0).max():%Y-%m-%d}\n")
     print(sweep(pred, close, args.quantiles, args.fee, args.sign).round(4).to_string())
+    if args.at:
+        share = [float((pred.abs() <= t).mean()) for t in args.at]
+        print("\nfixed thresholds on the raw prediction, and the quantile of |pred| each one lands on\n")
+        rows = pd.DataFrame([pnl(pred, close, t, args.fee, args.sign) for t in args.at])
+        print(rows.assign(quantile=share).round(4).to_string(index=False))
     print(f"\nbuy and hold, same rows: {buy_and_hold(close)['net_per_year'] * 100:.1f}% log per year")
 
 
