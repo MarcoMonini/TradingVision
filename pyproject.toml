@@ -10,6 +10,11 @@ dependencies = [
     "plotly==6.2.0",
     "ta==0.11.0",
     "requests==2.34.2",
+    # The chart page draws the GRU and the swing model from the checkpoints under `models/`, so
+    # the deployed image needs torch even though it never trains: `restore` and `predict_frame`
+    # are torch calls. The CPU wheel below keeps that to ~200 MB instead of the CUDA build's
+    # gigabytes — the page runs a 32-unit GRU over a few thousand bars, on one core, per rerun.
+    "torch==2.14.0",
 ]
 
 [build-system]
@@ -31,19 +36,17 @@ target-version = "py312"
 select = ["E", "F", "I"]
 
 [dependency-groups]
-# lightgbm and torch sit here and not in the runtime dependencies: the deployed image serves the
-# chart app and never trains anything, and the wheels pull an OpenMP runtime and a few hundred MB
-# of CUDA-less tensor machinery the slim base image lacks.
+# lightgbm stays out of the runtime dependencies: it trains the step-2 reference and the chart page
+# never calls it. torch moved *into* them when the page started serving predictions from `models/`.
 dev = [
     "black>=26.5.1",
     "lightgbm==4.7.0",
     "pytest>=9.1.1",
     "ruff>=0.16.6",
-    "torch==2.14.0",
 ]
 
 # torch on Linux would pull the CUDA build and 73 nvidia wheels behind it — a few gigabytes for a
-# CI job that runs on CPU, and for an image that never trains at all. macOS stays on PyPI, where
+# CI job that runs on CPU, and for an image that only does inference. macOS stays on PyPI, where
 # the wheel is already the CPU/MPS one.
 [tool.uv.sources]
 torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]

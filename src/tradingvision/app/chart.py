@@ -11,6 +11,7 @@ streamlit run src/tradingvision/app/chart.py
 """
 
 import importlib
+import os
 from pathlib import Path
 from types import ModuleType
 
@@ -40,13 +41,13 @@ from tradingvision.oracle import FEE, run
 def optional(name: str) -> ModuleType | None:
     """Import `tradingvision.<name>`, or return None when torch is not installed.
 
-    `gru` and `swing` import torch at module scope, and the deployed image does not carry it: the
-    wheel and its OpenMP runtime are a few hundred megabytes of machinery that only trains, and
-    the image ships no `data/` store, so neither checkpoint can exist there in the first place.
-    Before this the page died at import with `ModuleNotFoundError: No module named 'torch'` and
-    Render served nothing at all — the candles, the pivots, the label and the step-6 factor, none
-    of which need torch, were lost to two modules that had nothing to draw. Only torch is
-    tolerated: any other missing module is a broken install and has to be raised.
+    `gru` and `swing` import torch at module scope. torch is a runtime dependency now — the page
+    serves predictions from the checkpoints in `models/` and `restore` is a torch call — so on a
+    correct install this returns the module. The fallback stays because the failure it replaces
+    was total: an image built without torch died at import with `ModuleNotFoundError: No module
+    named 'torch'` and Render served nothing, losing the candles, the pivots, the label and the
+    step-6 factor, none of which need torch, to two modules that had nothing to draw. Only torch
+    is tolerated: any other missing module is a broken install and has to be raised.
     """
     try:
         return importlib.import_module(f"tradingvision.{name}")
@@ -58,6 +59,22 @@ def optional(name: str) -> ModuleType | None:
 
 gru = optional("gru")
 swing = optional("swing")
+
+# Where a checkpoint is looked for besides `data/`. `data/` is the store a training run writes to
+# and is gitignored, so nothing under it reaches the image; `models/` is tracked, which is how a
+# deployed page gets a model at all — commit `gru.pt` and `swing.pt` there and Render serves the
+# predictions. `data/` is read first on purpose: on a machine that has just run `gru --save` the
+# fresh checkpoint is the one to draw, and a committed file silently shadowing it is the failure
+# mode worth avoiding. `TRADINGVISION_MODELS` overrides the directory for a mounted disk.
+MODELS = Path(os.environ.get("TRADINGVISION_MODELS") or Path(__file__).resolve().parents[3] / "models")
+
+
+def saved(module: ModuleType | None) -> Path | None:
+    """The checkpoint of `gru` or `swing`, from the store or from `models/`, or None if neither."""
+    if module is None:
+        return None
+    return next((p for p in (module.CHECKPOINT, MODELS / module.CHECKPOINT.name) if p.exists()), None)
+
 
 MAX_DAYS = 365
 # The composite's window, as the duration it was measured as rather than as a count of bars: 2880
@@ -587,7 +604,7 @@ def main() -> None:
     # one), the chart has to be on the branch the model reads, and the label on screen has to be
     # the one the model predicts — over the retrospective label the two lines share an axis
     # without sharing a unit.
-    model_at = gru.CHECKPOINT if gru is not None and gru.CHECKPOINT.exists() else None
+    model_at = saved(gru)
     checkpoint = load_model(str(model_at))[1] if model_at else None
     branch = checkpoint["branches"][0] if checkpoint else None
     # Which of the two labels this checkpoint was fitted on. Older files predate the choice and
@@ -597,9 +614,12 @@ def main() -> None:
     trained_on = TRAINED_ON.get(checkpoint.get("label", "excursion")) if checkpoint else None
     predicting = False
     if gru is None:
-        st.sidebar.caption("No torch in this image, so no GRU prediction. The factor below needs none.")
+        st.sidebar.caption("This install has no torch, so no GRU prediction. The factor below needs none.")
     elif not model_at:
-        st.sidebar.caption("No model saved. `python -m tradingvision.gru --features all --save`")
+        st.sidebar.caption(
+            f"No model saved. `python -m tradingvision.gru --features all --save`, then copy it into "
+            f"`{MODELS.name}/` to deploy it."
+        )
     elif trained_on is None:
         st.sidebar.caption("The saved GRU reads cross-sectional ranks, which one pair cannot supply.")
     elif timeframe == branch and label == trained_on:
@@ -612,13 +632,15 @@ def main() -> None:
     # The swing model of step 7 — the one that trades. It is drawn against the retrospective
     # label because that is the label it predicts, and only on the timeframe it was fitted on:
     # its inputs are windows of that bar and nothing rescales them between one bar and another.
-    swing_at = swing.CHECKPOINT if swing is not None and swing.CHECKPOINT.exists() else None
+    swing_at = saved(swing)
     swing_card = load_swing_model(str(swing_at), swing_at.stat().st_mtime)[1] if swing_at else None
     swinging = False
     if swing is None:
-        st.sidebar.caption("No torch in this image, so no swing trades.")
+        st.sidebar.caption("This install has no torch, so no swing trades.")
     elif not swing_at:
-        st.sidebar.caption("No swing model. `python -m tradingvision.swing --save`")
+        st.sidebar.caption(
+            f"No swing model. `python -m tradingvision.swing --save`, then copy it into `{MODELS.name}/`."
+        )
     elif label != RETROSPECTIVE:
         st.sidebar.caption(f"The swing model predicts the **{RETROSPECTIVE}** label.")
     elif timeframe != swing_card["timeframe"]:
