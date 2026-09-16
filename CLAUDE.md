@@ -42,6 +42,7 @@ uv run python -m tradingvision.simulation --pred data/pred-*.parquet   # what it
 uv run python -m tradingvision.factor --price --baseline --by-quarter # step 6: the cross-sectional factor
 uv run python -m tradingvision.swing --timeframe 4h --baseline        # step 7: the tradable swing rule
 uv run python -m tradingvision.swingrule --pred data/pred-swing-*.parquet  # the long-only rule on the swing label
+uv run python -m tradingvision.threshold --pred data/pred-swing-*.parquet --at 0.4  # the always-in flip rule
 uv run python -m tradingvision.legcheck  --pred data/pred-swing-*.parquet  # does the prediction lead, or only summarise?
 ```
 

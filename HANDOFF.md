@@ -216,3 +216,42 @@ Tutto quello che il vecchio handoff elencava resta chiuso. Si aggiunge:
 - **Fidarsi di un file `pred-*.parquet` senza controllarne la breadth.** Una riga:
   `d.groupby(d.index.get_level_values(0)).size().mean()`. Se non è ~20, il file è precedente alla
   correzione del campionamento e ogni metrica cross-sectional letta su di esso è diluita.
+
+---
+
+## 9. La regola always-in, prezzata a soglia fissa (ramo `always-in-at-a-number`)
+
+La regola chiesta — sotto −0.4 long, sopra +0.4 si chiude il long e si va short, mai flat — **era
+già in `threshold.py`**, che è esattamente quel modello di stato con `sign=-1`. Mancava solo il
+modo di prezzarla a un numero grezzo invece che a un quantile dell'output: ora c'è `--at`.
+
+```bash
+uv run python -m tradingvision.threshold --pred data/pred-swing-all-15m.parquet --at 0.4
+```
+
+Venti simboli, 219.698 righe, 2025-06 → 2026-09, 25 bp/lato. `--at 0.4` cade sul quantile 0,763 di
+|pred| (il 23,7% delle righe supera 0.4 in valore assoluto).
+
+| soglia | trade/anno | lordo long | lordo short | lordo | commissioni | netto | fee di pareggio |
+|---|---|---|---|---|---|---|---|
+| ±0.3 | 325.1 | −0.234 | +0.250 | +0.015 | 1.624 | −1.608 | 0.24 bp |
+| **±0.4** | 195.8 | −0.203 | +0.286 | +0.083 | 0.977 | **−0.894** | 2.13 bp |
+| ±0.5 | 92.7 | −0.249 | +0.252 | +0.004 | 0.461 | −0.458 | 0.19 bp |
+| q 0.70 | 237.6 | −0.160 | +0.327 | +0.167 | 1.186 | −1.019 | **3.52 bp** |
+| q 0.95 | 65.9 | −0.235 | +0.260 | +0.024 | 0.328 | −0.303 | 1.85 bp |
+
+Buy and hold sulle stesse righe: −0.490 l'anno.
+
+**Il netto è negativo ovunque** e il punto migliore di tutta la griglia chiede 3,52 bp per lato,
+contro 25 bp taker e ~10 bp maker. Allargare la banda taglia commissioni e lordo insieme, che è
+la stessa forma di tabella di `exhaustcheck --price`.
+
+**La gamba long perde a ogni soglia** (−0.203 a ±0.4) e tutto il lordo è la gamba short (+0.286)
+su un paniere sceso del 49% l'anno. È la stessa colonna di sinistra che `swingrule` documenta e
+che la Misura 1 spiega: il decile 0 della predizione ha rendimento forward negativo a 24 e 72
+barre. Comprare sotto −0.4 è comprare dove il prezzo scende.
+
+Nessun `rotation_null` qui: con un lordo di +0.083 contro 0.977 di commissioni non c'è una fase da
+testare. Servirebbe solo se il lordo coprisse il costo.
+
+`threshold._selfcheck` non era registrato in `tests/test_selfchecks.py` — ora lo è.
