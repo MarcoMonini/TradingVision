@@ -24,6 +24,7 @@ from tradingvision import (
     selection,
     simulation,
     swingrule,
+    threshold,
 )
 
 SELF_CHECKED = [
@@ -97,6 +98,13 @@ def test_legcheck_selfcheck():
 def test_swingrule_selfcheck():
     """`swingrule` keeps its checks in a function: its `__main__` prices a real prediction file."""
     swingrule._selfcheck()
+
+
+def test_threshold_selfcheck():
+    """`threshold` keeps its checks in a function for the same reason `swingrule` does, and was
+    never registered here — the asserts on the always-in rule ran only when someone ran the
+    module by hand. They are the ones the traded rule rests on, so they belong in CI."""
+    threshold._selfcheck()
 
 
 def test_simulation_selfcheck():
