@@ -273,3 +273,48 @@ illeggibile. L'ampiezza mediana resta nella didascalia in fondo.
 Il libro della regola passa da `threshold.on_one`, che solleva la singola coppia nel MultiIndex a
 un simbolo che tutte le funzioni del modulo raggruppano: la regola disegnata è la stessa che
 `--at` prezza sul pannello, senza una seconda implementazione che possa divergere.
+
+---
+
+## 10. ±0.5 su venti coppie, e la tesi "lo ingannano i movimenti grandi"
+
+```bash
+uv run python -m tradingvision.threshold --pred data/pred-swing-all-15m.parquet \
+    --at 0.5 --by-symbol --by-move 5 --horizon 0 24 72 168
+```
+
+**Il pannello.** ±0.5 sta sul quantile 0,917 di |pred|. 92,7 flip l'anno per coppia, lordo +0.004,
+commissioni 0.461, netto **−0.458**. Per coppia: **4 su 20** positive, media −0.458 ± 0.121 (errore
+standard fra coppie) — 3,8 sigma sotto zero. Lo Spearman fra il lordo della gamba short e il
+buy-and-hold della coppia è **−0,734**: le quattro che guadagnano sono le quattro scese di più
+(AVAX −84%, SUSHI −89%, XTZ −78%). Esposizione, non selezione.
+
+**La tesi, misurata.** Sul hold la tabella le dà ragione: quintile dei movimenti grandi hit rate
+0,397 contro 0,74 del quintile medio, e da solo vale −24.1 contro i +12.6 di tutti gli altri.
+
+**Ma la lettura è circolare**, e la colonna `median_bars` lo dice: 100 barre nel quintile alto
+contro 50 nel quintile 2. Una regola a isteresi esce solo quando la predizione raggiunge la banda
+opposta, quindi un hold su cui ha ragione viene *chiuso* dal movimento e uno su cui ha torto resta
+aperto mentre il movimento corre. Dimensione del movimento e durata del hold sono la stessa
+variabile. Il meccanismo produce quella tabella senza alcun segnale.
+
+**Il controllo** (`--horizon`, ogni ingresso giudicato su N barre fisse, uscita fuori dalla misura):
+
+| orizzonte | hit rate min–max sui 5 quintili | pendenza alto − basso |
+|---|---|---|
+| 24 bar | 0,464 – 0,544 | +0,023 |
+| 72 bar | 0,489 – 0,558 | **+0,069** |
+| 168 bar | 0,464 – 0,519 | +0,002 |
+
+Errore standard di un hit rate: 0,023. **Piatto.** A 72 bar la pendenza è positiva e il quintile
+dei movimenti più grandi è l'unico sopra la moneta.
+
+**Verdetto.** Il segnale non prevede i movimenti grandi — a nessun orizzonte batte la moneta, come
+`legcheck` già diceva per decile — ma nemmeno ci sbatte contro più che contro gli altri. Quello che
+perde sui movimenti grandi è l'**uscita**. La leva che questa tabella indica non è una soglia né un
+modello: è uno stop. Da misurare, con la solita avvertenza: si parte da un lordo di +0.004 contro
+0.461 di commissioni, quindi lo stop dovrebbe guadagnare due ordini di grandezza, non qualche
+punto.
+
+**Non rifare:** leggere un hit rate per dimensione del movimento *sul hold* di una regola a
+isteresi senza la colonna delle durate accanto. È la variabile stessa, ordinata.
