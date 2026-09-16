@@ -7,6 +7,12 @@ retrospective description a linear model on point-in-time features already repro
 0.38). Reading them on the same legs is the fastest way to see the difference — the old one ramps
 across each leg, the new one collapses to zero at every pivot and says how much is left.
 
+Over the retrospective label the page also draws the always-in rule of `threshold` — long at or
+below -t, short at or above +t, never flat — on the *prediction* and never on the label, because
+the label is built from a centred window and a rule trading it would be reading `EXTREMA_WINDOW`
+bars of future. Two shapes on the candles keep that distinction visible: hollow squares are the
+oracle's pivots, which do read the future, and filled triangles are the rule's own fills.
+
 streamlit run src/tradingvision/app/chart.py
 """
 
@@ -18,7 +24,7 @@ import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 
-from tradingvision import factor, gru, metrics, swing
+from tradingvision import factor, gru, metrics, swing, threshold
 from tradingvision.data import candles
 from tradingvision.data.candles import SYMBOLS, TIMEFRAMES, get_candles
 from tradingvision.data.pivots import EXTREMA_WINDOW, find_pivots
@@ -49,6 +55,11 @@ BAR = {
     "4h": pd.Timedelta("4h"),
     "1d": pd.Timedelta("1D"),
 }
+# The rule's default band. Measured, like every other constant here: on `pred-swing-all-15m`,
+# twenty pairs and fifteen months, |pred| clears 0.4 on 23.7% of the rows, which puts the pair at
+# the 0.763 quantile of the model's own output. It is a starting point and not a tuned value —
+# section 9 of the spec prices the whole grid, and every row of it is negative after fees.
+THRESHOLD = 0.4
 # What the saved model was fitted up to, shown so nobody reads a prediction over the train period
 # as if it were out of sample. It is the walk-forward's first cut and `gru`'s own default.
 TEST_START = "2025-06"
@@ -428,15 +439,19 @@ def chart(
             row=2,
             col=1,
         )
+        # Hollow squares, and no leg amplitude written next to them. The oracle and the rule now
+        # share this row, so the two have to be told apart at a glance before anything else is
+        # readable: the oracle is what hindsight would have taken, the filled triangles below are
+        # what the rule actually took, and a shape is a faster distinction than a colour. The
+        # percentages went with the circles — they annotated the oracle's legs, which is a
+        # different quantity from the rule's trades and the one that made the row unreadable when
+        # both are drawn. The amplitude is still in the caption and still in `p.amplitude`.
         fig.add_trace(
             go.Scatter(
                 x=p.index,
                 y=p.close,
-                mode="markers+text",
-                marker=dict(size=8, color=color, symbol="circle"),
-                text=[f"{a * 100:.1f}%" for a in p.amplitude],
-                textposition=position,
-                textfont=dict(size=9, color=color),
+                mode="markers",
+                marker=dict(size=9, color=color, symbol="square-open", line=dict(width=2, color=color)),
                 name="pivot",
                 showlegend=False,
                 hovertemplate="%{x}<br>%{y}<extra></extra>",
@@ -453,7 +468,10 @@ def chart(
         moved = moved[(moved != 0) & (moved.index >= df.index[0]) & (moved.index <= df.index[-1])]
         # A long/flat book has only two states, so its markers say what was done rather than what
         # the weight became; a graded one has no "in" and "out" and says the level instead.
-        binary = set(trades.dropna().unique()) <= {0.0, 1.0}
+        # A long/flat book has two states and an always-in one has two of its own, both of them
+        # positions — so neither has a level worth printing, and the marker says what was done.
+        # The graded factor book is the only one with a weight to report.
+        binary = set(trades.dropna().unique()) <= {-1.0, 0.0, 1.0}
         for up, color, shape, position in (
             (True, "#2ecc71", "triangle-up", "bottom center"),
             (False, "#e74c3c", "triangle-down", "top center"),
@@ -601,6 +619,26 @@ def main() -> None:
             help=f"{swing_at.name}, stage {swing_card['stage']}, trained to {swing_card['test_start']}",
         )
 
+    # The always-in rule of `threshold`, drawn on whatever swing leg position the row below shows.
+    # It reads the *prediction* and never the target: the retrospective label is built from a
+    # centred window, so a rule trading it would be reading `EXTREMA_WINDOW` bars of future and
+    # would draw an oracle wearing a strategy's markers. That is why the toggle appears only once
+    # a model is on, and says so when it is not.
+    ruling, band = False, THRESHOLD
+    if retrospective and (swinging or predicting):
+        ruling = st.sidebar.toggle(
+            "Always-in rule",
+            value=True,
+            help="long at or below -t, short at or above +t, hold in between — never flat",
+        )
+        if ruling:
+            # The one parameter the rule has. A quantile would move with the model; a constant is
+            # what a live system has to commit to, which is why `threshold --at` prices constants
+            # and why this is a number and not a percentile.
+            band = st.sidebar.slider("Threshold ±t", 0.05, 1.0, THRESHOLD, 0.05)
+    elif retrospective:
+        st.sidebar.caption("The always-in rule needs a **prediction** of the swing leg position, not the label.")
+
     # The composite of step 6, which *is* drawable where the GRU is not: it reads the panel this
     # page already fetches for the label, and there is no checkpoint to be missing.
     factoring = False
@@ -707,6 +745,15 @@ def main() -> None:
         pred = swung.label.rename("prediction")
     if pred is None and predicting:
         pred = load_prediction(df, str(model_at), model_at.stat().st_mtime)
+    # The rule, on one pair lifted into the one-symbol panel every `threshold` function reads. Same
+    # state machine, same fee arithmetic and same warm-up as `threshold --at` on the twenty pairs —
+    # there is no second implementation here to drift away from the one the spec priced.
+    rule, ruled = None, None
+    if ruling and pred is not None and pred.notna().any():
+        lifted = threshold.on_one(pred)
+        rule = threshold.positions(lifted, band).droplevel(1)
+        ruled = threshold.pnl(lifted, threshold.on_one(df.close.reindex(pred.index)), band, FEE)
+
     if normalized and len(feats.columns):
         # Fitted on the window on screen, which is what a chart can do and not what the dataset
         # does: there the statistics come from the train period alone.
@@ -778,6 +825,45 @@ def main() -> None:
             f"{np.expm1(best) * 100:,.0f}% — it reads the future",
         )
 
+    if ruled is not None:
+        # `pnl` reports rates per year; over a window of a few weeks the rate is not the thing that
+        # happened, so it is scaled back to the period on screen before being shown next to a
+        # buy-and-hold over the same bars.
+        years = float((df.index[-1] - df.index[0]) / threshold.YEAR)
+        row = st.columns(4)
+        row[0].metric(
+            "Rule net return",
+            f"{np.expm1(ruled['net_per_year'] * years) * 100:+.1f}%",
+            f"gross {np.expm1(ruled['gross_per_year'] * years) * 100:+.1f}%, "
+            f"fees {np.expm1(ruled['fees_per_year'] * years) * 100:.1f}%",
+        )
+        # The split is the headline and not a detail. Over a period the market spends falling, a
+        # rule that is short half the time earns without predicting anything, so the two legs are
+        # the only reading that separates an edge from a market — on the twenty pairs the left one
+        # is negative at every threshold measured.
+        row[1].metric(
+            "Long leg, gross",
+            f"{np.expm1(ruled['gross_long'] * years) * 100:+.1f}%",
+            f"short leg {np.expm1(ruled['gross_short'] * years) * 100:+.1f}%",
+        )
+        row[2].metric(
+            "Flips",
+            f"{ruled['trades_per_year'] * years:.0f}",
+            f"{ruled['win_rate'] * 100:.0f}% win" if ruled["trades_per_year"] else "no trade",
+        )
+        row[3].metric(
+            "Buy and hold", f"{(df.close.iloc[-1] / df.close.iloc[0] - 1) * 100:+.1f}%", "same window, same bars"
+        )
+        st.caption(
+            f"Always in: long at or below **−{band:.2f}**, short at or above **+{band:.2f}**, holding in "
+            f"between — a flip closes one side and opens the other, so it pays {FEE * 200:.2f}% and never "
+            f"stands aside. Filled triangles on the candles are the rule's own fills; hollow squares are "
+            f"the oracle's pivots, which read {EXTREMA_WINDOW} bars of future and are there to be measured "
+            f"against, not traded. One pair over one window is one path — `threshold --at {band:.2f}` "
+            f"prices the same rule over twenty pairs and fifteen months, where it nets −89% a year and "
+            f"the long leg loses at every threshold on the grid."
+        )
+
     st.plotly_chart(
         chart(
             df,
@@ -791,7 +877,7 @@ def main() -> None:
             retrospective or bool(unit),
             pred,
             unit,
-            weight if weight is not None else swing_pos,
+            rule if rule is not None else (weight if weight is not None else swing_pos),
         ),
         use_container_width=True,
         key="chart",

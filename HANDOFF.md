@@ -255,3 +255,21 @@ Nessun `rotation_null` qui: con un lordo di +0.083 contro 0.977 di commissioni n
 testare. Servirebbe solo se il lordo coprisse il costo.
 
 `threshold._selfcheck` non era registrato in `tests/test_selfchecks.py` — ora lo è.
+
+### La regola sulla pagina chart
+
+La stessa regola è ora disegnata su `chart.py` sopra l'etichetta **swing leg position**, con il suo
+riquadro di metriche e la scomposizione per gamba. Legge la **predizione** e mai l'etichetta: il
+label retrospettivo nasce da una finestra centrata, quindi una regola che lo tradasse leggerebbe 24
+barre di futuro e sarebbe un oracolo travestito da strategia. Per questo il toggle compare solo
+quando un modello è acceso.
+
+Sulle candele le due cose si distinguono per forma, non per colore: **quadratini vuoti** sono i
+pivot dell'oracolo (che il futuro lo leggono davvero), **triangoli pieni** sono i fill della regola.
+Le percentuali di ampiezza che stavano accanto ai pivot sono state tolte — annotavano le gambe
+dell'oracolo, non i trade, e con entrambe le serie sulla stessa riga rendevano il grafico
+illeggibile. L'ampiezza mediana resta nella didascalia in fondo.
+
+Il libro della regola passa da `threshold.on_one`, che solleva la singola coppia nel MultiIndex a
+un simbolo che tutte le funzioni del modulo raggruppano: la regola disegnata è la stessa che
+`--at` prezza sul pannello, senza una seconda implementazione che possa divergere.
