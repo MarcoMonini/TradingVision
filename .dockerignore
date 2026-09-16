@@ -1,6 +1,11 @@
 .git/
 .venv/
-data/
+# The store stays out of the build context, except the two checkpoints the page loads. Written
+# as `data/*` rather than `data/` so the exceptions do not depend on how the builder treats a
+# re-included file under an excluded directory — the same reason .gitignore spells it this way.
+data/*
+!data/gru.pt
+!data/swing.pt
 tests/
 __pycache__/
 *.egg-info/
