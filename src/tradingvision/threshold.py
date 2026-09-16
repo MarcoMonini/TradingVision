@@ -102,6 +102,19 @@ def positions(pred: pd.Series, threshold: float, sign: int = -1) -> pd.Series:
     return signal.groupby(level=1).ffill().fillna(0.0)
 
 
+def on_one(series: pd.Series, symbol: str = "one") -> pd.Series:
+    """The same series under a one-symbol MultiIndex, which is what everything here reads.
+
+    Every function in this module groups by symbol, because the study is a panel of twenty. A
+    chart draws one pair. Lifting the series rather than relaxing the grouping is the choice that
+    keeps a single code path: the rule drawn on one pair is then bit for bit the rule `--at`
+    prices on the panel, down to the fee arithmetic and the warm-up before the first signal, and
+    there is no second implementation to drift away from this one.
+    """
+    at = pd.MultiIndex.from_arrays([series.index, [symbol] * len(series)], names=["open_time", "symbol"])
+    return series.set_axis(at)
+
+
 def forward_return(close: pd.Series) -> pd.Series:
     """Log return from each row to that symbol's next row — the return a position earns by being
     held there. NaN on the last row of each symbol, which no position can be paid for."""
@@ -247,6 +260,13 @@ def _selfcheck() -> None:
     # Wider is not always better: a band past the label's own range never fires and holds nothing,
     # which is the one way this rule can report a zero rather than a loss.
     assert positions(pred, 1.5).eq(0.0).all() and pnl(pred, close, 1.5)["in_market"] == 0.0
+
+    # One pair lifted into a one-symbol panel is the same rule on the same rows: that is what
+    # lets the chart draw `positions` directly instead of reimplementing the state machine.
+    flat = pred.droplevel(1)
+    lifted = on_one(flat)
+    assert positions(lifted, 0.4).droplevel(1).equals(positions(pred, 0.4).droplevel(1))
+    assert pnl(lifted, on_one(close.droplevel(1)), 0.4) == pnl(pred, close, 0.4)
 
     # The control the always-in rule is read against. The saw ends a twentieth of a leg above where
     # it started, so holding it earns nothing and every cent of the rule's gross above is timing.
