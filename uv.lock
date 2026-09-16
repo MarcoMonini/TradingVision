@@ -1421,6 +1421,8 @@ dependencies = [
     { name = "requests" },
     { name = "streamlit" },
     { name = "ta" },
+    { name = "torch", version = "2.14.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux'" },
+    { name = "torch", version = "2.14.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'linux'" },
 ]
 
 [package.dev-dependencies]
@@ -1429,8 +1431,6 @@ dev = [
     { name = "lightgbm" },
     { name = "pytest" },
     { name = "ruff" },
-    { name = "torch", version = "2.14.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux'" },
-    { name = "torch", version = "2.14.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'linux'" },
 ]
 
 [package.metadata]
@@ -1441,6 +1441,8 @@ requires-dist = [
     { name = "requests", specifier = "==2.34.2" },
     { name = "streamlit", specifier = "==1.47.1" },
     { name = "ta", specifier = "==0.11.0" },
+    { name = "torch", marker = "sys_platform != 'linux'", specifier = "==2.14.0" },
+    { name = "torch", marker = "sys_platform == 'linux'", specifier = "==2.14.0", index = "https://download.pytorch.org/whl/cpu" },
 ]
 
 [package.metadata.requires-dev]
@@ -1449,8 +1451,6 @@ dev = [
     { name = "lightgbm", specifier = "==4.7.0" },
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "ruff", specifier = ">=0.16.6" },
-    { name = "torch", marker = "sys_platform != 'linux'", specifier = "==2.14.0" },
-    { name = "torch", marker = "sys_platform == 'linux'", specifier = "==2.14.0", index = "https://download.pytorch.org/whl/cpu" },
 ]
 
 [[package]]
