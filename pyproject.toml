@@ -5,6 +5,13 @@ description = "Visualizzazione e analisi di candele crypto (dati Alpaca)."
 requires-python = ">=3.12"
 dependencies = [
     "pandas==2.3.1",
+    # Pinned, and the pin is the fix rather than a preference. numpy 2.5 turned the bare
+    # `np.timedelta64(n)` into a DeprecationWarning, and pandas 2.x builds one on every
+    # `pd.Timedelta("30D")` — every duration constant in this project, plus the timeframe strings
+    # `dataset` and `legcheck` parse at runtime, which have no literal form to rewrite. The warning
+    # is pandas' to fix and pandas 3 does; until this project moves to it, the last numpy that does
+    # not raise it is the one to build against. Nothing here is spelled wrong.
+    "numpy==2.4.0",
     "alpaca-py==0.42.0",
     "streamlit==1.47.1",
     "plotly==6.2.0",
