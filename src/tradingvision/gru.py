@@ -645,7 +645,15 @@ def save(
 
 
 def restore(path: Path = CHECKPOINT) -> tuple[Net, dict]:
-    checkpoint = torch.load(path, weights_only=False)
+    """The saved model, on whatever device *this* machine has.
+
+    `map_location=DEVICE` and not the default, which is what the file was written on. A checkpoint
+    carries the device of the process that saved it, so one trained on a Mac says `mps` and
+    `torch.load` on a Linux box raises `Storage device not recognized: mps` before a single weight
+    is read. That is exactly the deployed case — the page is the artefact this project ships, the
+    training runs on a laptop with MPS — so the default is not a default here, it is a crash.
+    """
+    checkpoint = torch.load(path, weights_only=False, map_location=DEVICE)
     model = Net(checkpoint["widths"], shared=checkpoint["shared"]).to(DEVICE)
     model.load_state_dict(checkpoint["state"])
     model.eval()
