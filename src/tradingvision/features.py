@@ -137,11 +137,26 @@ def _bars_since(s: pd.Series, n: int, *, high: bool) -> pd.Series:
     return s.rolling(n).apply(lambda a: n - 1 - pick(a), raw=True) / n
 
 
+# The shortest frame this can be asked about. `ta`'s ADX writes `adx[window]` into an array it has
+# already trimmed by `window` rows, so it raises IndexError — not a warning, not NaN — on anything
+# under `2 * n`, and the chart page reaches that with one click: a day of history on the 4h
+# timeframe is six bars. Measured rather than derived from the library's source: 48 bars raise at
+# n = 24 and 49 do not.
+MIN_BARS = 2 * EXTREMA_WINDOW + 1
+
+
 def features(df: pd.DataFrame, n: int = EXTREMA_WINDOW) -> pd.DataFrame:
     """The candidate columns for one OHLCV frame, indexed like `df`.
 
     Leading rows are NaN until every window is filled; the dataset drops them as warm-up.
+
+    A frame too short to fill any window is that same statement taken to its limit, so it comes
+    back all NaN rather than raising. The alternative is not a stricter contract, it is a page that
+    dies on a slider: every consumer here already treats NaN as "not scorable yet" and draws a gap,
+    and an exception out of `ta` two libraries down is a traceback where a short window belongs.
     """
+    if len(df) < 2 * n + 1:
+        return pd.DataFrame(np.nan, index=df.index, columns=list(COLUMNS))
     o, h, low, c, v = df.open, df.high, df.low, df.close, df.volume
     short = max(n // 4, 2)  # the "N/4" of the spec, floored so a std over it is defined
 
@@ -257,4 +272,16 @@ if __name__ == "__main__":
     # Causality: a feature must not move when a later bar changes.
     cut = 300
     assert np.allclose(features(df.iloc[:cut]).iloc[-1].to_numpy(), out.iloc[cut - 1].to_numpy(), equal_nan=True)
+    # A frame too short to fill a window is all NaN and not an exception. `ta`'s ADX raises
+    # IndexError under `2 * n` — not a warning, not NaN — and the chart page reaches that with one
+    # click: a day of history on the 4h timeframe is six bars. The shape has to survive it, same
+    # index and same columns, so every consumer downstream reads warm-up and draws a gap.
+    for count in (1, 6, 2 * EXTREMA_WINDOW):
+        stub = df.iloc[:count]
+        thin = features(stub, EXTREMA_WINDOW)
+        assert thin.index.equals(stub.index) and list(thin.columns) == COLUMNS, count
+        assert thin.isna().all().all(), count
+    # The boundary is where it was measured and not one bar either side: 2n+1 computes, 2n does not.
+    assert MIN_BARS == 2 * EXTREMA_WINDOW + 1
+    assert features(df.iloc[:MIN_BARS], EXTREMA_WINDOW).notna().any().any()
     print(f"ok — {len(COLUMNS)} columns, {len(tail)} rows past warm-up")

@@ -460,3 +460,47 @@ runtime fallisce.
 `scipy>=1.14` è ora **dichiarato** nel gruppo dev. `selection.py` importa `scipy.cluster.hierarchy`
 direttamente e nessuno lo dichiarava: il giorno che lightgbm smette di tirarselo dietro, `selection`
 ne ha ancora bisogno. Dev e mai runtime.
+
+### Perché la predizione appariva a tratti, e tre bug che stavano dietro
+
+Segnalato su DOGE/USD: la riga arancione della predizione compare solo a pezzi. Non è stato
+possibile riprodurlo sui dati veri — da questa sessione la rete verso Alpaca è bloccata — quindi
+sotto c'è quello che è stato **stabilito dal codice e misurato su serie sintetiche**, non dedotto.
+
+**Il meccanismo.** `gru.predict_frame` marca una barra scoribile solo se **tutte** le
+`steps × len(keep)` celle della sua finestra sono finite: una rete ricorrente non ha modo di essere
+avvisata che una cella manca. Una sola feature non finita annulla quindi le 24 barre che la
+leggono, ed è per questo che i buchi sono larghi e a blocchi invece che sparsi. Sul percorso reale
+(checkpoint `data/gru.pt`, serie sintetica in stile DOGE — prezzo basso, quantizzato al tick, con e
+senza barre mancanti) la copertura è **97,5%**: il percorso funziona, quindi la causa sta nei dati
+della coppia o nella lunghezza della finestra, non nel modello.
+
+**Quello che la pagina non diceva.** Un buco disegnato e basta è indistinguibile da un modello
+rotto. `gru.coverage` ora separa le tre cause — warm-up in testa, buchi interni con il nome delle
+colonne responsabili, e copertura totale — e la pagina scrive un avviso quando la copertura scende
+sotto il 90%. Legge lo **stesso** tensore di `predict_frame` (entrambi passano da `_inputs`), così
+la diagnosi non può descrivere un frame diverso da quello sullo schermo.
+
+**Bug 1 — `features` andava in IndexError sotto 2·EXTREMA_WINDOW+1 barre.** `ta` scrive
+`adx[window]` in un array che ha già tagliato di `window` righe. Raggiungibile dalla UI in un clic:
+History 1 giorno + timeframe 4h fa **sei barre**, e la pagina moriva con un traceback. Ora torna
+tutto NaN con indice e colonne intatti, che è ciò che ogni consumatore a valle già sa leggere.
+`MIN_BARS = 2 * EXTREMA_WINDOW + 1`, misurato e non derivato dal sorgente della libreria: 48 barre
+sollevano, 49 no. Verificato l'intero percorso della pagina su 1, 3, 6, 40, 49, 120 e 900 barre.
+
+**Bug 2 — i buchi di Alpaca erano tappati in `panel` e non in `get_candles`.** Il modulo li
+documenta e li misura (su 60 giorni a 15m: DOGE 63 barre mancanti, ETH 76, LTC 48, SOL 25) e li
+riempiva solo per il percorso cross-sectional. Il grafico disegna l'altro. Ora `candles.complete`
+mette una coppia su una griglia senza buchi e `get_candles` ci passa: 24 barre da 15m che
+silenziosamente coprono nove ore sono un input diverso da quello su cui i pesi sono stati
+addestrati, e niente nel frame lo diceva. Un bucket senza scambi ha open = high = low = close
+precedente e volume **zero** — non si fa `ffill` di high e low separatamente, perché inventerebbe
+uno stoppino che nessuno ha stampato e `stops` legge esattamente quei massimi e minimi per le
+barriere. Il volume zero è anche il marcatore con cui si contano le barre riempite.
+
+**Bug 3 — la combo box mostrava cinque coppie.** Ora sono le **venti dello studio**
+(`data.binance.SYMBOLS` quotate in USD, stesso ordine: un pair sul grafico dovrebbe essere un pair
+su cui i numeri dello spec sono stati misurati) e la casella accetta anche una coppia digitata.
+Quali di esse Alpaca elenchi davvero non è una cosa che questo progetto possa sapere — la copertura
+del venue è più stretta di quella di Binance e cambia — quindi la lista è un punto di partenza e
+non un'affermazione sul venue: una coppia che Alpaca non serve fa scattare l'avviso che c'era già.

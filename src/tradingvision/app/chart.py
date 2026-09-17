@@ -35,7 +35,7 @@ from plotly.subplots import make_subplots
 
 from tradingvision import factor, gru, metrics, stops, swing, threshold
 from tradingvision.data import candles
-from tradingvision.data.candles import SYMBOLS, TIMEFRAMES, get_candles
+from tradingvision.data.candles import BAR, SYMBOLS, TIMEFRAMES, get_candles
 from tradingvision.data.pivots import EXTREMA_WINDOW, find_pivots
 from tradingvision.data.target import (
     CROSS_HORIZON,
@@ -55,15 +55,6 @@ MAX_DAYS = 365
 # time so the same lens holds on whichever timeframe is on screen — a rolling deviation over
 # thirty days of 1h bars and over thirty days of 15m bars are the same statistic sampled twice.
 FACTOR_WINDOW = pd.Timedelta("30D")
-# `TIMEFRAMES` keys as durations. Spelled out rather than parsed: `pd.Timedelta("15m")` is minutes
-# but deprecated, and `pd.date_range(freq="15m")` is *months* — not an ambiguity to leave implicit.
-BAR = {
-    "5m": pd.Timedelta("5min"),
-    "15m": pd.Timedelta("15min"),
-    "1h": pd.Timedelta("1h"),
-    "4h": pd.Timedelta("4h"),
-    "1d": pd.Timedelta("1D"),
-}
 # The rule's default band. Measured, like every other constant here: on `pred-swing-all-15m`,
 # twenty pairs and fifteen months, |pred| clears 0.5 on 8.3% of the rows, which puts the pair at
 # the 0.917 quantile of the model's own output — 92.7 flips a year per pair against 195.8 at 0.4.
@@ -174,6 +165,13 @@ def load_model(path: str):
     """The saved GRU, kept across reruns. `cache_resource` and not `cache_data`: a torch module is
     not something to pickle and copy on every widget move."""
     return gru.restore(Path(path))
+
+
+@st.cache_data(show_spinner=False)
+def load_coverage(df, path: str, _mtime: float):
+    """Why the prediction does not fill the window — the same tensor `predict_frame` builds, so
+    the explanation can never describe a different frame from the one on screen."""
+    return gru.coverage(load_model(path)[1], df)
 
 
 @st.cache_data(show_spinner="Predicting…")
@@ -662,7 +660,17 @@ def main() -> None:
     st.set_page_config(page_title="Trading Vision", layout="wide")
     st.title("TradingVision")
 
-    symbol = st.sidebar.selectbox("Pair", SYMBOLS)
+    # The study's twenty pairs, and a typed one as well. Which of them Alpaca lists is not
+    # something this project can know — its crypto coverage is narrower than Binance's and moves —
+    # so the list is the universe the spec's numbers were measured on, not a claim about the
+    # venue. A pair it serves nothing for draws the warning below and nothing else breaks.
+    symbol = st.sidebar.selectbox(
+        "Pair",
+        SYMBOLS,
+        accept_new_options=True,
+        help="the twenty pairs the study measures on, quoted in USD. Type any other Alpaca pair "
+        "(`BASE/USD`) to draw it — the page says so if the venue serves nothing for it.",
+    )
     timeframe = st.sidebar.selectbox("Timeframe", list(TIMEFRAMES), index=1)
     days = st.sidebar.slider("History (days)", 1, MAX_DAYS, 30)
     # Default to the retrospective label rather than the predictive one. It is the label the swing
@@ -918,6 +926,37 @@ def main() -> None:
         pred = swung.label.rename("prediction")
     if pred is None and predicting:
         pred = load_prediction(df, str(model_at), model_at.stat().st_mtime)
+        # A gap in the orange line is a row the model was not asked about, not a row it got wrong:
+        # a recurrent net cannot be told that one cell of its window is missing, so a single
+        # non-finite feature anywhere in the 24 steps behind a bar makes that bar unscorable and
+        # `predict_frame` returns NaN rather than a number nothing supports. Drawn as a gap, that
+        # is indistinguishable from a broken model, and the reader should not have to guess — the
+        # three causes have three different answers, and only one of them is about the data.
+        gaps = load_coverage(df, str(model_at), model_at.stat().st_mtime)
+        if gaps["drawn"] < 0.9:
+            head = f"{gaps['head']} of {gaps['bars']} bars are the warm-up"
+            if gaps["head"] >= gaps["bars"]:
+                st.warning(
+                    f"**No prediction on this window.** The features read {EXTREMA_WINDOW} bars "
+                    f"back and the model reads {checkpoint['steps']} of those, so it needs about "
+                    f"**{gaps['needs']} {fetched[1]} bars** before the first scorable one — this "
+                    f"window has {gaps['bars']}. Widen **History (days)** or pick a faster "
+                    f"timeframe."
+                )
+            elif gaps["interior"]:
+                st.warning(
+                    f"**The prediction covers {gaps['drawn']:.0%} of this window.** {head}, and "
+                    f"{gaps['interior']} later bars have a feature that is not finite — "
+                    f"`{'`, `'.join(gaps['columns'][:3])}`. One such bar blanks the "
+                    f"{checkpoint['steps']} bars that read it, which is why the gaps are wide. "
+                    f"That is the pair's data, not the model: a stretch with no trade or no range "
+                    f"leaves some columns undefined."
+                )
+            else:
+                st.info(
+                    f"The prediction covers {gaps['drawn']:.0%} of this window — {head}, which is "
+                    f"unscorable by construction. Widen **History (days)** to shrink its share."
+                )
     # The rule, on one pair lifted into the one-symbol panel every `threshold` function reads. Same
     # state machine, same fee arithmetic and same warm-up as `threshold --at` on the twenty pairs —
     # there is no second implementation here to drift away from the one the spec priced.
