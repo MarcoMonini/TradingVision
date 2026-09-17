@@ -117,6 +117,15 @@ made of, so a naive t over 10,944 dates reads 31.9 where 153 non-overlapping blo
 and refuses to load a file built with different arguments. Don't defeat it — delete the file or pass
 another `--cache`.
 
+**The page may not reach scipy, and pandas hides a path to it.** `Series.corr(method="spearman")`
+imports scipy *lazily*, from inside `pandas.core.nanops`, so the call survives every import-time
+check and every test run in a venv that has it. scipy reaches this project only as a transitive
+dependency of lightgbm, which is dev-only, so the call works everywhere except the one place that
+matters — it took the chart page down in production on a caption. Use `metrics.spearman`, which is
+Pearson on the ranks and asserted equal to pandas' own. `tests/test_deploy.py` enforces both halves:
+the page's module graph is exercised with scipy made unimportable, and the call is banned by an AST
+scan everywhere but `metrics`, which has to make it to prove the replacement equals it.
+
 **torch and lightgbm never meet in one process.** Each ships its own OpenMP runtime and importing
 both aborts with `OMP: Error #15`. `gru` deliberately does not import `gbm`; the only place they
 coexist is `tests/test_selfchecks.py`, which runs the GRU check in a subprocess.

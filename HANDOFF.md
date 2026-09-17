@@ -428,3 +428,35 @@ graduato tiene la vecchia lettura: non ha stati da nominare, solo più e meno.
 scrive `atr[window - 1]` in un array più corto di così. Sulla pagina significa che con una barriera
 in ATR e poche giornate di storia la pagina cadeva. Ora un simbolo con meno barre della finestra
 resta NaN, che `width` traduce in nessuna barriera.
+
+### Un terzo bug, in produzione: `ModuleNotFoundError: No module named 'scipy'`
+
+La pagina è caduta su una didascalia, `pred.corr(target, method='spearman')`. `Series.corr` con
+`method="spearman"` **importa scipy pigramente**, dentro `pandas.core.nanops`: l'import non si vede
+a import-time e non fallisce in nessun venv che scipy ce l'ha. E scipy in questo progetto arriva
+**solo come dipendenza transitiva di lightgbm**, che sta nel gruppo dev di proposito — quindi la
+riga funzionava ovunque tranne che sull'unico host che conta. Era lì da mesi.
+
+`metrics.spearman(a, b)` è il rimpiazzo: Pearson sui ranghi, che *è* Spearman. Il `dropna` va prima
+del `rank` e non dopo — `Series.corr` scarta le coppie dove uno dei due è NaN, quindi rankare ogni
+serie sulle sue righe valide darebbe un numero diverso. Verificato su 300 forme casuali con pattern
+di NaN diversi fra le due serie: **identico a pandas a piena precisione**, non "vicino".
+
+Convertiti `chart.py` (il crash) e i quattro call site di `legcheck.py` (stessa violazione, modulo
+non deployato ma la regola è di progetto). I numeri di `legcheck` nello spec non cambiano.
+
+`tests/test_deploy.py` è la guardia, in due metà che si coprono a vicenda:
+- **runtime** — il grafo di import della pagina, letto dal sorgente di `chart.py` con l'AST così si
+  aggiorna da solo, girato in un sottoprocesso con `sys.modules["scipy"] = None`. È l'host di
+  deploy in miniatura, ed è ciò che sorveglia `metrics`, l'unico modulo autorizzato a chiamare
+  quella di pandas.
+- **sorgente** — la chiamata bandita ovunque tranne `metrics`, letta dall'albero sintattico e non
+  dal testo (altrimenti i commenti che spiegano la regola la fanno scattare). Serve perché un
+  import pigro sta su un ramo che nessun test percorre.
+
+Entrambe verificate per mutazione: rimesso `method="spearman"` dentro `metrics.spearman`, il test
+runtime fallisce.
+
+`scipy>=1.14` è ora **dichiarato** nel gruppo dev. `selection.py` importa `scipy.cluster.hierarchy`
+direttamente e nessuno lo dichiarava: il giorno che lightgbm smette di tirarselo dietro, `selection`
+ne ha ancora bisogno. Dev e mai runtime.

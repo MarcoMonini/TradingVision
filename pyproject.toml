@@ -55,6 +55,13 @@ select = ["E", "F", "I"]
 dev = [
     "black>=26.5.1",
     "lightgbm==4.7.0",
+    # Declared, though lightgbm already drags it in. `selection` imports `scipy.cluster.hierarchy`
+    # directly to cluster the correlation matrix, so this is a real dependency of the dev group and
+    # not a happy accident of lightgbm's own tree — the day lightgbm stops needing it, `selection`
+    # still does. Dev and never runtime: the deployed image is the chart page, and the page not
+    # reaching scipy is a rule `tests/test_deploy.py` enforces after a lazy
+    # `Series.corr(method="spearman")` took the page down in production.
+    "scipy>=1.14",
     "pytest>=9.1.1",
     "ruff>=0.16.6",
 ]

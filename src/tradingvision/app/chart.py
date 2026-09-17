@@ -1238,7 +1238,11 @@ def main() -> None:
                 # Spearman on one symbol through time, which is not the Rank IC of the spec — that
                 # one is taken per timestamp across the twenty pairs, and is blind to the common
                 # level this one reads. It says the model is wired up, not how good it is.
-                f"Spearman {pred.corr(target, method='spearman'):.2f} through time on this pair alone"
+                # `metrics.spearman` and not `Series.corr(method="spearman")`: the pandas call
+                # imports scipy lazily, and scipy reaches this project only through lightgbm,
+                # which the deployed image deliberately does not carry. This caption is what took
+                # the page down with a ModuleNotFoundError.
+                f"Spearman {metrics.spearman(pred, target):.2f} through time on this pair alone"
                 if pred is not None
                 else ""
             )

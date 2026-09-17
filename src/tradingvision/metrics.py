@@ -35,6 +35,32 @@ def by_date(pred: pd.Series, target: pd.Series, rank: bool = False) -> pd.Series
     return ((z.p * z.y).groupby(level=0).sum() / (n - 1)).where(n > 2)
 
 
+def spearman(a: pd.Series, b: pd.Series) -> float:
+    """Spearman between two aligned series, through time rather than inside a timestamp.
+
+    `by_date` above is the cross-sectional reading and is the project's metric; this is the other
+    shape — one pair, one column each, correlated along the index — and it exists for the same
+    reason `by_date` is written the way it is. `Series.corr(method="spearman")` imports scipy
+    *lazily*, deep inside `pandas.core.nanops`, so a page that calls it runs fine wherever scipy
+    happens to be installed and raises `ModuleNotFoundError` on the host that serves it. It did:
+    scipy reaches this project only as a transitive dependency of lightgbm, which is in the dev
+    group and deliberately absent from the deployed image, and the chart page died on a caption.
+
+    Pearson on the ranks is Spearman, and `rank()` and the default `corr()` are numpy alone.
+
+    The `dropna` comes before the ranking and not after, which is the part that is easy to get
+    wrong: `Series.corr` drops the pairs where either side is NaN, so ranking each series over its
+    own valid rows first would rank one of them over rows the other cannot match and return a
+    different number. Ranking the aligned frame is what makes this equal to pandas and not merely
+    close to it.
+    """
+    both = pd.DataFrame({"a": a, "b": b}).dropna()
+    if len(both) < 3:
+        return float("nan")
+    ranked = both.rank()
+    return float(ranked.a.corr(ranked.b))
+
+
 def blocked(per_date: pd.Series, horizon: pd.Timedelta) -> dict[str, float]:
     """`per_date` collapsed onto non-overlapping blocks of `horizon` — the honest denominator.
 
@@ -106,6 +132,29 @@ if __name__ == "__main__":
     # Same as pandas, which needs scipy for the ranks.
     one = y.loc["2024-01-01 00:00"]
     assert np.isclose(by_date(y**3, y, rank=False).iloc[0], (one**3).corr(one))
+
+    # The through-time Spearman, against pandas' own — which is the thing it replaces, so equal
+    # and not approximately equal is the requirement. scipy is present here (lightgbm brings it
+    # into the dev group) and absent from the deployed image, which is the whole point.
+    flat = pd.Series(rng.normal(size=500), index=pd.date_range("2024", periods=500, freq="h"))
+    other = flat**3 + rng.normal(0, 0.2, 500)
+    assert np.isclose(spearman(flat, other), flat.corr(other, method="spearman"))
+    assert np.isclose(spearman(flat, flat), 1.0) and np.isclose(spearman(flat, -flat), -1.0)
+    # Monotone and not linear: the rank version is perfect where Pearson is not.
+    assert np.isclose(spearman(flat, flat**3), 1.0)
+    # Ties are averaged, the way both pandas and scipy do it.
+    tied = pd.Series([1.0, 1.0, 2.0, 3.0, 3.0] * 4, index=flat.index[:20])
+    assert np.isclose(spearman(tied, tied.shift().bfill()), tied.corr(tied.shift().bfill(), method="spearman"))
+    # The NaN handling is the part that has to match: a pair is dropped when *either* side is
+    # missing, and the ranks are taken after that. Ranking each series over its own rows first
+    # would answer a different number, so the two patterns here are deliberately different.
+    holes, more = flat.copy(), other.copy()
+    holes.iloc[:50] = np.nan
+    more.iloc[25:75] = np.nan
+    assert np.isclose(spearman(holes, more), holes.corr(more, method="spearman"))
+    # Too little to correlate is NaN and not an exception: a chart asks this of a warm-up window.
+    assert np.isnan(spearman(flat.iloc[:2], other.iloc[:2]))
+    assert np.isnan(spearman(pd.Series(np.nan, index=flat.index), other))
 
     # The overlap correction, on the shape the real IC series has: an underlying signal that is
     # independent block by block, observed through a moving average as wide as the label horizon.
