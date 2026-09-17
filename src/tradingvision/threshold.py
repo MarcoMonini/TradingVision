@@ -115,17 +115,21 @@ def positions(pred: pd.Series, threshold: float, sign: int = -1) -> pd.Series:
     return signal.groupby(level=1).ffill().fillna(0.0)
 
 
-def on_one(series: pd.Series, symbol: str = "one") -> pd.Series:
-    """The same series under a one-symbol MultiIndex, which is what everything here reads.
+def on_one(frame: pd.Series | pd.DataFrame, symbol: str = "one") -> pd.Series | pd.DataFrame:
+    """The same series or frame under a one-symbol MultiIndex, which is what everything here reads.
 
     Every function in this module groups by symbol, because the study is a panel of twenty. A
     chart draws one pair. Lifting the series rather than relaxing the grouping is the choice that
     keeps a single code path: the rule drawn on one pair is then bit for bit the rule `--at`
     prices on the panel, down to the fee arithmetic and the warm-up before the first signal, and
     there is no second implementation to drift away from this one.
+
+    A frame as well as a series, because `stops` reads four price columns where this module reads
+    one, and a chart that lifted its close with this function and its OHLC by hand would have two
+    spellings of the same index to keep in step.
     """
-    at = pd.MultiIndex.from_arrays([series.index, [symbol] * len(series)], names=["open_time", "symbol"])
-    return series.set_axis(at)
+    at = pd.MultiIndex.from_arrays([frame.index, [symbol] * len(frame)], names=["open_time", "symbol"])
+    return frame.set_axis(at)
 
 
 def forward_return(close: pd.Series) -> pd.Series:
@@ -413,6 +417,10 @@ def _selfcheck() -> None:
     flat = pred.droplevel(1)
     lifted = on_one(flat)
     assert positions(lifted, 0.4).droplevel(1).equals(positions(pred, 0.4).droplevel(1))
+    # A frame lifts the same way, which is what keeps one index for the price columns a barrier
+    # rule reads and the close this module reads.
+    frame = on_one(pd.DataFrame({"close": close.droplevel(1)}))
+    assert frame.index.equals(lifted.index) and frame.close.to_numpy().tolist() == close.to_numpy().tolist()
     assert pnl(lifted, on_one(close.droplevel(1)), 0.4) == pnl(pred, close, 0.4)
 
     # `legs` is the same trades `pnl` counts, with the move kept apart from the side. On the saw

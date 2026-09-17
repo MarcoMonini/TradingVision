@@ -13,6 +13,15 @@ the label is built from a centred window and a rule trading it would be reading 
 bars of future. Two shapes on the candles keep that distinction visible: hollow squares are the
 oracle's pivots, which do read the future, and filled triangles are the rule's own fills.
 
+The rule's exits are `stops`, and they are controls rather than settings: a take profit and a stop
+loss, each named in ATR or in round trips or in a flat percentage, each with its own answer to
+what the rule holds afterwards — reverse into the other side, stand flat until the opposite
+signal, or stand flat until any fresh crossing. Both barriers are off by default, and off is
+exactly `threshold`'s rule, which is the one the spec priced. A stop fill is marked with an X on
+the candle and at the price it filled at, a take profit with a star; a gap through a level fills
+at the open, so the mark can sit well past the level it was aimed at, and that is the point of
+drawing it at the fill.
+
 streamlit run src/tradingvision/app/chart.py
 """
 
@@ -24,7 +33,7 @@ import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 
-from tradingvision import factor, gru, metrics, swing, threshold
+from tradingvision import factor, gru, metrics, stops, swing, threshold
 from tradingvision.data import candles
 from tradingvision.data.candles import SYMBOLS, TIMEFRAMES, get_candles
 from tradingvision.data.pivots import EXTREMA_WINDOW, find_pivots
@@ -66,6 +75,23 @@ THRESHOLD = 0.5
 # What the saved model was fitted up to, shown so nobody reads a prediction over the train period
 # as if it were out of sample. It is the walk-forward's first cut and `gru`'s own default.
 TEST_START = "2025-06"
+# How a barrier width is spelled in the sidebar. The identifiers are `stops.KINDS` and the labels
+# are the unit each one is a multiple of: ATR is what this market does anyway, the round trip is
+# what the trade costs, and a flat percentage is neither. "off" is first and is the default, so
+# the page opens on `threshold`'s own rule — the one the spec priced — and every barrier is an
+# explicit act.
+WIDTHS = {"off": "off", "atr": "× ATR at entry", "fee": f"× round trip ({FEE * 200:.2f}%)", "pct": "% of price"}
+# What each policy does after a barrier fires, spelled as the sentence rather than the identifier.
+POLICIES = {
+    "opposite": "wait for the opposite signal",
+    "reverse": "reverse into the other side",
+    "rearm": "wait for any fresh signal",
+}
+# Starting multiples for the two barriers, one per unit. Not tuned — nothing here has been
+# measured yet — but each is the number the unit makes obvious: three ATR is the textbook stop,
+# and three round trips is the smallest barrier that clears its own cost by a margin worth the
+# name (one round trip nets exactly zero).
+SIZE = {"atr": 3.0, "fee": 3.0, "pct": 2.0}
 
 # Downloads only happen on an explicit click, and only for a (symbol, timeframe, days) triplet
 # that is not already cached.
@@ -348,6 +374,42 @@ def pinned(pred: pd.Series, peers: int, symbol: str) -> str:
     )
 
 
+def barrier(name: str, key: str) -> tuple[str, float] | None:
+    """One sidebar barrier — its unit and its multiple — as the spec `stops` takes, or `None`.
+
+    Two widgets and not one, because the unit is the question and the number is only the answer to
+    it. "3" means nothing on its own: three ATR is a barrier that scales with the pair, three round
+    trips is a barrier that scales with the fee, and three percent is a barrier that scales with
+    neither. Naming the unit first is what keeps the multiple readable when the pair changes under
+    it.
+
+    The number is a percentage when the unit is one, and `stops` wants a log distance, so it is
+    the one place a division belongs. At these sizes the two agree to the fourth decimal.
+    """
+    kind = st.sidebar.selectbox(name, list(WIDTHS), format_func=WIDTHS.get, key=f"{key}-kind")
+    if kind == "off":
+        return None
+    # The unit is in the widget's key, so each unit keeps its own multiple. Sharing one key would
+    # carry the number across a change of unit, and 3 is a textbook stop in ATR and a very
+    # different barrier in percent — the kind of silent reinterpretation a reader cannot see.
+    size = st.sidebar.number_input(
+        f"{name}, {WIDTHS[kind]}", min_value=0.1, max_value=20.0, value=SIZE[kind], step=0.1, key=f"{key}-{kind}-size"
+    )
+    return kind, (size / 100 if kind == "pct" else size)
+
+
+def describe(spec: tuple[str, float] | None) -> str:
+    """A barrier spec as the caption says it: `("atr", 3.0)` to `3 × ATR at entry`.
+
+    The percentage goes back the way `barrier` brought it in, so a reader of the caption and a
+    reader of the sidebar see the same number.
+    """
+    if spec is None:
+        return "no"
+    kind, size = spec
+    return f"{size * 100:g}{WIDTHS[kind]}" if kind == "pct" else f"{size:g} {WIDTHS[kind]}"
+
+
 def chart(
     df,
     pivots,
@@ -361,6 +423,7 @@ def chart(
     pred=None,
     unit: str = "",
     trades=None,
+    exits=None,
 ) -> go.Figure:
     # Price, then the label under it on the same x: the target is only readable against the leg it
     # describes. Volume next, it is context rather than subject, and the features under everything.
@@ -510,6 +573,27 @@ def chart(
                 row=1,
                 col=1,
             )
+    if exits is not None and len(exits):
+        # The barrier fills, at the price they filled at rather than at the bar's close. That
+        # distinction is the whole reason to draw them: a level is where the rule aimed, the fill
+        # is where it got out, and a bar that gapped through the level puts the two far apart. A
+        # third shape, because the triangles above already mean "the signal changed its mind" and
+        # a stop is the opposite of that — the price changed it.
+        for why, color, shape, size in (("stop", "#e74c3c", "x-thin", 11), ("take", "#2ecc71", "star", 11)):
+            fills = exits[(exits.why == why) & exits.exit_time.between(df.index[0], df.index[-1])]
+            fig.add_trace(
+                go.Scatter(
+                    x=fills.exit_time,
+                    y=fills.exit,
+                    mode="markers",
+                    marker=dict(size=size, color=color, symbol=shape, line=dict(width=2, color=color)),
+                    name=why,
+                    showlegend=False,
+                    hovertemplate="%{x}<br>" + why + " at %{y}<extra></extra>",
+                ),
+                row=1,
+                col=1,
+            )
     fig.add_trace(go.Bar(x=df.index, y=df.volume, name="volume", marker_color="#888", showlegend=False), row=3, col=1)
     for row, (_, cols) in enumerate(groups, start=4):
         for col in cols:
@@ -649,6 +733,7 @@ def main() -> None:
     # would draw an oracle wearing a strategy's markers. That is why the toggle appears only once
     # a model is on, and says so when it is not.
     ruling, band = False, THRESHOLD
+    take, stop, after_stop, after_take, tie_stop = None, None, stops.AFTER[0], stops.AFTER[0], True
     if retrospective and (swinging or predicting):
         ruling = st.sidebar.toggle(
             "Always-in rule",
@@ -656,10 +741,41 @@ def main() -> None:
             help="long at or below -t, short at or above +t, hold in between — never flat",
         )
         if ruling:
-            # The one parameter the rule has. A quantile would move with the model; a constant is
-            # what a live system has to commit to, which is why `threshold --at` prices constants
-            # and why this is a number and not a percentile.
+            # The band is the one parameter the bare rule has. A quantile would move with the
+            # model; a constant is what a live system has to commit to, which is why
+            # `threshold --at` prices constants and why this is a number and not a percentile.
             band = st.sidebar.slider("Threshold ±t", 0.05, 1.0, THRESHOLD, 0.05)
+            # The exits. Both off by default, and off is not a neutral setting dressed up as one —
+            # it is exactly the rule section 9 of the spec prices, so every number on this page
+            # stays comparable to the ones already written down until a barrier is switched on.
+            stop = barrier("Stop loss", "sl")
+            if stop:
+                after_stop = st.sidebar.selectbox(
+                    "After a stop",
+                    list(POLICIES),
+                    format_func=POLICIES.get,
+                    key="after-stop",
+                    help="the stopped side is barred until the prediction leaves the band and crosses out again",
+                )
+            take = barrier("Take profit", "tp")
+            if take:
+                after_take = st.sidebar.selectbox(
+                    "After a take profit", list(POLICIES), format_func=POLICIES.get, key="after-take"
+                )
+            if take and stop:
+                # The one control that is an assumption rather than a rule. An OHLC bar does not
+                # say whether its high or its low came first, so a bar holding both levels has two
+                # readings; the pessimistic one is the default and the other is here to be run
+                # beside it. A result that only survives on the optimistic reading is a result
+                # about the intrabar path.
+                tie_stop = (
+                    st.sidebar.selectbox(
+                        "When one bar holds both levels",
+                        ["the stop fires", "the take fires"],
+                        help="the bar does not say which came first; the gap between the two is the assumption",
+                    )
+                    == "the stop fires"
+                )
     elif retrospective:
         st.sidebar.caption("The always-in rule needs a **prediction** of the swing leg position, not the label.")
 
@@ -772,11 +888,27 @@ def main() -> None:
     # The rule, on one pair lifted into the one-symbol panel every `threshold` function reads. Same
     # state machine, same fee arithmetic and same warm-up as `threshold --at` on the twenty pairs —
     # there is no second implementation here to drift away from the one the spec priced.
-    rule, ruled = None, None
+    rule, ruled, fills = None, None, None
     if ruling and pred is not None and pred.notna().any():
         lifted = threshold.on_one(pred)
-        rule = threshold.positions(lifted, band).droplevel(1)
-        ruled = threshold.pnl(lifted, threshold.on_one(df.close.reindex(pred.index)), band, FEE)
+        # One call whether or not a barrier is set: `stops` with both barriers absent is
+        # `threshold`'s rule down to the last decimal, and its self-check asserts so against
+        # `threshold.pnl`. Branching here would put a second code path behind the toggle, which is
+        # the arrangement where the two quietly stop agreeing.
+        held, fills = stops.run(
+            lifted,
+            threshold.on_one(df[list(stops.OHLC)].reindex(pred.index)),
+            band,
+            take=take,
+            stop=stop,
+            after_stop=after_stop,
+            after_take=after_take,
+            tie_stop=tie_stop,
+            window=EXTREMA_WINDOW,
+            fee=FEE,
+        )
+        rule = held.pos.droplevel(1)
+        ruled = stops.price(held, fills, FEE)
 
     if normalized and len(feats.columns):
         # Fitted on the window on screen, which is what a chart can do and not what the dataset
@@ -854,7 +986,7 @@ def main() -> None:
         # happened, so it is scaled back to the period on screen before being shown next to a
         # buy-and-hold over the same bars.
         years = float((df.index[-1] - df.index[0]) / threshold.YEAR)
-        row = st.columns(4)
+        row = st.columns(5 if (take or stop) else 4)
         row[0].metric(
             "Rule net return",
             f"{np.expm1(ruled['net_per_year'] * years) * 100:+.1f}%",
@@ -871,21 +1003,53 @@ def main() -> None:
             f"short leg {np.expm1(ruled['gross_short'] * years) * 100:+.1f}%",
         )
         row[2].metric(
-            "Flips",
-            f"{ruled['trades_per_year'] * years:.0f}",
-            f"{ruled['win_rate'] * 100:.0f}% win" if ruled["trades_per_year"] else "no trade",
+            "Trades",
+            f"{len(fills)}",
+            f"{ruled['win_rate'] * 100:.0f}% win, median {ruled['median_bars']:.0f} bars" if len(fills) else "no trade",
         )
-        row[3].metric(
+        if take or stop:
+            # What actually closed the trades, which is the only reading that says whether a
+            # barrier is doing anything at all. A stop share near zero means the barrier is wider
+            # than the rule's own holds and the numbers above are `threshold`'s with extra steps.
+            row[3].metric(
+                "Closed by a barrier",
+                f"{(ruled['stopped'] + ruled['took_profit']) * 100:.0f}%",
+                f"{ruled['stopped'] * 100:.0f}% stopped, {ruled['took_profit'] * 100:.0f}% took profit",
+            )
+        row[-1].metric(
             "Buy and hold", f"{(df.close.iloc[-1] / df.close.iloc[0] - 1) * 100:+.1f}%", "same window, same bars"
         )
         st.caption(
             f"Always in: long at or below **−{band:.2f}**, short at or above **+{band:.2f}**, holding in "
             f"between — a flip closes one side and opens the other, so it pays {FEE * 200:.2f}% and never "
-            f"stands aside. Filled triangles on the candles are the rule's own fills; hollow squares are "
+            f"stands aside. "
+            + (
+                f"**{describe(stop)} stop**, and after it fires the rule {POLICIES[after_stop]}. "
+                if stop
+                else "No stop: a hold ends only when the prediction reaches the other band. "
+            )
+            + (
+                f"**{describe(take)} take profit**, and after it fires the rule {POLICIES[after_take]}. "
+                if take
+                else ""
+            )
+            + (
+                f"A bar holding both levels is read as {'a stop' if tie_stop else 'a take profit'} — "
+                f"the bar does not say which came first, so run it both ways and read the gap. "
+                if take and stop
+                else ""
+            )
+            + (
+                "A barrier fills at its level, or at the open when the bar gapped through it, so an X or a "
+                "star can sit well past the level it was aimed at. "
+                if take or stop
+                else ""
+            )
+            + f"Filled triangles on the candles are the rule's own fills; hollow squares are "
             f"the oracle's pivots, which read {EXTREMA_WINDOW} bars of future and are there to be measured "
-            f"against, not traded. One pair over one window is one path — `threshold --at {band:.2f}` "
-            f"prices the same rule over twenty pairs and fifteen months, where it nets −89% a year and "
-            f"the long leg loses at every threshold on the grid."
+            f"against, not traded. One pair over one window is one path — `stops --at {band:.2f}` "
+            f"prices the same rule over twenty pairs and fifteen months, where the bare rule nets −89% a "
+            f"year and the long leg loses at every threshold on the grid."
         )
 
     st.plotly_chart(
@@ -902,6 +1066,7 @@ def main() -> None:
             pred,
             unit,
             rule if rule is not None else (weight if weight is not None else swing_pos),
+            fills if rule is not None else None,
         ),
         use_container_width=True,
         key="chart",
