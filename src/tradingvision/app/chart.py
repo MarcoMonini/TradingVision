@@ -529,50 +529,72 @@ def chart(
             col=1,
         )
     if trades is not None:
-        # Where and when, on the price itself. The book is graded rather than on/off, so there is
-        # no "entry" and "exit" to mark — only more and less, and the arrow says which way while
-        # the text says the weight it moved to. Markers sit at the close of the bar the decision
-        # was taken on, which is the price that decision actually paid.
+        # Where and when, on the price itself. Markers sit at the close of the bar the decision was
+        # taken on, which is the price that decision actually paid.
         moved = trades.diff().fillna(trades)
         moved = moved[(moved != 0) & (moved.index >= df.index[0]) & (moved.index <= df.index[-1])]
-        # A long/flat book has only two states, so its markers say what was done rather than what
-        # the weight became; a graded one has no "in" and "out" and says the level instead.
-        # A long/flat book has two states and an always-in one has two of its own, both of them
-        # positions — so neither has a level worth printing, and the marker says what was done.
-        # The graded factor book is the only one with a weight to report.
         binary = set(trades.dropna().unique()) <= {-1.0, 0.0, 1.0}
-        for up, color, shape, position in (
-            (True, "#2ecc71", "triangle-up", "bottom center"),
-            (False, "#e74c3c", "triangle-down", "top center"),
-        ):
-            side = moved[moved > 0] if up else moved[moved < 0]
-            fig.add_trace(
-                go.Scatter(
-                    x=side.index,
-                    # Forward filled: a pair that did not trade in a bar has no candle there, and
-                    # the decision still happened at the last price the panel carried.
-                    y=df.close.reindex(side.index, method="ffill"),
-                    mode="markers+text",
-                    # Big, filled, and outlined in the page's own background: a bright triangle
-                    # sitting on a green candle needs the halo to read as a separate mark. The
-                    # graded factor book prints a weight next to every change and would turn a
-                    # size that suits eight fills into a wall, so it keeps the smaller one.
-                    marker=dict(
-                        size=16 if binary else 9,
-                        color=color,
-                        symbol=shape,
-                        line=dict(width=1.5, color="#0e1117"),
+        if binary:
+            # Keyed on the position each change moved *to*, and that is a bug fix and not a style
+            # choice. The old version keyed on the sign of the change and called every rise "buy"
+            # and every fall "sell", which was right only while the rule had no flat state: an
+            # always-in rule goes +1 → −1 and back, so the words alternated by construction. With
+            # an exit there is a flat state in between, and closing a short (−1 → 0) and opening a
+            # long (0 → +1) are both a rise — two "buy" markers in a row with no "sell" between
+            # them, which reads on the chart as a position that was opened twice and never closed.
+            # The trade was fine; the caption on it was not. What a marker can always say without
+            # ambiguity is the state the rule is in from that bar on, so that is what it says.
+            for state, color, shape, word, position in (
+                (1.0, "#2ecc71", "triangle-up", "long", "bottom center"),
+                (-1.0, "#e74c3c", "triangle-down", "short", "top center"),
+                (0.0, "#95a5a6", "line-ew", "flat", "top center"),
+            ):
+                at = moved.index[trades.reindex(moved.index) == state]
+                fig.add_trace(
+                    go.Scatter(
+                        x=at,
+                        # Forward filled: a pair that did not trade in a bar has no candle there,
+                        # and the decision still happened at the last price the panel carried.
+                        y=df.close.reindex(at, method="ffill"),
+                        mode="markers+text",
+                        # Big, filled, and outlined in the page's own background: a bright triangle
+                        # sitting on a green candle needs the halo to read as a separate mark.
+                        marker=dict(size=16, color=color, symbol=shape, line=dict(width=1.5, color="#0e1117")),
+                        text=[word] * len(at),
+                        textposition=position,
+                        textfont=dict(size=12, color=color),
+                        name=word,
+                        showlegend=False,
+                        hovertemplate="%{x}<br>" + word + " from here, at %{y}<extra></extra>",
                     ),
-                    text=[("buy" if up else "sell") if binary else f"{v:+.2f}" for v in trades.reindex(side.index)],
-                    textposition=position,
-                    textfont=dict(size=12 if binary else 9, color=color),
-                    name="buy" if up else "sell",
-                    showlegend=False,
-                    hovertemplate="%{x}<br>%{y}<extra></extra>",
-                ),
-                row=1,
-                col=1,
-            )
+                    row=1,
+                    col=1,
+                )
+        else:
+            # The graded factor book has no states to name — only more and less — so the arrow says
+            # which way and the text says the weight it moved to. Smaller, because it prints a
+            # number at every change and a size that suits eight fills would be a wall.
+            for up, color, shape, position in (
+                (True, "#2ecc71", "triangle-up", "bottom center"),
+                (False, "#e74c3c", "triangle-down", "top center"),
+            ):
+                side = moved[moved > 0] if up else moved[moved < 0]
+                fig.add_trace(
+                    go.Scatter(
+                        x=side.index,
+                        y=df.close.reindex(side.index, method="ffill"),
+                        mode="markers+text",
+                        marker=dict(size=9, color=color, symbol=shape, line=dict(width=1.5, color="#0e1117")),
+                        text=[f"{v:+.2f}" for v in trades.reindex(side.index)],
+                        textposition=position,
+                        textfont=dict(size=9, color=color),
+                        name="buy" if up else "sell",
+                        showlegend=False,
+                        hovertemplate="%{x}<br>%{y}<extra></extra>",
+                    ),
+                    row=1,
+                    col=1,
+                )
     if exits is not None and len(exits):
         # The barrier fills, at the price they filled at rather than at the bar's close. That
         # distinction is the whole reason to draw them: a level is where the rule aimed, the fill
@@ -733,7 +755,7 @@ def main() -> None:
     # would draw an oracle wearing a strategy's markers. That is why the toggle appears only once
     # a model is on, and says so when it is not.
     ruling, band = False, THRESHOLD
-    take, stop, after_stop, after_take, tie_stop = None, None, stops.AFTER[0], stops.AFTER[0], True
+    take, stop, after_stop, after_take, tie_stop, trail = None, None, stops.AFTER[0], stops.AFTER[0], True, False
     if retrospective and (swinging or predicting):
         ruling = st.sidebar.toggle(
             "Always-in rule",
@@ -750,6 +772,16 @@ def main() -> None:
             # stays comparable to the ones already written down until a barrier is switched on.
             stop = barrier("Stop loss", "sl")
             if stop:
+                # The fourth lever, and the only one that changes where the barrier *is* rather
+                # than how far away it starts. Off is the plain stop; on, the same width hangs off
+                # the best price the hold has seen, so the exit turns from "how much am I willing
+                # to lose" into "how much of what I am up am I willing to give back".
+                trail = st.sidebar.toggle(
+                    "Trail the stop",
+                    value=False,
+                    help="same width, measured from the hold's best price instead of its entry — "
+                    "it ratchets one way and only off bars that have already closed",
+                )
                 after_stop = st.sidebar.selectbox(
                     "After a stop",
                     list(POLICIES),
@@ -763,19 +795,20 @@ def main() -> None:
                     "After a take profit", list(POLICIES), format_func=POLICIES.get, key="after-take"
                 )
             if take and stop:
-                # The one control that is an assumption rather than a rule. An OHLC bar does not
-                # say whether its high or its low came first, so a bar holding both levels has two
-                # readings; the pessimistic one is the default and the other is here to be run
-                # beside it. A result that only survives on the optimistic reading is a result
-                # about the intrabar path.
-                tie_stop = (
-                    st.sidebar.selectbox(
-                        "When one bar holds both levels",
-                        ["the stop fires", "the take fires"],
-                        help="the bar does not say which came first; the gap between the two is the assumption",
-                    )
-                    == "the stop fires"
-                )
+                # The one control that is an assumption rather than a rule, and the one that was
+                # unreadable: "when one bar holds both levels" says nothing about what is being
+                # decided. What is being decided is which of two exits already inside the same
+                # candle happened first, which a candle does not record — it gives a high and a low
+                # and no order. Both readings are here because the distance between them is the
+                # size of the assumption, and a result that only survives the optimistic one is a
+                # result about the intrabar path rather than about the rule.
+                tie_stop = st.sidebar.selectbox(
+                    "If one candle reaches the stop and the take profit",
+                    ["assume the stop came first (prudent)", "assume the take profit came first (optimistic)"],
+                    help="a candle gives a high and a low but not the order they arrived in, so a bar "
+                    "that reaches both levels has two readings and this picks one. Run it both ways: "
+                    "the gap between them is how much of the result is an assumption about the path.",
+                ).startswith("assume the stop")
     elif retrospective:
         st.sidebar.caption("The always-in rule needs a **prediction** of the swing leg position, not the label.")
 
@@ -904,6 +937,7 @@ def main() -> None:
             after_stop=after_stop,
             after_take=after_take,
             tie_stop=tie_stop,
+            trail=trail,
             window=EXTREMA_WINDOW,
             fee=FEE,
         )
@@ -1024,7 +1058,9 @@ def main() -> None:
             f"between — a flip closes one side and opens the other, so it pays {FEE * 200:.2f}% and never "
             f"stands aside. "
             + (
-                f"**{describe(stop)} stop**, and after it fires the rule {POLICIES[after_stop]}. "
+                f"**{describe(stop)} {'trailing ' if trail else ''}stop**"
+                + (", measured from the best price the hold has seen" if trail else "")
+                + f", and after it fires the rule {POLICIES[after_stop]}. "
                 if stop
                 else "No stop: a hold ends only when the prediction reaches the other band. "
             )
@@ -1034,8 +1070,9 @@ def main() -> None:
                 else ""
             )
             + (
-                f"A bar holding both levels is read as {'a stop' if tie_stop else 'a take profit'} — "
-                f"the bar does not say which came first, so run it both ways and read the gap. "
+                f"A candle that reaches both levels is read as {'a stop' if tie_stop else 'a take profit'} — "
+                f"it gives a high and a low but not the order they came in, so run it both ways and "
+                f"read the gap between the two answers. "
                 if take and stop
                 else ""
             )
