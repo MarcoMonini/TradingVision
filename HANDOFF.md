@@ -318,3 +318,77 @@ punto.
 
 **Non rifare:** leggere un hit rate per dimensione del movimento *sul hold* di una regola a
 isteresi senza la colonna delle durate accanto. È la variabile stessa, ordinata.
+
+---
+
+## 11. Le uscite della regola always-in (`stops.py`) — strumento pronto, **numeri non presi**
+
+La sezione 10 chiude dicendo che la leva non è una soglia né un modello, è **uno stop**. Questo
+ramo la scrive. Non la misura: lo store (`data/*.parquet`) non era presente in questa sessione,
+quindi la griglia sullo store non è mai stata lanciata e **in questo documento non c'è un solo
+numero nuovo sul P&L**. Chi riprende parte da qui:
+
+```bash
+uv run python -m tradingvision.stops --pred data/pred-swing-all-15m.parquet --at 0.5 --grid
+uv run python -m tradingvision.stops --pred data/pred-swing-all-15m.parquet --at 0.5 \
+    --sl atr:2 --tp atr:4 --after-stop reverse
+uv run python -m tradingvision.stops --pred data/pred-swing-all-15m.parquet --at 0.5 \
+    --sl fee:2 --tp fee:4 --tie take     # l'altra lettura della stessa barra
+```
+
+### Cosa è parametrizzato, e perché ognuno è una domanda e non un'impostazione
+
+- **Dove vanno le barriere.** Distanza in log dal prezzo d'ingresso, **fissata all'ingresso**
+  (trailing non c'è, è un'altra regola). Tre unità: `atr:k` (la colonna che `features` porta,
+  quindi la stessa unità degli input del modello), `fee:k` (multipli dell'andata e ritorno, l'unica
+  distanza con un significato aritmetico — `fee:1` incassa esattamente zero) e `pct:x` piatta.
+  Take e stop prendono specifiche separate: un take largo con uno stop stretto è la forma che la
+  tabella per movimento indica, e simmetrico è una scommessa sulla simmetria del *prezzo*, che
+  l'etichetta ha e il prezzo no.
+- **Cosa si tiene dopo.** `reverse` entra subito dall'altra parte al prezzo di uscita, `opposite`
+  sta flat fino al segnale opposto, `rearm` sta flat fino a un qualsiasi attraversamento fresco.
+  Una politica per barriera: invertire su uno stop è una scommessa di momentum, invertire su un
+  take è una di mean reversion.
+- **L'attraversamento fresco.** Il lato appena stoppato resta sbarrato finché la predizione non
+  rientra nella banda e non ne riesce. È il motivo per cui `threshold.signals` è stato separato da
+  `positions` — una posizione forward-filled ripete l'ultimo tocco per sempre e non può dire se il
+  segnale ha parlato *dopo* lo stop. Senza, `rearm` ricompra alla barra successiva.
+- **La barra che contiene entrambi i livelli.** `--tie stop` (default, prende la perdita) contro
+  `--tie take`. La distanza fra le due letture **è** la dimensione dell'ipotesi intrabarra. Un
+  risultato che vive solo su `--tie take` è un risultato sul percorso.
+
+### Il controllo
+
+Senza barriere `stops` **è** `threshold`: stesse posizioni, stesso lordo, stesse commissioni,
+stesso win rate, asserito riga per riga in `stops._selfcheck` contro `threshold.pnl`. `--grid`
+stampa quella riga per prima e ogni altra deve batterla. Se nessuna la batte, l'uscita non è dove
+la regola perde. E il punto di partenza è quello di sezione 9: a ±0.5 il lordo è +0.004 contro
+0.461 di commissioni, quindi **lo stop deve guadagnare due ordini di grandezza, non qualche punto**.
+
+### Sulla pagina
+
+`chart.py` apre ora su `swing_leg_target` e su ±0.5, e la regola disegnata passa da `stops` anche
+quando nessuna barriera è accesa — una sola strada di codice, non un ramo dietro il toggle.
+Controlli: stop loss e take profit (unità + moltiplicatore, widget separati perché "3" non vuol
+dire niente finché non dice tre di cosa), la politica di ognuna, e la lettura della barra
+ambigua. Sulle candele una X rossa è uno stop e una stella verde un take, **al prezzo di
+riempimento** e non alla chiusura della barra: una barra che gappa oltre il livello riempie
+all'apertura, e la distanza fra il segno e il livello è esattamente ciò che va visto. Il riquadro
+metriche guadagna "closed by a barrier", che è la lettura che dice se la barriera sta facendo
+qualcosa: una quota di stop vicina a zero vuol dire che la barriera è più larga dei hold della
+regola e i numeri accanto sono quelli di `threshold` con passaggi in più.
+
+### Un bug trovato strada facendo, fuori tema ma bloccante
+
+`gru.restore` e `swing.restore` chiamavano `torch.load` senza `map_location`. Un checkpoint porta
+con sé il device del processo che l'ha salvato, quindi quelli addestrati su Mac dicono `mps` e la
+pagina **non si apriva affatto** su Linux — cioè nel caso deployato, che è l'artefatto che questo
+progetto spedisce. Una riga per file.
+
+### Trappole
+
+- `ta` riempie il warm-up dell'ATR con **zeri**, non con NaN. Una barriera larga zero sta sul
+  prezzo d'ingresso e scatta alla prima barra che si muove. `stops.width` dà a un ATR non
+  strettamente positivo nessuna barriera, con l'assert accanto.
+- Una posizione aperta *dentro* una barra da un `reverse` è controllata contro le proprie barriere
+  solo dalla barra dopo: il percorso dentro la barra in cui è nata non è noto.
