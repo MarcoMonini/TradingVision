@@ -56,10 +56,13 @@ BAR = {
     "1d": pd.Timedelta("1D"),
 }
 # The rule's default band. Measured, like every other constant here: on `pred-swing-all-15m`,
-# twenty pairs and fifteen months, |pred| clears 0.4 on 23.7% of the rows, which puts the pair at
-# the 0.763 quantile of the model's own output. It is a starting point and not a tuned value —
-# section 9 of the spec prices the whole grid, and every row of it is negative after fees.
-THRESHOLD = 0.4
+# twenty pairs and fifteen months, |pred| clears 0.5 on 8.3% of the rows, which puts the pair at
+# the 0.917 quantile of the model's own output — 92.7 flips a year per pair against 195.8 at 0.4.
+# It is a starting point and not a tuned value: section 9 of the spec prices the whole grid and
+# every row of it is negative after fees, and the wider band is the default because it is the one
+# the exit rules are read on — a stop only has room to act on a hold the signal does not close
+# first, and at 0.4 the median hold is half as long.
+THRESHOLD = 0.5
 # What the saved model was fitted up to, shown so nobody reads a prediction over the train period
 # as if it were out of sample. It is the walk-forward's first cut and `gru`'s own default.
 TEST_START = "2025-06"
@@ -556,7 +559,17 @@ def main() -> None:
     symbol = st.sidebar.selectbox("Pair", SYMBOLS)
     timeframe = st.sidebar.selectbox("Timeframe", list(TIMEFRAMES), index=1)
     days = st.sidebar.slider("History (days)", 1, MAX_DAYS, 30)
-    label = st.sidebar.radio("Label", [PREDICTIVE, RETROSPECTIVE, CROSS], help="what the model is asked to output")
+    # Default to the retrospective label rather than the predictive one. It is the label the swing
+    # model and the always-in rule both read, so it is the only one on which the page draws a
+    # tradable rule at all; landing on `remaining_excursion` meant two clicks before anything that
+    # trades appears. The choice is still the open question of the project — the radio is where it
+    # is asked — but the answer the rest of the page is built on is this one.
+    label = st.sidebar.radio(
+        "Label",
+        [PREDICTIVE, RETROSPECTIVE, CROSS],
+        index=1,
+        help="what the model is asked to output",
+    )
     # Both controls shape the retrospective label only: the predictive one has no blend to weight
     # (a degenerate leg goes nowhere, so it scores near zero by itself).
     retrospective = label == RETROSPECTIVE
