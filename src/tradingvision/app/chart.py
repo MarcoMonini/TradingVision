@@ -1059,7 +1059,13 @@ def main() -> None:
             f"stands aside. "
             + (
                 f"**{describe(stop)} {'trailing ' if trail else ''}stop**"
-                + (", measured from the best price the hold has seen" if trail else "")
+                + (
+                    " off the best price the hold has seen, so it closes a *winning* hold by giving "
+                    "that much back rather than by losing it from the entry — a trailing stop firing "
+                    "in profit is the rule working, not a fault"
+                    if trail
+                    else " from the entry price, so it can only ever close at a loss"
+                )
                 + f", and after it fires the rule {POLICIES[after_stop]}. "
                 if stop
                 else "No stop: a hold ends only when the prediction reaches the other band. "
@@ -1079,6 +1085,13 @@ def main() -> None:
             + (
                 "A barrier fills at its level, or at the open when the bar gapped through it, so an X or a "
                 "star can sit well past the level it was aimed at. "
+                if take or stop
+                else ""
+            )
+            + (
+                "The rule stands **flat** only because a barrier fired — the prediction always says "
+                "long or short and never says stand aside — so a flat marker is an exit, and the X "
+                "or the star beside it says which one. "
                 if take or stop
                 else ""
             )

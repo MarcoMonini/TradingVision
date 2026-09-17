@@ -688,6 +688,37 @@ def _selfcheck() -> None:
     # is back to 100. A stop that loosened would have carried the hold past bar 4.
     assert out.why.iloc[0] == "stop" and out.bars.iloc[0] == 4
 
+    # The two properties a reader of the chart needs, because between them they identify what
+    # closed a hold from the marker alone.
+    #
+    # 1. A *fixed* stop can only ever close at a loss. It sits at `entry * exp(-w)` for a long, so
+    #    reaching it means the price went the wrong way by `w` — before fees, `side * move` is at
+    #    most `-w`. A fixed stop that closed a hold in profit would be a bug, not a strategy.
+    # 2. A *trailing* stop can and routinely does close in profit, which is what it is for: it sits
+    #    at `peak * exp(-w)`, and once the peak has moved `w` past the entry the level is above the
+    #    entry. It gives back `w` from the best price, it does not lose `w` from the entry.
+    # On the saw a 2xATR stop is wider than anything the perfect prediction lets the price take
+    # away, so it never fires — which is itself the point: a fixed stop fires only on an adverse
+    # move, and there are none here. The tight one fires on every hold, and every one is a loss of
+    # exactly its own width. A gap can take a fixed stop further than its width; nothing can make
+    # it less, and nothing can make it positive.
+    assert not len(run(pred, bars, 0.5, stop=("atr", 2.0))[1].query("why == 'stop'"))
+    tight = run(pred, bars, 0.5, stop=("pct", 0.002))[1].query("why == 'stop'")
+    assert len(tight) and ((tight.side * tight.move) < 0).all(), "a fixed stop closed in profit"
+    assert ((tight.side * tight.move) <= -0.002 + 1e-9).all(), tight.head()
+    over_hill = run(stuck, over, 0.5, stop=("pct", 0.02), trail=True)[1].query("why == 'stop'")
+    assert (over_hill.side * over_hill.move > 0).all(), "a trailing stop is the one that can"
+
+    # 3. The rule only ever goes flat because a barrier fired. The signal sets the side to +1 or
+    #    -1 and never to zero — there is no "the prediction told me to stand aside" — so a `flat`
+    #    marker on the chart is always an exit, and the X or the star next to it says which.
+    for tp_, sl_, a_s in ((("pct", 0.002), None, "opposite"), (None, ("pct", 0.002), "rearm")):
+        h, t = run(pred, bars, 0.5, take=tp_, stop=sl_, after_stop=a_s, after_take=a_s)
+        flat = h.pos.droplevel(1)
+        went_flat = flat.index[(flat == 0) & (flat.shift() != 0)]
+        closed = set(t[t.why.isin(["take", "stop"])].exit_time)
+        assert set(went_flat) <= closed, "the rule went flat without a barrier firing"
+
     # A policy name that does not exist is an error and not a silent default.
     for bad in ({"after_stop": "flip"}, {"after_take": ""}):
         try:
