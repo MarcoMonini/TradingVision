@@ -11,11 +11,10 @@ a fixed number of bars) is flat at every horizon, which is the reading that matt
 does not walk into big moves more often than into small ones. What loses money on them is the
 **exit**, and an exit is what this module adds.
 
-Three things are parameterised, because all three are guesses until something measures them.
+Four things are parameterised, because all four are guesses until something measures them.
 
-**Where the barriers go.** A barrier is a log distance from the entry price, fixed at entry and
-never moved (a trailing stop is a different rule and is not here). Three ways to name the distance,
-and they answer different questions:
+**Where the barriers go.** A barrier is a log distance from an anchor price, and the width is fixed
+at entry. Three ways to name the distance, and they answer different questions:
 
     atr:k   k times the Average True Range at the entry bar, as a fraction of price. The unit of
             what this market does anyway, so the same k is the same aggressiveness on a quiet pair
@@ -30,6 +29,22 @@ The two barriers take separate specs on purpose. Symmetric barriers are a bet th
 symmetric; `swing_leg_target` is symmetric around zero by construction but the *price* is not, and
 a wide take with a tight stop is the shape "let the leg run, cut the ones that start wrong" — the
 shape the by-move table points at. Whether it pays is a measurement and not an opinion.
+
+**Whether the stop trails.** `--trail` hangs the stop off the hold's high-water mark instead of
+its entry price — the highest high since entry for a long, the lowest low for a short — at the same
+width. It is the same rule turned from "how much am I willing to lose" into "how much of what I am
+already up am I willing to give back", and it is the one exit that can close a hold *in profit*
+without a take profit: on the by-move table's own reading, a hold that runs the right way and then
+turns is closed by the turn instead of by the prediction. Only the stop trails; a trailing take
+profit is not a thing, and the take stays where the entry put it.
+
+The ratchet moves one way only, so a trailed stop equals a fixed one on the hold's first bar and
+never loosens after that. It is raised from bars that have already been checked and survived, never
+from the bar it is being tested on: a stop lifted by the same bar's high and then hit by the same
+bar's low is a claim about which of the two arrived first, and an OHLC bar does not make that
+claim. One consequence is worth knowing rather than hiding — a long wick can ratchet the stop above
+where the price is now trading, and then the next bar fills at its open, below the level. That is
+what a real trailing stop does off a spike, not an artefact of this implementation.
 
 **Which barrier wins when both sit inside one bar.** An OHLC bar does not say the order its high
 and its low arrived in, and assuming the take came first is the oldest way to manufacture a
@@ -72,6 +87,8 @@ pair adds up to the four sides a flip really pays.
 
     uv run python -m tradingvision.stops --pred data/pred-swing-all-15m.parquet --at 0.5 \
         --sl atr:2 --tp atr:4 --after-stop reverse
+    uv run python -m tradingvision.stops --pred data/pred-swing-all-15m.parquet --at 0.5 \
+        --sl atr:2 --trail --after-stop opposite
     uv run python -m tradingvision.stops --pred data/pred-swing-all-15m.parquet --at 0.5 --grid
 """
 
@@ -126,6 +143,12 @@ def atr_pct(bars: pd.DataFrame, window: int = EXTREMA_WINDOW) -> pd.Series:
     """
     out = pd.Series(np.nan, index=bars.index, name="atr")
     for _, rows in bars.groupby(level=1, sort=False):
+        # A symbol with fewer bars than the window has no ATR, and `ta` does not say so politely —
+        # it writes `atr[window - 1]` into an array shorter than that and raises IndexError. Left
+        # as NaN here, which `width` turns into no barrier at all: a short window on the chart page
+        # then draws the rule without an ATR stop instead of taking the page down with it.
+        if len(rows) < window:
+            continue
         one = rows.droplevel(1)
         atr = AverageTrueRange(one.high, one.low, one.close, window=window).average_true_range()
         out.loc[rows.index] = (atr / one.close).to_numpy()
@@ -169,6 +192,7 @@ def walk(
     after_stop: str = "opposite",
     after_take: str = "opposite",
     tie_stop: bool = True,
+    trail: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, list]:
     """One symbol, bar by bar: the position held, what it earned, what it traded, why it exited.
 
@@ -192,10 +216,19 @@ def walk(
     "the signal spoke again" mean a fresh crossing rather than the same touch repeated; under
     `opposite` it does not, so only the other side can be taken however long the prediction stays
     where it was.
+
+    `peak` is the hold's high-water mark and carries the trailing stop. It starts at the entry
+    price and ratchets one way only, so a trailed stop equals a fixed one on the first bar and
+    never loosens after that. It is updated from bars that have already been *checked and
+    survived* — never from the bar the stop is being tested on — because a stop raised by the same
+    bar's high and then hit by the same bar's low is a statement about the order the two arrived
+    in, which an OHLC bar does not make. Same discipline as the tie-break below, for the same
+    reason. Only the stop trails; the take profit stays where the entry put it.
     """
     n = len(cl)
     pos, ret, ret_long, traded = (np.zeros(n) for _ in range(4))
     side, entry, entry_i, barred, sticky = 0.0, np.nan, -1, 0.0, False
+    peak = np.nan
     holds: list = []
 
     for i in range(n):
@@ -210,6 +243,7 @@ def walk(
                 traded[i] += 1.0
             traded[i] += 1.0
             side, entry, entry_i, barred, sticky = s, cl[i], i, 0.0, False
+            peak = entry
         pos[i] = side
         if i + 1 == n:
             break
@@ -221,7 +255,10 @@ def walk(
         # barrier is an infinite width, so its level is unreachable rather than special-cased.
         up = side > 0.0
         take_at = entry * np.exp(tp[entry_i] if up else -tp[entry_i])
-        stop_at = entry * np.exp(-sl[entry_i] if up else sl[entry_i])
+        # The stop hangs off the high-water mark when it trails and off the entry when it does not.
+        # Same width either way — trailing moves the anchor, it does not change the distance.
+        anchor = peak if trail else entry
+        stop_at = anchor * np.exp(-sl[entry_i] if up else sl[entry_i])
         if up:
             gapped_stop, gapped_take = op[j] <= stop_at, op[j] >= take_at
             touched_stop, touched_take = lo[j] <= stop_at, hi[j] >= take_at
@@ -246,6 +283,9 @@ def walk(
         else:
             ret[i] = side * np.log(cl[j] / cl[i])
             ret_long[i] = ret[i] if up else 0.0
+            # The bar survived, so its extreme is now history and may raise the stop for the next
+            # one. One way only: `max` for a long, `min` for a short.
+            peak = max(peak, hi[j]) if up else min(peak, lo[j])
             continue
 
         # The hold up to the fill, then whatever is held for the rest of the bar. Both land on row
@@ -256,7 +296,7 @@ def walk(
         traded[j] += 1.0
         stopped = side
         if (after_take if why == "take" else after_stop) == "reverse":
-            side, entry, entry_i = -stopped, at, j
+            side, entry, entry_i, peak = -stopped, at, j, at
             traded[j] += 1.0
         else:
             side = 0.0
@@ -282,6 +322,7 @@ def run(
     after_stop: str = "opposite",
     after_take: str = "opposite",
     tie_stop: bool = True,
+    trail: bool = False,
     sign: int = -1,
     window: int = EXTREMA_WINDOW,
     fee: float = FEE,
@@ -317,6 +358,7 @@ def run(
             after_stop,
             after_take,
             tie_stop,
+            trail,
         )
         held.loc[at, ["pos", "ret", "ret_long", "traded"]] = np.column_stack([pos, ret, ret_long, traded])
         when = at.get_level_values(0)
@@ -479,6 +521,12 @@ def _selfcheck() -> None:
     assert np.isclose(width(("fee", 3.0), atr).iloc[0], 6 * FEE)
     assert (width(None, atr) == np.inf).all()
     assert np.isclose(width(("pct", 0.05), atr).iloc[-1], 0.05)
+    # A frame shorter than the window is NaN throughout and therefore barrier-free, not an
+    # IndexError out of `ta`. The chart page can be asked for a week of candles.
+    short = bars.iloc[:6]
+    assert atr_pct(short).isna().all() and (width(("atr", 3.0), atr_pct(short)) == np.inf).all()
+    assert run(pred.iloc[:6], short, 0.5, stop=("atr", 2.0))[0].pos.notna().all()
+
     # `ta` fills the ATR warm-up with zeros, not NaN. A zero width is a barrier on the entry price
     # itself, so the warm-up would stop out on its first tick; it gets no barrier instead.
     assert atr.iloc[0] == 0.0 and width(("atr", 3.0), atr).iloc[0] == np.inf
@@ -585,6 +633,61 @@ def _selfcheck() -> None:
     assert (follow.side.to_numpy() == -t.side.shift()[follow.index].to_numpy()).all()
     assert np.allclose(follow.entry.to_numpy(), t.exit.shift()[follow.index].to_numpy())
 
+    # --- the trailing stop ---------------------------------------------------------------------
+    # With no stop at all, trailing has nothing to hang off and must change nothing.
+    assert run(pred, bars, 0.5, trail=True)[0].pos.equals(held.pos)
+    assert np.isclose(run(pred, bars, 0.5, take=("pct", 0.001), trail=True)[1].net.sum(), won.net.sum())
+
+    # The difference trailing makes, in one comparison. The saw cannot show it — its prediction is
+    # perfect, so the signal always closes a hold *before* the price turns and a trailing stop has
+    # nothing to catch. The case a trailing stop exists for is a hold that runs the right way and
+    # then gives it back, so that is the fixture: up 5% over twenty bars, down 8% over the next
+    # twenty, and a signal that says long throughout and never changes its mind.
+    when = pd.date_range("2025-03-01", periods=41, freq="h", tz="UTC")
+    hill = pd.MultiIndex.from_arrays([when, ["a"] * 41], names=["open_time", "symbol"])
+    shape = np.r_[np.linspace(0, 0.05, 21), np.linspace(0.05, -0.03, 21)[1:]]
+    line = np.exp(shape) * 100
+    over = pd.DataFrame({"open": np.r_[line[0], line[:-1]], "high": line, "low": line, "close": line}, index=hill)
+    stuck = pd.Series(-1.0, index=hill)  # sign -1, so "long" is what this says on every bar
+    fixed = run(stuck, over, 0.5, stop=("pct", 0.02))[1]
+    trailed = run(stuck, over, 0.5, stop=("pct", 0.02), trail=True)[1]
+    assert (fixed.why == "stop").sum() == 1 and (trailed.why == "stop").sum() == 1
+    a, b = fixed[fixed.why == "stop"].iloc[0], trailed[trailed.why == "stop"].iloc[0]
+    # Same width, different anchor: one waits for 2% below where it got in, the other takes 2% off
+    # the top. Earlier, higher, and the difference between a loss and a profit on the same path.
+    assert b.exit > a.exit and b.exit_time < a.exit_time, (a, b)
+    assert np.isclose(b.exit, line.max() * np.exp(-0.02)) and np.isclose(a.exit, 100 * np.exp(-0.02))
+    assert b.net > 0 > a.net, (a.net, b.net)
+
+    # The ratchet reads only bars that have already survived, which is the one property that keeps
+    # a trailing stop out of the intrabar guessing the tie-break is about. Six flat bars, a spike
+    # in the fourth, and a 5% trail: if the spike's own high raised the stop, the same bar's low of
+    # 99 would be under the new level and the hold would end inside the spike. It must not.
+    flat = pd.date_range("2025-06-01", periods=6, freq="h", tz="UTC")
+    at = pd.MultiIndex.from_arrays([flat, ["a"] * 6], names=["open_time", "symbol"])
+    spike = pd.DataFrame(
+        {
+            "open": [100.0, 100.0, 100.0, 100.0, 108.0, 100.0],
+            "high": [100.0, 100.0, 100.0, 110.0, 108.0, 100.0],
+            "low": [100.0, 100.0, 100.0, 99.0, 100.0, 100.0],
+            "close": [100.0, 100.0, 100.0, 108.0, 100.0, 100.0],
+        },
+        index=at,
+    )
+    always = pd.Series(-1.0, index=at)  # sign -1, so the rule is long from the first bar
+    _, out = run(always, spike, 0.5, stop=("pct", 0.05), trail=True)
+    hit = out[out.why == "stop"]
+    assert len(hit) == 1, out
+    # Not in the spike's own bar, and at the level the spike's high set for the bar after it.
+    assert hit.exit_time.iloc[0] == flat[4], out
+    assert np.isclose(hit.exit.iloc[0], 110 * np.exp(-0.05)), hit.exit.iloc[0]
+    # The same width from the entry price never fires here at all: 100 * exp(-0.05) is 95.1 and
+    # nothing trades that low. The two readings differ only in the anchor.
+    assert (run(always, spike, 0.5, stop=("pct", 0.05))[1].why == "stop").sum() == 0
+    # One way only: the stop that the spike raised is still raised on the last bar, where the high
+    # is back to 100. A stop that loosened would have carried the hold past bar 4.
+    assert out.why.iloc[0] == "stop" and out.bars.iloc[0] == 4
+
     # A policy name that does not exist is an error and not a silent default.
     for bad in ({"after_stop": "flip"}, {"after_take": ""}):
         try:
@@ -611,6 +714,23 @@ def _selfcheck() -> None:
     # The panel's rate is the per-symbol rate and not the sum of two of them.
     alone = price(*shapes["opposite"])
     assert np.isclose(price(h, t)["gross_per_year"], alone["gross_per_year"])
+
+    # The trade table and the drawn position are the same object read two ways, and a chart that
+    # marks one against the other needs them to agree. Two invariants, over every combination of
+    # barrier and policy: a hold's side is the position held at its entry bar, and no two holds of
+    # a symbol overlap. They are what says the state machine never opens a second position without
+    # closing the first — the shape of bug a marker that repeats itself makes you suspect.
+    for tp_, sl_, a_s, a_t, tr in (
+        (None, ("pct", 0.001), "reverse", "opposite", False),
+        (("pct", 0.001), ("pct", 0.002), "rearm", "reverse", False),
+        (("atr", 3.0), ("atr", 1.0), "opposite", "rearm", True),
+        (None, ("atr", 2.0), "reverse", "reverse", True),
+    ):
+        h, t = run(pred, bars, 0.5, take=tp_, stop=sl_, after_stop=a_s, after_take=a_t, trail=tr)
+        p_ = h.pos.droplevel(1)
+        assert (t.entry_time.to_numpy()[1:] >= t.exit_time.to_numpy()[:-1]).all(), "overlapping holds"
+        assert (p_.reindex(t.entry_time).to_numpy() == t.side.to_numpy()).all(), "a hold the chart cannot draw"
+        assert set(p_.unique()) <= {-1.0, 0.0, 1.0}
 
     # The grid's first row is the control, and it is `threshold`'s number.
     table = grid(pred, bars, 0.5, pairs=((2.0, 2.0),))
@@ -642,6 +762,11 @@ def main() -> None:
         choices=["stop", "take"],
         help="which barrier wins when both sit inside one bar; the default takes the loss",
     )
+    ap.add_argument(
+        "--trail",
+        action="store_true",
+        help="hang the stop off the hold's high-water mark instead of its entry price, same width",
+    )
     ap.add_argument("--fee", type=float, default=FEE, help="per side; the default is Alpaca taker tier 1")
     ap.add_argument("--sign", type=int, default=-1, choices=[-1, 1], help="-1 for the swing label")
     ap.add_argument("--window", type=int, default=EXTREMA_WINDOW, help="bars of ATR behind a barrier in atr units")
@@ -655,13 +780,17 @@ def main() -> None:
         after_stop=args.after_stop,
         after_take=args.after_take,
         tie_stop=args.tie == "stop",
+        trail=args.trail,
         sign=args.sign,
         window=args.window,
         fee=args.fee,
     )
     print(f"{len(pred):,} rows, {pred.index.get_level_values(1).nunique()} symbols, fee {args.fee * 100:.2f}% per side")
     print(f"{pred.index.get_level_values(0).min():%Y-%m-%d} to {pred.index.get_level_values(0).max():%Y-%m-%d}")
-    print(f"band +/-{args.at}, after a stop: {args.after_stop}, after a take: {args.after_take}, tie: {args.tie}\n")
+    print(
+        f"band +/-{args.at}, {'trailing' if args.trail else 'fixed'} stop, after a stop: "
+        f"{args.after_stop}, after a take: {args.after_take}, tie: {args.tie}\n"
+    )
     if args.grid:
         print(grid(pred, bars, args.at, **shared).round(4).to_string())
     else:
