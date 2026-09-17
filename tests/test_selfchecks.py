@@ -23,6 +23,7 @@ from tradingvision import (
     nearpivot,
     selection,
     simulation,
+    stops,
     swingrule,
     threshold,
 )
@@ -105,6 +106,12 @@ def test_threshold_selfcheck():
     never registered here — the asserts on the always-in rule ran only when someone ran the
     module by hand. They are the ones the traded rule rests on, so they belong in CI."""
     threshold._selfcheck()
+
+
+def test_stops_selfcheck():
+    """`stops` keeps its checks in a function: its `__main__` reads a real prediction file and the
+    5m store behind it. The checks themselves run on a saw and need neither."""
+    stops._selfcheck()
 
 
 def test_simulation_selfcheck():

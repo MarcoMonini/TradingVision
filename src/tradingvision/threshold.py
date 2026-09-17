@@ -87,16 +87,29 @@ def smoothed(pred: pd.Series, k: int) -> pd.Series:
     return ordered.groupby(level=1).rolling(k, min_periods=1).mean().droplevel(0).reindex(pred.index)
 
 
-def positions(pred: pd.Series, threshold: float, sign: int = -1) -> pd.Series:
-    """The held position at every row: +1 long, -1 short, 0 before the first signal.
+def signals(pred: pd.Series, threshold: float, sign: int = -1) -> pd.Series:
+    """What the band says at each row on its own: +1 long, -1 short, 0 in between.
+
+    The instantaneous reading, before any memory of what is held. `positions` is this forward
+    filled and is what the always-in rule holds; the raw series is what a rule with an *exit*
+    needs, because once a stop has closed a position the question is no longer "what is the
+    signal" but "has the signal said anything new since". A forward filled series cannot answer
+    that — every bar after a band touch repeats it forever — so the two readings are separated
+    here and `stops` reads this one.
 
     `sign` is the direction the label points. It is -1 for `swing_leg_target`, where a low
     prediction means the bar sits near a low and the leg runs up from there, and +1 for
     `remaining_excursion`, which is already signed the way the trade is.
     """
-    signal = pd.Series(np.nan, index=pred.index)
-    signal[pred <= -threshold] = -sign
-    signal[pred >= threshold] = sign
+    out = pd.Series(0.0, index=pred.index)
+    out[pred <= -threshold] = -sign
+    out[pred >= threshold] = sign
+    return out
+
+
+def positions(pred: pd.Series, threshold: float, sign: int = -1) -> pd.Series:
+    """The held position at every row: +1 long, -1 short, 0 before the first signal."""
+    signal = signals(pred, threshold, sign).replace(0.0, np.nan)
     # Forward filled inside each symbol, which is what makes it a hold and not a flicker. The rows
     # arrive sorted by timestamp, so a symbol's rows are already in its own chronological order.
     return signal.groupby(level=1).ffill().fillna(0.0)
@@ -329,6 +342,12 @@ def _selfcheck() -> None:
     # A fee larger than the leg turns the same perfect signal into a loss. Nothing about the
     # ordering changed, which is the whole point of measuring this and not the Rank IC.
     assert pnl(pred, close, 0.9, fee=0.05)["net_per_year"] < 0
+
+    # The raw band reading, which is `positions` before the fill: non-zero exactly where the
+    # prediction is outside the band, and zero — not the last side — everywhere in between.
+    raw = signals(pred, 0.9)
+    assert (raw[pred.abs() < 0.9] == 0.0).all() and (raw[pred <= -0.9] == 1.0).all()
+    assert positions(pred, 0.9).equals(raw.replace(0.0, np.nan).groupby(level=1).ffill().fillna(0.0))
 
     # Hysteresis: the position is held through the middle of the leg and not flattened there.
     pos = positions(pred, 0.9)
