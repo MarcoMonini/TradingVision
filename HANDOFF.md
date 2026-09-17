@@ -345,6 +345,13 @@ uv run python -m tradingvision.stops --pred data/pred-swing-all-15m.parquet --at
   Take e stop prendono specifiche separate: un take largo con uno stop stretto è la forma che la
   tabella per movimento indica, e simmetrico è una scommessa sulla simmetria del *prezzo*, che
   l'etichetta ha e il prezzo no.
+- **Se lo stop trascina** (`--trail`). Lo stop si aggancia al massimo raggiunto dal hold invece che
+  al prezzo d'ingresso, stessa larghezza: da "quanto sono disposto a perdere" a "quanto di ciò che
+  ho guadagnato sono disposto a restituire". È l'unica uscita che può chiudere un hold **in
+  profitto** senza un take profit. Il cricchetto va in una direzione sola e viene alzato solo da
+  barre già controllate e sopravvissute — mai da quella su cui è in prova, che sarebbe la stessa
+  ipotesi sul percorso che `--tie` isola. Uno spike può portare lo stop sopra il prezzo corrente e
+  la barra dopo riempie alla sua apertura: è quello che fa uno stop trailing vero, non un artefatto.
 - **Cosa si tiene dopo.** `reverse` entra subito dall'altra parte al prezzo di uscita, `opposite`
   sta flat fino al segnale opposto, `rearm` sta flat fino a un qualsiasi attraversamento fresco.
   Una politica per barriera: invertire su uno stop è una scommessa di momentum, invertire su un
@@ -353,9 +360,13 @@ uv run python -m tradingvision.stops --pred data/pred-swing-all-15m.parquet --at
   rientra nella banda e non ne riesce. È il motivo per cui `threshold.signals` è stato separato da
   `positions` — una posizione forward-filled ripete l'ultimo tocco per sempre e non può dire se il
   segnale ha parlato *dopo* lo stop. Senza, `rearm` ricompra alla barra successiva.
-- **La barra che contiene entrambi i livelli.** `--tie stop` (default, prende la perdita) contro
-  `--tie take`. La distanza fra le due letture **è** la dimensione dell'ipotesi intrabarra. Un
-  risultato che vive solo su `--tie take` è un risultato sul percorso.
+- **La candela che tocca entrambi i livelli.** Una barra dà un massimo e un minimo ma non l'ordine
+  in cui sono arrivati, quindi una barra che raggiunge sia lo stop sia il take ha due letture.
+  `--tie stop` (default, prende la perdita) contro `--tie take`. La distanza fra le due **è** la
+  dimensione dell'ipotesi intrabarra. Un risultato che vive solo su `--tie take` è un risultato sul
+  percorso. Sulla pagina il controllo si chiama ora *"If one candle reaches the stop and the take
+  profit"* con le due opzioni scritte per esteso — il vecchio *"When one bar holds both levels"* non
+  diceva cosa si stesse decidendo.
 
 ### Il controllo
 
@@ -392,3 +403,28 @@ progetto spedisce. Una riga per file.
   strettamente positivo nessuna barriera, con l'assert accanto.
 - Una posizione aperta *dentro* una barra da un `reverse` è controllata contro le proprie barriere
   solo dalla barra dopo: il percorso dentro la barra in cui è nata non è noto.
+
+### Il bug segnalato: era il marcatore, non la macchina a stati
+
+Segnalato come "un BUY mai chiuso e poi un altro BUY". La macchina a stati è a posto — 1944
+combinazioni di barriera, politica, tie e trail su sei serie, e nessuna invariante rotta: le
+posizioni stanno in {−1, 0, +1}, i hold non si sovrappongono mai, e il lato di ogni hold è la
+posizione tenuta alla sua barra d'ingresso.
+
+Erano le **etichette dei triangoli**. `chart.py` le derivava dal *segno della variazione*: ogni
+salita "buy", ogni discesa "sell". Con la regola always-in era corretto per costruzione, perché non
+c'è stato flat e la posizione va da +1 a −1 e ritorno, quindi le parole si alternavano da sole. Con
+un'uscita in mezzo c'è il flat, e **chiudere uno short (−1 → 0) e aprire un long (0 → +1) sono
+entrambi una salita**: due "buy" di fila senza "sell" in mezzo, che sul grafico si legge come una
+posizione aperta due volte e mai chiusa. Il trade era giusto, la didascalia no.
+
+Ora il marcatore è indicizzato sullo **stato in cui la regola entra** — `long`, `short`, `flat` —
+quindi due marcatori consecutivi uguali sono strutturalmente impossibili. Il libro fattoriale
+graduato tiene la vecchia lettura: non ha stati da nominare, solo più e meno.
+
+### Un secondo bug trovato mentre si verificava
+
+`atr_pct` andava in `IndexError` dentro `ta` su un frame più corto della finestra ATR: la libreria
+scrive `atr[window - 1]` in un array più corto di così. Sulla pagina significa che con una barriera
+in ATR e poche giornate di storia la pagina cadeva. Ora un simbolo con meno barre della finestra
+resta NaN, che `width` traduce in nessuna barriera.
