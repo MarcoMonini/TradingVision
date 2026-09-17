@@ -974,9 +974,12 @@ def save(path, model, tf, window, steps, params, stage, keep=None, cal=None):
     being run on, from that symbol's own history, which is what `chart` does when it draws a pair
     the store has never seen.
     """
+    # CPU whatever device trained it: a checkpoint written from `mps` names that device inside the
+    # pickle, and unpickling it on a host with no Metal — the deployed Streamlit page — dies before
+    # `restore`'s `map_location` is reached, because the storage itself cannot be built.
     torch.save(
         {
-            "state": model.state_dict(),
+            "state": {k: v.detach().cpu() for k, v in model.state_dict().items()},
             "inputs": list(INPUTS if keep is None else keep),
             "timeframe": tf,
             "window": window,
@@ -996,14 +999,8 @@ def save(path, model, tf, window, steps, params, stage, keep=None, cal=None):
 
 
 def restore(path: Path = CHECKPOINT) -> tuple[Net, dict]:
-    """The saved model, on whatever device *this* machine has.
-
-    `map_location=DEVICE` and not the default, which is what the file was written on. A checkpoint
-    carries the device of the process that saved it, so one trained on a Mac says `mps` and
-    `torch.load` on a Linux box raises `Storage device not recognized: mps` before a single weight
-    is read. That is exactly the deployed case — the page is the artefact this project ships, the
-    training runs on a laptop with MPS — so the default is not a default here, it is a crash.
-    """
+    # `map_location` is what loads a checkpoint trained on `mps` where there is no Metal; the
+    # files written before `save` went device-free still carry the device of every storage.
     checkpoint = torch.load(path, weights_only=False, map_location=DEVICE)
     model = Net(len(checkpoint["inputs"])).to(DEVICE)
     model.load_state_dict(checkpoint["state"])

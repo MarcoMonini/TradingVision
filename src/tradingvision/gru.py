@@ -628,9 +628,14 @@ def save(
 ) -> None:
     """The weights and everything needed to feed them: the scaling of the train period, the
     columns, the branches and their widths. A model without its scaler is not a model."""
+    # The state goes out on the CPU whatever device trained it. A checkpoint written from `mps`
+    # carries that device inside the pickle, and unpickling it where there is no Metal — the
+    # Streamlit page on a Linux host — raises before `map_location` in `restore` is consulted for
+    # the storages it cannot even construct. Saving device-free makes the file portable at the
+    # source; `restore` still maps, for the checkpoints already written the other way.
     torch.save(
         {
-            "state": model.state_dict(),
+            "state": {k: v.detach().cpu() for k, v in model.state_dict().items()},
             "stats": x.stats,
             "widths": x.widths,
             "branches": branches,
@@ -645,14 +650,9 @@ def save(
 
 
 def restore(path: Path = CHECKPOINT) -> tuple[Net, dict]:
-    """The saved model, on whatever device *this* machine has.
-
-    `map_location=DEVICE` and not the default, which is what the file was written on. A checkpoint
-    carries the device of the process that saved it, so one trained on a Mac says `mps` and
-    `torch.load` on a Linux box raises `Storage device not recognized: mps` before a single weight
-    is read. That is exactly the deployed case — the page is the artefact this project ships, the
-    training runs on a laptop with MPS — so the default is not a default here, it is a crash.
-    """
+    # `map_location` is what lets a model trained on `mps` load on a machine that has no Metal:
+    # the checkpoint records the device of every storage, and without this the deploy host dies on
+    # "Storage device not recognized: mps" before the weights are ever read.
     checkpoint = torch.load(path, weights_only=False, map_location=DEVICE)
     model = Net(checkpoint["widths"], shared=checkpoint["shared"]).to(DEVICE)
     model.load_state_dict(checkpoint["state"])
