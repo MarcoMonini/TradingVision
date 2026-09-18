@@ -45,9 +45,12 @@ uv run python -m tradingvision.swingrule --pred data/pred-swing-*.parquet  # the
 uv run python -m tradingvision.threshold --pred data/pred-swing-*.parquet --at 0.5  # the always-in flip rule
 uv run python -m tradingvision.stops --pred data/pred-swing-*.parquet --at 0.5 --grid  # the same rule with exits
 uv run python -m tradingvision.legcheck  --pred data/pred-swing-*.parquet  # does the prediction lead, or only summarise?
+uv run python -m tradingvision.legsweep --table                        # step 8: the 9x13 smoothing/leg-window grid
 ```
 
-`gru --save` writes `data/gru.pt`, which is what the chart page draws predictions from.
+`gru --save` writes `data/gru.pt`, which is what the chart page draws predictions from — except on the
+retrospective label, where the page loads the cell of `legsweep`'s grid its two sliders name
+(`data/gru-swing-s<smoothing>-w<window>.pt`) and refuses to draw a model fitted on another cell.
 
 ## Architecture
 

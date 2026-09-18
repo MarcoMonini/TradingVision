@@ -504,3 +504,85 @@ su cui i numeri dello spec sono stati misurati) e la casella accetta anche una c
 Quali di esse Alpaca elenchi davvero non è una cosa che questo progetto possa sapere — la copertura
 del venue è più stretta di quella di Binance e cambia — quindi la lista è un punto di partenza e
 non un'affermazione sul venue: una coppia che Alpaca non serve fa scattare l'avviso che c'era già.
+
+---
+
+## 12. La griglia smoothing × leg window, misurata tutta (`legsweep.py`)
+
+**Domanda.** Le due manopole di `swing_leg_target` non erano mai state misurate contro il modello:
+la finestra dei pivot (24, calibrata in `oracle` sul P&L di indietro penalizzato dal ritardo — una
+domanda sulla struttura del mercato, non su cosa una rete ricorrente riesce a ordinare) e il
+`peso_tempo` (0,7, documentato in `data/target.py` come "a starting value, tunable", e mai tunato).
+Griglia completa: 9 smoothing × 13 finestre = **117 celle, tutte addestrate**, 45 minuti.
+
+**Cosa si muove e cosa no.** Le feature restano su `EXTREMA_WINDOW = 24` in ogni cella e il tensore
+`step3-15m-all.npy` è sempre lo stesso file mappato: si muove solo il target. È il contratto di
+`dataset.relabel`, scritto lì — ricalcolare l'etichetta sulle righe che lo step 2 ha già scelto
+tiene il campione identico, quindi l'unica differenza fra due celle è la domanda posta. `next_pivot`
+**viene** ricalcolato per finestra, cosa che `relabel` non fa: le gambe non sono più le stesse
+gambe, quindi l'orizzonte di purging non è più lo stesso orizzonte, e uno split non purgato a
+finestra lunga perde attraverso il taglio che esiste per proteggerlo.
+
+**Protocollo veloce, e dichiarato tale.** Uno split temporale invece dei quattro fold walk-forward,
+un seed, griglia di campionamento a 4h invece che oraria (un quarto delle righe, cross-section
+intere — si assottiglia per *timestamp* e mai per riga, perché la metrica è cross-sectional),
+15 epoche con patience 3. La cella corrente riproduce il riferimento: **IC 0,4188 / Rank IC 0,4083**
+contro 0,4310 / 0,4114 del protocollo pieno a 4 fold e 5 seed. Un seed vale 0,001 (misurato su tre).
+I numeri di questa griglia **non** sono confrontabili con quelli dello spec: è un ordinatore, non
+una misura.
+
+### Il risultato
+
+| cella | IC | Rank IC | `rsi_centered` | edge |
+|---|---|---|---|---|
+| 0,7 / 24 — attuale | 0,4188 | 0,4083 | 0,3785 | 0,0298 |
+| **0,2 / 12 — massimo** | **0,5033** | **0,4753** | 0,4424 | 0,0330 |
+| 0,9 / 60 — minimo | 0,3439 | 0,3254 | 0,2232 | **0,1022** |
+
+IC e Rank IC hanno lo stesso massimo e **la superficie non ha nessun ottimo interno**: sale
+monotonamente verso finestre corte e pesi-tempo bassi, in entrambe le direzioni, su tutte e 117 le
+celle. Su tre seed alla finestra 12: 0,4741 ± 0,0006 a smoothing 0,2, 0,4731 ± 0,0009 a 0,1,
+0,4708 ± 0,0010 a 0,3 — quindi 0,2 batte davvero 0,3 ed è testa o croce contro 0,1. La risposta
+alla domanda posta è **finestra 12, peso tempo ≤ 0,3**, e vale +0,067 di Rank IC.
+
+### Perché non basta, e il controllo che lo dice
+
+Ogni cella misura anche `rsi_centered_15m` — un indicatore grezzo — sulla **stessa** etichetta e
+sulle stesse righe. Serve a rispondere a "quanto di questo Rank IC è l'etichetta che diventa più
+facile da ordinare": una finestra più larga fa un'etichetta più lenta, e un'etichetta più lenta si
+ordina meglio a parità di modello.
+
+`edge = rank_ic − base_rank_ic` sale monotonamente **nella direzione opposta**, fino a 0,1022 a
+0,9/60. Le due superfici sono angoli opposti della stessa griglia e nessuna delle due ha un massimo
+interno. Alla cella migliore un RSI grezzo legge 0,4424 dei 0,4753 del modello: **il 93% del vincitore
+è un indicatore per cui il modello non serve**, contro il 92,7% della cella attuale. I +0,067 di
+Rank IC valgono **+0,003 di edge**, cioè tre seed.
+
+**Quindi: non spostare il progetto su 0,2/12 su questa base.** Comprerebbe un numero più grande e
+non un grammo di segnale in più, ed è esattamente la distinzione che la sezione 3 di questo handoff
+ha già pagato — la predizione che fa 0,4114 contro l'etichetta swing fa **−0,0405 contro il
+rendimento forward**. Se la griglia va rifatta, va rifatta su un giudice che sia il prezzo
+(`legcheck`, `swingrule`), non la correlazione con l'etichetta.
+
+### Cosa c'è a terra
+
+- `data/legsweep.csv` — una riga per cella: `ic, icir, rank_ic, rank_icir, base_rank_ic, delta, rows, seconds`.
+  `python -m tradingvision.legsweep --table` stampa le tre matrici (Rank IC, IC, edge).
+- `data/gru-swing-s<smoothing>-w<finestra>.pt` — **117 checkpoint**, uno per cella. Il nome porta i
+  parametri perché la pagina deve decidere *prima* di aprire qualcosa quale dei 117 file caricare.
+- `data/legsweep-labels/w<finestra>.parquet` — cache delle etichette, 13 file da ~50 MB. Usa e getta:
+  si ricostruisce in pochi secondi per finestra.
+- La pagina: lo slider dello smoothing ora ha passo 0,1 (ogni posizione è una cella addestrata) e
+  c'è **Leg window (label pivots)** sulle 13 finestre. I due insieme scelgono il checkpoint, il
+  label disegnato, i pivot, e i due oracoli. Su una cella che nessuno ha addestrato la pagina **non**
+  ripiega su un altro modello — scrive quale comando la addestra — perché un modello adattato
+  all'etichetta a uno smoothing disegna una riga che contro l'etichetta a un altro smoothing
+  significa un'altra cosa. `gru --save data/gru-swing-s0.20-w12.pt` sovrascrive una cella col fit
+  pieno a quattro fold, che è ciò che il vincitore si merita se e quando lo si sposta.
+
+### Non rifare
+
+- **Non rifare la griglia muovendo anche la finestra delle feature.** Costa step 2 e il tensore
+  ricostruiti per finestra (16 + 4 minuti × 13) e confonde "etichetta migliore" con "input migliori".
+- **Non leggere `rank_ic` da solo.** L'argmax di Rank IC è la cella in cui l'etichetta somiglia di
+  più a un RSI. `--table edge` è la colonna che lo dice.

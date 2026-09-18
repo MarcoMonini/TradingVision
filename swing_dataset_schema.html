@@ -481,6 +481,32 @@ footer{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);color:v
   </div>
 
   <p><strong>Esito: 24.</strong> Ottimo del range a L=3 ed entro l'1% dell'ottimo a L=2, col miglior tasso di gambe in utile fra i valori equivalenti. La gamba risultante, mediane sui 20 simboli su 2023+: <strong>ampiezza 3,63%</strong>, primo quartile 2,29% (margine 4,6× sul costo), durata 8h50m, <strong>~344 gambe/anno</strong> per simbolo, commissioni pari al 13,8% della gamba mediana.</p>
+
+  <h3>La griglia peso_tempo × finestra, misurata contro il modello <span class="b b-msr">misurato</span></h3>
+  <p>Le due manopole dell'etichetta erano state fissate da domande diverse da quella che conta: la finestra dalla tabella qui sopra, che è una domanda sul P&amp;L dell'oracolo e sulla struttura del mercato; il <code>peso_tempo</code> da niente — 0,7 è annotato in <code>data/target.py</code> come valore di partenza. <code>tradingvision.legsweep</code> le misura sulla domanda del modello: <strong>9 smoothing × 13 finestre = 117 celle, tutte addestrate</strong>. Feature ferme su <code>finestra_estremi = 24</code> e stesso tensore in ogni cella — si muove solo il target, che è il contratto di <code>dataset.relabel</code> — mentre <code>next_pivot</code> viene ricalcolato per finestra, perché le gambe cambiano e con loro l'orizzonte di purging.</p>
+  <p>Protocollo dichiaratamente veloce: uno split invece di quattro fold, un seed, campionamento a 4h invece che orario, 15 epoche. Non confrontabile con i numeri di questa specifica — la cella corrente ci legge 0,4083 di Rank IC contro 0,4114 del protocollo pieno, e un seed vale 0,001.</p>
+
+  <div class="tw">
+    <table>
+      <caption>IC e Rank IC sul test, 2025-06+, e <code>rsi_centered</code> misurato sulla stessa etichetta come controllo</caption>
+      <thead><tr><th class="num">peso_tempo / finestra</th><th class="num">IC</th><th class="num">Rank IC</th><th class="num">rsi_centered</th><th class="num">edge</th></tr></thead>
+      <tbody>
+        <tr><td class="num">0,7 / 24 — in uso</td><td class="num">0.4188</td><td class="num">0.4083</td><td class="num">0.3785</td><td class="num">0.0298</td></tr>
+        <tr class="hi"><td class="num">0,2 / 12 — massimo IC e Rank IC</td><td class="num">0.5033</td><td class="num">0.4753</td><td class="num">0.4424</td><td class="num">0.0330</td></tr>
+        <tr><td class="num">0,9 / 60 — massimo edge</td><td class="num">0.3439</td><td class="num">0.3254</td><td class="num">0.2232</td><td class="num">0.1022</td></tr>
+        <tr><td colspan="5" class="foot">IC e Rank IC hanno lo stesso massimo e la superficie non ha nessun ottimo interno: sale monotonamente verso finestre corte e pesi-tempo bassi su tutte e 117 le celle</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="box why">
+    <h4>Perché l'argmax non è l'esito</h4>
+    <p><strong>Una finestra più larga fa un'etichetta più lenta, e un'etichetta più lenta si ordina meglio a parità di modello.</strong> Il Rank IC quindi deriva con la finestra per una ragione che non è segnale. Ogni cella misura perciò anche <code>rsi_centered_15m</code> — un indicatore grezzo — sulle stesse righe e sulla stessa etichetta, e <code>edge = Rank IC − rsi_centered</code> è la parte che non è l'etichetta che diventa più facile.</p>
+    <p><strong>Le due superfici sono angoli opposti della stessa griglia</strong>, e nessuna delle due ha un massimo interno: l'edge sale monotonamente nella direzione contraria, fino a 0,1022 a 0,9/60. Alla cella migliore un RSI grezzo legge 0,4424 dei 0,4753 del modello — <strong>il 93% del vincitore è un indicatore per cui il modello non serve</strong>, contro il 92,7% della cella attuale. I +0,067 di Rank IC valgono <strong>+0,003 di edge</strong>, cioè tre seed.</p>
+    <p><strong>Esito: 0,7 / 24 restano.</strong> Spostarsi su 0,2/12 comprerebbe un numero più grande e nessun segnale in più, ed è esattamente la distinzione che la sezione 9 ha già pagato: la predizione che fa 0,4114 contro questa etichetta fa −0,0405 contro il rendimento forward. Se la griglia va rifatta, va rifatta con giudice il prezzo — <code>legcheck</code>, <code>swingrule</code> — e non la correlazione con l'etichetta. Su tre seed alla finestra 12 il vincitore comunque tiene: 0,4741 ± 0,0006 a 0,2, 0,4731 ± 0,0009 a 0,1, 0,4708 ± 0,0010 a 0,3.</p>
+  </div>
+
+  <p>A terra restano <code>data/legsweep.csv</code> (una riga per cella, <code>--table</code> stampa le tre matrici) e <strong>117 checkpoint</strong> <code>data/gru-swing-s&lt;peso&gt;-w&lt;finestra&gt;.pt</code>. La pagina chart ha ora entrambi i controlli — smoothing a passo 0,1 e <em>Leg window (label pivots)</em> — e carica il checkpoint della cella scelta; su una cella non addestrata non ripiega su un altro modello, perché una rete adattata all'etichetta a uno smoothing disegna contro l'etichetta a un altro smoothing una riga che significa un'altra cosa.</p>
 </section>
 
 <section>

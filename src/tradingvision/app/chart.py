@@ -33,7 +33,7 @@ import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 
-from tradingvision import factor, gru, metrics, stops, swing, threshold
+from tradingvision import factor, gru, legsweep, metrics, stops, swing, threshold
 from tradingvision.data import candles
 from tradingvision.data.candles import BAR, SYMBOLS, TIMEFRAMES, get_candles
 from tradingvision.data.pivots import EXTREMA_WINDOW, find_pivots
@@ -688,6 +688,7 @@ def main() -> None:
     # (a degenerate leg goes nowhere, so it scores near zero by itself).
     retrospective = label == RETROSPECTIVE
     smoothing = SMOOTHING
+    leg_window = EXTREMA_WINDOW
     significance = True
     # Counted in bars of the timeframe on screen, like every other window here. 48 bars of 15m is
     # the 12h the horizon sweep pointed at; on another timeframe the same number is another period,
@@ -696,9 +697,22 @@ def main() -> None:
     if label == CROSS:
         horizon = st.sidebar.slider("Forward horizon (bars)", 4, 288, CROSS_HORIZON, 4)
     if retrospective:
-        # Unlike the window and the fee, this one is explicitly a tunable: 0.7 is a starting value.
-        # 1.0 is a pure time ramp between pivots, 0.0 follows price alone.
-        smoothing = st.sidebar.slider("Target smoothing (time weight)", 0.0, 1.0, SMOOTHING, 0.05)
+        # Unlike the fee, this one is explicitly a tunable: 0.7 is a starting value. 1.0 is a pure
+        # time ramp between pivots, 0.0 follows price alone. Stepped by 0.1 and not 0.05 so every
+        # position on it is a cell `legsweep` trained a model for — the two controls below pick
+        # the label *and* the checkpoint, and a half-step between two models would draw the label
+        # at one setting against a model fitted on another.
+        smoothing = st.sidebar.slider("Target smoothing (time weight)", 0.0, 1.0, SMOOTHING, 0.1)
+        # The pivots the label ramps between. `EXTREMA_WINDOW = 24` is calibrated in `oracle`, but
+        # on the *hindsight P&L of the legs* and never against what the model can rank, which is
+        # what `legsweep` measures. The features stay on 24 whatever this says: the sweep moved
+        # the label alone, so a checkpoint here reads the same inputs as every other one.
+        leg_window = st.sidebar.select_slider(
+            "Leg window (label pivots)",
+            options=legsweep.WINDOWS,
+            value=EXTREMA_WINDOW,
+            help="bars of the 15m reference the pivot detector needs clear on both sides",
+        )
         # Off shows the flat +/-1 labelling, which the weighting is meant to be read against.
         significance = st.sidebar.toggle("Weight pivots by leg significance", value=True)
     # The feature windows all derive from the extrema window, so they follow it rather than being
@@ -718,7 +732,24 @@ def main() -> None:
     # one), the chart has to be on the branch the model reads, and the label on screen has to be
     # the one the model predicts — over the retrospective label the two lines share an axis
     # without sharing a unit.
-    model_at = gru.CHECKPOINT if gru.CHECKPOINT.exists() else None
+    # The checkpoint that matches the label on the two sliders, when the sweep trained one, and
+    # `gru --save`'s single file otherwise. Matching by filename and not by a field inside the
+    # pickle is deliberate: the page has to decide *before* it loads anything which of 117 files
+    # to open, and the parameters are in the name precisely so it can.
+    # One file per cell of `legsweep`'s grid, and nothing else may stand in for it: a model fitted
+    # against the label at one smoothing draws a line that means something else against the label
+    # at another, and the two would share this page's axis without sharing its question. So when
+    # the sliders land on a cell nobody trained, the page says so instead of falling back.
+    # `gru --save <that path>` overwrites a cell with the full four-fold fit, which is what the
+    # winner of the sweep gets and what the caption below then quietly starts describing.
+    model_at = legsweep.checkpoint(smoothing, leg_window) if retrospective else gru.CHECKPOINT
+    missing = (
+        f"No model at smoothing {smoothing:.1f}, leg window {leg_window} — "
+        f"`python -m tradingvision.legsweep --smoothings {smoothing:.1f} --windows {leg_window}`"
+        if retrospective
+        else "No model saved. `python -m tradingvision.gru --features all --save`"
+    )
+    model_at = model_at if model_at.exists() else None
     checkpoint = load_model(str(model_at))[1] if model_at else None
     branch = checkpoint["branches"][0] if checkpoint else None
     # Which of the two labels this checkpoint was fitted on. Older files predate the choice and
@@ -728,7 +759,7 @@ def main() -> None:
     trained_on = TRAINED_ON.get(checkpoint.get("label", "excursion")) if checkpoint else None
     predicting = False
     if not model_at:
-        st.sidebar.caption("No model saved. `python -m tradingvision.gru --features all --save`")
+        st.sidebar.caption(missing)
     elif trained_on is None:
         st.sidebar.caption("The saved GRU reads cross-sectional ranks, which one pair cannot supply.")
     elif timeframe == branch and label == trained_on:
@@ -836,11 +867,14 @@ def main() -> None:
     if st.sidebar.button("Fetch candles", type="primary", use_container_width=True):
         st.session_state.fetched = (request, load_candles(*request))
 
-    # Not inputs: both were calibrated in oracle.py and changing them here would show pivots the
-    # dataset does not contain.
+    # The fee is not an input: it is the venue's, and a page that let it be typed would price a
+    # rule nobody can trade. The feature window is not one either — every feature derives its own
+    # windows from it, so moving it here would draw columns the tensor was not built from. The
+    # *label's* window is the one the sidebar now moves, and it is a separate number: `legsweep`
+    # varies the pivots the target ramps between and leaves the features on 24 throughout.
     st.sidebar.divider()
     st.sidebar.caption(
-        f"**Extrema window** &nbsp; {EXTREMA_WINDOW} bars — calibrated, see the spec  \n"
+        f"**Feature window** &nbsp; {EXTREMA_WINDOW} bars — calibrated, see the spec  \n"
         f"**Fee** &nbsp; {FEE * 100:.2f}% per side, {FEE * 200:.2f}% round trip — Alpaca taker tier 1"
     )
 
@@ -853,7 +887,7 @@ def main() -> None:
     if df.empty:
         st.warning(f"No data for {fetched[0]} on {fetched[1]}.")
         return
-    pivots = load_pivots(df.close, EXTREMA_WINDOW)
+    pivots = load_pivots(df.close, leg_window)
     peers, realised, predicted, factor_pred, skill, unit = 0, None, None, None, None, ""
     per, weight, decision = None, None, ""
     if label == CROSS:
@@ -902,7 +936,7 @@ def main() -> None:
                 per = factor.pnl(pos, panel["close"], step)
                 weight = pos[fetched[0]] if fetched[0] in pos else None
     else:
-        target = load_target(df.close, EXTREMA_WINDOW, label, smoothing, significance)
+        target = load_target(df.close, leg_window, label, smoothing, significance)
     swung = load_swing(df, str(swing_at), swing_at.stat().st_mtime) if swinging else None
     if swung is not None and not swung.position.notna().any():
         # Not an error and not an empty chart: the model reads 24 bars of history through features
@@ -914,7 +948,7 @@ def main() -> None:
         )
         swung = None
     swing_pos = swung.position.fillna(0.0) if swung is not None else None
-    strength = load_significance(df.close, EXTREMA_WINDOW)
+    strength = load_significance(df.close, leg_window)
     feats = load_features(df, EXTREMA_WINDOW, tuple(COLUMNS))[picked]
     # The two models never draw together: each predicts a different label, and the sidebar only
     # offers whichever one the label on screen belongs to.
@@ -990,7 +1024,7 @@ def main() -> None:
         feats = apply(feats[alive], fit(feats[alive]))
 
     # Oracle: what a perfect-hindsight trader would have made on this window over this period.
-    stats = run(df.close, EXTREMA_WINDOW, FEE, pivots=pivots)
+    stats = run(df.close, leg_window, FEE, pivots=pivots)
     columns = st.columns(4 if skill else 2)
     columns[0].metric("Oracle net return", f"{stats['net_return'] * 100:,.1f}%", f"{stats['trades']} legs")
     columns[1].metric("Avg gross leg", f"{stats['gross_trade_pct']:.2f}%", f"{stats['win_rate'] * 100:.0f}% above fees")
@@ -1030,7 +1064,7 @@ def main() -> None:
         # describe a 7x gap that no model can close.
         span = float((df.index[-1] - df.index[0]) / swing.YEAR)
         got = swing.price(swing_pos.to_numpy(), df.close.to_numpy(), span, FEE)
-        reachable = run(df.close, EXTREMA_WINDOW, FEE, pivots=pivots, lag=EXTREMA_WINDOW)
+        reachable = run(df.close, leg_window, FEE, pivots=pivots, lag=leg_window)
         mine = got["log_per_year"] * span
         best = stats["log_per_year"] * span
         near = reachable["log_per_year"] * span
@@ -1046,7 +1080,7 @@ def main() -> None:
         row[2].metric(
             "Of the reachable oracle",
             f"{mine / near * 100:+.0f}%" if near else "—",
-            f"{np.expm1(near) * 100:+.0f}% filling {EXTREMA_WINDOW} bars after each pivot",
+            f"{np.expm1(near) * 100:+.0f}% filling {leg_window} bars after each pivot",
         )
         row[3].metric(
             "Of the hindsight oracle",
@@ -1135,7 +1169,7 @@ def main() -> None:
                 else ""
             )
             + f"Filled triangles on the candles are the rule's own fills; hollow squares are "
-            f"the oracle's pivots, which read {EXTREMA_WINDOW} bars of future and are there to be measured "
+            f"the oracle's pivots, which read {leg_window} bars of future and are there to be measured "
             f"against, not traded. One pair over one window is one path — `stops --at {band:.2f}` "
             f"prices the same rule over twenty pairs and fifteen months, where the bare rule nets −89% a "
             f"year and the long leg loses at every threshold on the grid."
@@ -1287,7 +1321,7 @@ def main() -> None:
             )
         )
         if len(pivots)
-        else f"{len(df)} candles — no pivot at window {EXTREMA_WINDOW}"
+        else f"{len(df)} candles — no pivot at window {leg_window}"
     )
 
 

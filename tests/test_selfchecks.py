@@ -73,6 +73,13 @@ def test_gru_selfcheck():
     subprocess.run([sys.executable, "-c", code], check=True)
 
 
+def test_legsweep_selfcheck():
+    """`legsweep` keeps its checks in a function: its `__main__` is the sweep itself, an hour of
+    training. Run in a subprocess for `test_gru_selfcheck`'s reason — it imports torch through
+    `gru`, and lightgbm is already loaded in this process by `test_gbm_selfcheck`."""
+    subprocess.run([sys.executable, "-c", "from tradingvision import legsweep; legsweep._selfcheck()"], check=True)
+
+
 def test_nearpivot_selfcheck():
     nearpivot._selfcheck()
 
