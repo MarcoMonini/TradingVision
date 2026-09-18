@@ -1420,6 +1420,7 @@ dev = [
     { name = "lightgbm" },
     { name = "pytest" },
     { name = "ruff" },
+    { name = "scipy" },
 ]
 
 [package.metadata]
@@ -1441,6 +1442,7 @@ dev = [
     { name = "lightgbm", specifier = "==4.7.0" },
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "ruff", specifier = ">=0.16.6" },
+    { name = "scipy", specifier = ">=1.14" },
 ]
 
 [[package]]
