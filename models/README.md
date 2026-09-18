@@ -21,6 +21,13 @@ the page's own rules and not a deployment detail:
 
 The sidebar says which of these is missing rather than drawing nothing.
 
+`legsweep` writes a third kind of file into the store: one checkpoint per cell of its
+smoothing x leg-window grid, named `gru-swing-s<smoothing>-w<window>.pt`. The page finds those by
+the same rule, so copying one here deploys that cell — but none is committed and none needs to be.
+The grid's 117 fits are 15-epoch proxies used to rank the cells, and the cell the project actually
+sits on (0.7 / 24) is `gru.pt` itself, fitted on the full four folds. A cell that is not here draws
+nothing and says which command trains it.
+
 Both files are small — a 32-unit GRU and a 48-unit encoder — so they belong in git rather than in
 LFS. `TRADINGVISION_MODELS=/some/disk` moves the lookup to a mounted disk if a checkpoint ever
 outgrows that.

@@ -16,6 +16,15 @@ RUN uv sync --frozen --no-dev
 # image, so `models/` is the only way a trained model reaches Render — see models/README.md.
 COPY models ./models
 
+# The build fails here rather than at the first request. It asserts the two things that were once
+# broken at the same moment and that CI cannot see, because the image job builds the container and
+# never starts it: that `--no-dev` really carries torch, which `gru` and `swing` import at module
+# scope and whose absence used to take the page down before Streamlit drew anything, and that both
+# checkpoints landed under the directory `chart.MODELS` resolves to. Spelled from the modules' own
+# `CHECKPOINT` names so a rename cannot leave this checking a file nobody looks for.
+RUN python -c "from pathlib import Path; from tradingvision import gru, swing; \
+    assert all(Path('models', m.CHECKPOINT.name).exists() for m in (gru, swing))"
+
 # Stateless: the page draws Alpaca downloads and the committed checkpoints only. The Parquet store
 # under data/ is read by the oracle sweep and the Binance fetcher, neither of which runs here, so
 # no disk is mounted. torch is a runtime dependency (inference, not training) and is the CPU build:

@@ -20,7 +20,7 @@ measurements, and commit subjects are written that way ("Four branches lose to o
 ## Commands
 
 ```bash
-uv sync                              # installs dev group too (torch, lightgbm)
+uv sync                              # installs dev group too (lightgbm); torch is a runtime dep
 uv run pytest -q
 uv run pytest tests/test_dataset.py::test_branches_never_read_an_unclosed_bar -q
 uv run ruff check . && uv run black --check .    # what CI runs, line-length 120
@@ -42,10 +42,18 @@ uv run python -m tradingvision.simulation --pred data/pred-*.parquet   # what it
 uv run python -m tradingvision.factor --price --baseline --by-quarter # step 6: the cross-sectional factor
 uv run python -m tradingvision.swing --timeframe 4h --baseline        # step 7: the tradable swing rule
 uv run python -m tradingvision.swingrule --pred data/pred-swing-*.parquet  # the long-only rule on the swing label
+uv run python -m tradingvision.threshold --pred data/pred-swing-*.parquet --at 0.5  # the always-in flip rule
+uv run python -m tradingvision.stops --pred data/pred-swing-*.parquet --at 0.5 --grid  # the same rule with exits
 uv run python -m tradingvision.legcheck  --pred data/pred-swing-*.parquet  # does the prediction lead, or only summarise?
+uv run python -m tradingvision.legsweep --table                        # step 8: the 9x13 smoothing/leg-window grid
 ```
 
-`gru --save` writes `data/gru.pt`, which is what the chart page draws predictions from.
+`gru --save` writes `data/gru.pt` and `swing --save` writes `data/swing.pt`; the page reads the store
+first and `models/` after, which is the only directory a checkpoint reaches the Render image in —
+`data/` is gitignored. On the retrospective label the page instead loads the cell of `legsweep`'s grid
+its two sliders name (`gru-swing-s<smoothing>-w<window>.pt`), by the same two-directory rule, and
+refuses to draw a model fitted on another cell. `legsweep.CURRENT` — 0.7 / 24 — is the exception:
+`gru.pt` *is* that cell, at the full four folds, so it is the one the page draws there.
 
 ## Architecture
 
@@ -114,6 +122,15 @@ made of, so a naive t over 10,944 dates reads 31.9 where 153 non-overlapping blo
 **Cached datasets carry their parameters.** `dataset.cached` writes a JSON stamp next to the Parquet
 and refuses to load a file built with different arguments. Don't defeat it — delete the file or pass
 another `--cache`.
+
+**The page may not reach scipy, and pandas hides a path to it.** `Series.corr(method="spearman")`
+imports scipy *lazily*, from inside `pandas.core.nanops`, so the call survives every import-time
+check and every test run in a venv that has it. scipy reaches this project only as a transitive
+dependency of lightgbm, which is dev-only, so the call works everywhere except the one place that
+matters — it took the chart page down in production on a caption. Use `metrics.spearman`, which is
+Pearson on the ranks and asserted equal to pandas' own. `tests/test_deploy.py` enforces both halves:
+the page's module graph is exercised with scipy made unimportable, and the call is banned by an AST
+scan everywhere but `metrics`, which has to make it to prove the replacement equals it.
 
 **torch and lightgbm never meet in one process.** Each ships its own OpenMP runtime and importing
 both aborts with `OMP: Error #15`. `gru` deliberately does not import `gbm`; the only place they

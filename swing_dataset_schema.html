@@ -481,6 +481,32 @@ footer{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);color:v
   </div>
 
   <p><strong>Esito: 24.</strong> Ottimo del range a L=3 ed entro l'1% dell'ottimo a L=2, col miglior tasso di gambe in utile fra i valori equivalenti. La gamba risultante, mediane sui 20 simboli su 2023+: <strong>ampiezza 3,63%</strong>, primo quartile 2,29% (margine 4,6× sul costo), durata 8h50m, <strong>~344 gambe/anno</strong> per simbolo, commissioni pari al 13,8% della gamba mediana.</p>
+
+  <h3>La griglia peso_tempo × finestra, misurata contro il modello <span class="b b-msr">misurato</span></h3>
+  <p>Le due manopole dell'etichetta erano state fissate da domande diverse da quella che conta: la finestra dalla tabella qui sopra, che è una domanda sul P&amp;L dell'oracolo e sulla struttura del mercato; il <code>peso_tempo</code> da niente — 0,7 è annotato in <code>data/target.py</code> come valore di partenza. <code>tradingvision.legsweep</code> le misura sulla domanda del modello: <strong>9 smoothing × 13 finestre = 117 celle, tutte addestrate</strong>. Feature ferme su <code>finestra_estremi = 24</code> e stesso tensore in ogni cella — si muove solo il target, che è il contratto di <code>dataset.relabel</code> — mentre <code>next_pivot</code> viene ricalcolato per finestra, perché le gambe cambiano e con loro l'orizzonte di purging.</p>
+  <p>Protocollo dichiaratamente veloce: uno split invece di quattro fold, un seed, campionamento a 4h invece che orario, 15 epoche. Non confrontabile con i numeri di questa specifica — la cella corrente ci legge 0,4083 di Rank IC contro 0,4114 del protocollo pieno, e un seed vale 0,001.</p>
+
+  <div class="tw">
+    <table>
+      <caption>IC e Rank IC sul test, 2025-06+, e <code>rsi_centered</code> misurato sulla stessa etichetta come controllo</caption>
+      <thead><tr><th class="num">peso_tempo / finestra</th><th class="num">IC</th><th class="num">Rank IC</th><th class="num">rsi_centered</th><th class="num">edge</th></tr></thead>
+      <tbody>
+        <tr><td class="num">0,7 / 24 — in uso</td><td class="num">0.4188</td><td class="num">0.4083</td><td class="num">0.3785</td><td class="num">0.0298</td></tr>
+        <tr class="hi"><td class="num">0,2 / 12 — massimo IC e Rank IC</td><td class="num">0.5033</td><td class="num">0.4753</td><td class="num">0.4424</td><td class="num">0.0330</td></tr>
+        <tr><td class="num">0,9 / 60 — massimo edge</td><td class="num">0.3439</td><td class="num">0.3254</td><td class="num">0.2232</td><td class="num">0.1022</td></tr>
+        <tr><td colspan="5" class="foot">IC e Rank IC hanno lo stesso massimo e la superficie non ha nessun ottimo interno: sale monotonamente verso finestre corte e pesi-tempo bassi su tutte e 117 le celle</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="box why">
+    <h4>Perché l'argmax non è l'esito</h4>
+    <p><strong>Una finestra più larga fa un'etichetta più lenta, e un'etichetta più lenta si ordina meglio a parità di modello.</strong> Il Rank IC quindi deriva con la finestra per una ragione che non è segnale. Ogni cella misura perciò anche <code>rsi_centered_15m</code> — un indicatore grezzo — sulle stesse righe e sulla stessa etichetta, e <code>edge = Rank IC − rsi_centered</code> è la parte che non è l'etichetta che diventa più facile.</p>
+    <p><strong>Le due superfici sono angoli opposti della stessa griglia</strong>, e nessuna delle due ha un massimo interno: l'edge sale monotonamente nella direzione contraria, fino a 0,1022 a 0,9/60. Alla cella migliore un RSI grezzo legge 0,4424 dei 0,4753 del modello — <strong>il 93% del vincitore è un indicatore per cui il modello non serve</strong>, contro il 92,7% della cella attuale. I +0,067 di Rank IC valgono <strong>+0,003 di edge</strong>, cioè tre seed.</p>
+    <p><strong>Esito: 0,7 / 24 restano.</strong> Spostarsi su 0,2/12 comprerebbe un numero più grande e nessun segnale in più, ed è esattamente la distinzione che la sezione 9 ha già pagato: la predizione che fa 0,4114 contro questa etichetta fa −0,0405 contro il rendimento forward. Se la griglia va rifatta, va rifatta con giudice il prezzo — <code>legcheck</code>, <code>swingrule</code> — e non la correlazione con l'etichetta. Su tre seed alla finestra 12 il vincitore comunque tiene: 0,4741 ± 0,0006 a 0,2, 0,4731 ± 0,0009 a 0,1, 0,4708 ± 0,0010 a 0,3.</p>
+  </div>
+
+  <p>A terra restano <code>data/legsweep.csv</code> (una riga per cella, <code>--table</code> stampa le tre matrici) e <strong>117 checkpoint</strong> <code>data/gru-swing-s&lt;peso&gt;-w&lt;finestra&gt;.pt</code>. La pagina chart ha ora entrambi i controlli — smoothing a passo 0,1 e <em>Leg window (label pivots)</em> — e carica il checkpoint della cella scelta; su una cella non addestrata non ripiega su un altro modello, perché una rete adattata all'etichetta a uno smoothing disegna contro l'etichetta a un altro smoothing una riga che significa un'altra cosa.</p>
 </section>
 
 <section>
@@ -763,6 +789,96 @@ L = δ·(|e| − 0.5·δ)  altrimenti</pre>
     <p><strong>Nessuno slippage, nessun impatto</strong>, e la gamba hedged presuppone che il paniere venga davvero shortato, che sui perpetual costa funding.</p>
   </div>
 
+  <h3>La regola always-in a soglia fissa <span class="b b-msr">misurato</span></h3>
+  <p><code>threshold</code> prezza la regola più semplice che l'etichetta descrive, e l'unica che non ha uno stato flat: <code>pred ≤ −t</code> si è long, <code>pred ≥ +t</code> si è short, in mezzo si tiene quello che si aveva. Una volta partita è <strong>sempre in mercato</strong>, quindi un cambio di segno paga due lati e la gamba short è una posizione e non un'assenza. <code>--at</code> la prezza a un numero grezzo invece che a un quantile dell'output: <code>--at 0.4</code> è la coppia −0.4/+0.4 scritta come dovrebbe impegnarcisi un sistema live. Venti simboli, 219.698 righe, 2025-06 → 2026-09, 25 bp per lato.</p>
+
+  <div class="tw">
+    <table>
+      <caption>la coppia fissa, e il quantile di |pred| su cui ciascuna cade</caption>
+      <thead><tr><th class="num">soglia</th><th class="num">quantile</th><th class="num">trade/anno</th><th class="num">lordo long</th><th class="num">lordo short</th><th class="num">lordo</th><th class="num">commissioni</th><th class="num">netto</th><th class="num">win rate</th><th class="num">fee di pareggio</th></tr></thead>
+      <tbody>
+        <tr><td class="num">±0.3</td><td class="num">0.559</td><td class="num">325.1</td><td class="num">−0.234</td><td class="num">+0.250</td><td class="num">+0.015</td><td class="num">1.624</td><td class="num">−1.608</td><td class="num">0.577</td><td class="num">0.24 bp</td></tr>
+        <tr class="hi"><td class="num">±0.4</td><td class="num">0.763</td><td class="num">195.8</td><td class="num">−0.203</td><td class="num">+0.286</td><td class="num">+0.083</td><td class="num">0.977</td><td class="num"><strong>−0.894</strong></td><td class="num">0.584</td><td class="num">2.13 bp</td></tr>
+        <tr><td class="num">±0.5</td><td class="num">0.917</td><td class="num">92.7</td><td class="num">−0.249</td><td class="num">+0.252</td><td class="num">+0.004</td><td class="num">0.461</td><td class="num">−0.458</td><td class="num">0.582</td><td class="num">0.19 bp</td></tr>
+        <tr><td class="num">q 0.70</td><td class="num">0.700</td><td class="num">237.6</td><td class="num">−0.160</td><td class="num">+0.327</td><td class="num">+0.167</td><td class="num">1.186</td><td class="num">−1.019</td><td class="num">0.587</td><td class="num"><strong>3.52 bp</strong></td></tr>
+        <tr><td class="num">q 0.95</td><td class="num">0.534</td><td class="num">65.9</td><td class="num">−0.235</td><td class="num">+0.260</td><td class="num">+0.024</td><td class="num">0.328</td><td class="num">−0.303</td><td class="num">0.588</td><td class="num">1.85 bp</td></tr>
+        <tr><td colspan="10" class="foot">buy and hold sulle stesse righe: <strong>−0.490</strong> l'anno. Le due righe in fondo sono la griglia a quantile, per confronto: la coppia fissa non è né migliore né peggiore, è la stessa regola a una banda che non si muove</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="box why">
+    <h4>Tre letture, e nessuna è nuova</h4>
+    <p><strong>Il netto è negativo a ogni soglia, e non per poco.</strong> A ±0.4 le commissioni sono <strong>0.977</strong> l'anno contro un lordo di <strong>+0.083</strong>: dodici volte. La soglia migliore di tutta la griglia chiede <strong>3,52 bp per lato</strong> per pareggiare, contro 25 bp taker su Alpaca e ~10 bp maker realistico. È lo stesso ordine di grandezza che <code>exhaustcheck --price</code> misura sulle feature di esaurimento (1,76 bp): manca un fattore fra 3 e 10 sul costo di esecuzione, e nessuna soglia lo recupera — allargare la banda taglia le commissioni e il lordo insieme.</p>
+    <p><strong>Tutto il lordo è la gamba short, e la gamba long perde a ogni soglia.</strong> Long −0.203 contro short +0.286 a ±0.4, e la stessa forma su tutte le righe. La colonna di sinistra è esattamente la metà che l'utente compra scendendo sotto −0.4, ed è la stessa colonna negativa che <code>swingrule</code> documenta e che <code>legcheck</code> spiega: il decile 0 della predizione ha rendimento forward <em>negativo</em> a 24 e 72 barre, t −3.55 e −2.91. La regola compra dove il prezzo scende. La gamba short guadagna su un paniere sceso del 49% l'anno, che è esposizione e non previsione — <code>long_share</code> 0,49 dice che sta short circa metà del tempo, e metà di −0.490 fa −0.245, cioè quasi esattamente il +0.286 che incassa stando dall'altra parte.</p>
+    <p><strong>Il win rate 0,584 col trade mediano positivo</strong> è la trappola già descritta qui sopra per la regola long-only: tante vincite piccole, poche perdite grandi, e un netto per trade negativo. Non serve un <code>rotation_null</code> per chiudere questa: con un lordo di +0.083 contro commissioni di 0.977 non c'è niente che una fase possa salvare. Il null servirebbe solo se il lordo arrivasse a coprire il costo.</p>
+  </div>
+
+  <h3>±0.5 su venti coppie, e chi sta perdendo davvero <span class="b b-msr">misurato</span></h3>
+  <p>La coppia ±0.5 cade sul quantile <strong>0,917</strong> di |pred|: fuori banda sta l'8,3% delle righe. Sul pannello fa 92,7 flip l'anno per coppia, lordo <strong>+0.004</strong>, commissioni <strong>0.461</strong>, netto <strong>−0.458</strong>. <code>--by-symbol</code> apre la media: <strong>4 coppie su 20</strong> in positivo, media −0.458 con deviazione 0.542 fra coppie, cioè un errore standard della media di 0.121 — <strong>3,8 sigma sotto zero</strong>, non una media trascinata da due code.</p>
+  <p>E le quattro che guadagnano dicono perché guadagnano. Lo Spearman fra il <em>lordo della gamba short</em> e il buy-and-hold della coppia è <strong>−0,734</strong>: più una coppia è scesa, più la gamba short ha incassato. AVAX (+0.56 netto) è scesa dell'84%, SUSHI (+0.20) dell'89%, XTZ (+0.36) del 78%. Non è selezione di coppie, è esposizione al ribasso di quelle coppie.</p>
+
+  <div class="tw">
+    <table>
+      <caption>±0.5, holds raggruppati per quanto il prezzo si è mosso — a sinistra sulla durata del hold, a destra sui 72 bar dopo l'ingresso</caption>
+      <thead><tr><th class="num">quintile di |move|</th><th class="num">|move| mediano</th><th class="num">bar mediani</th><th class="num">hit rate sul hold</th><th class="num">netto tot.</th><th class="num">|move| a 72 bar</th><th class="num">hit rate a 72 bar</th></tr></thead>
+      <tbody>
+        <tr><td class="num">0</td><td class="num">0.8%</td><td class="num">68</td><td class="num">0.592</td><td class="num">−1.3</td><td class="num">0.6%</td><td class="num">0.489</td></tr>
+        <tr><td class="num">1</td><td class="num">2.3%</td><td class="num">57</td><td class="num">0.697</td><td class="num">+1.9</td><td class="num">2.0%</td><td class="num">0.518</td></tr>
+        <tr><td class="num">2</td><td class="num">3.8%</td><td class="num">50</td><td class="num">0.744</td><td class="num">+6.4</td><td class="num">3.7%</td><td class="num">0.524</td></tr>
+        <tr><td class="num">3</td><td class="num">5.7%</td><td class="num">60</td><td class="num">0.650</td><td class="num">+5.5</td><td class="num">6.0%</td><td class="num">0.544</td></tr>
+        <tr class="hi"><td class="num">4</td><td class="num">10.7%</td><td class="num"><strong>100</strong></td><td class="num"><strong>0.397</strong></td><td class="num"><strong>−24.1</strong></td><td class="num">11.3%</td><td class="num"><strong>0.558</strong></td></tr>
+        <tr><td colspan="7" class="foot">466 hold per riquadro, errore standard di un hit rate 0.023. Il quintile alto vale −24.1 contro i +12.6 di tutti gli altri messi insieme</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="box why">
+    <h4>L'osservazione è vera sulla curva, ma la causa è l'uscita e non il segnale <span class="b b-msr">misurato</span></h4>
+    <p><strong>La colonna di sinistra dà ragione all'occhio.</strong> Sul hold, il quintile dei movimenti grandi è l'unico sotto la moneta (0,397, cioè 4,4 errori standard sotto 0,5) e da solo perde il doppio di quanto gli altri quattro guadagnano. Letta così, la regola legge bene le oscillazioni medie e si fa travolgere dai movimenti grossi.</p>
+    <p><strong>La colonna dei <code>bar mediani</code> dice che quella lettura è circolare.</strong> Il quintile alto tiene 100 barre contro le 50 del quintile 2: la dimensione del movimento e la durata del hold <em>sono la stessa variabile</em>, perché una regola a isteresi esce solo quando la predizione raggiunge la banda opposta. Quando ha ragione, la predizione sale verso l'uscita e il trade viene chiuso presto con un movimento medio; quando ha torto, la predizione resta incollata dalla parte sbagliata e la posizione resta aperta mentre il prezzo scappa. È il <em>cut winners short, let losers run</em> classico, e produce esattamente questa tabella <strong>senza bisogno di alcun segnale</strong>.</p>
+    <p><strong>Il controllo toglie l'uscita di mezzo</strong> (<code>--horizon</code>): ogni ingresso viene giudicato sui 24, 72 o 168 bar successivi, qualunque cosa faccia poi la regola. L'hit rate diventa <strong>piatto</strong>: a 24 bar sta fra 0,464 e 0,544, a 168 bar fra 0,464 e 0,519, tutto entro ~2 errori standard da 0,5. A 72 bar la pendenza è <em>positiva</em> (+0,069 dal quintile basso all'alto) — il quintile dei movimenti più grandi è l'unico sopra la moneta, 0,558.</p>
+    <p><strong>Quindi il segnale non viene ingannato dai movimenti grandi.</strong> Non li prevede — a nessun orizzonte si distingue da una moneta, che è la stessa cosa che <code>legcheck</code> dice per decile — ma non ci sbatte contro più che contro gli altri. Quello che sbatte è l'uscita: il <code>hit_rate</code> sul hold non misura il segnale, misura una regola che tronca le vincite e lascia correre le perdite. La leva che quella tabella indica non è una soglia diversa né un modello migliore: è uno stop, cioè un'uscita che non aspetti la predizione. Rimane da misurare se lo stop paga il proprio costo, e i numeri di cui sopra dicono che parte da un lordo di +0.004 contro 0.461 di commissioni.</p>
+    <p><strong>Nota su <code>hit_rate</code> e <code>win_rate</code>.</strong> Il primo è la sola direzione, il secondo è al netto dello 0,50% di andata e ritorno. Si separano solo dove il movimento è più piccolo della commissione: nel quintile 0 a 24 bar (movimento mediano 0,41%) il win rate crolla a 0,144 mentre l'hit rate è 0,464. Quel crollo è la commissione, non un errore di direzione, ed è il motivo per cui la colonna da leggere verso il basso è l'hit rate.</p>
+  </div>
+
+  <h3>Lo stop che quella tabella chiede: <code>stops</code> <span class="b b-open">strumento pronto, numeri non ancora presi</span></h3>
+  <p>La riga sopra nomina la leva e si ferma lì. <code>stops</code> è quella leva scritta: la stessa regola always-in di <code>threshold</code>, con due barriere a distanza fissa dal prezzo d'ingresso e una risposta esplicita alla domanda "e dopo?". Non porta con sé nessun numero — il modulo è lo strumento, la griglia sullo store non è stata lanciata — e sta qui perché le scelte di disegno sono già decisioni, e le decisioni vanno scritte prima dei risultati, non dopo.</p>
+
+  <p><strong>Dove si mettono le barriere.</strong> Una barriera è una distanza in log da un prezzo d'ancoraggio, e la larghezza è <em>fissata all'ingresso</em>. Tre modi di nominarla, e rispondono a domande diverse.</p>
+  <ul>
+    <li><code>atr:k</code> — <em>k</em> volte l'Average True Range alla barra d'ingresso, in frazione di prezzo. È la stessa colonna che <code>features</code> porta come <code>average_true_range_pct</code>, quindi la barriera è quotata nell'unità in cui sono misurati gli input del modello: lo stesso <em>k</em> è la stessa aggressività su una coppia calma e su una rumorosa. <strong>3×ATR è il numero da manuale e qui non ha niente dietro.</strong></li>
+    <li><code>fee:k</code> — <em>k</em> volte l'andata e ritorno, <code>2 × FEE</code> = 0,50%. È l'unica distanza con un significato aritmetico: un take profit a <code>fee:1</code> incassa <strong>esattamente zero</strong>, quindi <em>k</em> ≤ 1 è una barriera che non può pagarsi da sola, e <code>fee:2</code> raddoppia la commissione prima che il trade conti come vinto.</li>
+    <li><code>pct:x</code> — una distanza piatta, per quando nessuna delle due è la domanda.</li>
+  </ul>
+  <p>Le due barriere prendono specifiche separate, di proposito. Una coppia simmetrica è una scommessa sulla simmetria dell'etichetta; <code>swing_leg_target</code> è simmetrica intorno a zero per costruzione, il <em>prezzo</em> no, e un take largo con uno stop stretto è la forma "lascia correre la gamba, taglia quelle che partono male" — cioè la forma che la tabella per movimento indica. Se paghi è una misura, non un'opinione.</p>
+
+  <p><strong>Se lo stop trascina.</strong> <code>--trail</code> aggancia lo stop al <em>massimo raggiunto dal hold</em> invece che al prezzo d'ingresso — il massimo dei massimi da quando è entrato per un long, il minimo dei minimi per uno short — alla stessa larghezza. È la stessa regola girata da "quanto sono disposto a perdere" a "quanto di ciò che ho già guadagnato sono disposto a restituire", ed è l'unica uscita che può chiudere un hold <em>in profitto</em> senza un take profit: sulla lettura stessa della tabella per movimento, un hold che corre dalla parte giusta e poi gira viene chiuso dalla giravolta invece che dalla predizione. Trascina solo lo stop; un take profit che trascina non esiste.</p>
+  <p>Il cricchetto va in una sola direzione, quindi uno stop trascinato è uguale a uno fisso sulla prima barra del hold e da lì non si allarga mai. Viene alzato da barre <strong>già controllate e sopravvissute</strong>, mai da quella su cui è in prova: uno stop alzato dal massimo della stessa barra e poi colpito dal minimo della stessa barra è un'affermazione su quale dei due sia arrivato prima, e una barra OHLC non la fa. Una conseguenza va saputa e non nascosta: uno spike lungo può cricchettare lo stop <em>sopra</em> il prezzo a cui si sta scambiando, e allora la barra dopo riempie alla sua apertura, sotto il livello. È quello che fa uno stop trailing vero contro uno spike, non un artefatto.</p>
+
+  <p><strong>Cosa si tiene dopo.</strong> Tre politiche, una per barriera, e la differenza fra loro è il significato di "il segnale diceva long e il mercato non era d'accordo":</p>
+  <ul>
+    <li><code>reverse</code> — si entra subito dalla parte opposta, <em>al prezzo di uscita</em>. Lo stop è trattato come informazione sulla direzione e non solo sulla taglia.</li>
+    <li><code>opposite</code> — si sta flat finché la predizione non spara dall'altra parte. Lo stop è una dichiarazione su <em>questo</em> trade, e la regola aspetta di sentirsi dire qualcosa di nuovo.</li>
+    <li><code>rearm</code> — si sta flat finché la predizione non spara di nuovo da una parte qualsiasi, quella appena stoppata compresa.</li>
+  </ul>
+  <p>Tutte e tre poggiano su un <strong>attraversamento fresco</strong>: il lato stoppato resta sbarrato finché la predizione non rientra nella banda e non ne esce di nuovo. È il motivo per cui <code>threshold.signals</code> è stato separato da <code>positions</code>: una posizione forward-filled ripete l'ultimo tocco di banda su ogni barra per sempre, quindi non può dire se il segnale ha parlato <em>dopo</em> lo stop; la lettura grezza sì. Senza quella separazione <code>rearm</code> ricomprerebbe il trade appena stoppato alla barra successiva, al costo di un giro completo di commissioni.</p>
+
+  <div class="box why">
+    <h4>Le due onestà del conteggio <span class="b b-open">disegno</span></h4>
+    <p><strong>Il riempimento.</strong> Un'uscita riempie al livello della barriera, oppure <em>all'apertura della barra</em> quando la barra ha gappato oltre — mai a un prezzo a cui il mercato non ha scambiato. La barra in cui avviene l'uscita paga quindi due pezzi, il hold fino al riempimento e quello che si tiene dopo, e sono sommati nella stessa riga.</p>
+    <p><strong>La candela che tocca entrambi i livelli.</strong> Una barra OHLC dà un massimo e un minimo ma <em>non l'ordine in cui sono arrivati</em>, quindi una barra che raggiunge sia lo stop sia il take profit ha due letture e bisogna sceglierne una. Supporre che sia arrivato prima il take è il modo più vecchio di fabbricare un backtest. <code>--tie stop</code> è il default e prende la perdita; <code>--tie take</code> esiste per essere lanciato accanto. <strong>La distanza fra le due letture è la dimensione dell'ipotesi intrabarra</strong>, e un risultato che sopravvive solo con <code>--tie take</code> è un risultato sul percorso, non sulla regola.</p>
+    <p>Un limite dichiarato: una posizione aperta <em>dentro</em> la barra da un <code>reverse</code> viene controllata contro le proprie barriere solo dalla barra successiva, perché il percorso dentro la barra in cui è nata non è noto. Lo stop trascinato segue la stessa disciplina, per la stessa ragione.</p>
+  </div>
+
+  <div class="box why">
+    <h4>Il controllo, e perché è la prima riga di ogni griglia <span class="b b-msr">asserito</span></h4>
+    <p>Senza barriere <code>stops</code> <em>è</em> <code>threshold</code>: stesse posizioni, stesso lordo, stesse commissioni, stesso win rate. Non "circa" — <code>stops._selfcheck</code> lo asserisce contro <code>threshold.pnl</code> riga per riga, ed è l'unica ragione per cui i numeri che usciranno da qui saranno confrontabili con quelli già scritti in questa sezione. <code>--grid</code> stampa quella riga per prima e ogni altra riga deve batterla: se nessuna barriera la migliora, <strong>l'uscita non è dove la regola perde</strong>, qualunque cosa suggerisse la tabella per movimento.</p>
+    <p>Da leggere con la dispersione e non con la riga migliore: sei coppie su una griglia mostrano sempre un vincitore, e sceglierlo dopo è il modo classico di fabbricare un numero tarato. E il punto di partenza è quello che è — a ±0.5 il lordo è +0.004 contro 0.461 di commissioni, quindi lo stop dovrebbe guadagnare <strong>due ordini di grandezza</strong>, non qualche punto.</p>
+  </div>
+
+  <p>Una trappola trovata strada facendo e fissata con un assert: <code>ta</code> riempie il warm-up dell'ATR con <strong>zeri</strong> e non con NaN. Una barriera di larghezza zero sta sul prezzo d'ingresso stesso e scatta alla prima barra che si muove, quindi il warm-up diventerebbe una fila di stop istantanei senza che niente lo dica. <code>width</code> dà a un ATR non strettamente positivo nessuna barriera.</p>
+
   <h3>La regola long-only sull'etichetta swing, e il controllo che la chiude <span class="b b-msr">misurato</span></h3>
   <p><code>swingrule</code> prezza la regola che l'etichetta swing descrive — compra vicino al minimo della gamba, tieni, vendi vicino al massimo, poi <em>aspetta</em>. Venti simboli, 2025-09 → 2026-09, 25 bp per lato, banda dinamica come quantile espandente di |pred| sulle righe passate di ogni simbolo.</p>
 
@@ -933,7 +1049,7 @@ L = δ·(|e| − 0.5·δ)  altrimenti</pre>
 </section>
 
 <footer>
-  Moduli: <code>data.binance</code> · <code>data.pivots</code> · <code>data.target</code> · <code>features</code> · <code>dataset</code> · <code>normalize</code> · <code>split</code> · <code>metrics</code> · <code>oracle</code> · <code>linear</code> · <code>gbm</code> · <code>selection</code> · <code>nearpivot</code> · <code>gru</code> · <code>factor</code> · <code>threshold</code>
+  Moduli: <code>data.binance</code> · <code>data.pivots</code> · <code>data.target</code> · <code>features</code> · <code>dataset</code> · <code>normalize</code> · <code>split</code> · <code>metrics</code> · <code>oracle</code> · <code>linear</code> · <code>gbm</code> · <code>selection</code> · <code>nearpivot</code> · <code>gru</code> · <code>factor</code> · <code>threshold</code> · <code>stops</code>
 </footer>
 
 </div>

@@ -7,6 +7,21 @@ retrospective description a linear model on point-in-time features already repro
 0.38). Reading them on the same legs is the fastest way to see the difference — the old one ramps
 across each leg, the new one collapses to zero at every pivot and says how much is left.
 
+Over the retrospective label the page also draws the always-in rule of `threshold` — long at or
+below -t, short at or above +t, never flat — on the *prediction* and never on the label, because
+the label is built from a centred window and a rule trading it would be reading `EXTREMA_WINDOW`
+bars of future. Two shapes on the candles keep that distinction visible: hollow squares are the
+oracle's pivots, which do read the future, and filled triangles are the rule's own fills.
+
+The rule's exits are `stops`, and they are controls rather than settings: a take profit and a stop
+loss, each named in ATR or in round trips or in a flat percentage, each with its own answer to
+what the rule holds afterwards — reverse into the other side, stand flat until the opposite
+signal, or stand flat until any fresh crossing. Both barriers are off by default, and off is
+exactly `threshold`'s rule, which is the one the spec priced. A stop fill is marked with an X on
+the candle and at the price it filled at, a take profit with a star; a gap through a level fills
+at the open, so the mark can sit well past the level it was aimed at, and that is the point of
+drawing it at the fill.
+
 streamlit run src/tradingvision/app/chart.py
 """
 
@@ -21,9 +36,9 @@ import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 
-from tradingvision import factor, metrics
+from tradingvision import factor, metrics, stops, threshold
 from tradingvision.data import candles
-from tradingvision.data.candles import SYMBOLS, TIMEFRAMES, get_candles
+from tradingvision.data.candles import BAR, SYMBOLS, TIMEFRAMES, get_candles
 from tradingvision.data.pivots import EXTREMA_WINDOW, find_pivots
 from tradingvision.data.target import (
     CROSS_HORIZON,
@@ -59,6 +74,12 @@ def optional(name: str) -> ModuleType | None:
 
 gru = optional("gru")
 swing = optional("swing")
+# `legsweep` imports `gru`, so it reaches torch too and goes through the same gate. The page needs
+# two torch-free facts out of it — the grid of leg windows the sweep trained, and the filename of a
+# cell — but a module that imports torch cannot be asked for them on an install without torch. When
+# it is None the label stays on the calibrated `EXTREMA_WINDOW`, which is where the page had it
+# before the sweep existed, and no cell can be drawn anyway because there is no model to load.
+legsweep = optional("legsweep")
 
 # Where a checkpoint is looked for besides `data/`. `data/` is the store a training run writes to
 # and is gitignored, so nothing under it reaches the image; `models/` is tracked, which is how a
@@ -69,11 +90,17 @@ swing = optional("swing")
 MODELS = Path(os.environ.get("TRADINGVISION_MODELS") or Path(__file__).resolve().parents[3] / "models")
 
 
-def saved(module: ModuleType | None) -> Path | None:
-    """The checkpoint of `gru` or `swing`, from the store or from `models/`, or None if neither."""
+def saved(module: ModuleType | None, name: str | None = None) -> Path | None:
+    """The checkpoint of `gru` or `swing`, from the store or from `models/`, or None if neither.
+
+    `name` replaces the filename and leaves the two directories and their order alone: the cells of
+    `legsweep`'s grid are 117 files in the same store, and they have to be found by the same rule
+    as the two named ones rather than by a second one that could drift away from it.
+    """
     if module is None:
         return None
-    return next((p for p in (module.CHECKPOINT, MODELS / module.CHECKPOINT.name) if p.exists()), None)
+    at = module.CHECKPOINT.with_name(name) if name else module.CHECKPOINT
+    return next((p for p in (at, MODELS / at.name) if p.exists()), None)
 
 
 MAX_DAYS = 365
@@ -82,18 +109,34 @@ MAX_DAYS = 365
 # time so the same lens holds on whichever timeframe is on screen — a rolling deviation over
 # thirty days of 1h bars and over thirty days of 15m bars are the same statistic sampled twice.
 FACTOR_WINDOW = pd.Timedelta("30D")
-# `TIMEFRAMES` keys as durations. Spelled out rather than parsed: `pd.Timedelta("15m")` is minutes
-# but deprecated, and `pd.date_range(freq="15m")` is *months* — not an ambiguity to leave implicit.
-BAR = {
-    "5m": pd.Timedelta("5min"),
-    "15m": pd.Timedelta("15min"),
-    "1h": pd.Timedelta("1h"),
-    "4h": pd.Timedelta("4h"),
-    "1d": pd.Timedelta("1D"),
-}
+# The rule's default band. Measured, like every other constant here: on `pred-swing-all-15m`,
+# twenty pairs and fifteen months, |pred| clears 0.5 on 8.3% of the rows, which puts the pair at
+# the 0.917 quantile of the model's own output — 92.7 flips a year per pair against 195.8 at 0.4.
+# It is a starting point and not a tuned value: section 9 of the spec prices the whole grid and
+# every row of it is negative after fees, and the wider band is the default because it is the one
+# the exit rules are read on — a stop only has room to act on a hold the signal does not close
+# first, and at 0.4 the median hold is half as long.
+THRESHOLD = 0.5
 # What the saved model was fitted up to, shown so nobody reads a prediction over the train period
 # as if it were out of sample. It is the walk-forward's first cut and `gru`'s own default.
 TEST_START = "2025-06"
+# How a barrier width is spelled in the sidebar. The identifiers are `stops.KINDS` and the labels
+# are the unit each one is a multiple of: ATR is what this market does anyway, the round trip is
+# what the trade costs, and a flat percentage is neither. "off" is first and is the default, so
+# the page opens on `threshold`'s own rule — the one the spec priced — and every barrier is an
+# explicit act.
+WIDTHS = {"off": "off", "atr": "× ATR at entry", "fee": f"× round trip ({FEE * 200:.2f}%)", "pct": "% of price"}
+# What each policy does after a barrier fires, spelled as the sentence rather than the identifier.
+POLICIES = {
+    "opposite": "wait for the opposite signal",
+    "reverse": "reverse into the other side",
+    "rearm": "wait for any fresh signal",
+}
+# Starting multiples for the two barriers, one per unit. Not tuned — nothing here has been
+# measured yet — but each is the number the unit makes obvious: three ATR is the textbook stop,
+# and three round trips is the smallest barrier that clears its own cost by a margin worth the
+# name (one round trip nets exactly zero).
+SIZE = {"atr": 3.0, "fee": 3.0, "pct": 2.0}
 
 # Downloads only happen on an explicit click, and only for a (symbol, timeframe, days) triplet
 # that is not already cached.
@@ -176,6 +219,13 @@ def load_model(path: str):
     """The saved GRU, kept across reruns. `cache_resource` and not `cache_data`: a torch module is
     not something to pickle and copy on every widget move."""
     return gru.restore(Path(path))
+
+
+@st.cache_data(show_spinner=False)
+def load_coverage(df, path: str, _mtime: float):
+    """Why the prediction does not fill the window — the same tensor `predict_frame` builds, so
+    the explanation can never describe a different frame from the one on screen."""
+    return gru.coverage(load_model(path)[1], df)
 
 
 @st.cache_data(show_spinner="Predicting…")
@@ -376,6 +426,42 @@ def pinned(pred: pd.Series, peers: int, symbol: str) -> str:
     )
 
 
+def barrier(name: str, key: str) -> tuple[str, float] | None:
+    """One sidebar barrier — its unit and its multiple — as the spec `stops` takes, or `None`.
+
+    Two widgets and not one, because the unit is the question and the number is only the answer to
+    it. "3" means nothing on its own: three ATR is a barrier that scales with the pair, three round
+    trips is a barrier that scales with the fee, and three percent is a barrier that scales with
+    neither. Naming the unit first is what keeps the multiple readable when the pair changes under
+    it.
+
+    The number is a percentage when the unit is one, and `stops` wants a log distance, so it is
+    the one place a division belongs. At these sizes the two agree to the fourth decimal.
+    """
+    kind = st.sidebar.selectbox(name, list(WIDTHS), format_func=WIDTHS.get, key=f"{key}-kind")
+    if kind == "off":
+        return None
+    # The unit is in the widget's key, so each unit keeps its own multiple. Sharing one key would
+    # carry the number across a change of unit, and 3 is a textbook stop in ATR and a very
+    # different barrier in percent — the kind of silent reinterpretation a reader cannot see.
+    size = st.sidebar.number_input(
+        f"{name}, {WIDTHS[kind]}", min_value=0.1, max_value=20.0, value=SIZE[kind], step=0.1, key=f"{key}-{kind}-size"
+    )
+    return kind, (size / 100 if kind == "pct" else size)
+
+
+def describe(spec: tuple[str, float] | None) -> str:
+    """A barrier spec as the caption says it: `("atr", 3.0)` to `3 × ATR at entry`.
+
+    The percentage goes back the way `barrier` brought it in, so a reader of the caption and a
+    reader of the sidebar see the same number.
+    """
+    if spec is None:
+        return "no"
+    kind, size = spec
+    return f"{size * 100:g}{WIDTHS[kind]}" if kind == "pct" else f"{size:g} {WIDTHS[kind]}"
+
+
 def chart(
     df,
     pivots,
@@ -389,6 +475,7 @@ def chart(
     pred=None,
     unit: str = "",
     trades=None,
+    exits=None,
 ) -> go.Figure:
     # Price, then the label under it on the same x: the target is only readable against the leg it
     # describes. Volume next, it is context rather than subject, and the features under everything.
@@ -470,15 +557,22 @@ def chart(
             row=2,
             col=1,
         )
+        # Hollow squares, and no leg amplitude written next to them. The oracle and the rule now
+        # share this row, so the two have to be told apart at a glance before anything else is
+        # readable: the oracle is what hindsight would have taken, the filled triangles below are
+        # what the rule actually took, and a shape is a faster distinction than a colour. The
+        # percentages went with the circles — they annotated the oracle's legs, which is a
+        # different quantity from the rule's trades and the one that made the row unreadable when
+        # both are drawn. The amplitude is still in the caption and still in `p.amplitude`.
         fig.add_trace(
             go.Scatter(
                 x=p.index,
                 y=p.close,
-                mode="markers+text",
-                marker=dict(size=8, color=color, symbol="circle"),
-                text=[f"{a * 100:.1f}%" for a in p.amplitude],
-                textposition=position,
-                textfont=dict(size=9, color=color),
+                mode="markers",
+                # Small and thin on purpose. The oracle marks every pivot in the window and the
+                # rule marks a handful of fills, so at equal weight the squares are what the eye
+                # reads first and the trades disappear into them. The squares are the backdrop.
+                marker=dict(size=5, color=color, symbol="square-open", line=dict(width=1, color=color)),
                 name="pivot",
                 showlegend=False,
                 hovertemplate="%{x}<br>%{y}<extra></extra>",
@@ -487,35 +581,89 @@ def chart(
             col=1,
         )
     if trades is not None:
-        # Where and when, on the price itself. The book is graded rather than on/off, so there is
-        # no "entry" and "exit" to mark — only more and less, and the arrow says which way while
-        # the text says the weight it moved to. Markers sit at the close of the bar the decision
-        # was taken on, which is the price that decision actually paid.
+        # Where and when, on the price itself. Markers sit at the close of the bar the decision was
+        # taken on, which is the price that decision actually paid.
         moved = trades.diff().fillna(trades)
         moved = moved[(moved != 0) & (moved.index >= df.index[0]) & (moved.index <= df.index[-1])]
-        # A long/flat book has only two states, so its markers say what was done rather than what
-        # the weight became; a graded one has no "in" and "out" and says the level instead.
-        binary = set(trades.dropna().unique()) <= {0.0, 1.0}
-        for up, color, shape, position in (
-            (True, "#2ecc71", "triangle-up", "bottom center"),
-            (False, "#e74c3c", "triangle-down", "top center"),
-        ):
-            side = moved[moved > 0] if up else moved[moved < 0]
+        binary = set(trades.dropna().unique()) <= {-1.0, 0.0, 1.0}
+        if binary:
+            # Keyed on the position each change moved *to*, and that is a bug fix and not a style
+            # choice. The old version keyed on the sign of the change and called every rise "buy"
+            # and every fall "sell", which was right only while the rule had no flat state: an
+            # always-in rule goes +1 → −1 and back, so the words alternated by construction. With
+            # an exit there is a flat state in between, and closing a short (−1 → 0) and opening a
+            # long (0 → +1) are both a rise — two "buy" markers in a row with no "sell" between
+            # them, which reads on the chart as a position that was opened twice and never closed.
+            # The trade was fine; the caption on it was not. What a marker can always say without
+            # ambiguity is the state the rule is in from that bar on, so that is what it says.
+            for state, color, shape, word, position in (
+                (1.0, "#2ecc71", "triangle-up", "long", "bottom center"),
+                (-1.0, "#e74c3c", "triangle-down", "short", "top center"),
+                (0.0, "#95a5a6", "line-ew", "flat", "top center"),
+            ):
+                at = moved.index[trades.reindex(moved.index) == state]
+                fig.add_trace(
+                    go.Scatter(
+                        x=at,
+                        # Forward filled: a pair that did not trade in a bar has no candle there,
+                        # and the decision still happened at the last price the panel carried.
+                        y=df.close.reindex(at, method="ffill"),
+                        mode="markers+text",
+                        # Big, filled, and outlined in the page's own background: a bright triangle
+                        # sitting on a green candle needs the halo to read as a separate mark.
+                        marker=dict(size=16, color=color, symbol=shape, line=dict(width=1.5, color="#0e1117")),
+                        text=[word] * len(at),
+                        textposition=position,
+                        textfont=dict(size=12, color=color),
+                        name=word,
+                        showlegend=False,
+                        hovertemplate="%{x}<br>" + word + " from here, at %{y}<extra></extra>",
+                    ),
+                    row=1,
+                    col=1,
+                )
+        else:
+            # The graded factor book has no states to name — only more and less — so the arrow says
+            # which way and the text says the weight it moved to. Smaller, because it prints a
+            # number at every change and a size that suits eight fills would be a wall.
+            for up, color, shape, position in (
+                (True, "#2ecc71", "triangle-up", "bottom center"),
+                (False, "#e74c3c", "triangle-down", "top center"),
+            ):
+                side = moved[moved > 0] if up else moved[moved < 0]
+                fig.add_trace(
+                    go.Scatter(
+                        x=side.index,
+                        y=df.close.reindex(side.index, method="ffill"),
+                        mode="markers+text",
+                        marker=dict(size=9, color=color, symbol=shape, line=dict(width=1.5, color="#0e1117")),
+                        text=[f"{v:+.2f}" for v in trades.reindex(side.index)],
+                        textposition=position,
+                        textfont=dict(size=9, color=color),
+                        name="buy" if up else "sell",
+                        showlegend=False,
+                        hovertemplate="%{x}<br>%{y}<extra></extra>",
+                    ),
+                    row=1,
+                    col=1,
+                )
+    if exits is not None and len(exits):
+        # The barrier fills, at the price they filled at rather than at the bar's close. That
+        # distinction is the whole reason to draw them: a level is where the rule aimed, the fill
+        # is where it got out, and a bar that gapped through the level puts the two far apart. A
+        # third shape, because the triangles above already mean "the signal changed its mind" and
+        # a stop is the opposite of that — the price changed it.
+        for why, color, shape, size in (("stop", "#e74c3c", "x-thin", 11), ("take", "#2ecc71", "star", 11)):
+            fills = exits[(exits.why == why) & exits.exit_time.between(df.index[0], df.index[-1])]
             fig.add_trace(
                 go.Scatter(
-                    x=side.index,
-                    # Forward filled: a pair that did not trade in a bar has no candle there, and
-                    # the decision still happened at the last price the panel carried.
-                    y=df.close.reindex(side.index, method="ffill"),
-                    mode="markers+text",
-                    marker=dict(size=9, color=color, symbol=shape),
-                    text=[("buy" if up else "sell") if binary else f"{v:+.2f}" for v in trades.reindex(side.index)],
-                    textposition=position,
-                    textfont=dict(size=9, color=color),
-                    name="buy" if up else "sell",
-                    marker_size=11 if binary else 9,
+                    x=fills.exit_time,
+                    y=fills.exit,
+                    mode="markers",
+                    marker=dict(size=size, color=color, symbol=shape, line=dict(width=2, color=color)),
+                    name=why,
                     showlegend=False,
-                    hovertemplate="%{x}<br>%{y}<extra></extra>",
+                    hovertemplate="%{x}<br>" + why + " at %{y}<extra></extra>",
                 ),
                 row=1,
                 col=1,
@@ -566,14 +714,35 @@ def main() -> None:
     st.set_page_config(page_title="Trading Vision", layout="wide")
     st.title("TradingVision")
 
-    symbol = st.sidebar.selectbox("Pair", SYMBOLS)
+    # The study's twenty pairs, and a typed one as well. Which of them Alpaca lists is not
+    # something this project can know — its crypto coverage is narrower than Binance's and moves —
+    # so the list is the universe the spec's numbers were measured on, not a claim about the
+    # venue. A pair it serves nothing for draws the warning below and nothing else breaks.
+    symbol = st.sidebar.selectbox(
+        "Pair",
+        SYMBOLS,
+        accept_new_options=True,
+        help="the twenty pairs the study measures on, quoted in USD. Type any other Alpaca pair "
+        "(`BASE/USD`) to draw it — the page says so if the venue serves nothing for it.",
+    )
     timeframe = st.sidebar.selectbox("Timeframe", list(TIMEFRAMES), index=1)
     days = st.sidebar.slider("History (days)", 1, MAX_DAYS, 30)
-    label = st.sidebar.radio("Label", [PREDICTIVE, RETROSPECTIVE, CROSS], help="what the model is asked to output")
+    # Default to the retrospective label rather than the predictive one. It is the label the swing
+    # model and the always-in rule both read, so it is the only one on which the page draws a
+    # tradable rule at all; landing on `remaining_excursion` meant two clicks before anything that
+    # trades appears. The choice is still the open question of the project — the radio is where it
+    # is asked — but the answer the rest of the page is built on is this one.
+    label = st.sidebar.radio(
+        "Label",
+        [PREDICTIVE, RETROSPECTIVE, CROSS],
+        index=1,
+        help="what the model is asked to output",
+    )
     # Both controls shape the retrospective label only: the predictive one has no blend to weight
     # (a degenerate leg goes nowhere, so it scores near zero by itself).
     retrospective = label == RETROSPECTIVE
     smoothing = SMOOTHING
+    leg_window = EXTREMA_WINDOW
     significance = True
     # Counted in bars of the timeframe on screen, like every other window here. 48 bars of 15m is
     # the 12h the horizon sweep pointed at; on another timeframe the same number is another period,
@@ -582,9 +751,25 @@ def main() -> None:
     if label == CROSS:
         horizon = st.sidebar.slider("Forward horizon (bars)", 4, 288, CROSS_HORIZON, 4)
     if retrospective:
-        # Unlike the window and the fee, this one is explicitly a tunable: 0.7 is a starting value.
-        # 1.0 is a pure time ramp between pivots, 0.0 follows price alone.
-        smoothing = st.sidebar.slider("Target smoothing (time weight)", 0.0, 1.0, SMOOTHING, 0.05)
+        # Unlike the fee, this one is explicitly a tunable: 0.7 is a starting value. 1.0 is a pure
+        # time ramp between pivots, 0.0 follows price alone. Stepped by 0.1 and not 0.05 so every
+        # position on it is a cell `legsweep` trained a model for — the two controls below pick
+        # the label *and* the checkpoint, and a half-step between two models would draw the label
+        # at one setting against a model fitted on another.
+        smoothing = st.sidebar.slider("Target smoothing (time weight)", 0.0, 1.0, SMOOTHING, 0.1)
+        # The pivots the label ramps between. `EXTREMA_WINDOW = 24` is calibrated in `oracle`, but
+        # on the *hindsight P&L of the legs* and never against what the model can rank, which is
+        # what `legsweep` measures. The features stay on 24 whatever this says: the sweep moved
+        # the label alone, so a checkpoint here reads the same inputs as every other one. The
+        # options are the sweep's own grid and not a range, so every position is a cell someone
+        # trained; without torch there is no sweep to ask and the label stays on the calibrated 24.
+        if legsweep is not None:
+            leg_window = st.sidebar.select_slider(
+                "Leg window (label pivots)",
+                options=legsweep.WINDOWS,
+                value=EXTREMA_WINDOW,
+                help="bars of the 15m reference the pivot detector needs clear on both sides",
+            )
         # Off shows the flat +/-1 labelling, which the weighting is meant to be read against.
         significance = st.sidebar.toggle("Weight pivots by leg significance", value=True)
     # The feature windows all derive from the extrema window, so they follow it rather than being
@@ -604,7 +789,24 @@ def main() -> None:
     # one), the chart has to be on the branch the model reads, and the label on screen has to be
     # the one the model predicts — over the retrospective label the two lines share an axis
     # without sharing a unit.
-    model_at = saved(gru)
+    # Which of the sweep's 117 checkpoints, chosen by filename and before anything is loaded —
+    # which is the whole reason the two knobs are in the name. One file per cell, and nothing else
+    # may stand in for it: a net fitted against the label at one smoothing draws a line that means
+    # something else against the label at another, and the two would share this page's axis
+    # without sharing its question. So on a cell nobody trained the page says so and draws
+    # nothing. `legsweep.CURRENT` is the exception and not a fallback: `gru.pt` *is* that cell,
+    # fitted on the full four folds where the grid's cells are 15-epoch proxies of the same
+    # question, so at 0.7 / 24 the better model of the two is the one already deployed.
+    cell = None if not retrospective or legsweep is None else (round(smoothing, 2), leg_window)
+    model_at = saved(gru, legsweep.checkpoint(*cell).name if cell and cell != legsweep.CURRENT else None)
+    missing = (
+        f"No model at smoothing {smoothing:.1f}, leg window {leg_window} — "
+        f"`python -m tradingvision.legsweep --smoothings {smoothing:.1f} --windows {leg_window}`, "
+        f"then copy it into `{MODELS.name}/` to deploy it."
+        if cell and cell != legsweep.CURRENT
+        else f"No model saved. `python -m tradingvision.gru --features all --save`, then copy it into "
+        f"`{MODELS.name}/` to deploy it."
+    )
     checkpoint = load_model(str(model_at))[1] if model_at else None
     branch = checkpoint["branches"][0] if checkpoint else None
     # Which of the two labels this checkpoint was fitted on. Older files predate the choice and
@@ -616,10 +818,7 @@ def main() -> None:
     if gru is None:
         st.sidebar.caption("This install has no torch, so no GRU prediction. The factor below needs none.")
     elif not model_at:
-        st.sidebar.caption(
-            f"No model saved. `python -m tradingvision.gru --features all --save`, then copy it into "
-            f"`{MODELS.name}/` to deploy it."
-        )
+        st.sidebar.caption(missing)
     elif trained_on is None:
         st.sidebar.caption("The saved GRU reads cross-sectional ranks, which one pair cannot supply.")
     elif timeframe == branch and label == trained_on:
@@ -652,6 +851,69 @@ def main() -> None:
             help=f"{swing_at.name}, stage {swing_card['stage']}, trained to {swing_card['test_start']}",
         )
 
+    # The always-in rule of `threshold`, drawn on whatever swing leg position the row below shows.
+    # It reads the *prediction* and never the target: the retrospective label is built from a
+    # centred window, so a rule trading it would be reading `EXTREMA_WINDOW` bars of future and
+    # would draw an oracle wearing a strategy's markers. That is why the toggle appears only once
+    # a model is on, and says so when it is not.
+    ruling, band = False, THRESHOLD
+    take, stop, after_stop, after_take, tie_stop, trail = None, None, stops.AFTER[0], stops.AFTER[0], True, False
+    if retrospective and (swinging or predicting):
+        ruling = st.sidebar.toggle(
+            "Always-in rule",
+            value=True,
+            help="long at or below -t, short at or above +t, hold in between — never flat",
+        )
+        if ruling:
+            # The band is the one parameter the bare rule has. A quantile would move with the
+            # model; a constant is what a live system has to commit to, which is why
+            # `threshold --at` prices constants and why this is a number and not a percentile.
+            band = st.sidebar.slider("Threshold ±t", 0.05, 1.0, THRESHOLD, 0.05)
+            # The exits. Both off by default, and off is not a neutral setting dressed up as one —
+            # it is exactly the rule section 9 of the spec prices, so every number on this page
+            # stays comparable to the ones already written down until a barrier is switched on.
+            stop = barrier("Stop loss", "sl")
+            if stop:
+                # The fourth lever, and the only one that changes where the barrier *is* rather
+                # than how far away it starts. Off is the plain stop; on, the same width hangs off
+                # the best price the hold has seen, so the exit turns from "how much am I willing
+                # to lose" into "how much of what I am up am I willing to give back".
+                trail = st.sidebar.toggle(
+                    "Trail the stop",
+                    value=False,
+                    help="same width, measured from the hold's best price instead of its entry — "
+                    "it ratchets one way and only off bars that have already closed",
+                )
+                after_stop = st.sidebar.selectbox(
+                    "After a stop",
+                    list(POLICIES),
+                    format_func=POLICIES.get,
+                    key="after-stop",
+                    help="the stopped side is barred until the prediction leaves the band and crosses out again",
+                )
+            take = barrier("Take profit", "tp")
+            if take:
+                after_take = st.sidebar.selectbox(
+                    "After a take profit", list(POLICIES), format_func=POLICIES.get, key="after-take"
+                )
+            if take and stop:
+                # The one control that is an assumption rather than a rule, and the one that was
+                # unreadable: "when one bar holds both levels" says nothing about what is being
+                # decided. What is being decided is which of two exits already inside the same
+                # candle happened first, which a candle does not record — it gives a high and a low
+                # and no order. Both readings are here because the distance between them is the
+                # size of the assumption, and a result that only survives the optimistic one is a
+                # result about the intrabar path rather than about the rule.
+                tie_stop = st.sidebar.selectbox(
+                    "If one candle reaches the stop and the take profit",
+                    ["assume the stop came first (prudent)", "assume the take profit came first (optimistic)"],
+                    help="a candle gives a high and a low but not the order they arrived in, so a bar "
+                    "that reaches both levels has two readings and this picks one. Run it both ways: "
+                    "the gap between them is how much of the result is an assumption about the path.",
+                ).startswith("assume the stop")
+    elif retrospective:
+        st.sidebar.caption("The always-in rule needs a **prediction** of the swing leg position, not the label.")
+
     # The composite of step 6, which *is* drawable where the GRU is not: it reads the panel this
     # page already fetches for the label, and there is no checkpoint to be missing.
     factoring = False
@@ -668,11 +930,14 @@ def main() -> None:
     if st.sidebar.button("Fetch candles", type="primary", use_container_width=True):
         st.session_state.fetched = (request, load_candles(*request))
 
-    # Not inputs: both were calibrated in oracle.py and changing them here would show pivots the
-    # dataset does not contain.
+    # The fee is not an input: it is the venue's, and a page that let it be typed would price a
+    # rule nobody can trade. The feature window is not one either — every feature derives its own
+    # windows from it, so moving it here would draw columns the tensor was not built from. The
+    # *label's* window is the one the sidebar now moves, and it is a separate number: `legsweep`
+    # varies the pivots the target ramps between and leaves the features on 24 throughout.
     st.sidebar.divider()
     st.sidebar.caption(
-        f"**Extrema window** &nbsp; {EXTREMA_WINDOW} bars — calibrated, see the spec  \n"
+        f"**Feature window** &nbsp; {EXTREMA_WINDOW} bars — calibrated, see the spec  \n"
         f"**Fee** &nbsp; {FEE * 100:.2f}% per side, {FEE * 200:.2f}% round trip — Alpaca taker tier 1"
     )
 
@@ -685,7 +950,7 @@ def main() -> None:
     if df.empty:
         st.warning(f"No data for {fetched[0]} on {fetched[1]}.")
         return
-    pivots = load_pivots(df.close, EXTREMA_WINDOW)
+    pivots = load_pivots(df.close, leg_window)
     peers, realised, predicted, factor_pred, skill, unit = 0, None, None, None, None, ""
     per, weight, decision = None, None, ""
     if label == CROSS:
@@ -734,7 +999,7 @@ def main() -> None:
                 per = factor.pnl(pos, panel["close"], step)
                 weight = pos[fetched[0]] if fetched[0] in pos else None
     else:
-        target = load_target(df.close, EXTREMA_WINDOW, label, smoothing, significance)
+        target = load_target(df.close, leg_window, label, smoothing, significance)
     swung = load_swing(df, str(swing_at), swing_at.stat().st_mtime) if swinging else None
     if swung is not None and not swung.position.notna().any():
         # Not an error and not an empty chart: the model reads 24 bars of history through features
@@ -746,7 +1011,7 @@ def main() -> None:
         )
         swung = None
     swing_pos = swung.position.fillna(0.0) if swung is not None else None
-    strength = load_significance(df.close, EXTREMA_WINDOW)
+    strength = load_significance(df.close, leg_window)
     feats = load_features(df, EXTREMA_WINDOW, tuple(COLUMNS))[picked]
     # The two models never draw together: each predicts a different label, and the sidebar only
     # offers whichever one the label on screen belongs to.
@@ -758,6 +1023,63 @@ def main() -> None:
         pred = swung.label.rename("prediction")
     if pred is None and predicting:
         pred = load_prediction(df, str(model_at), model_at.stat().st_mtime)
+        # A gap in the orange line is a row the model was not asked about, not a row it got wrong:
+        # a recurrent net cannot be told that one cell of its window is missing, so a single
+        # non-finite feature anywhere in the 24 steps behind a bar makes that bar unscorable and
+        # `predict_frame` returns NaN rather than a number nothing supports. Drawn as a gap, that
+        # is indistinguishable from a broken model, and the reader should not have to guess — the
+        # three causes have three different answers, and only one of them is about the data.
+        gaps = load_coverage(df, str(model_at), model_at.stat().st_mtime)
+        if gaps["drawn"] < 0.9:
+            head = f"{gaps['head']} of {gaps['bars']} bars are the warm-up"
+            if gaps["head"] >= gaps["bars"]:
+                st.warning(
+                    f"**No prediction on this window.** The features read {EXTREMA_WINDOW} bars "
+                    f"back and the model reads {checkpoint['steps']} of those, so it needs about "
+                    f"**{gaps['needs']} {fetched[1]} bars** before the first scorable one — this "
+                    f"window has {gaps['bars']}. Widen **History (days)** or pick a faster "
+                    f"timeframe."
+                )
+            elif gaps["interior"]:
+                st.warning(
+                    f"**The prediction covers {gaps['drawn']:.0%} of this window.** {head}, and "
+                    f"{gaps['interior']} later bars have a feature that is not finite — "
+                    f"`{'`, `'.join(gaps['columns'][:3])}`. One such bar blanks the "
+                    f"{checkpoint['steps']} bars that read it, which is why the gaps are wide. "
+                    f"That is the pair's data, not the model: a stretch with no trade or no range "
+                    f"leaves some columns undefined."
+                )
+            else:
+                st.info(
+                    f"The prediction covers {gaps['drawn']:.0%} of this window — {head}, which is "
+                    f"unscorable by construction. Widen **History (days)** to shrink its share."
+                )
+    # The rule, on one pair lifted into the one-symbol panel every `threshold` function reads. Same
+    # state machine, same fee arithmetic and same warm-up as `threshold --at` on the twenty pairs —
+    # there is no second implementation here to drift away from the one the spec priced.
+    rule, ruled, fills = None, None, None
+    if ruling and pred is not None and pred.notna().any():
+        lifted = threshold.on_one(pred)
+        # One call whether or not a barrier is set: `stops` with both barriers absent is
+        # `threshold`'s rule down to the last decimal, and its self-check asserts so against
+        # `threshold.pnl`. Branching here would put a second code path behind the toggle, which is
+        # the arrangement where the two quietly stop agreeing.
+        held, fills = stops.run(
+            lifted,
+            threshold.on_one(df[list(stops.OHLC)].reindex(pred.index)),
+            band,
+            take=take,
+            stop=stop,
+            after_stop=after_stop,
+            after_take=after_take,
+            tie_stop=tie_stop,
+            trail=trail,
+            window=EXTREMA_WINDOW,
+            fee=FEE,
+        )
+        rule = held.pos.droplevel(1)
+        ruled = stops.price(held, fills, FEE)
+
     if normalized and len(feats.columns):
         # Fitted on the window on screen, which is what a chart can do and not what the dataset
         # does: there the statistics come from the train period alone.
@@ -765,7 +1087,7 @@ def main() -> None:
         feats = apply(feats[alive], fit(feats[alive]))
 
     # Oracle: what a perfect-hindsight trader would have made on this window over this period.
-    stats = run(df.close, EXTREMA_WINDOW, FEE, pivots=pivots)
+    stats = run(df.close, leg_window, FEE, pivots=pivots)
     columns = st.columns(4 if skill else 2)
     columns[0].metric("Oracle net return", f"{stats['net_return'] * 100:,.1f}%", f"{stats['trades']} legs")
     columns[1].metric("Avg gross leg", f"{stats['gross_trade_pct']:.2f}%", f"{stats['win_rate'] * 100:.0f}% above fees")
@@ -805,7 +1127,7 @@ def main() -> None:
         # describe a 7x gap that no model can close.
         span = float((df.index[-1] - df.index[0]) / swing.YEAR)
         got = swing.price(swing_pos.to_numpy(), df.close.to_numpy(), span, FEE)
-        reachable = run(df.close, EXTREMA_WINDOW, FEE, pivots=pivots, lag=EXTREMA_WINDOW)
+        reachable = run(df.close, leg_window, FEE, pivots=pivots, lag=leg_window)
         mine = got["log_per_year"] * span
         best = stats["log_per_year"] * span
         near = reachable["log_per_year"] * span
@@ -821,12 +1143,99 @@ def main() -> None:
         row[2].metric(
             "Of the reachable oracle",
             f"{mine / near * 100:+.0f}%" if near else "—",
-            f"{np.expm1(near) * 100:+.0f}% filling {EXTREMA_WINDOW} bars after each pivot",
+            f"{np.expm1(near) * 100:+.0f}% filling {leg_window} bars after each pivot",
         )
         row[3].metric(
             "Of the hindsight oracle",
             f"{mine / best * 100:+.1f}%" if best else "—",
             f"{np.expm1(best) * 100:,.0f}% — it reads the future",
+        )
+
+    if ruled is not None:
+        # `pnl` reports rates per year; over a window of a few weeks the rate is not the thing that
+        # happened, so it is scaled back to the period on screen before being shown next to a
+        # buy-and-hold over the same bars.
+        years = float((df.index[-1] - df.index[0]) / threshold.YEAR)
+        row = st.columns(5 if (take or stop) else 4)
+        row[0].metric(
+            "Rule net return",
+            f"{np.expm1(ruled['net_per_year'] * years) * 100:+.1f}%",
+            f"gross {np.expm1(ruled['gross_per_year'] * years) * 100:+.1f}%, "
+            f"fees {np.expm1(ruled['fees_per_year'] * years) * 100:.1f}%",
+        )
+        # The split is the headline and not a detail. Over a period the market spends falling, a
+        # rule that is short half the time earns without predicting anything, so the two legs are
+        # the only reading that separates an edge from a market — on the twenty pairs the left one
+        # is negative at every threshold measured.
+        row[1].metric(
+            "Long leg, gross",
+            f"{np.expm1(ruled['gross_long'] * years) * 100:+.1f}%",
+            f"short leg {np.expm1(ruled['gross_short'] * years) * 100:+.1f}%",
+        )
+        row[2].metric(
+            "Trades",
+            f"{len(fills)}",
+            f"{ruled['win_rate'] * 100:.0f}% win, median {ruled['median_bars']:.0f} bars" if len(fills) else "no trade",
+        )
+        if take or stop:
+            # What actually closed the trades, which is the only reading that says whether a
+            # barrier is doing anything at all. A stop share near zero means the barrier is wider
+            # than the rule's own holds and the numbers above are `threshold`'s with extra steps.
+            row[3].metric(
+                "Closed by a barrier",
+                f"{(ruled['stopped'] + ruled['took_profit']) * 100:.0f}%",
+                f"{ruled['stopped'] * 100:.0f}% stopped, {ruled['took_profit'] * 100:.0f}% took profit",
+            )
+        row[-1].metric(
+            "Buy and hold", f"{(df.close.iloc[-1] / df.close.iloc[0] - 1) * 100:+.1f}%", "same window, same bars"
+        )
+        st.caption(
+            f"Always in: long at or below **−{band:.2f}**, short at or above **+{band:.2f}**, holding in "
+            f"between — a flip closes one side and opens the other, so it pays {FEE * 200:.2f}% and never "
+            f"stands aside. "
+            + (
+                f"**{describe(stop)} {'trailing ' if trail else ''}stop**"
+                + (
+                    " off the best price the hold has seen, so it closes a *winning* hold by giving "
+                    "that much back rather than by losing it from the entry — a trailing stop firing "
+                    "in profit is the rule working, not a fault"
+                    if trail
+                    else " from the entry price, so it can only ever close at a loss"
+                )
+                + f", and after it fires the rule {POLICIES[after_stop]}. "
+                if stop
+                else "No stop: a hold ends only when the prediction reaches the other band. "
+            )
+            + (
+                f"**{describe(take)} take profit**, and after it fires the rule {POLICIES[after_take]}. "
+                if take
+                else ""
+            )
+            + (
+                f"A candle that reaches both levels is read as {'a stop' if tie_stop else 'a take profit'} — "
+                f"it gives a high and a low but not the order they came in, so run it both ways and "
+                f"read the gap between the two answers. "
+                if take and stop
+                else ""
+            )
+            + (
+                "A barrier fills at its level, or at the open when the bar gapped through it, so an X or a "
+                "star can sit well past the level it was aimed at. "
+                if take or stop
+                else ""
+            )
+            + (
+                "The rule stands **flat** only because a barrier fired — the prediction always says "
+                "long or short and never says stand aside — so a flat marker is an exit, and the X "
+                "or the star beside it says which one. "
+                if take or stop
+                else ""
+            )
+            + f"Filled triangles on the candles are the rule's own fills; hollow squares are "
+            f"the oracle's pivots, which read {leg_window} bars of future and are there to be measured "
+            f"against, not traded. One pair over one window is one path — `stops --at {band:.2f}` "
+            f"prices the same rule over twenty pairs and fifteen months, where the bare rule nets −89% a "
+            f"year and the long leg loses at every threshold on the grid."
         )
 
     st.plotly_chart(
@@ -842,7 +1251,8 @@ def main() -> None:
             retrospective or bool(unit),
             pred,
             unit,
-            weight if weight is not None else swing_pos,
+            rule if rule is not None else (weight if weight is not None else swing_pos),
+            fills if rule is not None else None,
         ),
         use_container_width=True,
         key="chart",
@@ -964,13 +1374,17 @@ def main() -> None:
                 # Spearman on one symbol through time, which is not the Rank IC of the spec — that
                 # one is taken per timestamp across the twenty pairs, and is blind to the common
                 # level this one reads. It says the model is wired up, not how good it is.
-                f"Spearman {pred.corr(target, method='spearman'):.2f} through time on this pair alone"
+                # `metrics.spearman` and not `Series.corr(method="spearman")`: the pandas call
+                # imports scipy lazily, and scipy reaches this project only through lightgbm,
+                # which the deployed image deliberately does not carry. This caption is what took
+                # the page down with a ModuleNotFoundError.
+                f"Spearman {metrics.spearman(pred, target):.2f} through time on this pair alone"
                 if pred is not None
                 else ""
             )
         )
         if len(pivots)
-        else f"{len(df)} candles — no pivot at window {EXTREMA_WINDOW}"
+        else f"{len(df)} candles — no pivot at window {leg_window}"
     )
 
 

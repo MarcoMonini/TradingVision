@@ -5,6 +5,14 @@ description = "Visualizzazione e analisi di candele crypto (dati Alpaca)."
 requires-python = ">=3.12"
 dependencies = [
     "pandas==2.3.1",
+    # Pinned, and the pin is the fix rather than a preference. numpy 2.5 turned the bare
+    # `np.timedelta64(n)` into a DeprecationWarning, and pandas 2.x builds one on every
+    # `pd.Timedelta("30D")` — every duration constant in this project, plus the timeframe strings
+    # `dataset` and `legcheck` parse at runtime, which have no literal form to rewrite. The warning
+    # is pandas' to fix and pandas 3 does; until this project moves to it, the last numpy that does
+    # not raise it is the one to build against — 2.4.3 and not 2.4.0, which PyPI has yanked.
+    # Nothing here is spelled wrong.
+    "numpy==2.4.3",
     "alpaca-py==0.42.0",
     "streamlit==1.47.1",
     "plotly==6.2.0",
@@ -12,8 +20,10 @@ dependencies = [
     "requests==2.34.2",
     # The chart page draws the GRU and the swing model from the checkpoints under `models/`, so
     # the deployed image needs torch even though it never trains: `restore` and `predict_frame`
-    # are torch calls. The CPU wheel below keeps that to ~200 MB instead of the CUDA build's
-    # gigabytes — the page runs a 32-unit GRU over a few thousand bars, on one core, per rerun.
+    # are torch calls, and `gru` and `swing` import torch at module scope, so without it the page
+    # used to die at import before Streamlit drew a thing. The CPU wheel below keeps that to
+    # ~200 MB instead of the CUDA build's gigabytes — the page runs a 32-unit GRU over a few
+    # thousand bars, on one core, per rerun.
     "torch==2.14.0",
 ]
 
@@ -37,10 +47,20 @@ select = ["E", "F", "I"]
 
 [dependency-groups]
 # lightgbm stays out of the runtime dependencies: it trains the step-2 reference and the chart page
-# never calls it. torch moved *into* them when the page started serving predictions from `models/`.
+# never calls it, so the image has no reason to carry its OpenMP runtime. Keeping it out is also
+# what keeps the rule of `CLAUDE.md` true where it now matters most — torch and lightgbm each ship
+# their own libomp and abort with `OMP: Error #15` in one process, and the image has torch in it.
+# torch moved *into* the runtime dependencies when the page started serving predictions.
 dev = [
     "black>=26.5.1",
     "lightgbm==4.7.0",
+    # Declared, though lightgbm already drags it in. `selection` imports `scipy.cluster.hierarchy`
+    # directly to cluster the correlation matrix, so this is a real dependency of the dev group and
+    # not a happy accident of lightgbm's own tree — the day lightgbm stops needing it, `selection`
+    # still does. Dev and never runtime: the deployed image is the chart page, and the page not
+    # reaching scipy is a rule `tests/test_deploy.py` enforces after a lazy
+    # `Series.corr(method="spearman")` took the page down in production.
+    "scipy>=1.14",
     "pytest>=9.1.1",
     "ruff>=0.16.6",
 ]

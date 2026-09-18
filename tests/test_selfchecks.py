@@ -23,7 +23,9 @@ from tradingvision import (
     nearpivot,
     selection,
     simulation,
+    stops,
     swingrule,
+    threshold,
 )
 
 SELF_CHECKED = [
@@ -71,6 +73,13 @@ def test_gru_selfcheck():
     subprocess.run([sys.executable, "-c", code], check=True)
 
 
+def test_legsweep_selfcheck():
+    """`legsweep` keeps its checks in a function: its `__main__` is the sweep itself, an hour of
+    training. Run in a subprocess for `test_gru_selfcheck`'s reason — it imports torch through
+    `gru`, and lightgbm is already loaded in this process by `test_gbm_selfcheck`."""
+    subprocess.run([sys.executable, "-c", "from tradingvision import legsweep; legsweep._selfcheck()"], check=True)
+
+
 def test_nearpivot_selfcheck():
     nearpivot._selfcheck()
 
@@ -97,6 +106,19 @@ def test_legcheck_selfcheck():
 def test_swingrule_selfcheck():
     """`swingrule` keeps its checks in a function: its `__main__` prices a real prediction file."""
     swingrule._selfcheck()
+
+
+def test_threshold_selfcheck():
+    """`threshold` keeps its checks in a function for the same reason `swingrule` does, and was
+    never registered here — the asserts on the always-in rule ran only when someone ran the
+    module by hand. They are the ones the traded rule rests on, so they belong in CI."""
+    threshold._selfcheck()
+
+
+def test_stops_selfcheck():
+    """`stops` keeps its checks in a function: its `__main__` reads a real prediction file and the
+    5m store behind it. The checks themselves run on a saw and need neither."""
+    stops._selfcheck()
 
 
 def test_simulation_selfcheck():

@@ -628,9 +628,14 @@ def save(
 ) -> None:
     """The weights and everything needed to feed them: the scaling of the train period, the
     columns, the branches and their widths. A model without its scaler is not a model."""
+    # The state goes out on the CPU whatever device trained it. A checkpoint written from `mps`
+    # carries that device inside the pickle, and unpickling it where there is no Metal — the
+    # Streamlit page on a Linux host — raises before `map_location` in `restore` is consulted for
+    # the storages it cannot even construct. Saving device-free makes the file portable at the
+    # source; `restore` still maps, for the checkpoints already written the other way.
     torch.save(
         {
-            "state": model.state_dict(),
+            "state": {k: v.detach().cpu() for k, v in model.state_dict().items()},
             "stats": x.stats,
             "widths": x.widths,
             "branches": branches,
@@ -645,11 +650,65 @@ def save(
 
 
 def restore(path: Path = CHECKPOINT) -> tuple[Net, dict]:
-    checkpoint = torch.load(path, weights_only=False)
+    # `map_location` is what lets a model trained on `mps` load on a machine that has no Metal:
+    # the checkpoint records the device of every storage, and without this the deploy host dies on
+    # "Storage device not recognized: mps" before the weights are ever read.
+    checkpoint = torch.load(path, weights_only=False, map_location=DEVICE)
     model = Net(checkpoint["widths"], shared=checkpoint["shared"]).to(DEVICE)
     model.load_state_dict(checkpoint["state"])
     model.eval()
     return model, checkpoint
+
+
+def _inputs(checkpoint: dict, bars: pd.DataFrame):
+    """The windowed, scaled tensor and the mask of rows the model can be asked about.
+
+    A row is scorable only when **every** one of `steps` x `len(keep)` numbers behind it is finite,
+    because a recurrent net has no way to be told that one cell of its input is missing. That is
+    the rule `predict_frame` draws by and the rule `coverage` explains, and it is here so the two
+    cannot drift — a diagnosis computed a second way would eventually diagnose a different frame.
+    """
+    f = features(bars, EXTREMA_WINDOW)[checkpoint["keep"]]
+    x = apply(window(f.shift(1), bars.index, checkpoint["steps"]), checkpoint["stats"][0])
+    return x, np.isfinite(x).all(axis=(1, 2)), f
+
+
+def coverage(checkpoint: dict, bars: pd.DataFrame) -> dict:
+    """Why the prediction does not cover the window, in the terms a reader can act on.
+
+    A gap in the line is not a fault and not a result — it is a row the model was not asked about,
+    and `predict_frame` returns NaN there rather than a number nothing supports. But a chart that
+    only draws the gap leaves the reader to guess between "the model is broken", "the pair is
+    unsupported" and "the window is too short", and the three have different answers. This
+    separates them:
+
+        head        the warm-up. The features need `EXTREMA_WINDOW` bars behind them and the
+                    window needs `steps` more, so the first stretch of any frame is unscorable by
+                    construction. On a short history this is most of it, and the fix is more days.
+        interior    a gap *after* the warm-up, which means a feature went non-finite in the middle
+                    of the series. `columns` names the ones responsible, worst first. This is the
+                    one worth looking at: it is the data, not the protocol.
+        drawn       the share of rows that carry a number.
+
+    Cheap enough to call on every rerun — it is the same tensor `predict_frame` builds, and the
+    page already pays for that.
+    """
+    _, ready, f = _inputs(checkpoint, bars)
+    first = int(np.argmax(ready)) if ready.any() else len(ready)
+    inside = ~ready[first:]
+    # Which columns are non-finite on the rows the warm-up does not explain. Read off the features
+    # and not the tensor: the tensor has lost the column names to the window axis, and a name is
+    # the whole point of this.
+    body = f.iloc[first:]
+    blame = (~np.isfinite(body)).sum().sort_values(ascending=False)
+    return {
+        "bars": len(bars),
+        "drawn": float(ready.mean()),
+        "head": first,
+        "interior": int(inside.sum()),
+        "columns": [c for c, n in blame.items() if n > 0],
+        "needs": EXTREMA_WINDOW * 6 + checkpoint["steps"],
+    }
 
 
 def predict_frame(model: Net, checkpoint: dict, bars: pd.DataFrame) -> pd.Series:
@@ -670,9 +729,7 @@ def predict_frame(model: Net, checkpoint: dict, bars: pd.DataFrame) -> pd.Series
     # label, and the chart draws that as a heatmap over the panel rather than as a line on one pair.
     if checkpoint.get("rank"):
         raise ValueError("this model reads cross-sectional ranks, which one pair cannot supply")
-    f = features(bars, EXTREMA_WINDOW)[checkpoint["keep"]]
-    x = apply(window(f.shift(1), bars.index, checkpoint["steps"]), checkpoint["stats"][0])
-    ready = np.isfinite(x).all(axis=(1, 2))
+    x, ready, _ = _inputs(checkpoint, bars)
     out = pd.Series(np.nan, index=bars.index, name="prediction")
     if ready.any():
         with torch.no_grad():
@@ -849,6 +906,50 @@ def _selfcheck() -> None:
     # And the whole reading is wired through `run`, which is where the flag is read from.
     assert run([x], wide, "2024-01-25", **kw)["move"] is not None
     assert run([x], df, "2024-01-25", **kw)["move"] is None, "no move column, no bucket table"
+
+    # `coverage` explains exactly the mask `predict_frame` draws by, and it has to keep doing so:
+    # a diagnosis computed a second way would eventually describe a different frame from the one
+    # on screen, which is worse than no diagnosis. Both read `_inputs`, and this is what says so.
+    when = pd.date_range("2025-01-01", periods=600, freq="15min", tz="UTC")
+    walk = np.exp(np.cumsum(rng.normal(0, 0.003, 600))) * 100
+    frame = pd.DataFrame(
+        {
+            "open": np.r_[walk[0], walk[:-1]],
+            "high": walk * 1.002,
+            "low": walk * 0.998,
+            "close": walk,
+            "volume": rng.lognormal(5, 1, 600),
+        },
+        index=when,
+    )
+    card = {
+        "branches": ["15m"],
+        "steps": 8,
+        "keep": list(SELECTED),
+        "widths": [len(SELECTED)],
+        "shared": False,
+        "rank": False,
+    }
+    card["stats"] = [normalize.fit(features(frame, EXTREMA_WINDOW)[card["keep"]].dropna())]
+    net = Net(card["widths"], shared=False)
+    told = coverage(card, frame)
+    assert np.isclose(told["drawn"], predict_frame(net, card, frame).notna().mean())
+    # A clean walk has no interior gap: everything missing is the warm-up at the front.
+    assert told["interior"] == 0 and told["columns"] == [] and told["head"] > 0
+    assert told["bars"] == 600 and 0.8 < told["drawn"] < 1.0
+
+    # A hole punched into a feature blanks the `steps` bars that read it and names the column. It
+    # is the case the page has to be able to explain, so it is the case that is checked.
+    dead = frame.copy()
+    dead.iloc[300:302, :] = np.nan
+    hurt = coverage(card, dead)
+    assert hurt["interior"] >= card["steps"], hurt
+    assert hurt["columns"] and hurt["drawn"] < told["drawn"], hurt
+    assert np.isclose(hurt["drawn"], predict_frame(net, card, dead).notna().mean())
+
+    # A window shorter than the warm-up scores nothing, and says so as a head and not as a mystery.
+    short = coverage(card, frame.iloc[:40])
+    assert short["drawn"] == 0.0 and short["head"] >= short["bars"] and short["interior"] == 0
 
 
 def main() -> None:

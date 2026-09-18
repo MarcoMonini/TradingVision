@@ -171,7 +171,7 @@ def partial(pred: pd.Series, fwd: pd.Series, control: pd.Series) -> dict[str, fl
     return {
         "rows": len(at),
         "ic_raw": _ic(p, r, at),
-        "ic_control": float(rc.corr(r, method="spearman")),
+        "ic_control": metrics.spearman(rc, r),
         "ic_residual": _ic(resid, r, at),
         "corr_pred_control": float(rp.corr(rc)),
     }
@@ -184,7 +184,7 @@ def _ic(x: pd.Series, r: pd.Series, index: pd.Index) -> float:
     is told which one it got by how many symbols it passed in."""
     if isinstance(index, pd.MultiIndex) and index.get_level_values(1).nunique() >= 3:
         return float(metrics.by_date(x, r, rank=True).dropna().mean())
-    return float(x.corr(r, method="spearman"))
+    return metrics.spearman(x, r)
 
 
 def _selfcheck() -> None:
@@ -229,12 +229,12 @@ def _selfcheck() -> None:
     # with neither the price advancement nor the per-pivot significance the real one carries. That
     # is the floor, not the ceiling: a GRU with 28 columns and 24 steps has far more of `elapsed`
     # available to it, which is the shape of the 0.42 the objection points at.
-    got = causal[both].corr(label[both], method="spearman")
+    got = metrics.spearman(causal[both], label[both])
     assert got > 0.25, got
     # And it knows nothing about what comes next, because on a random walk there is nothing to know.
     ahead = np.log(close.shift(-24) / close)
     live = causal.index.intersection(ahead.dropna().index)
-    ic = causal[live].corr(ahead[live], method="spearman")
+    ic = metrics.spearman(causal[live], ahead[live])
     assert abs(ic) < 0.05, f"the walk leaked: {ic:.4f}"
 
     # `elapsed_position` is causal by truncation: a bar's control cannot move when later bars are
