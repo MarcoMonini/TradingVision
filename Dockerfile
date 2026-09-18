@@ -9,26 +9,27 @@ ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy PATH="/app/.venv/bin:$PATH" \
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
-# The two trained checkpoints, ahead of the sources because they change far less often than the
-# code does. `binance.STORE` resolves to /app/data off the editable install, which is where this
-# lands. 106 KB, so the layer costs nothing.
-COPY data/gru.pt data/swing.pt ./data/
-
 COPY src ./src
 RUN uv sync --frozen --no-dev
 
-# The build fails here rather than at the first request. Two things this asserts that nothing else
-# can: that `--no-dev` really carries torch, which `gru` and `swing` import at module scope and
-# whose absence used to take the page down before Streamlit drew anything; and that the checkpoints
-# landed where `binance.STORE` looks for them, which is /app/data off the editable install and is
-# a path no unit test can check. Both were broken at once and neither showed up in CI, because the
-# image job builds the container and never starts it.
-RUN python -c "from tradingvision import gru, swing; assert gru.CHECKPOINT.exists() and swing.CHECKPOINT.exists()"
+# The checkpoints the page draws predictions from. `data/` is gitignored and never enters the
+# image, so `models/` is the only way a trained model reaches Render — see models/README.md.
+COPY models ./models
 
-# Stateless apart from those two files: the page draws Alpaca downloads live and computes the
-# label, the pivots and the features on them. It never opens the Parquet store — that is read by
-# the Binance fetcher and the pipeline, neither of which runs here — so no disk is mounted and
-# the 15 GB under data/ stays out of both the repo and the image.
+# The build fails here rather than at the first request. It asserts the two things that were once
+# broken at the same moment and that CI cannot see, because the image job builds the container and
+# never starts it: that `--no-dev` really carries torch, which `gru` and `swing` import at module
+# scope and whose absence used to take the page down before Streamlit drew anything, and that both
+# checkpoints landed under the directory `chart.MODELS` resolves to. Spelled from the modules' own
+# `CHECKPOINT` names so a rename cannot leave this checking a file nobody looks for.
+RUN python -c "from pathlib import Path; from tradingvision import gru, swing; \
+    assert all(Path('models', m.CHECKPOINT.name).exists() for m in (gru, swing))"
+
+# Stateless: the page draws Alpaca downloads and the committed checkpoints only. The Parquet store
+# under data/ is read by the oracle sweep and the Binance fetcher, neither of which runs here, so
+# no disk is mounted. torch is a runtime dependency (inference, not training) and is the CPU build:
+# the `pytorch-cpu` index in pyproject.toml keeps the image around a gigabyte instead of the five
+# the CUDA wheels would cost for hardware Render does not have.
 EXPOSE 8501
 # Shell form on purpose: Render injects the port at runtime (PORT, default 10000) and exec form
 # would not expand it. The fallback keeps `docker run -p 8501:8501` working locally.

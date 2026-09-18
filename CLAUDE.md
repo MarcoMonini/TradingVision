@@ -48,9 +48,12 @@ uv run python -m tradingvision.legcheck  --pred data/pred-swing-*.parquet  # doe
 uv run python -m tradingvision.legsweep --table                        # step 8: the 9x13 smoothing/leg-window grid
 ```
 
-`gru --save` writes `data/gru.pt`, which is what the chart page draws predictions from — except on the
-retrospective label, where the page loads the cell of `legsweep`'s grid its two sliders name
-(`data/gru-swing-s<smoothing>-w<window>.pt`) and refuses to draw a model fitted on another cell.
+`gru --save` writes `data/gru.pt` and `swing --save` writes `data/swing.pt`; the page reads the store
+first and `models/` after, which is the only directory a checkpoint reaches the Render image in —
+`data/` is gitignored. On the retrospective label the page instead loads the cell of `legsweep`'s grid
+its two sliders name (`gru-swing-s<smoothing>-w<window>.pt`), by the same two-directory rule, and
+refuses to draw a model fitted on another cell. `legsweep.CURRENT` — 0.7 / 24 — is the exception:
+`gru.pt` *is* that cell, at the full four folds, so it is the one the page draws there.
 
 ## Architecture
 

@@ -16,18 +16,8 @@ __pycache__/
 # Oracle sweep output
 oracle*.csv
 
-# Market data store (root only: src/tradingvision/data/ is a package). 15 GB of Parquet and
-# tensors, rebuilt by `python -m tradingvision.data.binance` and the pipeline, never committed.
-# `/data/*` and not `/data/`: git does not descend into an ignored directory, so a trailing slash
-# would make the two exceptions below unreachable.
-/data/*
-# The exceptions are the trained checkpoints, and they are here because the deployed artefact
-# needs them. The Render image builds from this repo and mounts no disk, so a model that is not
-# committed is a page with the prediction toggles permanently off. 106 KB for both, and each one
-# carries its own label, branch and normalisation statistics, so neither can be read against the
-# wrong target by accident.
-!/data/gru.pt
-!/data/swing.pt
+# Market data store (root only: src/tradingvision/data/ is a package)
+/data/
 
 # Local dev launch config
 /.claude/

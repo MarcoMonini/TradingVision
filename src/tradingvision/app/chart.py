@@ -25,7 +25,10 @@ drawing it at the fill.
 streamlit run src/tradingvision/app/chart.py
 """
 
+import importlib
+import os
 from pathlib import Path
+from types import ModuleType
 
 import numpy as np
 import pandas as pd
@@ -33,7 +36,7 @@ import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 
-from tradingvision import factor, gru, legsweep, metrics, stops, swing, threshold
+from tradingvision import factor, metrics, stops, threshold
 from tradingvision.data import candles
 from tradingvision.data.candles import BAR, SYMBOLS, TIMEFRAMES, get_candles
 from tradingvision.data.pivots import EXTREMA_WINDOW, find_pivots
@@ -48,6 +51,57 @@ from tradingvision.data.target import (
 from tradingvision.features import COLUMNS, FAMILIES, LABELS, SELECTED, features
 from tradingvision.normalize import CLIP, SCALE, apply, fit
 from tradingvision.oracle import FEE, run
+
+
+def optional(name: str) -> ModuleType | None:
+    """Import `tradingvision.<name>`, or return None when torch is not installed.
+
+    `gru` and `swing` import torch at module scope. torch is a runtime dependency now — the page
+    serves predictions from the checkpoints in `models/` and `restore` is a torch call — so on a
+    correct install this returns the module. The fallback stays because the failure it replaces
+    was total: an image built without torch died at import with `ModuleNotFoundError: No module
+    named 'torch'` and Render served nothing, losing the candles, the pivots, the label and the
+    step-6 factor, none of which need torch, to two modules that had nothing to draw. Only torch
+    is tolerated: any other missing module is a broken install and has to be raised.
+    """
+    try:
+        return importlib.import_module(f"tradingvision.{name}")
+    except ModuleNotFoundError as missing:
+        if missing.name != "torch":
+            raise
+        return None
+
+
+gru = optional("gru")
+swing = optional("swing")
+# `legsweep` imports `gru`, so it reaches torch too and goes through the same gate. The page needs
+# two torch-free facts out of it — the grid of leg windows the sweep trained, and the filename of a
+# cell — but a module that imports torch cannot be asked for them on an install without torch. When
+# it is None the label stays on the calibrated `EXTREMA_WINDOW`, which is where the page had it
+# before the sweep existed, and no cell can be drawn anyway because there is no model to load.
+legsweep = optional("legsweep")
+
+# Where a checkpoint is looked for besides `data/`. `data/` is the store a training run writes to
+# and is gitignored, so nothing under it reaches the image; `models/` is tracked, which is how a
+# deployed page gets a model at all — commit `gru.pt` and `swing.pt` there and Render serves the
+# predictions. `data/` is read first on purpose: on a machine that has just run `gru --save` the
+# fresh checkpoint is the one to draw, and a committed file silently shadowing it is the failure
+# mode worth avoiding. `TRADINGVISION_MODELS` overrides the directory for a mounted disk.
+MODELS = Path(os.environ.get("TRADINGVISION_MODELS") or Path(__file__).resolve().parents[3] / "models")
+
+
+def saved(module: ModuleType | None, name: str | None = None) -> Path | None:
+    """The checkpoint of `gru` or `swing`, from the store or from `models/`, or None if neither.
+
+    `name` replaces the filename and leaves the two directories and their order alone: the cells of
+    `legsweep`'s grid are 117 files in the same store, and they have to be found by the same rule
+    as the two named ones rather than by a second one that could drift away from it.
+    """
+    if module is None:
+        return None
+    at = module.CHECKPOINT.with_name(name) if name else module.CHECKPOINT
+    return next((p for p in (at, MODELS / at.name) if p.exists()), None)
+
 
 MAX_DAYS = 365
 # The composite's window, as the duration it was measured as rather than as a count of bars: 2880
@@ -706,13 +760,16 @@ def main() -> None:
         # The pivots the label ramps between. `EXTREMA_WINDOW = 24` is calibrated in `oracle`, but
         # on the *hindsight P&L of the legs* and never against what the model can rank, which is
         # what `legsweep` measures. The features stay on 24 whatever this says: the sweep moved
-        # the label alone, so a checkpoint here reads the same inputs as every other one.
-        leg_window = st.sidebar.select_slider(
-            "Leg window (label pivots)",
-            options=legsweep.WINDOWS,
-            value=EXTREMA_WINDOW,
-            help="bars of the 15m reference the pivot detector needs clear on both sides",
-        )
+        # the label alone, so a checkpoint here reads the same inputs as every other one. The
+        # options are the sweep's own grid and not a range, so every position is a cell someone
+        # trained; without torch there is no sweep to ask and the label stays on the calibrated 24.
+        if legsweep is not None:
+            leg_window = st.sidebar.select_slider(
+                "Leg window (label pivots)",
+                options=legsweep.WINDOWS,
+                value=EXTREMA_WINDOW,
+                help="bars of the 15m reference the pivot detector needs clear on both sides",
+            )
         # Off shows the flat +/-1 labelling, which the weighting is meant to be read against.
         significance = st.sidebar.toggle("Weight pivots by leg significance", value=True)
     # The feature windows all derive from the extrema window, so they follow it rather than being
@@ -732,24 +789,24 @@ def main() -> None:
     # one), the chart has to be on the branch the model reads, and the label on screen has to be
     # the one the model predicts — over the retrospective label the two lines share an axis
     # without sharing a unit.
-    # The checkpoint that matches the label on the two sliders, when the sweep trained one, and
-    # `gru --save`'s single file otherwise. Matching by filename and not by a field inside the
-    # pickle is deliberate: the page has to decide *before* it loads anything which of 117 files
-    # to open, and the parameters are in the name precisely so it can.
-    # One file per cell of `legsweep`'s grid, and nothing else may stand in for it: a model fitted
-    # against the label at one smoothing draws a line that means something else against the label
-    # at another, and the two would share this page's axis without sharing its question. So when
-    # the sliders land on a cell nobody trained, the page says so instead of falling back.
-    # `gru --save <that path>` overwrites a cell with the full four-fold fit, which is what the
-    # winner of the sweep gets and what the caption below then quietly starts describing.
-    model_at = legsweep.checkpoint(smoothing, leg_window) if retrospective else gru.CHECKPOINT
+    # Which of the sweep's 117 checkpoints, chosen by filename and before anything is loaded —
+    # which is the whole reason the two knobs are in the name. One file per cell, and nothing else
+    # may stand in for it: a net fitted against the label at one smoothing draws a line that means
+    # something else against the label at another, and the two would share this page's axis
+    # without sharing its question. So on a cell nobody trained the page says so and draws
+    # nothing. `legsweep.CURRENT` is the exception and not a fallback: `gru.pt` *is* that cell,
+    # fitted on the full four folds where the grid's cells are 15-epoch proxies of the same
+    # question, so at 0.7 / 24 the better model of the two is the one already deployed.
+    cell = None if not retrospective or legsweep is None else (round(smoothing, 2), leg_window)
+    model_at = saved(gru, legsweep.checkpoint(*cell).name if cell and cell != legsweep.CURRENT else None)
     missing = (
         f"No model at smoothing {smoothing:.1f}, leg window {leg_window} — "
-        f"`python -m tradingvision.legsweep --smoothings {smoothing:.1f} --windows {leg_window}`"
-        if retrospective
-        else "No model saved. `python -m tradingvision.gru --features all --save`"
+        f"`python -m tradingvision.legsweep --smoothings {smoothing:.1f} --windows {leg_window}`, "
+        f"then copy it into `{MODELS.name}/` to deploy it."
+        if cell and cell != legsweep.CURRENT
+        else f"No model saved. `python -m tradingvision.gru --features all --save`, then copy it into "
+        f"`{MODELS.name}/` to deploy it."
     )
-    model_at = model_at if model_at.exists() else None
     checkpoint = load_model(str(model_at))[1] if model_at else None
     branch = checkpoint["branches"][0] if checkpoint else None
     # Which of the two labels this checkpoint was fitted on. Older files predate the choice and
@@ -758,7 +815,9 @@ def main() -> None:
     # has no line for, and the old subscript turned that into a KeyError on import of the sidebar.
     trained_on = TRAINED_ON.get(checkpoint.get("label", "excursion")) if checkpoint else None
     predicting = False
-    if not model_at:
+    if gru is None:
+        st.sidebar.caption("This install has no torch, so no GRU prediction. The factor below needs none.")
+    elif not model_at:
         st.sidebar.caption(missing)
     elif trained_on is None:
         st.sidebar.caption("The saved GRU reads cross-sectional ranks, which one pair cannot supply.")
@@ -772,11 +831,15 @@ def main() -> None:
     # The swing model of step 7 — the one that trades. It is drawn against the retrospective
     # label because that is the label it predicts, and only on the timeframe it was fitted on:
     # its inputs are windows of that bar and nothing rescales them between one bar and another.
-    swing_at = swing.CHECKPOINT if swing.CHECKPOINT.exists() else None
+    swing_at = saved(swing)
     swing_card = load_swing_model(str(swing_at), swing_at.stat().st_mtime)[1] if swing_at else None
     swinging = False
-    if not swing_at:
-        st.sidebar.caption("No swing model. `python -m tradingvision.swing --save`")
+    if swing is None:
+        st.sidebar.caption("This install has no torch, so no swing trades.")
+    elif not swing_at:
+        st.sidebar.caption(
+            f"No swing model. `python -m tradingvision.swing --save`, then copy it into `{MODELS.name}/`."
+        )
     elif label != RETROSPECTIVE:
         st.sidebar.caption(f"The swing model predicts the **{RETROSPECTIVE}** label.")
     elif timeframe != swing_card["timeframe"]:
@@ -1325,4 +1388,7 @@ def main() -> None:
     )
 
 
-main()
+# Guarded so the page can be imported without drawing it: `streamlit run` executes the script as
+# `__main__`, and `tests/test_chart.py` imports it to check it survives a torch-less install.
+if __name__ == "__main__":
+    main()

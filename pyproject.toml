@@ -18,13 +18,12 @@ dependencies = [
     "plotly==6.2.0",
     "ta==0.11.0",
     "requests==2.34.2",
-    # Runtime and not dev, because the chart page imports `gru` and `swing` at module scope and
-    # both import torch at theirs: without it the deployed image raises ModuleNotFoundError before
-    # Streamlit draws a thing. It was in the dev group while the page drew only candles, pivots
-    # and features, and moving it is what makes `data/gru.pt` and `data/swing.pt` worth shipping.
-    # The cost is the image: a few hundred MB of tensor machinery on a slim base. `tool.uv.sources`
-    # below is what keeps it from being gigabytes — on Linux the wheel comes from the CPU index,
-    # so the CUDA build and the 73 nvidia wheels behind it never enter the build.
+    # The chart page draws the GRU and the swing model from the checkpoints under `models/`, so
+    # the deployed image needs torch even though it never trains: `restore` and `predict_frame`
+    # are torch calls, and `gru` and `swing` import torch at module scope, so without it the page
+    # used to die at import before Streamlit drew a thing. The CPU wheel below keeps that to
+    # ~200 MB instead of the CUDA build's gigabytes — the page runs a 32-unit GRU over a few
+    # thousand bars, on one core, per rerun.
     "torch==2.14.0",
 ]
 
@@ -47,11 +46,11 @@ target-version = "py312"
 select = ["E", "F", "I"]
 
 [dependency-groups]
-# lightgbm sits here and not in the runtime dependencies: it is the step-2 reference model and
-# nothing the page draws goes near it, so the deployed image has no reason to carry its OpenMP
-# runtime. Keeping it out is also what keeps the rule of `CLAUDE.md` true where it matters most —
-# torch and lightgbm each ship their own libomp and abort with `OMP: Error #15` in one process,
-# and the image now has torch in it.
+# lightgbm stays out of the runtime dependencies: it trains the step-2 reference and the chart page
+# never calls it, so the image has no reason to carry its OpenMP runtime. Keeping it out is also
+# what keeps the rule of `CLAUDE.md` true where it now matters most — torch and lightgbm each ship
+# their own libomp and abort with `OMP: Error #15` in one process, and the image has torch in it.
+# torch moved *into* the runtime dependencies when the page started serving predictions.
 dev = [
     "black>=26.5.1",
     "lightgbm==4.7.0",
@@ -67,7 +66,7 @@ dev = [
 ]
 
 # torch on Linux would pull the CUDA build and 73 nvidia wheels behind it — a few gigabytes for a
-# CI job that runs on CPU, and for an image that never trains at all. macOS stays on PyPI, where
+# CI job that runs on CPU, and for an image that only does inference. macOS stays on PyPI, where
 # the wheel is already the CPU/MPS one.
 [tool.uv.sources]
 torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
