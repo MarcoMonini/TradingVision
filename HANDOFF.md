@@ -7,6 +7,10 @@ Rank IC 0,4114 contro l'etichetta swing ottiene **−0,0405 contro il rendimento
 
 Base: merge di `book-on-screen` in `claude/fervent-knuth-se8cw5`.
 
+**Aggiornamento 2026-09-19** — dopo la PR #14 è stata fatta una passata di revisione su tutto il
+codice (nessuna misura nuova, nessun numero spostato): sezione 13. Contiene un crash della pagina
+deployata, tre cache che non invalidavano, e un'ottimizzazione da 61x su `features`.
+
 ---
 
 ## 1. Cosa è stato misurato, e su cosa
@@ -586,3 +590,81 @@ rendimento forward**. Se la griglia va rifatta, va rifatta su un giudice che sia
   ricostruiti per finestra (16 + 4 minuti × 13) e confonde "etichetta migliore" con "input migliori".
 - **Non leggere `rank_ic` da solo.** L'argmax di Rank IC è la cella in cui l'etichetta somiglia di
   più a un RSI. `--table edge` è la colonna che lo dice.
+
+---
+
+## 13. Passata di revisione post-PR #14 — bug, cache, prestazioni
+
+Nessuna misura nuova e **nessun numero di questo documento o dello spec cambia**: le correzioni
+sono di codice e di infrastruttura, e quella sulle prestazioni è verificata identica bit per bit.
+`uv run pytest -q` → **77 passed** (prima: 76 passed, 1 failed).
+
+### I due che rompevano qualcosa
+
+**La pagina andava in crash sul proprio percorso principale.** In `chart.py` il libro del modello
+swing legava `per`, che è lo stesso nome del frame del libro fattoriale cinquanta righe più sotto.
+L'etichetta retrospettiva non passa mai dal ramo cross-sectional, quindi `per` restava quello dello
+swing e il blocco `if per is not None` in fondo alla pagina ripartiva: ridisegnava il libro swing
+sotto la didascalia del fattore e poi moriva su `factor.swap(0)` → `ZeroDivisionError`, con `pos`
+mai definito dietro. Si attiva con etichetta retrospettiva + timeframe 4h + `models/swing.pt`, che
+è esattamente la configurazione che il checkpoint committato serve. Rinominato in `swing_per`;
+verificato sulla pagina vera (BTC/USD 4h, 175 giorni) che ora arriva in fondo senza traceback.
+
+**`test_gru_selfcheck` falliva su qualunque macchina con Metal.** Il self-check costruiva `Net` su
+CPU e gli passava tensori `.to(DEVICE)`. In CI `DEVICE` è `cpu`, quindi era verde lì e rosso sulla
+macchina che addestra — il caso peggiore per un test. Una `.to(DEVICE)`.
+
+### Le tre cache che non invalidavano
+
+- **Il modello sulla pagina non si aggiornava mai dopo un riaddestramento.** `load_prediction` e
+  `load_coverage` portano `_mtime` nella chiave proprio per quello, ma chiamavano `load_model(path)`,
+  che era cachata sul solo path: ricalcolavano la predizione sui pesi vecchi. Risposta fresca da un
+  modello vecchio, che è peggio di una risposta vecchia. `load_swing_model` aveva già la forma
+  giusta; `_mtime` ora passa anche di lì.
+- **`legsweep.cached_labels` non aveva timbro.** Rileggeva il parquet controllando solo le colonne,
+  e `rows_of` allinea quel frame a `df` **posizionalmente** (`lab.iloc[:, 1].notna().to_numpy()`).
+  Un file di etichette costruito contro uno `step2.parquet` precedente non avrebbe sollevato niente:
+  avrebbe rietichettato l'intera griglia contro le barre sbagliate. Ora confronta anche l'indice,
+  che qui *è* la provenienza (`labels` finisce su `reindex(index)`), quindi non serve un JSON
+  accanto come per `dataset.cached` e `gru.cached_sequences`.
+- **`stops.run` calcolava l'ATR del pannello due volte** — stessa colonna, stessa finestra, una per
+  barriera. `--grid` ne pagava quattordici passate invece di una.
+
+### `features` è 4,6x più veloce, e il PSAR è identico
+
+Profilando `features` su 93.696 barre: **PSAR era 9,4s di 10,8s**. `ta.trend.PSARIndicator` esegue
+la ricorsione di Wilder con `.iloc` scalare di pandas in get *e* in set. Portato a un loop su
+array numpy in `features._psar`, con i default `step`/`max_step` di `ta`.
+
+Verificato **bit per bit** contro `ta` su tutte le 20 coppie × 3 timeframe dal 2023 — 60 serie,
+zero differenze. L'uguaglianza è ora un assert nel self-check del modulo, quindi `ta` resta la
+definizione e il porting non può derivare in silenzio. Serve che sia esatto e non "vicino": la
+ricorsione è path-dependent, una barra di scarto si propagherebbe fino in fondo alla serie e ogni
+numero già misurato su quella colonna sarebbe un altro numero.
+
+| | prima | dopo |
+|---|---|---|
+| PSAR su tutto lo store (60 serie) | 304s | 5s |
+| `features`, 93.696 barre | 3,11s | 0,67s |
+| `uv run pytest -q` | 192s | 105s |
+
+### Un numero sbagliato in una didascalia della pagina
+
+`chart.py` scriveva che la regola nuda fa **−89% l'anno**. Quel numero non esiste da nessuna parte:
+la misura è **−0.458 log l'anno** a ±0.5 (sezione 9, e §9 dello spec). Il −89% è il *drawdown* di
+SUSHI, che nello spec sta nella frase accanto. Corretto alla cifra misurata.
+
+### Cosa è stato guardato e lasciato stare
+
+Tre cose sono sbagliate ma correggerle sposterebbe un numero già pubblicato, quindi sono decisioni
+di chi riprende e non correzioni silenziose:
+
+- **`swing.baselines` taglia le candele dalla prima riga di *test***, quindi ogni regola a una
+  colonna sta piatta durante il proprio warm-up delle feature (~49 barre) mentre il modello no. È
+  conservativo — penalizza la baseline, che vince lo stesso — ma sposterebbe il +0.116 della tabella.
+- **`nearpivot.rank_ic` riporta un `mean/std*sqrt(n)` ingenuo** su date sovrapposte, cioè
+  esattamente ciò che `metrics.blocked` esiste per vietare. Impatto basso (la banda è < 24 barre),
+  ma contraddice la regola di progetto.
+- **`simulation.sweep` campiona per posizione** (`np.arange(len(close)) % step == 0`) dove
+  `factor.hourly` campiona sull'orologio. Sicuro sull'indice-unione, incoerente con la regola che
+  `dataset.build` documenta.

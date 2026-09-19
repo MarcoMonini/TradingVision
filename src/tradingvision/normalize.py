@@ -1,6 +1,6 @@
 """Puts every feature column on one scale, so none of them is ignored during training.
 
-Measured on the store, the 28 raw columns span ~3.2 orders of magnitude: the wick and log-return
+Measured on the store, the 29 raw columns span ~3.2 orders of magnitude: the wick and log-return
 columns sit at an IQR of 1e-3 while the bounded ones sit around 1e0. A GRU can in principle
 rescale its inputs, but with standard initialisation the gradient on a 1e-3 column is a thousand
 times smaller, and weight decay penalises exactly the large weights that would compensate — inside

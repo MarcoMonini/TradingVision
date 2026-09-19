@@ -1,4 +1,4 @@
-"""The 28 candidate feature columns of the swing dataset, one row per bar.
+"""The 29 candidate feature columns of the swing dataset, one row per bar.
 
 All causal: every rolling window looks only backwards from the current bar, never centred. The
 asymmetry with the target is deliberate — pivots see the future because they are the label, the
@@ -10,10 +10,11 @@ borrowed from another problem. The per-branch values are still to be measured (s
 `N` is a plain argument here and defaults to the reference window.
 
 Column names are the spec's 28 candidates spelled out as descriptive identifiers, grouped by the
-spec's families; the definitions are unchanged.
+spec's families, plus `log_dollar_volume` — the one column here whose *level* is the information,
+added when the label became cross-sectional. The other definitions are unchanged.
 
-These 28 are candidates, not the final set: the spec reduces them by correlation and permutation
-importance, expecting 7-12 survivors.
+These 29 are candidates, not the final set: the spec reduces them by correlation and permutation
+importance, and on the cross-sectional label `SELECTED` is down to two.
 
 Every column comes back finite or NaN, never an infinity. NaN is a value the pipeline handles —
 `dataset` drops the row — while an infinity is one nothing downstream sees: it passes `dropna`,
@@ -25,7 +26,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 from ta.momentum import KAMAIndicator, RSIIndicator, TSIIndicator
-from ta.trend import ADXIndicator, PSARIndicator
+from ta.trend import ADXIndicator
 from ta.volatility import AverageTrueRange
 from ta.volume import VolumeWeightedAveragePrice
 
@@ -131,6 +132,55 @@ LABELS = {
 }
 
 
+# Wilder's Parabolic SAR, ported from `ta.trend.PSARIndicator._run` and asserted equal to it in
+# the self-check below. The port is here for one reason: `ta` runs the recursion with pandas
+# scalar `.iloc` get and set, which is 60x the cost of the same loop over arrays, and it is the
+# whole of this module's runtime — measured on the store, PSAR was 9.4s of `features`' 10.8s and
+# the twenty symbols at three timeframes took 304s against 5s. Bit for bit identical on all sixty
+# of those series, which is the only condition under which a number already measured stays
+# comparable; `ta` stays the definition and the check is what says so.
+#
+# The `step`/`max_step` defaults are `ta`'s own. There is no window here — Wilder's SAR is
+# parameterised by an acceleration and not by a lookback — so this is the one column in the file
+# that does not derive its shape from `n`.
+PSAR_STEP, PSAR_MAX_STEP = 0.02, 0.20
+
+
+def _psar(high: pd.Series, low: pd.Series, close: pd.Series, step: float, max_step: float) -> np.ndarray:
+    """The SAR level at every bar. Causal: bar `i` reads `i`, `i-1` and `i-2` and nothing later."""
+    h, low_, c = (s.to_numpy(dtype="float64") for s in (high, low, close))
+    out = c.copy()
+    up, acceleration, trend_high, trend_low = True, step, h[0], low_[0]
+    for i in range(2, len(c)):
+        reversal = False
+        if up:
+            out[i] = out[i - 1] + acceleration * (trend_high - out[i - 1])
+            if low_[i] < out[i]:
+                reversal, out[i], trend_low, acceleration = True, trend_high, low_[i], step
+            else:
+                if h[i] > trend_high:
+                    trend_high, acceleration = h[i], min(acceleration + step, max_step)
+                # The two bars behind it cap the level, so the stop never sits inside the range
+                # the market has just traded through.
+                if low_[i - 2] < out[i]:
+                    out[i] = low_[i - 2]
+                elif low_[i - 1] < out[i]:
+                    out[i] = low_[i - 1]
+        else:
+            out[i] = out[i - 1] - acceleration * (out[i - 1] - trend_low)
+            if h[i] > out[i]:
+                reversal, out[i], trend_high, acceleration = True, trend_low, h[i], step
+            else:
+                if low_[i] < trend_low:
+                    trend_low, acceleration = low_[i], min(acceleration + step, max_step)
+                if h[i - 2] > out[i]:
+                    out[i] = h[i - 2]
+                elif h[i - 1] > out[i]:
+                    out[i] = h[i - 1]
+        up = up != reversal  # XOR
+    return out
+
+
 def _bars_since(s: pd.Series, n: int, *, high: bool) -> pd.Series:
     """Age of the window extreme, in [0, 1]: 0 on the bar that set it, 1 at the far end."""
     pick = np.argmax if high else np.argmin
@@ -208,12 +258,7 @@ def features(df: pd.DataFrame, n: int = EXTREMA_WINDOW) -> pd.DataFrame:
         "distance_from_kama_pct": np.log(c / KAMAIndicator(c, window=n).kama()),
         "distance_from_ema_pct": np.log(c / ema),
         "ema_slope": np.log(ema / ema.shift(short)),
-        # On a positional index: ta assigns into the PSAR series by position, which a
-        # DatetimeIndex turns into a deprecation warning on every bar.
-        "distance_from_psar_pct": (
-            c - PSARIndicator(*(s.reset_index(drop=True) for s in (h, low, c))).psar().set_axis(c.index)
-        )
-        / c,
+        "distance_from_psar_pct": (c - _psar(h, low, c, PSAR_STEP, PSAR_MAX_STEP)) / c,
         # Known fixed ranges, so dividing by a constant puts them on the same scale as the % columns
         # with no statistic to estimate and no leakage. The rest need robust scaling fitted on train.
         "adx_trend_strength": ADXIndicator(h, low, c, window=n).adx() / 100,
@@ -250,6 +295,15 @@ if __name__ == "__main__":
     )
     out = features(df)
     assert list(out.columns) == COLUMNS and len(COLUMNS) == 29, "29 columns, spec order"
+    # The PSAR port against `ta`, which is still the definition of the column. Equal and not
+    # approximately equal: the recursion is path dependent, so a single bar of drift would carry
+    # to the end of the series and every number already measured on it would be a different one.
+    from ta.trend import PSARIndicator
+
+    assert np.array_equal(
+        _psar(df.high, df.low, df.close, PSAR_STEP, PSAR_MAX_STEP),
+        PSARIndicator(*(s.reset_index(drop=True) for s in (df.high, df.low, df.close))).psar().to_numpy(),
+    ), "the PSAR port drifted from ta's"
     assert list(LABELS) == COLUMNS, "every column needs a chart label"
     tail = out.iloc[EXTREMA_WINDOW * 4 :]
     assert tail.notna().all().all(), f"NaN past warm-up: {tail.columns[tail.isna().any()].tolist()}"

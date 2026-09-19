@@ -20,7 +20,7 @@ measurements, and commit subjects are written that way ("Four branches lose to o
 ## Commands
 
 ```bash
-uv sync                              # installs dev group too (lightgbm); torch is a runtime dep
+uv sync                              # installs dev group too (lightgbm, scipy); torch is a runtime dep
 uv run pytest -q
 uv run pytest tests/test_dataset.py::test_branches_never_read_an_unclosed_bar -q
 uv run ruff check . && uv run black --check .    # what CI runs, line-length 120
@@ -121,7 +121,11 @@ made of, so a naive t over 10,944 dates reads 31.9 where 153 non-overlapping blo
 
 **Cached datasets carry their parameters.** `dataset.cached` writes a JSON stamp next to the Parquet
 and refuses to load a file built with different arguments. Don't defeat it — delete the file or pass
-another `--cache`.
+another `--cache`. The stamp records what is *not* an argument too (`LAGS`, `SAMPLING`), because
+those change which rows exist without changing anything a caller passes. Same contract in
+`gru.cached_sequences` (rows, first, last) and in `legsweep.cached_labels`, whose stamp is the
+index itself — `rows_of` masks the step-2 frame with that file **positionally**, so a label frame
+built against an older `step2.parquet` would relabel the whole grid instead of raising.
 
 **The page may not reach scipy, and pandas hides a path to it.** `Series.corr(method="spearman")`
 imports scipy *lazily*, from inside `pandas.core.nanops`, so the call survives every import-time
@@ -131,6 +135,13 @@ matters — it took the chart page down in production on a caption. Use `metrics
 Pearson on the ranks and asserted equal to pandas' own. `tests/test_deploy.py` enforces both halves:
 the page's module graph is exercised with scipy made unimportable, and the call is banned by an AST
 scan everywhere but `metrics`, which has to make it to prove the replacement equals it.
+
+**PSAR is ported, not imported, and has to stay bit-equal.** `ta.trend.PSARIndicator` runs Wilder's
+recursion with pandas scalar `.iloc` on both sides, which made it 9.4s of `features`' 10.8s — the
+whole cost of the most-called function in the pipeline. `features._psar` is the same algorithm over
+numpy arrays, 61x faster, and the module's self-check asserts it **equal** to `ta` rather than
+close: the recursion is path dependent, so one bar of drift propagates to the end of the series and
+every number measured on that column becomes a different number. `ta` stays the definition.
 
 **torch and lightgbm never meet in one process.** Each ships its own OpenMP runtime and importing
 both aborts with `OMP: Error #15`. `gru` deliberately does not import `gbm`; the only place they
