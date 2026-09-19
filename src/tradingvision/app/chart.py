@@ -215,9 +215,15 @@ def load_significance(close, window: int):
 
 
 @st.cache_resource(show_spinner=False)
-def load_model(path: str):
+def load_model(path: str, _mtime: float):
     """The saved GRU, kept across reruns. `cache_resource` and not `cache_data`: a torch module is
-    not something to pickle and copy on every widget move."""
+    not something to pickle and copy on every widget move.
+
+    `_mtime` is in the key and unused in the body, exactly as it is in `load_swing_model`, and it
+    has to be: the two callers below carry it so a retrained checkpoint invalidates them, and
+    without it here they would recompute the prediction against the weights already cached under
+    the same path — a fresh answer from a stale model, which is worse than a stale answer.
+    """
     return gru.restore(Path(path))
 
 
@@ -225,14 +231,14 @@ def load_model(path: str):
 def load_coverage(df, path: str, _mtime: float):
     """Why the prediction does not fill the window — the same tensor `predict_frame` builds, so
     the explanation can never describe a different frame from the one on screen."""
-    return gru.coverage(load_model(path)[1], df)
+    return gru.coverage(load_model(path, _mtime)[1], df)
 
 
 @st.cache_data(show_spinner="Predicting…")
 def load_prediction(df, path: str, _mtime: float):
     """The model's output at every bar on screen. `_mtime` is in the key and unused in the body:
     retraining the checkpoint has to invalidate this, and the path alone would not say so."""
-    return gru.predict_frame(*load_model(path), df)
+    return gru.predict_frame(*load_model(path, _mtime), df)
 
 
 @st.cache_resource(show_spinner=False)
@@ -712,7 +718,7 @@ def chart(
 
 def main() -> None:
     st.set_page_config(page_title="Trading Vision", layout="wide")
-    st.title("TradingVision")
+    st.title("Trading Vision")
 
     # The study's twenty pairs, and a typed one as well. Which of them Alpaca lists is not
     # something this project can know — its crypto coverage is narrower than Binance's and moves —
@@ -807,7 +813,7 @@ def main() -> None:
         else f"No model saved. `python -m tradingvision.gru --features all --save`, then copy it into "
         f"`{MODELS.name}/` to deploy it."
     )
-    checkpoint = load_model(str(model_at))[1] if model_at else None
+    checkpoint = load_model(str(model_at), model_at.stat().st_mtime)[1] if model_at else None
     branch = checkpoint["branches"][0] if checkpoint else None
     # Which of the two labels this checkpoint was fitted on. Older files predate the choice and
     # were all fitted on the predictive one.
@@ -1234,8 +1240,8 @@ def main() -> None:
             + f"Filled triangles on the candles are the rule's own fills; hollow squares are "
             f"the oracle's pivots, which read {leg_window} bars of future and are there to be measured "
             f"against, not traded. One pair over one window is one path — `stops --at {band:.2f}` "
-            f"prices the same rule over twenty pairs and fifteen months, where the bare rule nets −89% a "
-            f"year and the long leg loses at every threshold on the grid."
+            f"prices the same rule over twenty pairs and fifteen months, where the bare rule nets "
+            f"−0.458 log a year at this band and the long leg loses at every threshold on the grid."
         )
 
     st.plotly_chart(
@@ -1261,12 +1267,17 @@ def main() -> None:
         # The same figure the factor book gets, on the only benchmark a single pair has: holding
         # it. Three curves and the two gaps between them — gross to net is the fee, net to hold is
         # the whole of what timing the legs was worth.
+        #
+        # Its own name and not `per`, which is the factor book's frame further down. Sharing it
+        # made the swing curve leak into the `if per is not None` below: this label never sets
+        # `per`, so that block would draw the swing book a second time under the factor's caption
+        # and then die on `pos`, which only the cross-sectional branch ever binds.
         ret = np.log(df.close.shift(-1) / df.close).fillna(0.0)
-        per = pd.DataFrame(
+        swing_per = pd.DataFrame(
             {"gross": swing_pos * ret, "traded": swing_pos.diff().fillna(swing_pos).abs(), "basket": ret}
         )
         st.plotly_chart(
-            book(per, swing_pos, fetched[0], "position", "buy and hold"),
+            book(swing_per, swing_pos, fetched[0], "position", "buy and hold"),
             use_container_width=True,
             key="swing-book",
         )

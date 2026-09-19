@@ -152,12 +152,20 @@ def labels(index: pd.MultiIndex, window: int, smoothings=SMOOTHINGS) -> pd.DataF
 
 def cached_labels(window: int, smoothings=SMOOTHINGS, at: Path = LABELS, index=None) -> pd.DataFrame:
     """`labels` on disk. Half of a cell's wall clock is the label, and the nine smoothings of a
-    window share the file, so a resumed or re-read sweep pays for it once."""
+    window share the file, so a resumed or re-read sweep pays for it once.
+
+    The index is checked and not only the columns, which is this file's version of the stamp
+    `dataset.cached` and `gru.cached_sequences` both carry. `rows_of` masks `df` with
+    `lab.iloc[:, 1]` *positionally*, so a label frame built against an older `step2.parquet` would
+    not raise — it would line every row up against the wrong bar and relabel the whole grid. The
+    index is the provenance here (`labels` ends on `reindex(index)`), so comparing it is the whole
+    check and no JSON is needed beside the file.
+    """
     at.mkdir(parents=True, exist_ok=True)
     path = at / f"w{window:d}.parquet"
     if path.exists():
         out = pd.read_parquet(path)
-        if list(out.columns) == ["next_pivot"] + [f"{s:.2f}" for s in smoothings]:
+        if list(out.columns) == ["next_pivot"] + [f"{s:.2f}" for s in smoothings] and out.index.equals(index):
             return out
     out = labels(index, window, smoothings)
     out.to_parquet(path)

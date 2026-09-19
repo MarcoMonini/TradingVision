@@ -931,7 +931,10 @@ def _selfcheck() -> None:
         "rank": False,
     }
     card["stats"] = [normalize.fit(features(frame, EXTREMA_WINDOW)[card["keep"]].dropna())]
-    net = Net(card["widths"], shared=False)
+    # On `DEVICE`, like every other net here: `restore` puts a checkpoint there and
+    # `predict_frame` moves its input there, so a CPU model fed an `mps` window is a
+    # RuntimeError that only ever fires on the machine that trains — never in CI.
+    net = Net(card["widths"], shared=False).to(DEVICE)
     told = coverage(card, frame)
     assert np.isclose(told["drawn"], predict_frame(net, card, frame).notna().mean())
     # A clean walk has no interior gap: everything missing is the warm-up at the front.
@@ -1133,8 +1136,9 @@ def main() -> None:
         print(out["seeds"].round(4).to_string())
     if args.smooth:
         print("\nlow-pass on the prediction — Rank IC of the k-bar average, pooled over the folds\n")
-        rows = {k: metrics.signal(threshold.smoothed(out["pred"], k), out["target"]) for k in [1] + args.smooth}
-        print(pd.DataFrame(rows).T.rename_axis("k").round(4).to_string())
+        # Not `rows`: that name holds the tensor's row index above, and `x` is built from it.
+        table = {k: metrics.signal(threshold.smoothed(out["pred"], k), out["target"]) for k in [1] + args.smooth}
+        print(pd.DataFrame(table).T.rename_axis("k").round(4).to_string())
     print("\nmarket beta — the same metrics once the cross-sectional mean is removed\n")
     print(out["market_beta"].round(4).to_string())
     if args.horizon:

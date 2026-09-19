@@ -341,7 +341,11 @@ def run(
     if missing:
         raise ValueError(f"bars is missing {missing}")
     sig = threshold.signals(pred, band, sign)
-    tp, sl = width(take, atr_pct(bars, window), fee), width(stop, atr_pct(bars, window), fee)
+    # One ATR pass for both barriers: it is the same column at the same window, and it is a
+    # per-symbol Wilder recursion over the whole panel — a third of a second on twenty pairs,
+    # paid twice per call and fourteen times by `--grid`.
+    atr = atr_pct(bars, window)
+    tp, sl = width(take, atr, fee), width(stop, atr, fee)
 
     held = pd.DataFrame(
         {"pos": 0.0, "ret": 0.0, "ret_long": 0.0, "traded": 0.0, "exit": ""},
@@ -349,10 +353,10 @@ def run(
     )
     rows = []
     for symbol, at in pred.groupby(pred.index.get_level_values(1), sort=False).groups.items():
-        take_ = bars.loc[at]
+        one = bars.loc[at]
         pos, ret, ret_long, traded, holds = walk(
             sig.loc[at].to_numpy(),
-            *(take_[c].to_numpy() for c in OHLC),
+            *(one[c].to_numpy() for c in OHLC),
             tp.loc[at].to_numpy(),
             sl.loc[at].to_numpy(),
             after_stop,
