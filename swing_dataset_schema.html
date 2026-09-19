@@ -560,7 +560,7 @@ footer{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);color:v
 
   <div class="tw">
     <table>
-      <caption>le 28 candidate — C, O, H, L, V della candela; N = finestra_estremi = 24 barre del ramo</caption>
+      <caption>le 29 candidate — C, O, H, L, V della candela; N = finestra_estremi = 24 barre del ramo. Le prime 28 sono quelle dello step 2; la 29ª è stata aggiunta dall'etichetta cross-sectional, ed è l'unica il cui <em>livello</em> è l'informazione</caption>
       <thead><tr><th class="num">#</th><th>colonna</th><th>famiglia</th><th>definizione</th></tr></thead>
       <tbody>
         <tr><td class="num">1</td><td class="key">log_return</td><td>prezzo</td><td>log(C / C₋₁)</td></tr>
@@ -591,6 +591,7 @@ footer{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);color:v
         <tr><td class="num">26</td><td class="key">adx_trend_strength</td><td>forza trend</td><td>ADX_N / 100</td></tr>
         <tr><td class="num">27</td><td class="key">tsi_momentum</td><td>momentum</td><td>TSI / 100</td></tr>
         <tr><td class="num">28</td><td class="key">rsi_centered</td><td>momentum</td><td>RSI_N / 50 − 1</td></tr>
+        <tr><td class="num">29</td><td class="key">log_dollar_volume</td><td>volume</td><td>log(media(V · C, N))</td></tr>
       </tbody>
     </table>
   </div>
@@ -655,7 +656,7 @@ footer{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);color:v
   <p class="h2sub">Robust scaling con clip<span class="b b-ok">chiuso</span></p>
   <pre>z = clip((x − mediana) / IQR, ±5) × 0.1</pre>
   <p class="lead">Statistiche stimate <strong>solo sul train</strong> e applicate invariate a validazione, test e live; <code>apply</code> non legge mai il frame a cui è applicata. In codice: <code>normalize</code>.</p>
-  <p><strong>Perché serve il clip.</strong> Le 28 colonne grezze coprono 3,2 ordini di grandezza — wick e log-ritorni a IQR 10⁻³, le limitate a 10⁰. Il quantile scaling da solo normalizza il corpo della distribuzione e lascia outlier fino a <strong>380 IQR</strong> fuori campione, che sui gate della GRU pesano quanto tutto il resto. A CLIP = 5 si tronca lo 0,46% dei valori e il risultato sta in ±0,5.</p>
+  <p><strong>Perché serve il clip.</strong> Le 29 colonne grezze coprono 3,2 ordini di grandezza — wick e log-ritorni a IQR 10⁻³, le limitate a 10⁰. Il quantile scaling da solo normalizza il corpo della distribuzione e lascia outlier fino a <strong>380 IQR</strong> fuori campione, che sui gate della GRU pesano quanto tutto il resto. A CLIP = 5 si tronca lo 0,46% dei valori e il risultato sta in ±0,5.</p>
   <p><strong>Esito:</strong> IQR esattamente 0,1 su tutte le colonne in train, 0,093–0,111 in test — 0,08 decadi di spread contro le 3,2 di partenza. La trasformazione è monotona per colonna, quindi le correlazioni di Spearman della selezione restano intatte. Anche le colonne già limitate passano di qui: fra loro avevano comunque 1,2 decadi di spread.</p>
 </section>
 
