@@ -1,0 +1,1229 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pipeline Swing Leg Target</title>
+<style>
+:root{
+  --bg:#fbfaf8; --panel:#fff; --ink:#1a1c1f; --soft:#5c6169; --line:#e3e1dc;
+  --accent:#1b6b4a; --amber:#8a6212; --blue:#1f5c8c; --red:#a33a2a;
+  --chip:#f1efea; --code:#f4f2ee;
+  --s1:#2a78d6; --s2:#eb6834; --grid:#ecebe7;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#15161a; --panel:#1c1e23; --ink:#e8e6e3; --soft:#9aa0a8; --line:#2c2f36;
+  --accent:#5cc394; --amber:#d9a441; --blue:#6aa9d9; --red:#e08b7a;
+  --chip:#24272d; --code:#22252b;
+  --s1:#3987e5; --s2:#d95926; --grid:#26292f;
+}}
+:root[data-theme="dark"]{
+  --bg:#15161a; --panel:#1c1e23; --ink:#e8e6e3; --soft:#9aa0a8; --line:#2c2f36;
+  --accent:#5cc394; --amber:#d9a441; --blue:#6aa9d9; --red:#e08b7a;
+  --chip:#24272d; --code:#22252b;
+  --s1:#3987e5; --s2:#d95926; --grid:#26292f;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.62;margin:0}
+.wrap{max-width:1000px;margin:0 auto;padding:48px 16px 96px}
+header{border-bottom:2px solid var(--ink);padding-bottom:24px;margin-bottom:8px}
+h1{font-size:30px;line-height:1.2;margin:0 0 8px;letter-spacing:-.02em}
+.tagline{color:var(--soft);font-size:16px;margin:0 0 20px;max-width:74ch}
+.facts{display:flex;flex-wrap:wrap;gap:10px}
+.fact{background:var(--chip);border-radius:6px;padding:8px 12px;font-size:13px}
+.fact b{display:block;font-size:17px;font-variant-numeric:tabular-nums}
+.fact span{color:var(--soft)}
+nav.toc{margin:28px 0 0;columns:2 260px;column-gap:32px;font-size:14px}
+nav.toc a{color:var(--ink);text-decoration:none;display:block;padding:2px 0;break-inside:avoid}
+nav.toc a:hover{color:var(--blue)}
+nav.toc .n{color:var(--soft);font-variant-numeric:tabular-nums;display:inline-block;min-width:2.2em}
+section{margin-top:56px;scroll-margin-top:16px}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.12em;color:var(--soft);margin:0 0 4px;font-weight:600}
+h2 .n{color:var(--ink);font-variant-numeric:tabular-nums}
+.h2sub{font-size:23px;font-weight:650;letter-spacing:-.01em;margin:0 0 20px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:32px 0 10px;font-weight:640;letter-spacing:-.01em}
+p{margin:0 0 12px;max-width:80ch}
+.lead{font-size:16px;color:var(--soft);max-width:78ch}
+.b{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border-radius:99px;vertical-align:3px;margin-left:8px}
+.b-ok{background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accent)}
+.b-msr{background:color-mix(in srgb,var(--blue) 15%,transparent);color:var(--blue)}
+.b-open{background:color-mix(in srgb,var(--amber) 18%,transparent);color:var(--amber)}
+.b-no{background:color-mix(in srgb,var(--red) 15%,transparent);color:var(--red)}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin:18px 0}
+.box>:last-child{margin-bottom:0}
+.box.why{border-left:3px solid var(--blue)}
+.box.no{border-left:3px solid var(--red)}
+.box.open{border-left:3px solid var(--amber)}
+.box.ok{border-left:3px solid var(--accent)}
+.box h4{margin:0 0 8px;font-size:15px;font-weight:640}
+.tw{overflow-x:auto;margin:18px 0;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+caption{text-align:left;padding:12px 16px;color:var(--soft);font-size:12.5px;border-bottom:1px solid var(--line)}
+th{text-align:left;font-weight:600;color:var(--soft);font-size:12px;text-transform:uppercase;letter-spacing:.05em;padding:10px 14px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:8px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+tbody tr:last-child td{border-bottom:none}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td.key{font-family:var(--mono);font-size:12.5px;overflow-wrap:anywhere}
+td.ind{padding-left:34px}
+td.ind2{padding-left:54px}
+tr.grp td{background:var(--chip);font-weight:640;font-size:12.5px;letter-spacing:.02em}
+tr.hi td{background:color-mix(in srgb,var(--accent) 8%,transparent);font-weight:600}
+td.foot{color:var(--soft);font-size:12.5px;background:var(--chip)}
+.pos{color:var(--accent)}.neg{color:var(--red)}
+code{overflow-wrap:anywhere;font-family:var(--mono);font-size:.88em;background:var(--code);padding:1.5px 5px;border-radius:4px}
+pre{font-family:var(--mono);font-size:12.5px;background:var(--code);padding:14px 16px;border-radius:8px;overflow-x:auto;margin:12px 0;line-height:1.5}
+pre.tree{line-height:1.45}
+ul,ol{margin:0 0 12px;padding-left:22px;max-width:80ch}li{margin-bottom:6px}
+strong{font-weight:650}
+.muted{color:var(--soft)}
+figure{margin:22px 0;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 14px 10px}
+figure svg{display:block;width:100%;height:auto}
+figcaption{color:var(--soft);font-size:12.5px;margin-top:8px;max-width:90ch}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+/* diagrammi: tutti i colori passano dai token, così il tema scuro li segue */
+.dg text{font-family:var(--sans);fill:var(--ink);font-size:12px}
+.dg .t-soft{fill:var(--soft);font-size:11px}
+.dg .t-mono{font-family:var(--mono);font-size:10.5px;fill:var(--soft)}
+.dg .t-b{font-weight:650}
+.dg .node{fill:var(--panel);stroke:var(--line);stroke-width:1.2}
+.dg .n-data{fill:color-mix(in srgb,var(--blue) 9%,var(--panel));stroke:var(--blue)}
+.dg .n-lab{fill:color-mix(in srgb,var(--amber) 11%,var(--panel));stroke:var(--amber)}
+.dg .n-mod{fill:color-mix(in srgb,var(--accent) 10%,var(--panel));stroke:var(--accent)}
+.dg .n-out{fill:var(--chip);stroke:var(--soft)}
+.dg .n-bad{fill:color-mix(in srgb,var(--red) 10%,var(--panel));stroke:var(--red)}
+.dg .arr{stroke:var(--soft);stroke-width:1.3;fill:none;marker-end:url(#ah)}
+.dg .arr-d{stroke:var(--soft);stroke-width:1.2;fill:none;stroke-dasharray:4 3;marker-end:url(#ah)}
+.dg .ahead{fill:var(--soft)}
+.dg .gridl{stroke:var(--grid);stroke-width:1}
+.dg .ink{stroke:var(--ink);fill:none}
+/* grafico interattivo */
+.viz{position:relative}
+.viz .legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12.5px;color:var(--soft);margin:0 0 6px}
+.viz .sw{display:inline-block;width:18px;height:2px;vertical-align:middle;margin-right:6px;border-radius:2px}
+.viz .tip{position:absolute;pointer-events:none;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.45;box-shadow:0 4px 14px rgba(0,0,0,.08);display:none;min-width:170px;font-variant-numeric:tabular-nums}
+.viz .tip b{font-weight:650}
+.viz svg text{font-family:var(--sans);font-size:11px;fill:var(--soft)}
+footer{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);color:var(--soft);font-size:13px}
+@media (max-width:600px){h1{font-size:24px}.h2sub{font-size:20px}td,th{padding:7px 10px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Pipeline di addestramento — modelli Swing Leg Target</h1>
+  <p class="tagline">Come nasce, dal dump Binance al checkpoint caricato dalla pagina Streamlit, ogni modello addestrato sull'etichetta retrospettiva <code>swing_leg_target</code>: la GRU a ramo singolo 15m (<code>gru --label swing</code>, e le 117 celle di <code>legsweep</code>) e il modello swing a due stadi su barre 4h (<code>swing</code>). Per ogni passaggio: cosa entra, cosa esce, con quali colonne, forme, tipi e file su disco — e perché è fatto così.</p>
+  <div class="facts">
+    <div class="fact"><b>20</b><span>coppie USDT, 5m, 2017+</span></div>
+    <div class="fact"><b>(N, 24, 29)</b><span>tensore GRU 15m</span></div>
+    <div class="fact"><b>(N, 24, 65)</b><span>tensore swing 4h</span></div>
+    <div class="fact"><b>6.081</b><span>parametri <code>gru.pt</code></span></div>
+    <div class="fact"><b>16.658</b><span>parametri <code>swing.pt</code></span></div>
+    <div class="fact"><b>0,4114</b><span>Rank IC sull'etichetta</span></div>
+    <div class="fact"><b>−0,0405</b><span>Rank IC sul prezzo</span></div>
+  </div>
+  <nav class="toc" aria-label="Indice">
+    <a href="#s1"><span class="n">1</span>Le due famiglie di modelli</a>
+    <a href="#s2"><span class="n">2</span>Mappa della pipeline</a>
+    <a href="#s3"><span class="n">3</span>Dati grezzi: lo store</a>
+    <a href="#s4"><span class="n">4</span>Pivot e gemello causale</a>
+    <a href="#s5"><span class="n">5</span>L'etichetta <code>swing_leg_target</code></a>
+    <a href="#s6"><span class="n">6</span>Feature: 29 candidate</a>
+    <a href="#s7"><span class="n">7</span>Stato della gamba ed esaurimento</a>
+    <a href="#s8"><span class="n">8</span>Dataset step 2 e allineamento</a>
+    <a href="#s9"><span class="n">9</span>Tensori di sequenza</a>
+    <a href="#s10"><span class="n">10</span>Split, purging, walk-forward</a>
+    <a href="#s11"><span class="n">11</span>Normalizzazione</a>
+    <a href="#s12"><span class="n">12</span>Modello A — GRU 15m</a>
+    <a href="#s13"><span class="n">13</span>Modello B — swing a due stadi</a>
+    <a href="#s14"><span class="n">14</span>La griglia <code>legsweep</code></a>
+    <a href="#s15"><span class="n">15</span>Metriche</a>
+    <a href="#s16"><span class="n">16</span>Risultati misurati</a>
+    <a href="#s17"><span class="n">17</span>Valutazione a valle</a>
+    <a href="#s18"><span class="n">18</span>Inferenza e deploy</a>
+    <a href="#s19"><span class="n">19</span>Invarianti e trappole</a>
+    <a href="#s20"><span class="n">20</span>Appendice: artefatti su disco</a>
+  </nav>
+</header>
+
+<!-- ============================================================ 1 -->
+<section id="s1">
+  <h2><span class="n">1</span> · Perimetro</h2>
+  <p class="h2sub">Le due famiglie di modelli sull'etichetta swing</p>
+  <p class="lead">"Swing Leg Target" non è un modello solo. Nel codice ci sono due pipeline di addestramento distinte che condividono l'etichetta, i pivot, le feature e la regola di purging, e divergono su tutto il resto: griglia temporale, input, architettura, obiettivo e criterio di early stopping.</p>
+  <div class="tw"><table>
+    <caption>le due pipeline a confronto</caption>
+    <thead><tr><th></th><th>Modello A — GRU di etichetta</th><th>Modello B — swing a due stadi</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Modulo</strong></td><td class="key">gru.py (+ legsweep.py)</td><td class="key">swing.py (+ legs.py)</td></tr>
+      <tr><td><strong>Comando</strong></td><td class="key">gru --label swing --features all --seeds 5</td><td class="key">swing --timeframe 4h --baseline</td></tr>
+      <tr><td><strong>Domanda</strong></td><td>quanto bene una ricorrente ordina l'etichetta, cross-sectional</td><td>quanto guadagna una regola long-only tradata sull'output, al netto delle fee</td></tr>
+      <tr><td><strong>Griglia delle righe</strong></td><td>5m campionata oraria (stride 12), righe dello step 2</td><td>una riga per barra 4h, per simbolo</td></tr>
+      <tr><td><strong>Input</strong></td><td>(B, 24, 29): 24 candele 15m chiuse × 29 feature</td><td>(B, 24, 65): 24 barre 4h × (29 feature + 3×10 stato gamba + 6 esaurimento)</td></tr>
+      <tr><td><strong>Rete</strong></td><td>GRU(29→32) → dropout → Linear(32→1)</td><td>GRU(65→48) → dropout → due teste Linear(48→1): label e policy</td></tr>
+      <tr><td><strong>Obiettivo</strong></td><td>Huber(δ = mediana |y| su train)</td><td>stadio 1 Huber sull'etichetta; stadio 2 ricompensa P&amp;L netta con fee + 0,1·Huber</td></tr>
+      <tr><td><strong>Early stopping</strong></td><td>Rank IC cross-sectional di validazione</td><td>stadio 1: correlazione di Pearson; stadio 2: log/anno netto meno buy&amp;hold</td></tr>
+      <tr><td><strong>Protocollo</strong></td><td>4 fold walk-forward dal 2025-06, 5 seed</td><td>4 fold walk-forward dal 2023-01, storia dal 2021</td></tr>
+      <tr><td><strong>Artefatti</strong></td><td class="key">data/pred-swing-all-15m.parquet<br>data/gru.pt · models/gru.pt</td><td class="key">data/pos-swing-4h-both.parquet<br>data/swing.pt · models/swing.pt</td></tr>
+    </tbody>
+  </table></div>
+  <div class="box why">
+    <h4>Perché l'etichetta retrospettiva ha due pipeline</h4>
+    <p>La GRU di etichetta misura il segnale (Rank IC 0,4114 ± 0,0202 su quattro fold), ma lo stesso output contro il rendimento forward dà −0,0405: la parte di etichetta che il modello riproduce è quella già nota a <em>t</em>. Il modello B nasce da quella lezione — "la correlazione con l'etichetta non è l'obiettivo" — e ottimizza direttamente il denaro. Nessuno dei due batte <code>rsi_centered &gt; 0.3</code>, che è la riga da tenere davanti a ogni affermazione (sezione 16).</p>
+  </div>
+</section>
+
+<!-- ============================================================ 2 -->
+<section id="s2">
+  <h2><span class="n">2</span> · Architettura</h2>
+  <p class="h2sub">Mappa della pipeline, da un capo all'altro</p>
+  <p>Ogni riquadro è un modulo con entry point <code>python -m tradingvision.&lt;modulo&gt;</code> o una funzione chiamata da uno di essi. Blu: dati; ambra: etichetta; verde: addestramento; grigio: artefatti su disco. Le frecce tratteggiate sono letture di cache.</p>
+  <figure>
+  <svg class="dg" viewBox="0 0 960 610" role="img" aria-label="Diagramma a blocchi della pipeline di addestramento swing">
+    <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ahead" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+    <!-- colonna 1: dati -->
+    <rect class="node n-data" x="10" y="20" width="200" height="56" rx="8"/>
+    <text x="110" y="43" text-anchor="middle" class="t-b">data.binance</text>
+    <text x="110" y="61" text-anchor="middle" class="t-soft">ZIP S3 → Parquet 5m</text>
+    <rect class="node n-out" x="10" y="100" width="200" height="44" rx="8"/>
+    <text x="110" y="127" text-anchor="middle" class="t-mono">data/{SYM}USDT-5m.parquet</text>
+    <rect class="node n-data" x="10" y="170" width="200" height="56" rx="8"/>
+    <text x="110" y="193" text-anchor="middle" class="t-b">binance.load(sym, tf)</text>
+    <text x="110" y="211" text-anchor="middle" class="t-soft">resample 15m · 1h · 4h</text>
+    <path class="arr" d="M110,76 V100"/><path class="arr" d="M110,144 V170"/>
+
+    <!-- colonna 2: etichetta e feature -->
+    <rect class="node n-lab" x="260" y="20" width="200" height="56" rx="8"/>
+    <text x="360" y="43" text-anchor="middle" class="t-b">data.pivots.find_pivots</text>
+    <text x="360" y="61" text-anchor="middle" class="t-soft">estremi centrati, N=24</text>
+    <rect class="node n-lab" x="260" y="96" width="200" height="56" rx="8"/>
+    <text x="360" y="119" text-anchor="middle" class="t-b">swing_leg_target</text>
+    <text x="360" y="137" text-anchor="middle" class="t-soft">data.target · y ∈ [−1, +1]</text>
+    <rect class="node n-data" x="260" y="172" width="200" height="56" rx="8"/>
+    <text x="360" y="195" text-anchor="middle" class="t-b">features.features</text>
+    <text x="360" y="213" text-anchor="middle" class="t-soft">29 colonne causali</text>
+    <rect class="node n-data" x="260" y="248" width="200" height="56" rx="8"/>
+    <text x="360" y="271" text-anchor="middle" class="t-b">legs.state · exhaustion</text>
+    <text x="360" y="289" text-anchor="middle" class="t-soft">pivot confermati, 10 + 6 col.</text>
+    <path class="arr" d="M210,198 H236 V48 H260"/>
+    <path class="arr" d="M236,198 H260"/>
+    <path class="arr" d="M236,198 V276 H260"/>
+    <path class="arr" d="M360,76 V96"/>
+
+    <!-- ramo A -->
+    <text x="520" y="18" class="t-soft t-b">MODELLO A · 15m</text>
+    <rect class="node n-mod" x="510" y="26" width="210" height="56" rx="8"/>
+    <text x="615" y="49" text-anchor="middle" class="t-b">dataset.build (gbm --horizon)</text>
+    <text x="615" y="67" text-anchor="middle" class="t-soft">(ts, sym) × 582, stride 12</text>
+    <rect class="node n-out" x="510" y="98" width="210" height="36" rx="8"/>
+    <text x="615" y="121" text-anchor="middle" class="t-mono">data/step2.parquet + .json</text>
+    <rect class="node n-mod" x="510" y="150" width="210" height="56" rx="8"/>
+    <text x="615" y="173" text-anchor="middle" class="t-b">dataset.relabel(swing)</text>
+    <text x="615" y="191" text-anchor="middle" class="t-soft">stesse righe, nuovo target</text>
+    <rect class="node n-mod" x="510" y="222" width="210" height="56" rx="8"/>
+    <text x="615" y="245" text-anchor="middle" class="t-b">gru.cached_sequences</text>
+    <text x="615" y="263" text-anchor="middle" class="t-soft">(N, 24, 29) float32 mmap</text>
+    <rect class="node n-out" x="510" y="294" width="210" height="36" rx="8"/>
+    <text x="615" y="317" text-anchor="middle" class="t-mono">data/step3-15m-all.npy + .json</text>
+    <rect class="node n-mod" x="510" y="346" width="210" height="72" rx="8"/>
+    <text x="615" y="369" text-anchor="middle" class="t-b">gru.run → fold → fit</text>
+    <text x="615" y="387" text-anchor="middle" class="t-soft">walk-forward 4 fold × 5 seed</text>
+    <text x="615" y="404" text-anchor="middle" class="t-soft">Huber · stop su Rank IC</text>
+    <rect class="node n-out" x="510" y="436" width="210" height="36" rx="8"/>
+    <text x="615" y="459" text-anchor="middle" class="t-mono">pred-swing-all-15m.parquet</text>
+    <rect class="node n-out" x="510" y="484" width="210" height="36" rx="8"/>
+    <text x="615" y="507" text-anchor="middle" class="t-mono">gru.pt (--save)</text>
+    <path class="arr" d="M615,82 V98"/><path class="arr-d" d="M615,134 V150"/>
+    <path class="arr" d="M615,206 V222"/><path class="arr" d="M615,278 V294"/>
+    <path class="arr-d" d="M615,330 V346"/><path class="arr" d="M615,418 V436"/>
+    <path class="arr" d="M722,382 H736 V502 H722"/>
+    <path class="arr" d="M460,124 H486 V178 H510"/>
+    <path class="arr" d="M460,200 H486 V250 H510"/>
+    <path class="arr" d="M486,200 V54 H510"/>
+
+    <!-- ramo B -->
+    <text x="760" y="18" class="t-soft t-b">MODELLO B · 4h</text>
+    <rect class="node n-mod" x="750" y="26" width="200" height="56" rx="8"/>
+    <text x="850" y="49" text-anchor="middle" class="t-b">swing.frame</text>
+    <text x="850" y="67" text-anchor="middle" class="t-soft">65 input + target, ret, close</text>
+    <rect class="node n-mod" x="750" y="98" width="200" height="56" rx="8"/>
+    <text x="850" y="121" text-anchor="middle" class="t-b">swing.build</text>
+    <text x="850" y="139" text-anchor="middle" class="t-soft">scaler per simbolo, (N,24,65)</text>
+    <rect class="node n-out" x="750" y="170" width="200" height="36" rx="8"/>
+    <text x="850" y="193" text-anchor="middle" class="t-mono">swing-4h-full.npy/.parquet</text>
+    <rect class="node n-mod" x="750" y="222" width="200" height="56" rx="8"/>
+    <text x="850" y="245" text-anchor="middle" class="t-b">stadio 1 · fit_label</text>
+    <text x="850" y="263" text-anchor="middle" class="t-soft">Huber, stop su corr</text>
+    <rect class="node n-mod" x="750" y="294" width="200" height="56" rx="8"/>
+    <text x="850" y="317" text-anchor="middle" class="t-b">stadio 2 · fit_policy</text>
+    <text x="850" y="335" text-anchor="middle" class="t-soft">P&amp;L netto differenziabile</text>
+    <rect class="node n-mod" x="750" y="366" width="200" height="56" rx="8"/>
+    <text x="850" y="389" text-anchor="middle" class="t-b">walk_forward · by_symbol</text>
+    <text x="850" y="407" text-anchor="middle" class="t-soft">oracolo, reachable, hold</text>
+    <rect class="node n-out" x="750" y="436" width="200" height="36" rx="8"/>
+    <text x="850" y="459" text-anchor="middle" class="t-mono">pos-swing-4h-both.parquet</text>
+    <rect class="node n-out" x="750" y="484" width="200" height="36" rx="8"/>
+    <text x="850" y="507" text-anchor="middle" class="t-mono">swing.pt (--save)</text>
+    <path class="arr" d="M850,82 V98"/><path class="arr" d="M850,154 V170"/>
+    <path class="arr-d" d="M850,206 V222"/><path class="arr" d="M850,278 V294"/>
+    <path class="arr" d="M850,350 V366"/><path class="arr" d="M850,422 V436"/>
+    <path class="arr" d="M952,394 H956 V502 H950"/>
+    <path class="arr" d="M460,286 H740 V40 H750"/>
+
+    <!-- consumatori -->
+    <rect class="node n-out" x="10" y="548" width="940" height="52" rx="8"/>
+    <text x="480" y="570" text-anchor="middle" class="t-b">a valle: threshold · stops · swingrule · legcheck (su pred-*.parquet) · app/chart.py (su gru.pt / swing.pt / gru-swing-s*-w*.pt)</text>
+    <text x="480" y="588" text-anchor="middle" class="t-soft">legsweep riusa step2.parquet e step3-15m-all.npy, ricalcola solo target e next_pivot per cella</text>
+    <path class="arr" d="M615,520 V548"/><path class="arr" d="M850,520 V548"/>
+    <path class="arr" d="M110,226 V548"/>
+  </svg>
+  <figcaption>Figura 1 — dipendenze fra moduli e artefatti. L'etichetta è calcolata due volte con due griglie diverse: sulla 5m (pivot 15m spostati sulla griglia 5m) per il modello A, direttamente sulle barre 4h per il modello B.</figcaption>
+  </figure>
+
+  <h3>Ordine dei comandi</h3>
+  <div class="tw"><table>
+    <caption>i comandi nell'ordine in cui dipendono l'uno dall'altro — tempi misurati dall'handoff (Mac, MPS)</caption>
+    <thead><tr><th>#</th><th>comando</th><th>legge</th><th>scrive</th><th class="num">tempo</th></tr></thead>
+    <tbody>
+      <tr><td>0</td><td class="key">uv run python -m tradingvision.data.binance</td><td>S3 <code>data.binance.vision</code></td><td class="key">data/{SYM}USDT-5m.parquet</td><td class="num">—</td></tr>
+      <tr><td>1</td><td class="key">… oracle</td><td>store</td><td>stdout: fissa <code>EXTREMA_WINDOW = 24</code></td><td class="num">—</td></tr>
+      <tr><td>2</td><td class="key">… gbm --horizon</td><td>store</td><td class="key">data/step2.parquet (1,64 GB) + .json</td><td class="num">16 min</td></tr>
+      <tr class="hi"><td>3A</td><td class="key">… gru --label swing --features all --seeds 5</td><td class="key">step2.parquet, store</td><td class="key">step3-15m-all.npy (1,79 GB), pred-swing-all-15m.parquet</td><td class="num">~4 + 55 min</td></tr>
+      <tr><td>3A′</td><td class="key">… gru --label swing --features all --save</td><td>idem</td><td class="key">data/gru.pt</td><td class="num">—</td></tr>
+      <tr><td>3A″</td><td class="key">… legsweep [--table]</td><td class="key">step2.parquet, step3-15m-all.npy</td><td class="key">legsweep.csv, gru-swing-s*-w*.pt, legsweep-labels/</td><td class="num">45 min</td></tr>
+      <tr class="hi"><td>3B</td><td class="key">… swing --timeframe 4h --baseline [--save]</td><td>store</td><td class="key">swing-4h-full.{npy,parquet,json}, pos-swing-4h-both.parquet, swing.pt</td><td class="num">—</td></tr>
+      <tr><td>4</td><td class="key">… legcheck / swingrule / threshold / stops --pred …</td><td class="key">pred-swing-all-15m.parquet, store</td><td>stdout</td><td class="num">~5 min</td></tr>
+      <tr><td>5</td><td class="key">cp data/gru.pt data/swing.pt models/</td><td></td><td class="key">models/ (unica via verso l'immagine Render)</td><td class="num">—</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============================================================ 3 -->
+<section id="s3">
+  <h2><span class="n">3</span> · Ingestione</h2>
+  <p class="h2sub">Dati grezzi: lo store Parquet <span class="b b-ok">chiuso</span></p>
+  <p><code>data.binance</code> scarica i dump pubblici (ZIP statici su S3, nessuna chiave) e scrive <strong>un Parquet per (simbolo, intervallo)</strong>. Si memorizza solo il 5m; ogni altro timeframe si ricampiona al volo in <code>binance.load</code>. Rilanciare scarica solo ciò che manca, riprendendo dal mese in cui lo store finisce (quasi certamente parziale).</p>
+  <div class="tw"><table>
+    <caption>schema di <code>data/{SYM}USDT-5m.parquet</code> — 7 delle 12 colonne del dump</caption>
+    <thead><tr><th>colonna</th><th>dtype</th><th>unità / significato</th><th>aggregazione in resample</th></tr></thead>
+    <tbody>
+      <tr><td class="key">open_time (indice)</td><td class="key">datetime64[ns, UTC]</td><td>istante di <strong>apertura</strong> della barra; la barra chiude a <code>open_time + tf</code></td><td>etichetta del bucket</td></tr>
+      <tr><td class="key">open</td><td class="key">float64</td><td>prezzo in USDT</td><td>first</td></tr>
+      <tr><td class="key">high</td><td class="key">float64</td><td>prezzo in USDT</td><td>max</td></tr>
+      <tr><td class="key">low</td><td class="key">float64</td><td>prezzo in USDT</td><td>min</td></tr>
+      <tr><td class="key">close</td><td class="key">float64</td><td>prezzo in USDT</td><td>last</td></tr>
+      <tr><td class="key">volume</td><td class="key">float32</td><td>quantità base scambiata</td><td>sum</td></tr>
+      <tr><td class="key">quote_volume</td><td class="key">float32</td><td>controvalore in USDT</td><td>sum</td></tr>
+      <tr><td class="key">trades</td><td class="key">int32</td><td>numero di eseguiti</td><td>sum</td></tr>
+      <tr><td colspan="4" class="foot">scartate: close_time, taker_buy_base, taker_buy_quote, ignore. I bucket senza scambi vengono eliminati (<code>dropna(subset=["open"])</code>), mai riempiti: una barra sintetica sarebbe un prezzo inventato che la ricerca dei pivot tratterebbe come livello reale.</td></tr>
+    </tbody>
+  </table></div>
+  <div class="tw"><table>
+    <caption>esempio reale — BTCUSDT 5m e lo stesso intervallo ricampionato a 15m</caption>
+    <thead><tr><th>open_time</th><th class="num">open</th><th class="num">high</th><th class="num">low</th><th class="num">close</th><th class="num">volume</th><th class="num">quote_volume</th><th class="num">trades</th></tr></thead>
+    <tbody>
+      <tr class="grp"><td colspan="8">5m</td></tr>
+      <tr><td class="key">2024-09-01 00:00Z</td><td class="num">58974.00</td><td class="num">58978.00</td><td class="num">58957.01</td><td class="num">58978.00</td><td class="num">15.93</td><td class="num">939246</td><td class="num">2237</td></tr>
+      <tr><td class="key">2024-09-01 00:05Z</td><td class="num">58978.00</td><td class="num">59035.76</td><td class="num">58975.41</td><td class="num">59035.76</td><td class="num">65.12</td><td class="num">3841414</td><td class="num">2178</td></tr>
+      <tr><td class="key">2024-09-01 00:10Z</td><td class="num">59035.75</td><td class="num">59055.00</td><td class="num">59023.00</td><td class="num">59038.12</td><td class="num">25.99</td><td class="num">1534441</td><td class="num">2407</td></tr>
+      <tr class="grp"><td colspan="8">15m = aggregato delle tre righe sopra</td></tr>
+      <tr><td class="key">2024-09-01 00:00Z</td><td class="num">58974.00</td><td class="num">59055.00</td><td class="num">58957.01</td><td class="num">59038.12</td><td class="num">107.04</td><td class="num">6315101</td><td class="num">6822</td></tr>
+    </tbody>
+  </table></div>
+  <ul>
+    <li><strong>Universo</strong> (<code>binance.SYMBOLS</code>): BTC ETH LTC ADA XRP TRX LINK BAT DOGE XTZ BCH YFI DOT SOL CRV UNI AVAX SUSHI NEAR AAVE — 14,9 M candele 5m; dal 2023 esattamente 386.192 barre per simbolo.</li>
+    <li><strong>Trappole gestite in <code>parse</code></strong>: <code>open_time</code> è passato da millisecondi a microsecondi nel 2025 senza marcatore (unità dedotta per file: &gt;1e14 → µs); alcuni file hanno una riga di header (coerce + dropna).</li>
+    <li><strong>Percorso</strong>: <code>STORE</code> è ancorato alla root del repo, non alla CWD. <code>data/</code> è in <code>.gitignore</code>: le run si riproducono riscaricando.</li>
+  </ul>
+</section>
+
+<!-- ============================================================ 4 -->
+<section id="s4">
+  <h2><span class="n">4</span> · Struttura della gamba</h2>
+  <p class="h2sub">Pivot centrati e il loro gemello causale</p>
+  <h3>Pivot centrati — <code>data.pivots.find_pivots(close, window=24)</code></h3>
+  <p>Una barra è massimo se il suo <strong>close</strong> è strettamente maggiore dei close delle <code>window</code> barre a sinistra <em>e</em> a destra (esclusa sé stessa); simmetrico per il minimo. È il criterio di <code>argrelextrema(order=window)</code> scritto con finestre rolling, senza scipy. Poi due massimi (o due minimi) consecutivi si fondono tenendo il più estremo, così la sequenza alterna sempre.</p>
+  <div class="cols">
+  <div class="tw" style="margin:0"><table>
+    <caption>output: un DataFrame, una riga per pivot</caption>
+    <thead><tr><th>colonna</th><th>dtype</th><th>significato</th></tr></thead>
+    <tbody>
+      <tr><td class="key">(indice)</td><td class="key">datetime64 UTC</td><td>open_time della barra pivot</td></tr>
+      <tr><td class="key">kind</td><td class="key">int</td><td>+1 massimo, −1 minimo</td></tr>
+      <tr><td class="key">close</td><td class="key">float64</td><td>close al pivot</td></tr>
+      <tr><td class="key">amplitude</td><td class="key">float64</td><td>|log(close / close del pivot precedente)| — convenzione all'indietro, quindi nota al pivot</td></tr>
+    </tbody>
+  </table></div>
+  <div class="tw" style="margin:0"><table>
+    <caption>esempio reale — BTC 15m, ottobre 2024</caption>
+    <thead><tr><th>open_time</th><th class="num">kind</th><th class="num">close</th><th class="num">amplitude</th></tr></thead>
+    <tbody>
+      <tr><td class="key">10-01 07:30</td><td class="num">+1</td><td class="num">64098.00</td><td class="num">0.0140</td></tr>
+      <tr><td class="key">10-01 20:30</td><td class="num">−1</td><td class="num">60612.00</td><td class="num">0.0559</td></tr>
+      <tr><td class="key">10-02 16:00</td><td class="num">+1</td><td class="num">62134.00</td><td class="num">0.0248</td></tr>
+      <tr><td class="key">10-02 19:30</td><td class="num">−1</td><td class="num">60098.77</td><td class="num">0.0333</td></tr>
+      <tr><td class="key">10-03 03:45</td><td class="num">+1</td><td class="num">61463.99</td><td class="num">0.0225</td></tr>
+    </tbody>
+  </table></div>
+  </div>
+  <p>Sul campione BTC 15m 2024-10 → 2025-03: 385 pivot, gamba mediana di 35 barre (8h45m) e 2,25% di ampiezza. Sui 20 simboli dal 2023 lo spec misura 3,63% e 8h50m.</p>
+  <div class="box why">
+    <h4>Perché <code>EXTREMA_WINDOW = 24</code> e perché sul Close</h4>
+    <p>Misurato da <code>oracle</code>: il P&amp;L dell'oracolo a posteriori è degenere (premia la finestra più corta che batte le fee), quindi le finestre sono confrontate penalizzando un ritardo di rilevazione di 1–3 barre. 24 è l'ottimo del range 16–28 a L=3 ed entro l'1% a L=2. Close e non High/Low: niente wick di liquidazione, niente barra che sia massimo su High e minimo su Low, e un ordine si riempie vicino al close.</p>
+  </div>
+
+  <h3>Il gemello causale — <code>legs.confirmed(close, window)</code></h3>
+  <p>Un pivot centrato a <code>j</code> diventa conoscibile solo a <code>j + window</code>. <code>confirmed</code> ricostruisce la linea del tempo che un lettore dal vivo avrebbe tenuto: una riga per estremo <em>grezzo</em>, datata dalla propria conferma, con la fusione dei gemelli applicata in ordine di arrivo. Traslare <code>find_pivots</code> di <code>window</code> <strong>non</strong> è equivalente: il passaggio centrato ha già cancellato il massimo più basso su cui il lettore stava agendo (i due disaccordano sull'ultimo pivot nel 7,4% delle barre).</p>
+  <div class="tw"><table>
+    <caption>output di <code>confirmed</code> — posizioni intere, non timestamp. Esempio reale: BTC 15m dal 2025-02-01, window 24</caption>
+    <thead><tr><th>colonna</th><th>significato</th><th class="num">r0</th><th class="num">r1</th><th class="num">r2</th><th class="num">r3</th><th class="num">r4</th></tr></thead>
+    <tbody>
+      <tr><td class="key">known</td><td>barra da cui la riga è vera (= estremo + window)</td><td class="num">62</td><td class="num">135</td><td class="num">235</td><td class="num">305</td><td class="num">346</td></tr>
+      <tr><td class="key">bar</td><td>pivot tenuto da quel momento</td><td class="num">38</td><td class="num">111</td><td class="num">211</td><td class="num">281</td><td class="num">322</td></tr>
+      <tr><td class="key">kind</td><td>±1</td><td class="num">−1</td><td class="num">−1</td><td class="num">−1</td><td class="num">+1</td><td class="num">−1</td></tr>
+      <tr><td class="key">price</td><td>close del pivot tenuto</td><td class="num">101620</td><td class="num">99207</td><td class="num">92787</td><td class="num">102000</td><td class="num">97893</td></tr>
+      <tr><td class="key">prev_bar</td><td>pivot precedente (NaN finché non esiste)</td><td class="num">NaN</td><td class="num">NaN</td><td class="num">NaN</td><td class="num">211</td><td class="num">281</td></tr>
+      <tr><td class="key">prev_price</td><td>suo close</td><td class="num">NaN</td><td class="num">NaN</td><td class="num">NaN</td><td class="num">92787</td><td class="num">102000</td></tr>
+      <tr><td colspan="7" class="foot">r0 → r2 sono tre minimi di fila, ognuno più basso: il lettore tiene 38, poi 111 da barra 135, poi 211 da barra 235. <code>find_pivots</code> terrebbe solo 211 — e per tutto il tempo prima di 235 avrebbe mentito su cosa era noto.</td></tr>
+    </tbody>
+  </table></div>
+  <p><code>legs.next_pivot(close, window)</code> invece usa di proposito i pivot <em>centrati</em>: è l'orizzonte di purging, e il purging riguarda ciò che l'etichetta ha visto.</p>
+</section>
+
+<!-- ============================================================ 5 -->
+<section id="s5">
+  <h2><span class="n">5</span> · Target</h2>
+  <p class="h2sub">L'etichetta <code>swing_leg_target</code></p>
+  <p class="lead">Dove si trova una barra lungo la gamba fra due pivot adiacenti: circa −1 su un minimo, circa +1 sul massimo successivo, interpolata in mezzo. Retrospettiva per costruzione — interpola verso il pivot <em>successivo</em>, quindi vede il futuro. È ciò che un'etichetta è; il lato causale sono le feature.</p>
+<pre>
+k(i)            = indice della gamba che contiene i       (pivot k ≤ i &lt; pivot k+1)
+time_advance    = (i − start) / (end − start)             ∈ [0, 1]
+price_advance   = clip((c[i] − c[start]) / (c[end] − c[start]), 0, 1)
+x               = s · time_advance + (1 − s) · price_advance        s = SMOOTHING = 0.7  ("peso_tempo")
+
+valori[k]       = kind[k] · tanh( amplitude[k] / (σ · √duration[k]) )     σ = std dei log-ritorni su 96 barre
+target(i)       = valori[k] + x · (valori[k+1] − valori[k])
+</pre>
+  <div class="tw"><table>
+    <caption>i parametri dell'etichetta</caption>
+    <thead><tr><th>costante</th><th>valore</th><th>dove</th><th>nota</th></tr></thead>
+    <tbody>
+      <tr><td class="key">window</td><td class="num">24</td><td class="key">data.pivots.EXTREMA_WINDOW</td><td>barre 15m del ramo pivot; misurato (sezione 4)</td></tr>
+      <tr><td class="key">smoothing</td><td class="num">0.7</td><td class="key">data.target.SMOOTHING</td><td>peso del termine tempo; mai tarato finché <code>legsweep</code> non l'ha misurato (sezione 14): resta 0,7</td></tr>
+      <tr><td class="key">significance</td><td>True</td><td>argomento</td><td>pivot pesati da <code>tanh</code>; False ripristina ±1 piatti</td></tr>
+      <tr><td class="key">SIGNIFICANCE_LOOKBACK</td><td class="num">96</td><td class="key">4 × EXTREMA_WINDOW</td><td>in barre <em>della serie passata</em>: 24h sulla 15m, ma 8h quando il modello A passa il close 5m</td></tr>
+    </tbody>
+  </table></div>
+  <div class="box why">
+    <h4>Perché i pivot non valgono ±1</h4>
+    <p>Un pivot è un estremo locale di 24 barre, non della gamba: due pivot possono stare a pochi punti base con il prezzo che oscilla ben oltre (1,3% delle gambe). Con ±1 piatti l'etichetta rampa da +1 a −1 attraverso puro rumore. Il denominatore σ·√durata è ciò che una passeggiata casuale della stessa volatilità avrebbe coperto nel tempo della gamba: cattura l'85% delle gambe rotte contro il 54% dell'ATR (<code>reference</code>). Gamba mediana: rapporto 1,6 → pivot a 0,92; gamba rotta mediana: 0,41 → 0,39. Sul campione BTC la mediana misurata è 1,67.</p>
+  </div>
+  <h3>Dove l'etichetta è NaN</h3>
+  <ul>
+    <li>prima del primo pivot e dopo l'ultimo — la coda è la condizione permanente della barra corrente in produzione;</li>
+    <li>sulle due gambe che toccano un pivot la cui significatività è NaN: il primo pivot (nessuna gamba prima) e quelli dentro il warm-up di volatilità. Nel campione BTC i primi due pivot hanno etichetta NaN per questo;</li>
+    <li>una gamba con escursione nulla ricade sul solo termine tempo (nessuna divisione per zero).</li>
+  </ul>
+
+  <h3>L'etichetta su dati reali</h3>
+  <p>BTC 15m, 18 → 25 febbraio 2025, dal campione scaricato per questo documento. In alto il close con i pivot centrati (triangoli) e, tratteggiato, il ritardo con cui ciascuno diventa noto a un lettore causale (<code>legs.confirmed</code>: 24 barre = 6 ore). In basso l'etichetta alla cella in uso (0,7 / 24) e al massimo della griglia di <code>legsweep</code> (0,2 / 12). Passa il puntatore per leggere i valori.</p>
+  <figure class="viz" id="viz">
+    <div class="legend" id="lg1">
+      <span><span class="sw" style="background:var(--soft)"></span>close BTCUSDT 15m</span>
+      <span>▲▼ pivot centrati (window 24)</span>
+      <span><span class="sw" style="background:var(--accent);height:0;border-top:2px dashed var(--accent)"></span>ritardo di conferma</span>
+    </div>
+    <svg id="pv" viewBox="0 0 960 250" aria-label="Prezzo di chiusura BTC con pivot"></svg>
+    <div class="legend" id="lg2" style="margin-top:8px">
+      <span><span class="sw" style="background:var(--s1)"></span>swing_leg_target, s 0,7 · w 24 (in uso)</span>
+      <span><span class="sw" style="background:var(--s2)"></span>swing_leg_target, s 0,2 · w 12 (argmax legsweep)</span>
+    </div>
+    <svg id="lv" viewBox="0 0 960 200" aria-label="Etichetta swing_leg_target nelle due configurazioni"></svg>
+    <div class="tip" id="tip"></div>
+    <figcaption>Figura 2 — Sul campione (BTC, 2024-10 → 2025-03, 17.278 barre etichettate): media +0,009, sd 0,48, quartili −0,38 / +0,40. La mediana di |y| è ≈ 0,40, che è esattamente il δ della Huber del modello A. Si nota perché lo spec chiama l'etichetta "descrittiva": dentro la gamba è quasi una rampa del tempo trascorso dal pivot precedente, che a <em>t</em> è noto a meno dei 24 bar di conferma.</figcaption>
+  </figure>
+</section>
+
+<!-- ============================================================ 6 -->
+<section id="s6">
+  <h2><span class="n">6</span> · Input</h2>
+  <p class="h2sub">Feature: le 29 candidate <span class="b b-ok">chiuso</span></p>
+  <p><code>features.features(df, n=24)</code> prende un frame OHLCV di un simbolo e restituisce 29 colonne indicizzate come l'input. Tutte causali (finestre rolling solo all'indietro), tutte finite o NaN — mai infinite, perché <code>dropna</code> non vede un infinito. <code>N = 24</code> barre <em>del ramo</em>, non ore: così i rami coprono 2h / 6h / 12h / 24h. Sotto <code>2N+1 = 49</code> barre torna tutto NaN (ADX di <code>ta</code> solleva IndexError). <code>N/4 = 6</code> è la finestra corta.</p>
+  <div class="tw"><table>
+    <caption>le 29 colonne nell'ordine di <code>features.COLUMNS</code> — la colonna # è l'indice sull'ultimo asse del tensore. Centro e scala sono quelli reali salvati in <code>models/gru.pt</code> (ramo 15m, train &lt; 2025-06)</caption>
+    <thead><tr><th class="num">#</th><th>colonna</th><th>famiglia</th><th>definizione</th><th class="num">center</th><th class="num">scale (IQR)</th></tr></thead>
+    <tbody>
+      <tr><td class="num">0</td><td class="key">log_return</td><td>prezzo</td><td>log(C / C₋₁)</td><td class="num">0.00000</td><td class="num">0.00334</td></tr>
+      <tr><td class="num">1</td><td class="key">cum_log_return_window</td><td>prezzo</td><td>log(C / C₋ₙ)</td><td class="num">0.00012</td><td class="num">0.01712</td></tr>
+      <tr><td class="num">2</td><td class="key">candle_body_pct</td><td>prezzo</td><td>(C − O) / C</td><td class="num">0.00000</td><td class="num">0.00331</td></tr>
+      <tr><td class="num">3</td><td class="key">bar_range_pct</td><td>volatilità</td><td>(H − L) / C</td><td class="num">0.00392</td><td class="num">0.00384</td></tr>
+      <tr><td class="num">4</td><td class="key">window_range_pct</td><td>volatilità</td><td>log(maxH_N / minL_N)</td><td class="num">0.02327</td><td class="num">0.02098</td></tr>
+      <tr><td class="num">5</td><td class="key">average_true_range_pct</td><td>volatilità</td><td>ATR_N / C</td><td class="num">0.00482</td><td class="num">0.00336</td></tr>
+      <tr><td class="num">6</td><td class="key">realized_volatility</td><td>volatilità</td><td>std(log_return, N)</td><td class="num">0.00307</td><td class="num">0.00241</td></tr>
+      <tr><td class="num">7</td><td class="key">volatility_expansion</td><td>volatilità</td><td>std(ret, N/4) / std(ret, N)</td><td class="num">0.90822</td><td class="num">0.49727</td></tr>
+      <tr><td class="num">8</td><td class="key">upper_wick_pct</td><td>struttura</td><td>(H − max(O,C)) / C</td><td class="num">0.00080</td><td class="num">0.00142</td></tr>
+      <tr><td class="num">9</td><td class="key">lower_wick_pct</td><td>struttura</td><td>(min(O,C) − L) / C</td><td class="num">0.00086</td><td class="num">0.00147</td></tr>
+      <tr><td class="num">10</td><td class="key">close_position_in_bar</td><td>struttura</td><td>(C − L)/(H − L); 0,5 se H = L</td><td class="num">0.50000</td><td class="num">0.56471</td></tr>
+      <tr><td class="num">11</td><td class="key">close_position_in_window</td><td>posizione</td><td>2(C − minL_N)/(maxH_N − minL_N) − 1</td><td class="num">0.05263</td><td class="num">0.93511</td></tr>
+      <tr><td class="num">12</td><td class="key">distance_from_window_high_pct</td><td>posizione</td><td>log(C / maxH_N) ≤ 0</td><td class="num">−0.00955</td><td class="num">0.01333</td></tr>
+      <tr><td class="num">13</td><td class="key">distance_from_window_low_pct</td><td>posizione</td><td>log(C / minL_N) ≥ 0</td><td class="num">0.01092</td><td class="num">0.01450</td></tr>
+      <tr><td class="num">14</td><td class="key">age_of_window_high</td><td>posizione</td><td>barre dal maxH_N / N ∈ [0,1)</td><td class="num">0.54167</td><td class="num">0.66667</td></tr>
+      <tr><td class="num">15</td><td class="key">age_of_window_low</td><td>posizione</td><td>barre dal minL_N / N</td><td class="num">0.58333</td><td class="num">0.66667</td></tr>
+      <tr><td class="num">16</td><td class="key">log_volume_vs_median</td><td>volume</td><td>log(max(V / mediana(V,N), 1e−6))</td><td class="num">−0.05597</td><td class="num">0.85570</td></tr>
+      <tr><td class="num">17</td><td class="key">log_dollar_volume</td><td>volume</td><td>log(media(V·C, N)) — l'unica il cui <em>livello</em> è l'informazione</td><td class="num">12.50971</td><td class="num">2.58933</td></tr>
+      <tr><td class="num">18</td><td class="key">signed_volume</td><td>volume</td><td>segno(ret) · log1p(V / mediana(V,N))</td><td class="num">0.00000</td><td class="num">1.29621</td></tr>
+      <tr><td class="num">19</td><td class="key">volume_trend</td><td>volume</td><td>log(media(V,N/4) / media(V,N))</td><td class="num">−0.08789</td><td class="num">0.59272</td></tr>
+      <tr><td class="num">20</td><td class="key">on_balance_volume_zscore</td><td>volume</td><td>z-score rolling di Σ_N V·segno(ret)</td><td class="num">0.01057</td><td class="num">2.09261</td></tr>
+      <tr><td class="num">21</td><td class="key">distance_from_vwap_pct</td><td>volume</td><td>log(C / VWAP_N)</td><td class="num">0.00023</td><td class="num">0.00897</td></tr>
+      <tr><td class="num">22</td><td class="key">distance_from_kama_pct</td><td>trend</td><td>log(C / KAMA_N)</td><td class="num">−0.00004</td><td class="num">0.01000</td></tr>
+      <tr><td class="num">23</td><td class="key">distance_from_ema_pct</td><td>trend</td><td>log(C / EMA_N)</td><td class="num">0.00011</td><td class="num">0.00775</td></tr>
+      <tr><td class="num">24</td><td class="key">ema_slope</td><td>trend</td><td>log(EMA_N / EMA_N shift N/4)</td><td class="num">0.00005</td><td class="num">0.00377</td></tr>
+      <tr><td class="num">25</td><td class="key">distance_from_psar_pct</td><td>trend</td><td>(C − PSAR)/C, PSAR 0,02/0,2 portato su numpy e uguale bit per bit a <code>ta</code></td><td class="num">0.00115</td><td class="num">0.01755</td></tr>
+      <tr><td class="num">26</td><td class="key">adx_trend_strength</td><td>momentum</td><td>ADX_N / 100 ∈ [0,1]</td><td class="num">0.18863</td><td class="num">0.11891</td></tr>
+      <tr><td class="num">27</td><td class="key">tsi_momentum</td><td>momentum</td><td>TSI(slow N, fast N/4) / 100</td><td class="num">0.00436</td><td class="num">0.27702</td></tr>
+      <tr><td class="num">28</td><td class="key">rsi_centered</td><td>momentum</td><td>RSI_N / 50 − 1 ∈ [−1,1]</td><td class="num">0.00291</td><td class="num">0.21939</td></tr>
+      <tr><td colspan="6" class="foot">Warm-up: 47 righe NaN in testa su una serie 15m. Il modello A usa <code>--features all</code> (tutte e 29): la selezione 28→12 dello step 2 era stata fatta con un GBM contro un'altra etichetta e costava 0,005 di Rank IC alla ricorrente. <code>features.SELECTED</code> (2 colonne) è per l'etichetta cross-sectional e non riguarda questi modelli.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============================================================ 7 -->
+<section id="s7">
+  <h2><span class="n">7</span> · Input del modello B</h2>
+  <p class="h2sub">Stato della gamba ed esaurimento — 36 colonne in più</p>
+  <p>Il modello B aggiunge alle 29 feature lo stato causale della gamba a tre scale (<code>SCALES = (6, 12, 24)</code>, suffisso <code>_6</code>, <code>_12</code>, <code>_24</code>) e sei colonne di esaurimento. Motivazione: <code>swing_leg_target</code> è dominata da <code>(i − start)/(end − start)</code> e <code>i − start</code> è conoscibile; senza una nozione di <code>start</code> il modello deve inferirla dalla forma del prezzo. A tre scale perché il ritardo di conferma <em>è</em> la finestra.</p>
+  <div class="cols">
+  <div class="tw" style="margin:0"><table>
+    <caption><code>legs.state(close, w)</code> — 10 colonne per scala (# per w = 6 / 12 / 24)</caption>
+    <thead><tr><th class="num">#</th><th>colonna</th><th>definizione</th></tr></thead>
+    <tbody>
+      <tr><td class="num">29/39/49</td><td class="key">leg_kind</td><td>tipo dell'ultimo pivot confermato (+1 massimo ⇒ gamba in discesa)</td></tr>
+      <tr><td class="num">30/40/50</td><td class="key">leg_age</td><td>(i − bar) / w</td></tr>
+      <tr><td class="num">31/41/51</td><td class="key">leg_move</td><td>(log C − log price) / (σ_4w · √max(age,1))</td></tr>
+      <tr><td class="num">32/42/52</td><td class="key">leg_extent</td><td>move log / ampiezza della gamba precedente</td></tr>
+      <tr><td class="num">33/43/53</td><td class="key">leg_age_vs_prev</td><td>age / durata della gamba precedente</td></tr>
+      <tr><td class="num">34/44/54</td><td class="key">prev_amplitude</td><td>|log(price / prev_price)|, ≥ 1e−6</td></tr>
+      <tr><td class="num">35/45/55</td><td class="key">prev_duration</td><td>(bar − prev_bar) / w</td></tr>
+      <tr><td class="num">36/46/56</td><td class="key">leg_drawdown</td><td>minimo cumulato di move·kind da quel pivot</td></tr>
+      <tr><td class="num">37/47/57</td><td class="key">signed_age</td><td>leg_kind · leg_age</td></tr>
+      <tr><td class="num">38/48/58</td><td class="key">signed_move</td><td>leg_kind · leg_move</td></tr>
+    </tbody>
+  </table></div>
+  <div class="tw" style="margin:0"><table>
+    <caption><code>legs.exhaustion(bars, N=24)</code> — 6 colonne</caption>
+    <thead><tr><th class="num">#</th><th>colonna</th><th>definizione</th></tr></thead>
+    <tbody>
+      <tr><td class="num">59</td><td class="key">divergence</td><td>rank%(C, N) − rank%(RSI, N)</td></tr>
+      <tr><td class="num">60</td><td class="key">volume_climax</td><td>z(V, 4N) · posizione (2·rank%(C,N) − 1)</td></tr>
+      <tr><td class="num">61</td><td class="key">rejection</td><td>wick inferiore·max(−pos,0) − wick superiore·max(pos,0), wick / range</td></tr>
+      <tr><td class="num">62</td><td class="key">streak</td><td>segno(ΔC) · tanh(lunghezza della serie / N)</td></tr>
+      <tr><td class="num">63</td><td class="key">deceleration</td><td>−segno(slope) · Δslope / σ, slope = Δlog EMA_N</td></tr>
+      <tr><td class="num">64</td><td class="key">stretch</td><td>(log C − log EMA_N) / σ_4N</td></tr>
+      <tr><td colspan="3" class="foot">Quattro su sei (<code>stretch</code>, <code>divergence</code>, <code>streak</code>, <code>rejection</code>) tengono il segno contro il rendimento forward su 4 fold su 4 — ma la cadenza migliore pareggia a 1,76 bp per lato (<code>exhaustcheck</code>).</td></tr>
+    </tbody>
+  </table></div>
+  </div>
+  <div class="tw"><table>
+    <caption>il frame di un simbolo prima del tensore — <code>swing.frame</code>, esempio reale BTC 4h (ultime tre righe del campione; 1.272 barre → 1.042 righe dopo il warm-up)</caption>
+    <thead><tr><th>open_time</th><th class="num">leg_kind_24</th><th class="num">leg_age_24</th><th class="num">leg_move_24</th><th class="num">leg_extent_24</th><th class="num">leg_drawdown_24</th><th class="num">stretch</th><th class="num">target</th><th class="num">close</th><th class="num">ret</th></tr></thead>
+    <tbody>
+      <tr><td class="key">2025-03-24 04:00</td><td class="num">1.0</td><td class="num">1.0833</td><td class="num">0.0064</td><td class="num">0.0053</td><td class="num">−0.0088</td><td class="num">2.3630</td><td class="num">0.7257</td><td class="num">86874.52</td><td class="num">0.0093</td></tr>
+      <tr><td class="key">2025-03-24 08:00</td><td class="num">1.0</td><td class="num">1.1250</td><td class="num">0.1828</td><td class="num">0.1555</td><td class="num">−0.0088</td><td class="num">3.0055</td><td class="num">0.7978</td><td class="num">87689.52</td><td class="num">0.0075</td></tr>
+      <tr><td class="key">2025-03-24 12:00</td><td class="num">1.0</td><td class="num">1.1667</td><td class="num">0.3183</td><td class="num">0.2761</td><td class="num">−0.0088</td><td class="num">3.4329</td><td class="num">0.8610</td><td class="num">88350.01</td><td class="num">0.0000</td></tr>
+      <tr><td colspan="10" class="foot">69 colonne: 65 input + <code>target</code> (swing_leg_target sulle barre 4h, window 24) + <code>next_pivot</code> (datetime, pivot centrati) + <code>close</code> + <code>ret</code> = log(close₊₁ / close) calcolato <em>dopo</em> il dropna, 0 sull'ultima riga. <code>leg_kind_24 = 1</code> con target che sale verso +0,86: l'ultimo pivot confermato è un massimo vecchio, ma il prezzo sta già salendo — la gamba che l'etichetta vede non è quella che il lettore causale conosce.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============================================================ 8 -->
+<section id="s8">
+  <h2><span class="n">8</span> · Assemblaggio (modello A)</h2>
+  <p class="h2sub">Il dataset step 2 e la regola di allineamento</p>
+  <p>Il modello A non costruisce righe proprie: legge l'<strong>indice</strong>, <code>target</code> e <code>next_pivot</code> di <code>data/step2.parquet</code>, il dataset che <code>gbm --horizon</code> materializza con <code>dataset.cached(start="2023", stride=12, lags=True)</code>. Stesse righe, stessi fold, stesso campione: il confronto fra modelli misura solo i modelli.</p>
+
+  <h3>La regola che non deve mai rompersi</h3>
+  <p>Ogni frame è indicizzato dall'<strong>apertura</strong> della barra: una barra <code>b</code> su <code>tf</code> chiude a <code>b + tf</code>. Una colonna di ramo va sulla griglia 5m a <code>label + tf − 5m</code> e poi forward-fill. Alla riga 5m delle 10:05 il ramo 15m legge la candela chiusa alle 10:00, non quella in formazione fino alle 10:15. Una barra di anticipo sul ramo 1h regalerebbe dodici barre 5m di futuro. I pivot seguono la stessa regola: un pivot sulla 15m delle 09:45 è un prezzo realizzato alle 10:00 e cade sulla riga 5m delle 09:55. <code>tests/test_dataset.py</code> lo verifica per troncamento.</p>
+  <figure>
+  <svg class="dg" viewBox="0 0 960 230" role="img" aria-label="Allineamento fra la griglia 5m e il ramo 15m">
+    <text x="10" y="24" class="t-b">griglia 5m</text><text x="10" y="54" class="t-soft">righe dataset</text>
+    <g>
+      <!-- 5m bars 09:30..10:15 -->
+      <rect class="node" x="120" y="36" width="70" height="26" rx="3"/><text x="155" y="54" text-anchor="middle" class="t-mono">09:30</text>
+      <rect class="node" x="192" y="36" width="70" height="26" rx="3"/><text x="227" y="54" text-anchor="middle" class="t-mono">09:35</text>
+      <rect class="node" x="264" y="36" width="70" height="26" rx="3"/><text x="299" y="54" text-anchor="middle" class="t-mono">09:40</text>
+      <rect class="node" x="336" y="36" width="70" height="26" rx="3"/><text x="371" y="54" text-anchor="middle" class="t-mono">09:45</text>
+      <rect class="node" x="408" y="36" width="70" height="26" rx="3"/><text x="443" y="54" text-anchor="middle" class="t-mono">09:50</text>
+      <rect class="node n-mod" x="480" y="36" width="70" height="26" rx="3"/><text x="515" y="54" text-anchor="middle" class="t-mono">09:55</text>
+      <rect class="node" x="552" y="36" width="70" height="26" rx="3"/><text x="587" y="54" text-anchor="middle" class="t-mono">10:00</text>
+      <rect class="node n-mod" x="624" y="36" width="70" height="26" rx="3"/><text x="659" y="54" text-anchor="middle" class="t-mono">10:05</text>
+      <rect class="node" x="696" y="36" width="70" height="26" rx="3"/><text x="731" y="54" text-anchor="middle" class="t-mono">10:10</text>
+      <rect class="node" x="768" y="36" width="70" height="26" rx="3"/><text x="803" y="54" text-anchor="middle" class="t-mono">10:15</text>
+    </g>
+    <text x="10" y="106" class="t-b">ramo 15m</text><text x="10" y="120" class="t-soft">(open_time)</text>
+    <rect class="node n-data" x="120" y="96" width="214" height="26" rx="3"/><text x="227" y="114" text-anchor="middle" class="t-mono">09:30 → chiude 09:45</text>
+    <rect class="node n-data" x="336" y="96" width="214" height="26" rx="3"/><text x="443" y="114" text-anchor="middle" class="t-mono">09:45 → chiude 10:00</text>
+    <rect class="node n-bad" x="552" y="96" width="214" height="26" rx="3"/><text x="659" y="114" text-anchor="middle" class="t-mono">10:00 → in formazione</text>
+    <path class="arr" d="M443,122 C443,150 515,150 515,66"/>
+    <text x="700" y="150" class="t-soft">shift = 15m − 5m = 10 min:</text>
+    <text x="700" y="166" class="t-soft">la candela 09:45 diventa leggibile</text>
+    <text x="700" y="182" class="t-soft">dalla riga 5m delle 09:55 (chiusa 10:00)</text>
+    <path class="arr-d" d="M659,122 V176 H620"/>
+    <text x="360" y="196" class="t-soft">alla riga 10:05 il ramo 15m legge ancora la candela 09:45 (ffill), mai quella delle 10:00</text>
+    <line class="gridl" x1="552" y1="30" x2="552" y2="128"/>
+    <text x="120" y="222" class="t-mono">regola: f.index = f.index + (tf − 5m); f.reindex(idx_5m, method="ffill")</text>
+  </svg>
+  <figcaption>Figura 3 — <code>dataset._shift(tf) = Timedelta(tf) − Timedelta("5m")</code>. Stessa regola per i pivot (<code>dataset.pivots_on</code>), che verifica anche che ogni pivot cada su una barra 5m esistente.</figcaption>
+  </figure>
+
+  <h3>Campionamento sull'orologio, non per posizione</h3>
+  <p><code>build</code> tiene le righe con <code>index.floor(stride·5m) == index</code> (stride 12 = una riga l'ora). L'<code>iloc[::stride]</code> posizionale dopo un <code>dropna</code> per simbolo sfasava quel simbolo per sempre alla prima riga persa: nel build precedente 31.111 timestamp su 64.393 portavano un simbolo solo e AVAX era assente da ogni cross-section. Breadth dopo la correzione: 19,95.</p>
+
+  <h3>Schema di <code>data/step2.parquet</code></h3>
+  <div class="tw"><table>
+    <caption>582 colonne, righe = (open_time, symbol). ~643.000 righe sui 20 simboli dal 2023, 1,64 GB. Esempio reale: BTC/ETH/SOL gen–mar 2025 → 6.457 × 582, 2.152 timestamp con tre simboli</caption>
+    <thead><tr><th>livello / colonna</th><th>dtype</th><th>contenuto</th></tr></thead>
+    <tbody>
+      <tr class="grp"><td colspan="3">MultiIndex</td></tr>
+      <tr><td class="key ind">open_time</td><td class="key">datetime64 UTC</td><td>ora piena (clock sampling), ordinato</td></tr>
+      <tr><td class="key ind">symbol</td><td class="key">str</td><td>BTC … AAVE (senza USDT)</td></tr>
+      <tr class="grp"><td colspan="3">580 colonne di feature, float32 — per ogni ramo tf ∈ {5m, 15m, 30m, 1h} (in quest'ordine)</td></tr>
+      <tr><td class="key ind">{feature}_{tf}</td><td class="key">float32</td><td>valore a t (29 colonne) — es. <code>log_return_15m</code></td></tr>
+      <tr><td class="key ind">{feature}_lag1_{tf}</td><td class="key">float32</td><td>valore una barra <em>del ramo</em> prima (29)</td></tr>
+      <tr><td class="key ind">{feature}_lag4_{tf}</td><td class="key">float32</td><td>quattro barre del ramo prima (29)</td></tr>
+      <tr><td class="key ind">{feature}_mean_{tf}</td><td class="key">float32</td><td>media rolling su N = 24 (29)</td></tr>
+      <tr><td class="key ind">{feature}_std_{tf}</td><td class="key">float32</td><td>deviazione rolling su N = 24 (29)</td></tr>
+      <tr class="grp"><td colspan="3">meta (<code>linear.META</code>) — le sole colonne che il modello A legge</td></tr>
+      <tr><td class="key ind">target</td><td class="key">float64</td><td><code>remaining_excursion</code> (etichetta di default del dataset) — <strong>sostituito</strong> da <code>relabel</code></td></tr>
+      <tr><td class="key ind">next_pivot</td><td class="key">datetime64 UTC</td><td>timestamp 5m del pivot che chiude la gamba della riga (la riga stessa se è un pivot) — orizzonte di purging</td></tr>
+      <tr><td colspan="3" class="foot">Ordine delle colonne: per ogni ramo 145 colonne raggruppate per suffisso (29 valori, 29 lag1, 29 lag4, 29 mean, 29 std), poi il ramo successivo; in coda <code>target</code>, <code>next_pivot</code>. Il file è accompagnato da <code>step2.json</code>: <code>{start, stride, lags, symbols, lags_at:[1,4], sampling:"clock"}</code>; un file costruito con altri parametri viene rifiutato.</td></tr>
+    </tbody>
+  </table></div>
+  <div class="tw"><table>
+    <caption>esempio reale di righe, cinque colonne di un ramo e il meta (etichetta ancora remaining_excursion)</caption>
+    <thead><tr><th>open_time</th><th>symbol</th><th class="num">log_return_15m</th><th class="num">…_lag1_15m</th><th class="num">…_lag4_15m</th><th class="num">…_mean_15m</th><th class="num">…_std_15m</th><th class="num">target</th><th>next_pivot</th></tr></thead>
+    <tbody>
+      <tr><td class="key">2025-01-01 00:00</td><td>BTC</td><td class="num">0.000910</td><td class="num">−0.002566</td><td class="num">−0.003132</td><td class="num">−0.000242</td><td class="num">0.002248</td><td class="num">0.952</td><td class="key">01-01 00:55</td></tr>
+      <tr><td class="key"></td><td>ETH</td><td class="num">−0.000383</td><td class="num">−0.001314</td><td class="num">−0.001254</td><td class="num">−0.000319</td><td class="num">0.001907</td><td class="num">−0.608</td><td class="key">01-01 09:25</td></tr>
+      <tr><td class="key"></td><td>SOL</td><td class="num">−0.001161</td><td class="num">−0.005052</td><td class="num">−0.004854</td><td class="num">−0.001468</td><td class="num">0.002468</td><td class="num">8.680</td><td class="key">01-02 12:10</td></tr>
+      <tr><td class="key">2025-01-01 01:00</td><td>BTC</td><td class="num">0.005482</td><td class="num">0.001312</td><td class="num">0.000910</td><td class="num">0.000233</td><td class="num">0.002451</td><td class="num">−1.315</td><td class="key">01-01 09:40</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Il cambio di etichetta — <code>dataset.relabel(index, swing_leg_target)</code></h3>
+  <p>Per ogni simbolo: carica il close 5m da <code>min(open_time) − 10 giorni</code>, trova i pivot 15m e li porta sulla griglia 5m (<code>pivots_on</code>), calcola <code>swing_leg_target(close_5m, pivots, 24)</code> e lo legge sui timestamp delle righe. Solleva se anche una riga resta senza etichetta. <code>next_pivot</code> <strong>non</strong> viene ricalcolato: le gambe sono le stesse, quindi l'orizzonte di purging non dipende dall'etichetta scritta sopra. (<code>legsweep</code>, che cambia la finestra, invece lo ricalcola.)</p>
+  <p class="muted">Sul campione: dopo il relabel la colonna ha media 0,017, sd 0,49, estremi −0,98 / +0,99; orizzonte di purging in barre 5m mediana 83, p95 326, p99 503, massimo 731.</p>
+</section>
+
+<!-- ============================================================ 9 -->
+<section id="s9">
+  <h2><span class="n">9</span> · Tensori</h2>
+  <p class="h2sub">Dalle righe alle sequenze</p>
+  <h3>Modello A — <code>gru.sequences(index, keep=COLUMNS, tf="15m", steps=24)</code></h3>
+  <p>Per ogni simbolo: <code>features(load(sym, "15m"), 24)[keep]</code>, indice spostato di <code>+10 min</code> sulla griglia 5m; poi per ogni riga le ultime 24 candele 15m chiuse, più vecchia per prima: <code>np.stack([f.shift(k).reindex(when, method="ffill") for k in 23..0], axis=1)</code>. Non è una finestra rolling sulla 5m: lo step k è la stessa serie spostata di k barre <em>sue</em>. Solleva se una cella non è finita (warm-up insufficiente).</p>
+  <figure>
+  <svg class="dg" viewBox="0 0 960 200" role="img" aria-label="Forma del tensore di sequenza">
+    <g transform="translate(40,30)">
+      <rect class="node n-data" x="40" y="20" width="360" height="120" rx="4"/>
+      <rect class="node n-data" x="28" y="30" width="360" height="120" rx="4"/>
+      <rect class="node n-data" x="16" y="40" width="360" height="120" rx="4"/>
+      <text x="196" y="104" text-anchor="middle" class="t-b">una riga: 24 × 29</text>
+      <text x="196" y="178" text-anchor="middle" class="t-soft">asse 1 → step 0 (t − 23 candele 15m) … step 23 (ultima chiusa)</text>
+      <text x="-8" y="100" text-anchor="middle" class="t-soft" transform="rotate(-90,-8,100)">asse 2: feature 0…28</text>
+      <text x="420" y="18" class="t-soft">asse 0: N righe (open_time, symbol)</text>
+    </g>
+    <g transform="translate(520,30)">
+      <text x="0" y="16" class="t-b">data/step3-15m-all.npy</text>
+      <text x="0" y="38" class="t-mono">shape (≈643.000, 24, 29) · float32 · 1,79 GB</text>
+      <text x="0" y="56" class="t-mono">letto con np.load(mmap_mode="r")</text>
+      <text x="0" y="82" class="t-b">step3-15m-all.json (stamp)</text>
+      <text x="0" y="102" class="t-mono">{keep:[29 nomi], tf:"15m", steps:24,</text>
+      <text x="0" y="118" class="t-mono"> rows:N, first:"2023-01-01 …", last:"…"}</text>
+      <text x="0" y="144" class="t-soft">riga i del tensore ⇔ riga i di step2.parquet</text>
+      <text x="0" y="160" class="t-soft">(colonna <tspan class="t-mono">row = arange(N)</tspan> in <tspan class="t-mono">gru.meta</tspan>)</text>
+    </g>
+  </svg>
+  <figcaption>Figura 4 — il tensore è costruito su <em>tutte</em> le righe dello step 2, qualunque cosa l'etichetta faccia dopo: <code>row</code> è posizionale, quindi un'etichetta che scarta righe non può spostare cosa significano le posizioni. Con <code>--rank</code> il file diventa <code>step3-15m-all-rank.npy</code> (non usato sull'etichetta swing).</figcaption>
+  </figure>
+  <p><code>gru.meta()</code> restituisce il DataFrame che guida l'addestramento:</p>
+  <div class="tw"><table>
+    <caption><code>gru.meta(CACHE)</code> dopo il relabel — il "df" di tutto il modello A</caption>
+    <thead><tr><th>colonna</th><th>dtype</th><th>contenuto</th></tr></thead>
+    <tbody>
+      <tr><td class="key">(open_time, symbol)</td><td>MultiIndex</td><td>quello di step2.parquet</td></tr>
+      <tr><td class="key">target</td><td class="key">float64</td><td><code>swing_leg_target</code> a 0,7 / 24</td></tr>
+      <tr><td class="key">next_pivot</td><td class="key">datetime64 UTC</td><td>orizzonte di purging</td></tr>
+      <tr><td class="key">row</td><td class="key">int64</td><td>posizione nel tensore</td></tr>
+      <tr><td class="key">move <span class="muted">(opz.)</span></td><td class="key">float64</td><td>|remaining_excursion|, solo con <code>--weight</code>, <code>--finetune</code>, <code>--by-move</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Modello B — <code>swing.build(symbols, tf="4h", since="2021", window=24, steps=24)</code></h3>
+  <p>Per ogni simbolo: <code>frame</code> (sezione 7) → scaler fittato sulle righe del simbolo <em>prima del 2023-01</em> → <code>sequences</code>: <code>out[k:, 23−k, :] = z[:len(z)−k]</code>, step 23 = barra corrente → si scartano le righe con una cella non finita (le prime 23). I blocchi dei simboli vengono concatenati; le righe restano contigue e in ordine temporale dentro ogni simbolo, che è ciò che permette allo stadio 2 di tagliare episodi senza riordinare.</p>
+  <div class="tw"><table>
+    <caption>i tre file di <code>swing.cached(path)</code> — path = <code>data/swing-{tf}-{basic|full}</code></caption>
+    <thead><tr><th>file</th><th>struttura</th></tr></thead>
+    <tbody>
+      <tr><td class="key">swing-4h-full.npy</td><td>(N, 24, 65) float32, già scalato, mmap</td></tr>
+      <tr><td class="key">swing-4h-full.parquet</td><td>indice <code>open_time</code> (DatetimeIndex UTC, <em>non</em> univoco fra simboli); colonne <code>target</code> f64, <code>next_pivot</code> datetime, <code>close</code> f64, <code>ret</code> f64, <code>symbol</code> str, <code>row</code> int (posizione nel .npy)</td></tr>
+      <tr><td class="key">swing-4h-full.json</td><td><code>{tf, since, window, steps, symbols:[…], inputs:[65 nomi]}</code></td></tr>
+      <tr><td colspan="2" class="foot"><code>--inputs basic</code> usa 29 feature + stato a 24 soltanto (39 colonne). Una riga con meno di <code>steps + 100</code> barre utili esclude il simbolo.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============================================================ 10 -->
+<section id="s10">
+  <h2><span class="n">10</span> · Protocollo</h2>
+  <p class="h2sub">Split, purging esatto e walk-forward</p>
+  <p>Il leakage non sta nelle candele (nessuna barra è condivisa, le feature sono causali): sta nell'<strong>etichetta</strong>, che interpola fino al pivot successivo. La distanza da quel pivot non è limitata (p50 28, p95 124, p99 202, max 754 barre 15m), quindi un embargo fisso di 72 barre copre ~87° percentile e perde ancora. La regola esatta:</p>
+<pre>train = df[(open_time &lt; cut) &amp; (next_pivot &lt; cut)]        # split.temporal / swing.purge
+test  = df[open_time &gt;= cut]</pre>
+  <p>Vale su ogni confine: train→test e train→valid (un valid non purgato contamina l'early stopping).</p>
+  <figure>
+  <svg class="dg" viewBox="0 0 960 250" role="img" aria-label="Walk-forward espansivo a quattro fold con purging">
+    <text x="10" y="20" class="t-soft">tempo →</text>
+    <g font-size="11">
+      <!-- axis -->
+      <line class="gridl" x1="120" y1="220" x2="940" y2="220"/>
+      <text x="120" y="238" class="t-mono">2023-01</text>
+      <text x="560" y="238" class="t-mono" text-anchor="middle">2025-06 (cut 1)</text>
+      <text x="940" y="238" class="t-mono" text-anchor="end">2026-09</text>
+      <!-- fold rows: train inner, valid, purge, test -->
+      <text x="10" y="50" class="t-b">fold 1</text>
+      <rect class="node n-data" x="120" y="36" width="336" height="22" rx="3"/><text x="288" y="51" text-anchor="middle" class="t-soft">inner train 80%</text>
+      <rect class="node n-lab" x="456" y="36" width="96" height="22" rx="3"/><text x="504" y="51" text-anchor="middle" class="t-soft">valid 20%</text>
+      <rect class="node n-bad" x="552" y="36" width="8" height="22"/>
+      <rect class="node n-mod" x="560" y="36" width="95" height="22" rx="3"/><text x="607" y="51" text-anchor="middle" class="t-soft">test</text>
+      <text x="10" y="90" class="t-b">fold 2</text>
+      <rect class="node n-data" x="120" y="76" width="412" height="22" rx="3"/>
+      <rect class="node n-lab" x="532" y="76" width="115" height="22" rx="3"/>
+      <rect class="node n-bad" x="647" y="76" width="8" height="22"/>
+      <rect class="node n-mod" x="655" y="76" width="95" height="22" rx="3"/><text x="702" y="91" text-anchor="middle" class="t-soft">test</text>
+      <text x="10" y="130" class="t-b">fold 3</text>
+      <rect class="node n-data" x="120" y="116" width="488" height="22" rx="3"/>
+      <rect class="node n-lab" x="608" y="116" width="134" height="22" rx="3"/>
+      <rect class="node n-bad" x="742" y="116" width="8" height="22"/>
+      <rect class="node n-mod" x="750" y="116" width="95" height="22" rx="3"/><text x="797" y="131" text-anchor="middle" class="t-soft">test</text>
+      <text x="10" y="170" class="t-b">fold 4</text>
+      <rect class="node n-data" x="120" y="156" width="564" height="22" rx="3"/>
+      <rect class="node n-lab" x="684" y="156" width="153" height="22" rx="3"/>
+      <rect class="node n-bad" x="837" y="156" width="8" height="22"/>
+      <rect class="node n-mod" x="845" y="156" width="95" height="22" rx="3"/><text x="892" y="171" text-anchor="middle" class="t-soft">test</text>
+      <rect class="node n-bad" x="120" y="194" width="10" height="12"/><text x="136" y="204" class="t-soft">righe purgate: next_pivot oltre il taglio (anche fra inner train e valid)</text>
+    </g>
+  </svg>
+  <figcaption>Figura 5 — <code>split.walk_forward(df, "2025-06", 4)</code> (modello A): tagli equispaziati fra il 2025-06 e l'ultima barra, train espansivo, test che tassellano il periodo senza sovrapporsi. Dentro ogni fold, <code>split.temporal_fraction(train, 0.2)</code> taglia per <em>tempo di calendario</em> (non per righe) l'ultimo 20% come validazione, purgato. Il modello B usa la stessa geometria con <code>swing.folds(meta, "2023-01", 4)</code> e storia dal 2021. Proporzioni indicative.</figcaption>
+  </figure>
+  <div class="tw"><table>
+    <caption>modello A sull'etichetta swing, righe reali per fold (handoff, misura 0)</caption>
+    <thead><tr><th>fold</th><th class="num">train (purgato)</th><th class="num">test</th><th class="num">IC</th><th class="num">ICIR</th><th class="num">Rank IC</th><th class="num">Rank ICIR</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td class="num">423.089</td><td class="num">55.060</td><td class="num">0.4479</td><td class="num">1.8360</td><td class="num">0.4229</td><td class="num">1.7834</td></tr>
+      <tr><td>2</td><td class="num">478.114</td><td class="num">55.040</td><td class="num">0.4493</td><td class="num">1.8112</td><td class="num">0.4317</td><td class="num">1.8619</td></tr>
+      <tr><td>3</td><td class="num">533.148</td><td class="num">55.019</td><td class="num">0.3972</td><td class="num">1.6314</td><td class="num">0.3863</td><td class="num">1.6734</td></tr>
+      <tr><td>4</td><td class="num">588.234</td><td class="num">54.579</td><td class="num">0.4294</td><td class="num">1.8581</td><td class="num">0.4046</td><td class="num">1.7410</td></tr>
+      <tr class="hi"><td>media ± std</td><td class="num"></td><td class="num"></td><td class="num">0.4310 ± 0.0242</td><td class="num">1.784 ± 0.104</td><td class="num">0.4114 ± 0.0202</td><td class="num">1.765 ± 0.079</td></tr>
+    </tbody>
+  </table></div>
+  <p class="muted">Split per simbolo escluso: i 20 asset sono correlati, e BTC in test con ETH in train nello stesso periodo è leakage cross-sectional.</p>
+</section>
+
+<!-- ============================================================ 11 -->
+<section id="s11">
+  <h2><span class="n">11</span> · Scala</h2>
+  <p class="h2sub">Normalizzazione robusta con clip</p>
+<pre>z = clip((x − mediana) / IQR, −5, +5) × 0.1          normalize.CLIP = 5, normalize.SCALE = 0.1</pre>
+  <p>Le 29 colonne grezze coprono 3,2 ordini di grandezza (IQR 1e−3 per wick e ritorni, 1e0 per le limitate). Senza clip restano outlier a 380 IQR fuori campione. A CLIP = 5 si tronca lo 0,46–0,56% dei valori e l'output sta in ±0,5, con IQR esattamente 0,1 su train. Monotona per colonna, quindi le correlazioni di rango non cambiano.</p>
+  <div class="tw"><table>
+    <caption>dove si fittano le statistiche — sempre e solo su dati di train</caption>
+    <thead><tr><th></th><th>modello A</th><th>modello B</th></tr></thead>
+    <tbody>
+      <tr><td>chi</td><td class="key">gru.Branches(x, inner.row) → stats_of</td><td class="key">swing.scaler(f, "2023-01")</td></tr>
+      <tr><td>su quali righe</td><td>inner train <em>di ogni fold</em>, solo l'ultimo step (x[train, −1])</td><td>righe del simbolo prima del 2023-01 (sottoinsieme di ogni train, perché i fold espandono)</td></tr>
+      <tr><td>granularità</td><td>una tabella per ramo, condivisa fra i simboli</td><td>una tabella <em>per simbolo</em> (log_dollar_volume BTC vs BAT)</td></tr>
+      <tr><td>quando si applica</td><td>al volo, per batch (<code>Branches.__getitem__</code>): il tensore resta mmap</td><td>una volta, dentro il tensore salvato</td></tr>
+      <tr><td>formato</td><td colspan="2">DataFrame indicizzato per colonna, due colonne <code>center</code>, <code>scale</code>; <code>fit</code> solleva su scale ≤ 0</td></tr>
+      <tr><td>in inferenza</td><td>salvato nel checkpoint (<code>stats</code>)</td><td><strong>non</strong> salvato: <code>live_scaler</code> sulla storia della finestra a schermo, IQR nullo → 1</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============================================================ 12 -->
+<section id="s12">
+  <h2><span class="n">12</span> · Modello A</h2>
+  <p class="h2sub">GRU a ramo singolo 15m sull'etichetta swing</p>
+  <figure>
+  <svg class="dg" viewBox="0 0 960 170" role="img" aria-label="Architettura della GRU a ramo singolo">
+    <rect class="node n-data" x="10" y="50" width="170" height="64" rx="8"/>
+    <text x="95" y="76" text-anchor="middle" class="t-b">x (B, 24, 29)</text>
+    <text x="95" y="96" text-anchor="middle" class="t-soft">float32, scalato ±0,5</text>
+    <rect class="node n-mod" x="230" y="40" width="200" height="84" rx="8"/>
+    <text x="330" y="66" text-anchor="middle" class="t-b">nn.GRU(29, 32)</text>
+    <text x="330" y="86" text-anchor="middle" class="t-soft">1 layer, batch_first</text>
+    <text x="330" y="104" text-anchor="middle" class="t-soft">h_n[−1] → (B, 32)</text>
+    <rect class="node n-mod" x="480" y="50" width="140" height="64" rx="8"/>
+    <text x="550" y="76" text-anchor="middle" class="t-b">Dropout(0.2)</text>
+    <text x="550" y="96" text-anchor="middle" class="t-soft">(B, 32)</text>
+    <rect class="node n-mod" x="670" y="50" width="140" height="64" rx="8"/>
+    <text x="740" y="76" text-anchor="middle" class="t-b">Linear(32, 1)</text>
+    <text x="740" y="96" text-anchor="middle" class="t-soft">bias init 0</text>
+    <rect class="node n-out" x="850" y="50" width="100" height="64" rx="8"/>
+    <text x="900" y="76" text-anchor="middle" class="t-b">ŷ (B,)</text>
+    <text x="900" y="96" text-anchor="middle" class="t-soft">nessuna tanh</text>
+    <path class="arr" d="M180,82 H230"/><path class="arr" d="M430,82 H480"/><path class="arr" d="M620,82 H670"/><path class="arr" d="M810,82 H850"/>
+    <text x="330" y="150" text-anchor="middle" class="t-mono">weight_ih 96×29 · weight_hh 96×32 · bias 2×96</text>
+    <text x="740" y="150" text-anchor="middle" class="t-mono">32 + 1</text>
+    <text x="900" y="150" text-anchor="middle" class="t-mono">Σ = 6.081</text>
+  </svg>
+  <figcaption>Figura 6 — <code>gru.Net(widths=[29])</code>. Con più rami (<code>--branches 5m,15m,30m,1h</code>) ci sono quattro GRU e la testa legge la concatenazione 4×32; con <code>--encoder shared</code> un'unica GRU più un embedding di timeframe a 4 dimensioni. Entrambe le varianti perdono sul ramo singolo in 4 fold su 4, quindi il checkpoint dell'etichetta swing è a ramo singolo. Nessuna attivazione in uscita: la tanh saturava proprio sui pivot, e Rank IC è invariante per trasformazioni monotone.</figcaption>
+  </figure>
+  <div class="tw"><table>
+    <caption>iperparametri — valori di partenza dello spec, non tarati</caption>
+    <thead><tr><th>parametro</th><th>valore</th><th>costante</th><th>nota</th></tr></thead>
+    <tbody>
+      <tr><td>stato nascosto H</td><td class="num">32</td><td class="key">gru.H</td><td>oltre 64 overfitta</td></tr>
+      <tr><td>step di sequenza</td><td class="num">24</td><td class="key">gru.STEPS</td><td>6h di 15m; mai mosso (punto aperto: le gambe arrivano a 754 barre)</td></tr>
+      <tr><td>dropout</td><td class="num">0.2</td><td class="key">gru.DROPOUT</td><td>sullo stato finale</td></tr>
+      <tr><td>ottimizzatore</td><td>AdamW</td><td class="key">LEARNING_RATE 1e−3, WEIGHT_DECAY 1e−4</td><td></td></tr>
+      <tr><td>scheduler</td><td>ReduceLROnPlateau</td><td class="key">mode max, factor 0.5, patience 5</td><td>sulla Rank IC di valid</td></tr>
+      <tr><td>batch</td><td class="num">512</td><td class="key">gru.BATCH</td><td>permutazione per epoca, seed fisso</td></tr>
+      <tr><td>grad clip</td><td class="num">1.0</td><td class="key">gru.GRAD_CLIP</td><td>norma</td></tr>
+      <tr><td>epoche / patience</td><td class="num">100 / 10</td><td class="key">EPOCHS, PATIENCE</td><td>early stopping su Rank IC di valid, <strong>mai sulla loss</strong></td></tr>
+      <tr><td>loss</td><td>Huber</td><td class="key">δ = mediana |target| su train</td><td>≈ 0,40 sull'etichetta swing (2,1 è per remaining_excursion); rimisurato a ogni cambio di etichetta</td></tr>
+      <tr><td>valid</td><td class="num">20%</td><td class="key">VALID_FRACTION</td><td>coda di calendario del train, purgata</td></tr>
+      <tr><td>seed</td><td class="num">5</td><td class="key">--seeds</td><td>metriche mediate per seed; predizioni mediate per il file</td></tr>
+      <tr><td>device</td><td colspan="3">mps se disponibile, altrimenti cpu</td></tr>
+    </tbody>
+  </table></div>
+  <h3>Il ciclo di addestramento</h3>
+<pre>for fold, (train, test) in walk_forward(df, "2025-06", 4):          # gru.run
+    for seed in range(5):                                            # gru.fold
+        inner, valid = temporal_fraction(train, 0.2)                 # purgato
+        z = Branches([tensor], inner.row)                            # scaler sul solo inner
+        model = Net([29]); opt = AdamW(1e-3, wd=1e-4)
+        for epoch in range(100):                                     # gru.fit
+            for batch in split(permutation(inner), 512):
+                loss = Huber(δ)(model(z[inner.row[batch]]), y[batch]).mean()
+                loss.backward(); clip_grad_norm_(1.0); opt.step()
+            score = mean_t RankIC_t(predict(valid), valid.target)    # metrics.by_date(rank=True)
+            sched.step(score); tieni lo stato migliore; stop dopo 10 epoche senza miglioramento
+        pred[seed] = predict(model, z, test.row)
+    metriche = media sui seed di metrics.signal(pred[seed], test.target)</pre>
+  <p>Opzioni che toccano l'addestramento senza cambiare lo schema: <code>--weight {excursion,rank}</code> (peso per riga dalla dimensione del movimento residuo, normalizzato a media 1), <code>--finetune K</code> (seconda fase a lr/10 sul quintile alto di <code>move</code>), <code>--band B</code> (solo righe entro B barre dal pivot), <code>--z-target</code> (per l'etichetta excursion). Nessuna è stata lanciata sull'etichetta swing (handoff, misura 3): ottimizzerebbe una quantità misurata a −0,04 contro il prezzo.</p>
+  <h3>Output</h3>
+  <div class="tw"><table>
+    <caption>cosa scrive una run di <code>gru --label swing --features all</code></caption>
+    <thead><tr><th>artefatto</th><th>struttura</th></tr></thead>
+    <tbody>
+      <tr><td class="key">stdout: folds</td><td>una riga per fold + <code>mean</code>, <code>std</code>: <code>train, test, ic, icir, rank_ic, rank_icir</code>; con <code>--seeds &gt; 1</code> anche la tabella per (fold, seed)</td></tr>
+      <tr><td class="key">stdout: low-pass</td><td>Rank IC della media mobile a k ∈ {1, 2, 4, 12} dell'output</td></tr>
+      <tr><td class="key">stdout: market beta</td><td>le stesse metriche contro il target meno la sua media cross-sectional</td></tr>
+      <tr><td class="key">stdout: --horizon</td><td>Rank IC per distanza dal pivot, bucket in barre 5m <code>[0,6) [6,12) [12,24) [24,48) [48,96) [96,192) [192,∞)</code>: <code>bars, dates, rank_ic</code></td></tr>
+      <tr><td class="key">stdout: --pnl</td><td><code>threshold.sweep</code> con <code>sign = −1</code> (predizione bassa = compra) e buy&amp;hold sulle stesse righe</td></tr>
+      <tr><td class="key">data/pred-swing-all-15m.parquet</td><td>una colonna <code>pred</code> (float), MultiIndex (open_time, symbol) = righe di test dei 4 fold concatenate; ~219.000 righe, media sui seed</td></tr>
+    </tbody>
+  </table></div>
+  <h3>Il checkpoint — <code>gru --label swing --features all --save</code></h3>
+  <p>Nessun fold: un solo modello fittato su tutto il train prima di <code>--test-start</code> (80/20 inner/valid, purgato). Salvato su CPU (un pickle scritto da <code>mps</code> non si carica sull'host Linux).</p>
+  <div class="tw"><table>
+    <caption>contenuto di <code>models/gru.pt</code> (torch.save di un dict) — valori letti dal file committato</caption>
+    <thead><tr><th>chiave</th><th>tipo</th><th>valore</th></tr></thead>
+    <tbody>
+      <tr><td class="key">state</td><td>dict[str, Tensor]</td><td></td></tr>
+      <tr><td class="key ind">gru.0.weight_ih_l0</td><td>Tensor</td><td class="num">(96, 29)</td></tr>
+      <tr><td class="key ind">gru.0.weight_hh_l0</td><td>Tensor</td><td class="num">(96, 32)</td></tr>
+      <tr><td class="key ind">gru.0.bias_ih_l0 · bias_hh_l0</td><td>Tensor</td><td class="num">(96,) · (96,)</td></tr>
+      <tr><td class="key ind">head.weight · head.bias</td><td>Tensor</td><td class="num">(1, 32) · (1,)</td></tr>
+      <tr><td class="key">stats</td><td>list[DataFrame]</td><td>una per ramo: 29 × {center, scale} (tabella della sezione 6)</td></tr>
+      <tr><td class="key">widths</td><td>list[int]</td><td class="key">[29]</td></tr>
+      <tr><td class="key">branches</td><td>list[str]</td><td class="key">["15m"]</td></tr>
+      <tr><td class="key">keep</td><td>list[str]</td><td>le 29 colonne, ordine COLUMNS</td></tr>
+      <tr><td class="key">steps</td><td>int</td><td class="key">24</td></tr>
+      <tr><td class="key">shared</td><td>bool</td><td class="key">False</td></tr>
+      <tr><td class="key">label</td><td>str</td><td class="key">"swing"</td></tr>
+      <tr><td class="key">rank</td><td>bool</td><td class="key">False</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============================================================ 13 -->
+<section id="s13">
+  <h2><span class="n">13</span> · Modello B</h2>
+  <p class="h2sub">Il modello swing a due stadi</p>
+  <p class="lead">Una ridge sulle 29 feature più lo stato della gamba arriva a 0,623 di correlazione con l'etichetta e perde 0,29 l'anno: i suoi errori si concentrano sulle svolte, dove ogni trade si apre e si chiude. Quindi si addestra due volte: prima sull'etichetta, per mettere la struttura della gamba nell'encoder; poi direttamente sul denaro.</p>
+  <figure>
+  <svg class="dg" viewBox="0 0 960 250" role="img" aria-label="Architettura a encoder condiviso e due teste">
+    <rect class="node n-data" x="10" y="90" width="160" height="64" rx="8"/>
+    <text x="90" y="116" text-anchor="middle" class="t-b">x (B, 24, 65)</text>
+    <text x="90" y="136" text-anchor="middle" class="t-soft">scalato per simbolo</text>
+    <rect class="node n-mod" x="215" y="80" width="190" height="84" rx="8"/>
+    <text x="310" y="106" text-anchor="middle" class="t-b">nn.GRU(65, 48)</text>
+    <text x="310" y="126" text-anchor="middle" class="t-soft">+ Dropout(0.2)</text>
+    <text x="310" y="144" text-anchor="middle" class="t-soft">h (B, 48)</text>
+    <rect class="node n-lab" x="460" y="30" width="170" height="60" rx="8"/>
+    <text x="545" y="55" text-anchor="middle" class="t-b">head: Linear(48,1)</text>
+    <text x="545" y="74" text-anchor="middle" class="t-soft">label ŷ</text>
+    <rect class="node n-mod" x="460" y="154" width="170" height="60" rx="8"/>
+    <text x="545" y="179" text-anchor="middle" class="t-b">policy: Linear(48,1)</text>
+    <text x="545" y="198" text-anchor="middle" class="t-soft">logit</text>
+    <path class="arr" d="M170,122 H215"/><path class="arr" d="M405,110 H430 V60 H460"/><path class="arr" d="M405,134 H430 V184 H460"/>
+    <path class="arr-d" d="M545,90 V154"/><text x="552" y="126" class="t-soft">adopt: policy = −1 · head</text>
+    <rect class="node n-out" x="690" y="30" width="260" height="60" rx="8"/>
+    <text x="820" y="55" text-anchor="middle" class="t-b">stadio 1: Huber(ŷ, y)</text>
+    <text x="820" y="74" text-anchor="middle" class="t-soft">stop su corr(ŷ, y) in valid · calibrazione</text>
+    <rect class="node n-out" x="690" y="154" width="260" height="60" rx="8"/>
+    <text x="820" y="179" text-anchor="middle" class="t-b">stadio 2: −Σ[p·r̃ − c·|Δp|] + 0,1·Huber</text>
+    <text x="820" y="198" text-anchor="middle" class="t-soft">p = σ(2·logit) · stop su netto − hold</text>
+    <path class="arr" d="M630,60 H690"/><path class="arr" d="M630,184 H690"/>
+    <text x="310" y="200" text-anchor="middle" class="t-mono">GRU: 144×65 + 144×48 + 2×144</text>
+    <text x="310" y="216" text-anchor="middle" class="t-mono">teste: 2 × (48 + 1) · Σ = 16.658</text>
+  </svg>
+  <figcaption>Figura 7 — <code>swing.Net(65)</code>: un encoder, due teste. La testa di policy parte come la testa di etichetta negata (<code>ADOPT = 1</code>): long quando l'etichetta prevista è bassa, cioè vicino a un minimo di gamba.</figcaption>
+  </figure>
+  <h3>Stadio 1 — <code>fit_label</code></h3>
+  <ul>
+    <li>Huber con δ = mediana |target| del train del fold; AdamW 1e−3, wd 1e−4, batch 512, clip 1.0; 40 epoche, patience 6.</li>
+    <li>Early stopping sulla <strong>correlazione di Pearson</strong> fra testa di etichetta e target sulla validazione (serie temporale, non cross-sectional).</li>
+    <li><strong>Calibrazione</strong> (<code>swing.calibration</code>): 201 quantili dell'output fittato e dell'etichetta sul train; <code>np.interp</code> in uscita. Monotona, non sposta nessuna decisione; ripristina l'unità (la Huber schiaccia la predizione a ±0,4 mentre l'etichetta tocca ±1). Nel checkpoint reale: quantili dell'output da −1,134 a +1,024 mappati su −1 … +1.</li>
+  </ul>
+  <h3>Stadio 2 — <code>fit_policy</code>, rinforzo diretto (Moody &amp; Saffell)</h3>
+<pre>p_t    = sigmoid(SHARPNESS · logit_t)                 SHARPNESS = 2   (a 4 satura e scappa in "sempre flat")
+r̃_t    = ret_t − media_simbolo(ret sul train)          detrend: senza, la policy ottima è buy &amp; hold
+R      = Σ_t [ p_t · r̃_t − FEE · |p_t − p_{t−1}| ]     FEE = 0,0025 per lato, p_{−1} = 0 (paga l'apertura)
+loss   = −mean_episodi(R) + 0,1 · Huber(ŷ, y)          anchor: l'encoder non dimentica la gamba</pre>
+  <div class="tw"><table>
+    <caption>parametri dello stadio 2</caption>
+    <thead><tr><th>parametro</th><th>valore</th><th>perché</th></tr></thead>
+    <tbody>
+      <tr><td>episodio</td><td class="num">CHUNK = 256 barre</td><td>la fee lega p_t a p_{t−1}: un batch mescolato cancellerebbe il costo. Contiguo e dentro un simbolo (<code>episodes</code>)</td></tr>
+      <tr><td>episodi per passo</td><td class="num">CHUNKS = 48</td><td>tensore (48 × 256, 24, 65) per passo</td></tr>
+      <tr><td>passi per epoca / epoche / patience</td><td class="num">40 / 30 / 6</td><td></td></tr>
+      <tr><td>learning rate</td><td class="num">1e−3</td><td>3e−4 non lascia mai il prior</td></tr>
+      <tr><td>straight-through (<code>hard</code>)</td><td>off</td><td>misurato peggio: −0,042 contro +0,063</td></tr>
+      <tr><td>criterio di validazione</td><td colspan="2"><code>valid_score</code>: media sui simboli di (log/anno netto della regola <code>logit &gt; 0</code> − log/anno di buy&amp;hold). Il criterio assoluto trovava buy&amp;hold</td></tr>
+    </tbody>
+  </table></div>
+  <h3>Dalla testa alla posizione</h3>
+  <ul>
+    <li>Default (<code>book(signal, None)</code>): <strong>long quando logit &gt; 0</strong>, flat altrimenti. Long-only, niente short.</li>
+    <li><code>--band</code> o <code>--stage label</code>: <code>choose</code> cerca ingresso/uscita a quantili (griglia 6 × 6) e segno (±1) — 72 combinazioni — massimizzando netto − hold; poi <code>positions</code> isteretica: long sotto −enter, flat sopra exit.</li>
+    <li>Prezzo (<code>trades</code>, <code>price</code>): entrata e uscita al close, fee su entrambi i lati composta col rapporto di prezzo; una posizione aperta sull'ultima barra si chiude lì.</li>
+    <li>Con <code>--seeds &gt; 1</code> i punteggi dei seed si mediano <em>prima</em> della regola.</li>
+  </ul>
+  <h3>Output</h3>
+  <div class="tw"><table>
+    <caption><code>by_symbol</code> — una riga per simbolo sulle righe di test dei 4 fold (ogni fold è il suo modello, posizioni concatenate)</caption>
+    <thead><tr><th>colonna</th><th>significato</th></tr></thead>
+    <tbody>
+      <tr><td class="key">symbol · trades · in_market · win_rate · median_trade_pct · median_bars</td><td>conteggi della regola</td></tr>
+      <tr><td class="key">gross_per_year · log_per_year · net_return</td><td>lordo senza fee, netto in log/anno, netto semplice</td></tr>
+      <tr><td class="key">oracle_log · oracle_net</td><td>oracolo a posteriori (lag 0) <em>ricalcolato sulle stesse barre</em></td></tr>
+      <tr><td class="key">reachable_log</td><td>stesso oracolo a lag = 24: il primo istante in cui un pivot è conoscibile. Il riferimento da citare</td></tr>
+      <tr><td class="key">hold_log · share · reach</td><td>buy&amp;hold; netto / oracolo; netto / reachable</td></tr>
+      <tr><td colspan="2" class="foot"><code>summarise</code> ne fa una riga: gross, net, net_sd, oracle, share, reachable, reach, hold, excess, trades, win_rate, in_market, beat_hold, positive. File: <code>data/pos-swing-4h-both.parquet</code> con colonne <code>symbol, close, position</code> indicizzate per open_time.</td></tr>
+    </tbody>
+  </table></div>
+  <div class="tw"><table>
+    <caption>contenuto di <code>models/swing.pt</code> — letto dal file committato. Lo scaler per simbolo non c'è di proposito</caption>
+    <thead><tr><th>chiave</th><th>valore</th></tr></thead>
+    <tbody>
+      <tr><td class="key">state</td><td><code>gru.weight_ih_l0</code> (144,65) · <code>gru.weight_hh_l0</code> (144,48) · <code>gru.bias_ih_l0</code>, <code>gru.bias_hh_l0</code> (144,) · <code>head.weight</code> (1,48) · <code>head.bias</code> (1,) · <code>policy.weight</code> (1,48) · <code>policy.bias</code> (1,)</td></tr>
+      <tr><td class="key">inputs</td><td>i 65 nomi, ordine della sezione 7</td></tr>
+      <tr><td class="key">timeframe · window · steps</td><td class="key">"4h" · 24 · 24</td></tr>
+      <tr><td class="key">enter · exit · sign</td><td class="key">None · None · None</td></tr>
+      <tr><td class="key">stage · test_start</td><td class="key">"both" · "2023-01"</td></tr>
+      <tr><td class="key">calibration</td><td>tupla di due array da 201 quantili (output fittato, etichetta)</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============================================================ 14 -->
+<section id="s14">
+  <h2><span class="n">14</span> · Step 8</h2>
+  <p class="h2sub">La griglia <code>legsweep</code>: 9 smoothing × 13 finestre</p>
+  <p>Le due manopole dell'etichetta, mai misurate contro il modello: <code>smoothing</code> ∈ {0,1 … 0,9} e <code>window</code> ∈ {12, 16, … 60}. 117 celle, un checkpoint ciascuna. Si muove solo il target: feature ferme su N = 24, stesso tensore <code>step3-15m-all.npy</code>. <code>next_pivot</code> invece si ricalcola per finestra (le gambe cambiano).</p>
+  <div class="tw"><table>
+    <caption>protocollo veloce, dichiarato — ~40× più economico, numeri non confrontabili con lo spec</caption>
+    <thead><tr><th></th><th>protocollo pieno (<code>gru</code>)</th><th><code>legsweep</code></th></tr></thead>
+    <tbody>
+      <tr><td>split</td><td>4 fold walk-forward</td><td>un taglio al 2025-06, valid 20%</td></tr>
+      <tr><td>seed</td><td>5</td><td>1</td></tr>
+      <tr><td>righe</td><td>griglia oraria</td><td>timestamp a 4h (<code>floor("4h") == ts</code>): un quarto, cross-section intere</td></tr>
+      <tr><td>epoche / patience</td><td>100 / 10</td><td>15 / 3</td></tr>
+      <tr><td>δ Huber</td><td colspan="2">mediana |target| sul train, per cella</td></tr>
+      <tr><td>controllo</td><td>—</td><td><code>base_rank_ic</code>: Rank IC di <code>rsi_centered_15m</code> grezzo sulle stesse righe e sulla stessa etichetta</td></tr>
+    </tbody>
+  </table></div>
+  <div class="tw"><table>
+    <caption>artefatti</caption>
+    <thead><tr><th>file</th><th>struttura</th></tr></thead>
+    <tbody>
+      <tr><td class="key">data/legsweep-labels/w{W}.parquet</td><td>indice = quello di step2.parquet (verificato all'uguaglianza, fa da stamp); colonne <code>next_pivot</code>, <code>"0.10"</code> … <code>"0.90"</code>. Uno per finestra, ~50 MB</td></tr>
+      <tr><td class="key">data/legsweep.csv</td><td>una riga per cella, in append: <code>window, smoothing, delta, rows, ic, icir, rank_ic, rank_icir, base_rank_ic, seconds</code></td></tr>
+      <tr><td class="key">data/gru-swing-s{0.70}-w{24}.pt</td><td>stesso formato di <code>gru.pt</code> (label "swing", branches ["15m"], 29 colonne). Il nome porta i parametri: la pagina sceglie il file prima di aprirlo</td></tr>
+    </tbody>
+  </table></div>
+  <div class="tw"><table>
+    <caption>risultato — la superficie non ha ottimo interno; <code>edge = rank_ic − base_rank_ic</code> sale nella direzione opposta</caption>
+    <thead><tr><th>cella (smoothing / window)</th><th class="num">IC</th><th class="num">Rank IC</th><th class="num">rsi_centered</th><th class="num">edge</th></tr></thead>
+    <tbody>
+      <tr class="hi"><td>0,7 / 24 — in uso</td><td class="num">0.4188</td><td class="num">0.4083</td><td class="num">0.3785</td><td class="num">0.0298</td></tr>
+      <tr><td>0,2 / 12 — massimo IC e Rank IC</td><td class="num">0.5033</td><td class="num">0.4753</td><td class="num">0.4424</td><td class="num">0.0330</td></tr>
+      <tr><td>0,9 / 60 — massimo edge</td><td class="num">0.3439</td><td class="num">0.3254</td><td class="num">0.2232</td><td class="num">0.1022</td></tr>
+      <tr><td colspan="5" class="foot">Alla cella migliore un RSI grezzo legge il 93% del Rank IC del modello. +0,067 di Rank IC valgono +0,003 di edge (tre seed). Esito: 0,7 / 24 resta, e <code>gru.pt</code> <em>è</em> quella cella al protocollo pieno. Se la griglia va rifatta, va rifatta con giudice il prezzo.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============================================================ 15 -->
+<section id="s15">
+  <h2><span class="n">15</span> · Metriche</h2>
+  <p class="h2sub">Come si misura il modello A — cross-sectional</p>
+  <div class="tw"><table>
+    <caption><code>metrics.signal(pred, target, horizon=None)</code> → dict</caption>
+    <thead><tr><th>chiave</th><th>definizione</th><th>lettura</th></tr></thead>
+    <tbody>
+      <tr><td class="key">ic</td><td>media su t di Pearson(pred_t, y_t) fra i simboli di quell'istante</td><td>forza lineare</td></tr>
+      <tr><td class="key">icir</td><td>media(IC_t) / std(IC_t)</td><td>stabilità</td></tr>
+      <tr><td class="key">rank_ic</td><td>idem sui ranghi (Pearson sui ranghi = Spearman, senza scipy)</td><td>metrica primaria, early stopping</td></tr>
+      <tr><td class="key">rank_icir</td><td>media / std della Rank IC per data</td><td>promozione di uno step</td></tr>
+      <tr><td class="key">rank_ic_se · rank_ic_t · blocks</td><td>solo con <code>horizon</code>: media per blocchi non sovrapposti</td><td>la significatività onesta quando le etichette di date adiacenti si sovrappongono</td></tr>
+      <tr><td colspan="3" class="foot">Date con meno di tre simboli escluse. Con 20 simboli un singolo cross-section ha errore standard ≈ 0,24: conta solo la media su migliaia di date. Il modello B non usa queste metriche: si giudica in denaro (sezione 13).</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============================================================ 16 -->
+<section id="s16">
+  <h2><span class="n">16</span> · Risultati</h2>
+  <p class="h2sub">Cosa hanno prodotto questi modelli <span class="b b-msr">misurato</span></p>
+  <h3>Modello A: ordina l'etichetta, non il prezzo</h3>
+  <figure>
+    <svg class="dg" id="icbars" viewBox="0 0 960 190" role="img" aria-label="Rank IC della stessa predizione contro l'etichetta e contro il rendimento forward"></svg>
+    <figcaption>Figura 8 — la stessa run (<code>pred-swing-all-15m.parquet</code>, 219.135 righe, 20 simboli), letta contro l'etichetta e contro il rendimento forward market-neutral a 6, 24 e 72 barre orarie (<code>legcheck</code>). Controllo causale: correlazione 0,34 con <code>elapsed_position</code>; togliendolo la Rank IC resta −0,0363.</figcaption>
+  </figure>
+  <div>
+  <div class="tw"><table>
+    <caption>forward return per decile di predizione (<code>legcheck</code>)</caption>
+    <thead><tr><th>decile</th><th class="num">pred</th><th class="num">fwd 24</th><th class="num">t</th><th class="num">fwd 72</th><th class="num">t</th></tr></thead>
+    <tbody>
+      <tr><td>0 (compra)</td><td class="num">−0.491</td><td class="num neg">−0.00053</td><td class="num">−3.55</td><td class="num neg">−0.00074</td><td class="num">−2.91</td></tr>
+      <tr><td>4</td><td class="num">−0.051</td><td class="num">+0.00014</td><td class="num">0.98</td><td class="num">+0.00001</td><td class="num">0.05</td></tr>
+      <tr><td>5</td><td class="num">+0.065</td><td class="num">−0.00006</td><td class="num">−0.39</td><td class="num">+0.00008</td><td class="num">0.31</td></tr>
+      <tr><td>9 (vendi)</td><td class="num">+0.506</td><td class="num">+0.00004</td><td class="num">0.21</td><td class="num">−0.00013</td><td class="num">−0.40</td></tr>
+    </tbody>
+  </table></div>
+  <div class="tw"><table>
+    <caption>regola always-in a soglia fissa (<code>threshold --at</code>), 25 bp/lato</caption>
+    <thead><tr><th>soglia</th><th class="num">trade/anno</th><th class="num">lordo</th><th class="num">fee</th><th class="num">netto</th></tr></thead>
+    <tbody>
+      <tr><td>±0.3</td><td class="num">325.1</td><td class="num">+0.015</td><td class="num">1.624</td><td class="num neg">−1.608</td></tr>
+      <tr><td>±0.4</td><td class="num">195.8</td><td class="num">+0.083</td><td class="num">0.977</td><td class="num neg">−0.894</td></tr>
+      <tr><td>±0.5</td><td class="num">92.7</td><td class="num">+0.004</td><td class="num">0.461</td><td class="num neg">−0.458</td></tr>
+      <tr><td colspan="5" class="foot">buy&amp;hold −0.490/anno. Tutto il lordo è la gamba short su un paniere sceso del 49%.</td></tr>
+    </tbody>
+  </table></div>
+  </div>
+  <h3>Modello B: batte l'hold di poco, non batte un indicatore</h3>
+  <div class="tw"><table>
+    <caption>step 7 — barre 4h, 20 simboli, 4 fold, test 2023-01 → 2026-09, 0,25% per lato (docstring di <code>swing.book</code>)</caption>
+    <thead><tr><th>regola</th><th class="num">lordo</th><th class="num">netto/anno</th><th class="num">trade/anno</th><th class="num">batte l'hold</th></tr></thead>
+    <tbody>
+      <tr><td>oracolo a posteriori (lag 0)</td><td class="num">—</td><td class="num">4.123</td><td class="num">116</td><td class="num">20/20</td></tr>
+      <tr><td>oracolo alla conferma (lag 24) — <em>reachable</em></td><td class="num">—</td><td class="num">0.399</td><td class="num">116</td><td class="num">—</td></tr>
+      <tr class="hi"><td><code>rsi_centered &gt; 0.3</code>, una colonna</td><td class="num">0.172</td><td class="num pos">+0.116</td><td class="num">11.1</td><td class="num">11/20</td></tr>
+      <tr><td>modello B, policy letta a zero (config. di <code>swing.pt</code>)</td><td class="num">0.192</td><td class="num">+0.063</td><td class="num">25.7</td><td class="num">12/20</td></tr>
+      <tr><td>modello B, solo etichetta + banda su valid</td><td class="num">0.095</td><td class="num">+0.060</td><td class="num">6.8</td><td class="num">11/20</td></tr>
+      <tr><td>policy + banda su valid</td><td class="num">−0.006</td><td class="num neg">−0.042</td><td class="num">7.1</td><td class="num">5/20</td></tr>
+      <tr><td>buy&amp;hold</td><td class="num">—</td><td class="num">+0.057</td><td class="num">—</td><td class="num">—</td></tr>
+      <tr><td colspan="5" class="foot">Deviazione standard del netto fra simboli 0,207: le prime righe non sono distinguibili. La tabella di step 7 dello spec riporta per la regola RSI 0,182 / +0,126 sullo stesso protocollo; qui si cita il valore scritto nel codice.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============================================================ 17 -->
+<section id="s17">
+  <h2><span class="n">17</span> · A valle</h2>
+  <p class="h2sub">I moduli che leggono le predizioni</p>
+  <p>Tutti prendono <code>--pred data/pred-swing-all-15m.parquet</code> (colonna <code>pred</code>, indice (open_time, symbol)) e ricaricano i prezzi dallo store. Sull'etichetta swing il segno è <code>−1</code>: predizione bassa = compra.</p>
+  <div class="tw"><table>
+    <caption>consumatori del file di predizione</caption>
+    <thead><tr><th>modulo</th><th>domanda</th><th>parametri principali</th></tr></thead>
+    <tbody>
+      <tr><td class="key">legcheck</td><td>la predizione guida il prezzo o lo riassume? rendimento forward per decile, senza regola né fee</td><td>--horizons 6 24 72, --buckets 10, --raw</td></tr>
+      <tr><td class="key">threshold</td><td>regola always-in: long sotto −t, short sopra +t, in mezzo si tiene</td><td>--at (soglia grezza), quantili, --by-symbol, --by-move, --horizon</td></tr>
+      <tr><td class="key">stops</td><td>la stessa regola con stop/take (<code>atr:k</code>, <code>fee:k</code>, <code>pct:x</code>), trailing, politica dopo l'uscita, tie-break intrabarra</td><td>--sl, --tp, --after-stop, --after-take, --trail, --tie, --grid</td></tr>
+      <tr><td class="key">swingrule</td><td>regola long-only a banda dinamica + <code>rotation_null</code> a esposizione fissa</td><td>--quantiles, --window, --rotations 500</td></tr>
+    </tbody>
+  </table></div>
+  <p class="muted">Prima di fidarsi di un file <code>pred-*.parquet</code>: <code>d.groupby(d.index.get_level_values(0)).size().mean()</code> deve essere ~20. Se non lo è, il file precede la correzione del campionamento.</p>
+</section>
+
+<!-- ============================================================ 18 -->
+<section id="s18">
+  <h2><span class="n">18</span> · Inferenza</h2>
+  <p class="h2sub">Dal checkpoint alla pagina Streamlit</p>
+  <div class="tw"><table>
+    <caption>le due funzioni di inferenza a confronto</caption>
+    <thead><tr><th></th><th><code>gru.predict_frame</code></th><th><code>swing.predict_frame</code></th></tr></thead>
+    <tbody>
+      <tr><td>input</td><td>candele del ramo del checkpoint (15m), un simbolo</td><td>candele del timeframe del checkpoint (4h)</td></tr>
+      <tr><td>anti-anticipo</td><td><code>window(f.shift(1), …)</code>: alla barra T la candela T è in formazione</td><td>la riga t è la decisione al close di t (nessuno shift; <code>ret</code> va da t a t+1)</td></tr>
+      <tr><td>scaler</td><td><code>checkpoint["stats"][0]</code> dal train</td><td><code>live_scaler</code> sulla finestra, IQR nullo → 1</td></tr>
+      <tr><td>righe valide</td><td>tutte le 24 × 29 celle finite (<code>_inputs</code>); <code>coverage</code> spiega i buchi (head, interior, colonne colpevoli)</td><td>almeno <code>MIN_BARS = 6·24 + 24 = 168</code> righe utili</td></tr>
+      <tr><td>output</td><td>Series <code>prediction</code></td><td>DataFrame <code>label</code> (calibrata), <code>logit</code>, <code>position</code> (logit &gt; 0)</td></tr>
+      <tr><td>rifiuta</td><td>checkpoint multi-ramo o <code>rank=True</code></td><td>—</td></tr>
+    </tbody>
+  </table></div>
+  <ul>
+    <li><strong>Dove cerca il file</strong> (<code>chart.saved</code>): prima <code>data/</code>, poi <code>models/</code> (o <code>$TRADINGVISION_MODELS</code>). <code>data/</code> non entra nell'immagine Docker: un modello arriva su Render solo committato in <code>models/</code>.</li>
+    <li><strong>Quale file</strong>: sull'etichetta retrospettiva i due slider (smoothing a passo 0,1, leg window sulle 13 finestre) scelgono <code>gru-swing-s&lt;s&gt;-w&lt;w&gt;.pt</code>; la cella 0,7 / 24 usa <code>gru.pt</code>. Su una cella non addestrata la pagina non ripiega: scrive il comando che la addestra.</li>
+    <li><strong>Cache</strong>: <code>load_model</code>, <code>load_prediction</code>, <code>load_swing_model</code> hanno l'<code>mtime</code> del file nella chiave, così un riaddestramento invalida la predizione.</li>
+    <li><strong>Portabilità</strong>: <code>save</code> scrive lo stato su CPU; <code>restore</code> usa <code>map_location</code> per i file scritti su <code>mps</code>.</li>
+  </ul>
+</section>
+
+<!-- ============================================================ 19 -->
+<section id="s19">
+  <h2><span class="n">19</span> · Invarianti</h2>
+  <p class="h2sub">Cosa non deve rompersi, e le trappole già pagate</p>
+  <div class="cols">
+  <div class="box ok">
+    <h4>Invarianti asserite nel codice</h4>
+    <ul>
+      <li>Allineamento dei rami a <code>label + tf − 5m</code> — <code>test_dataset.py</code> per troncamento; <code>gru._selfcheck</code> sulla finestra.</li>
+      <li>Causalità di feature, <code>lagged</code>, <code>legs.state</code>, <code>exhaustion</code>, <code>sequences</code>: troncare il futuro non cambia il passato.</li>
+      <li>Purging esatto su ogni confine, valid compreso.</li>
+      <li>Statistiche di scala solo su train; <code>apply</code> non legge mai il frame che trasforma.</li>
+      <li>Cache con stamp: <code>step2.json</code>, <code>step3-*.json</code>, <code>swing-*.json</code>, indice di <code>legsweep-labels</code>.</li>
+      <li>PSAR portato uguale bit per bit a <code>ta</code>.</li>
+      <li>Stadio 2 capace di ribaltare un prior sbagliato (<code>swing._selfcheck</code>: da negativo a positivo sulla sega).</li>
+    </ul>
+  </div>
+  <div class="box no">
+    <h4>Trappole</h4>
+    <ul>
+      <li>Non approssimare <code>legs.confirmed</code> traslando <code>find_pivots</code>.</li>
+      <li>δ della Huber vive nelle unità dell'etichetta: si rimisura, non si porta (2,1 excursion, ≈0,40 swing).</li>
+      <li>Early stopping mai sulla loss: la loss è cardinale, la metrica ordinale.</li>
+      <li>Non leggere <code>rank_ic</code> di <code>legsweep</code> senza <code>edge</code>.</li>
+      <li>torch e lightgbm mai nello stesso processo (OpenMP): <code>gru</code> non importa <code>gbm</code>.</li>
+      <li><code>gru</code> stampa solo alla fine e stdout rediretto è bufferizzato: usare <code>python -u --verbose</code>.</li>
+      <li>La tabella per decile, non il win rate: 0,545 su 1.577 trade con trade medio negativo non è un edge.</li>
+    </ul>
+  </div>
+  </div>
+</section>
+
+<!-- ============================================================ 20 -->
+<section id="s20">
+  <h2><span class="n">20</span> · Appendice</h2>
+  <p class="h2sub">Artefatti su disco</p>
+<pre class="tree">data/                                   (gitignored — si ricostruisce)
+├── {SYM}USDT-5m.parquet                store OHLCV, 20 file
+├── step2.parquet + step2.json          (open_time, symbol) × 582 · 1,64 GB · gbm --horizon
+├── step3-15m-all.npy + .json           (N, 24, 29) float32 · 1,79 GB · gru
+├── pred-swing-all-15m.parquet          pred · (open_time, symbol) · gru --label swing
+├── gru.pt                              gru --label swing --features all --save
+├── legsweep.csv                        117 righe
+├── legsweep-labels/w{12..60}.parquet   next_pivot + 9 colonne di smoothing
+├── gru-swing-s{0.10..0.90}-w{12..60}.pt   117 checkpoint
+├── swing-4h-full.{npy,parquet,json}    (N, 24, 65) + meta + stamp · swing
+├── pos-swing-4h-both.parquet           symbol, close, position
+└── swing.pt                            swing --timeframe 4h --save
+models/                                 (tracciato — unica via verso Render)
+├── gru.pt                              29 KB · cella 0,7 / 24
+└── swing.pt                            77 KB · 4h, stage both</pre>
+</section>
+
+<footer>
+  Documento derivato dal codice del ramo corrente (<code>data.binance</code>, <code>data.pivots</code>, <code>data.target</code>, <code>features</code>, <code>legs</code>, <code>dataset</code>, <code>normalize</code>, <code>split</code>, <code>metrics</code>, <code>gru</code>, <code>swing</code>, <code>legsweep</code>, <code>app.chart</code>), dai checkpoint in <code>models/</code>, da <code>HANDOFF.md</code> e da <code>swing_dataset_schema.html</code>. Gli esempi di righe e la figura 2 vengono da BTC/ETH/SOL 5m scaricati da <code>data.binance.vision</code> (2024-09 → 2025-03) e passati per le funzioni del repo; i numeri di risultato sono quelli già misurati nello spec e nell'handoff, non rimisurati qui. Lo spec resta il riferimento per decisioni e numeri.
+</footer>
+</div>
+
+<script id="chartdata" type="application/json">{"t": ["02-18 00:00", "02-18 00:15", "02-18 00:30", "02-18 00:45", "02-18 01:00", "02-18 01:15", "02-18 01:30", "02-18 01:45", "02-18 02:00", "02-18 02:15", "02-18 02:30", "02-18 02:45", "02-18 03:00", "02-18 03:15", "02-18 03:30", "02-18 03:45", "02-18 04:00", "02-18 04:15", "02-18 04:30", "02-18 04:45", "02-18 05:00", "02-18 05:15", "02-18 05:30", "02-18 05:45", "02-18 06:00", "02-18 06:15", "02-18 06:30", "02-18 06:45", "02-18 07:00", "02-18 07:15", "02-18 07:30", "02-18 07:45", "02-18 08:00", "02-18 08:15", "02-18 08:30", "02-18 08:45", "02-18 09:00", "02-18 09:15", "02-18 09:30", "02-18 09:45", "02-18 10:00", "02-18 10:15", "02-18 10:30", "02-18 10:45", "02-18 11:00", "02-18 11:15", "02-18 11:30", "02-18 11:45", "02-18 12:00", "02-18 12:15", "02-18 12:30", "02-18 12:45", "02-18 13:00", "02-18 13:15", "02-18 13:30", "02-18 13:45", "02-18 14:00", "02-18 14:15", "02-18 14:30", "02-18 14:45", "02-18 15:00", "02-18 15:15", "02-18 15:30", "02-18 15:45", "02-18 16:00", "02-18 16:15", "02-18 16:30", "02-18 16:45", "02-18 17:00", "02-18 17:15", "02-18 17:30", "02-18 17:45", "02-18 18:00", "02-18 18:15", "02-18 18:30", "02-18 18:45", "02-18 19:00", "02-18 19:15", "02-18 19:30", "02-18 19:45", "02-18 20:00", "02-18 20:15", "02-18 20:30", "02-18 20:45", "02-18 21:00", "02-18 21:15", "02-18 21:30", "02-18 21:45", "02-18 22:00", "02-18 22:15", "02-18 22:30", "02-18 22:45", "02-18 23:00", "02-18 23:15", "02-18 23:30", "02-18 23:45", "02-19 00:00", "02-19 00:15", "02-19 00:30", "02-19 00:45", "02-19 01:00", "02-19 01:15", "02-19 01:30", "02-19 01:45", "02-19 02:00", "02-19 02:15", "02-19 02:30", "02-19 02:45", "02-19 03:00", "02-19 03:15", "02-19 03:30", "02-19 03:45", "02-19 04:00", "02-19 04:15", "02-19 04:30", "02-19 04:45", "02-19 05:00", "02-19 05:15", "02-19 05:30", "02-19 05:45", "02-19 06:00", "02-19 06:15", "02-19 06:30", "02-19 06:45", "02-19 07:00", "02-19 07:15", "02-19 07:30", "02-19 07:45", "02-19 08:00", "02-19 08:15", "02-19 08:30", "02-19 08:45", "02-19 09:00", "02-19 09:15", "02-19 09:30", "02-19 09:45", "02-19 10:00", "02-19 10:15", "02-19 10:30", "02-19 10:45", "02-19 11:00", "02-19 11:15", "02-19 11:30", "02-19 11:45", "02-19 12:00", "02-19 12:15", "02-19 12:30", "02-19 12:45", "02-19 13:00", "02-19 13:15", "02-19 13:30", "02-19 13:45", "02-19 14:00", "02-19 14:15", "02-19 14:30", "02-19 14:45", "02-19 15:00", "02-19 15:15", "02-19 15:30", "02-19 15:45", "02-19 16:00", "02-19 16:15", "02-19 16:30", "02-19 16:45", "02-19 17:00", "02-19 17:15", "02-19 17:30", "02-19 17:45", "02-19 18:00", "02-19 18:15", "02-19 18:30", "02-19 18:45", "02-19 19:00", "02-19 19:15", "02-19 19:30", "02-19 19:45", "02-19 20:00", "02-19 20:15", "02-19 20:30", "02-19 20:45", "02-19 21:00", "02-19 21:15", "02-19 21:30", "02-19 21:45", "02-19 22:00", "02-19 22:15", "02-19 22:30", "02-19 22:45", "02-19 23:00", "02-19 23:15", "02-19 23:30", "02-19 23:45", "02-20 00:00", "02-20 00:15", "02-20 00:30", "02-20 00:45", "02-20 01:00", "02-20 01:15", "02-20 01:30", "02-20 01:45", "02-20 02:00", "02-20 02:15", "02-20 02:30", "02-20 02:45", "02-20 03:00", "02-20 03:15", "02-20 03:30", "02-20 03:45", "02-20 04:00", "02-20 04:15", "02-20 04:30", "02-20 04:45", "02-20 05:00", "02-20 05:15", "02-20 05:30", "02-20 05:45", "02-20 06:00", "02-20 06:15", "02-20 06:30", "02-20 06:45", "02-20 07:00", "02-20 07:15", "02-20 07:30", "02-20 07:45", "02-20 08:00", "02-20 08:15", "02-20 08:30", "02-20 08:45", "02-20 09:00", "02-20 09:15", "02-20 09:30", "02-20 09:45", "02-20 10:00", "02-20 10:15", "02-20 10:30", "02-20 10:45", "02-20 11:00", "02-20 11:15", "02-20 11:30", "02-20 11:45", "02-20 12:00", "02-20 12:15", "02-20 12:30", "02-20 12:45", "02-20 13:00", "02-20 13:15", "02-20 13:30", "02-20 13:45", "02-20 14:00", "02-20 14:15", "02-20 14:30", "02-20 14:45", "02-20 15:00", "02-20 15:15", "02-20 15:30", "02-20 15:45", "02-20 16:00", "02-20 16:15", "02-20 16:30", "02-20 16:45", "02-20 17:00", "02-20 17:15", "02-20 17:30", "02-20 17:45", "02-20 18:00", "02-20 18:15", "02-20 18:30", "02-20 18:45", "02-20 19:00", "02-20 19:15", "02-20 19:30", "02-20 19:45", "02-20 20:00", "02-20 20:15", "02-20 20:30", "02-20 20:45", "02-20 21:00", "02-20 21:15", "02-20 21:30", "02-20 21:45", "02-20 22:00", "02-20 22:15", "02-20 22:30", "02-20 22:45", "02-20 23:00", "02-20 23:15", "02-20 23:30", "02-20 23:45", "02-21 00:00", "02-21 00:15", "02-21 00:30", "02-21 00:45", "02-21 01:00", "02-21 01:15", "02-21 01:30", "02-21 01:45", "02-21 02:00", "02-21 02:15", "02-21 02:30", "02-21 02:45", "02-21 03:00", "02-21 03:15", "02-21 03:30", "02-21 03:45", "02-21 04:00", "02-21 04:15", "02-21 04:30", "02-21 04:45", "02-21 05:00", "02-21 05:15", "02-21 05:30", "02-21 05:45", "02-21 06:00", "02-21 06:15", "02-21 06:30", "02-21 06:45", "02-21 07:00", "02-21 07:15", "02-21 07:30", "02-21 07:45", "02-21 08:00", "02-21 08:15", "02-21 08:30", "02-21 08:45", "02-21 09:00", "02-21 09:15", "02-21 09:30", "02-21 09:45", "02-21 10:00", "02-21 10:15", "02-21 10:30", "02-21 10:45", "02-21 11:00", "02-21 11:15", "02-21 11:30", "02-21 11:45", "02-21 12:00", "02-21 12:15", "02-21 12:30", "02-21 12:45", "02-21 13:00", "02-21 13:15", "02-21 13:30", "02-21 13:45", "02-21 14:00", "02-21 14:15", "02-21 14:30", "02-21 14:45", "02-21 15:00", "02-21 15:15", "02-21 15:30", "02-21 15:45", "02-21 16:00", "02-21 16:15", "02-21 16:30", "02-21 16:45", "02-21 17:00", "02-21 17:15", "02-21 17:30", "02-21 17:45", "02-21 18:00", "02-21 18:15", "02-21 18:30", "02-21 18:45", "02-21 19:00", "02-21 19:15", "02-21 19:30", "02-21 19:45", "02-21 20:00", "02-21 20:15", "02-21 20:30", "02-21 20:45", "02-21 21:00", "02-21 21:15", "02-21 21:30", "02-21 21:45", "02-21 22:00", "02-21 22:15", "02-21 22:30", "02-21 22:45", "02-21 23:00", "02-21 23:15", "02-21 23:30", "02-21 23:45", "02-22 00:00", "02-22 00:15", "02-22 00:30", "02-22 00:45", "02-22 01:00", "02-22 01:15", "02-22 01:30", "02-22 01:45", "02-22 02:00", "02-22 02:15", "02-22 02:30", "02-22 02:45", "02-22 03:00", "02-22 03:15", "02-22 03:30", "02-22 03:45", "02-22 04:00", "02-22 04:15", "02-22 04:30", "02-22 04:45", "02-22 05:00", "02-22 05:15", "02-22 05:30", "02-22 05:45", "02-22 06:00", "02-22 06:15", "02-22 06:30", "02-22 06:45", "02-22 07:00", "02-22 07:15", "02-22 07:30", "02-22 07:45", "02-22 08:00", "02-22 08:15", "02-22 08:30", "02-22 08:45", "02-22 09:00", "02-22 09:15", "02-22 09:30", "02-22 09:45", "02-22 10:00", "02-22 10:15", "02-22 10:30", "02-22 10:45", "02-22 11:00", "02-22 11:15", "02-22 11:30", "02-22 11:45", "02-22 12:00", "02-22 12:15", "02-22 12:30", "02-22 12:45", "02-22 13:00", "02-22 13:15", "02-22 13:30", "02-22 13:45", "02-22 14:00", "02-22 14:15", "02-22 14:30", "02-22 14:45", "02-22 15:00", "02-22 15:15", "02-22 15:30", "02-22 15:45", "02-22 16:00", "02-22 16:15", "02-22 16:30", "02-22 16:45", "02-22 17:00", "02-22 17:15", "02-22 17:30", "02-22 17:45", "02-22 18:00", "02-22 18:15", "02-22 18:30", "02-22 18:45", "02-22 19:00", "02-22 19:15", "02-22 19:30", "02-22 19:45", "02-22 20:00", "02-22 20:15", "02-22 20:30", "02-22 20:45", "02-22 21:00", "02-22 21:15", "02-22 21:30", "02-22 21:45", "02-22 22:00", "02-22 22:15", "02-22 22:30", "02-22 22:45", "02-22 23:00", "02-22 23:15", "02-22 23:30", "02-22 23:45", "02-23 00:00", "02-23 00:15", "02-23 00:30", "02-23 00:45", "02-23 01:00", "02-23 01:15", "02-23 01:30", "02-23 01:45", "02-23 02:00", "02-23 02:15", "02-23 02:30", "02-23 02:45", "02-23 03:00", "02-23 03:15", "02-23 03:30", "02-23 03:45", "02-23 04:00", "02-23 04:15", "02-23 04:30", "02-23 04:45", "02-23 05:00", "02-23 05:15", "02-23 05:30", "02-23 05:45", "02-23 06:00", "02-23 06:15", "02-23 06:30", "02-23 06:45", "02-23 07:00", "02-23 07:15", "02-23 07:30", "02-23 07:45", "02-23 08:00", "02-23 08:15", "02-23 08:30", "02-23 08:45", "02-23 09:00", "02-23 09:15", "02-23 09:30", "02-23 09:45", "02-23 10:00", "02-23 10:15", "02-23 10:30", "02-23 10:45", "02-23 11:00", "02-23 11:15", "02-23 11:30", "02-23 11:45", "02-23 12:00", "02-23 12:15", "02-23 12:30", "02-23 12:45", "02-23 13:00", "02-23 13:15", "02-23 13:30", "02-23 13:45", "02-23 14:00", "02-23 14:15", "02-23 14:30", "02-23 14:45", "02-23 15:00", "02-23 15:15", "02-23 15:30", "02-23 15:45", "02-23 16:00", "02-23 16:15", "02-23 16:30", "02-23 16:45", "02-23 17:00", "02-23 17:15", "02-23 17:30", "02-23 17:45", "02-23 18:00", "02-23 18:15", "02-23 18:30", "02-23 18:45", "02-23 19:00", "02-23 19:15", "02-23 19:30", "02-23 19:45", "02-23 20:00", "02-23 20:15", "02-23 20:30", "02-23 20:45", "02-23 21:00", "02-23 21:15", "02-23 21:30", "02-23 21:45", "02-23 22:00", "02-23 22:15", "02-23 22:30", "02-23 22:45", "02-23 23:00", "02-23 23:15", "02-23 23:30", "02-23 23:45", "02-24 00:00", "02-24 00:15", "02-24 00:30", "02-24 00:45", "02-24 01:00", "02-24 01:15", "02-24 01:30", "02-24 01:45", "02-24 02:00", "02-24 02:15", "02-24 02:30", "02-24 02:45", "02-24 03:00", "02-24 03:15", "02-24 03:30", "02-24 03:45", "02-24 04:00", "02-24 04:15", "02-24 04:30", "02-24 04:45", "02-24 05:00", "02-24 05:15", "02-24 05:30", "02-24 05:45", "02-24 06:00", "02-24 06:15", "02-24 06:30", "02-24 06:45", "02-24 07:00", "02-24 07:15", "02-24 07:30", "02-24 07:45", "02-24 08:00", "02-24 08:15", "02-24 08:30", "02-24 08:45", "02-24 09:00", "02-24 09:15", "02-24 09:30", "02-24 09:45", "02-24 10:00", "02-24 10:15", "02-24 10:30", "02-24 10:45", "02-24 11:00", "02-24 11:15", "02-24 11:30", "02-24 11:45", "02-24 12:00", "02-24 12:15", "02-24 12:30", "02-24 12:45", "02-24 13:00", "02-24 13:15", "02-24 13:30", "02-24 13:45", "02-24 14:00", "02-24 14:15", "02-24 14:30", "02-24 14:45", "02-24 15:00", "02-24 15:15", "02-24 15:30", "02-24 15:45", "02-24 16:00", "02-24 16:15", "02-24 16:30", "02-24 16:45", "02-24 17:00", "02-24 17:15", "02-24 17:30", "02-24 17:45", "02-24 18:00", "02-24 18:15", "02-24 18:30", "02-24 18:45", "02-24 19:00", "02-24 19:15", "02-24 19:30", "02-24 19:45", "02-24 20:00", "02-24 20:15", "02-24 20:30", "02-24 20:45", "02-24 21:00", "02-24 21:15", "02-24 21:30", "02-24 21:45", "02-24 22:00", "02-24 22:15", "02-24 22:30", "02-24 22:45", "02-24 23:00", "02-24 23:15", "02-24 23:30", "02-24 23:45", "02-25 00:00"], "close": [95900.88, 95601.31, 95626.46, 95637.93, 95976.19, 96005.62, 96105.38, 96266.24, 96196.9, 96205.71, 96096.43, 96064.47, 96161.43, 96207.03, 96263.88, 96200.0, 96260.04, 96106.5, 96214.32, 96070.81, 95944.32, 95870.0, 95750.0, 95609.49, 95300.01, 95433.96, 95509.43, 95382.75, 95402.11, 95559.79, 95475.24, 95456.93, 95326.0, 95466.04, 95365.34, 95238.89, 95437.9, 95628.58, 95600.32, 95775.95, 95634.57, 95725.13, 95865.61, 95742.5, 95638.03, 95735.85, 95629.34, 95640.34, 95812.46, 95937.86, 96151.99, 96194.0, 96350.0, 96249.99, 96278.94, 96230.0, 96281.59, 96508.45, 95941.32, 95536.83, 95578.01, 95403.51, 95531.77, 95546.48, 95402.58, 95266.78, 94671.66, 94639.98, 94774.17, 94529.58, 94258.86, 94102.16, 94051.23, 94049.54, 93736.37, 93924.03, 93512.71, 93679.63, 94021.77, 94104.14, 94444.0, 94225.49, 93849.83, 94196.02, 95159.77, 95159.1, 94908.4, 95065.46, 95018.86, 95399.95, 95272.21, 95304.43, 95442.93, 95581.18, 95395.56, 95671.74, 95584.0, 95464.96, 95499.99, 95330.15, 95215.01, 95199.99, 95326.06, 95479.99, 95609.56, 95542.67, 95721.11, 95831.76, 95660.0, 95704.98, 95711.6, 95710.26, 95631.99, 95535.98, 95377.2, 95213.85, 95259.05, 95109.54, 95314.72, 95289.33, 95351.46, 95387.62, 95362.09, 95616.31, 95736.76, 95644.65, 95719.99, 95687.71, 95737.08, 95819.91, 95758.63, 95629.99, 95745.88, 95788.68, 95870.68, 95937.4, 96371.3, 96309.95, 96247.74, 96330.32, 96370.13, 96246.81, 96272.83, 96422.6, 96386.94, 96436.83, 96289.71, 96166.44, 96181.45, 96236.14, 96367.11, 96277.54, 96172.01, 96375.7, 96005.47, 95766.33, 95774.01, 95994.27, 96265.67, 95943.74, 96197.97, 96316.34, 96204.0, 96300.0, 96217.62, 96209.3, 96435.52, 96389.57, 95919.34, 96019.21, 95898.12, 95670.54, 96016.89, 95952.22, 96042.81, 96206.54, 96401.68, 96284.5, 96335.99, 96180.72, 96247.34, 96415.09, 96421.85, 96315.64, 96430.2, 96484.3, 96476.0, 96539.85, 96601.17, 96659.62, 96678.92, 96644.37, 96544.8, 96512.51, 96550.59, 96853.98, 96718.78, 96697.23, 96688.56, 96767.67, 96939.02, 96853.85, 96871.95, 97134.52, 97152.0, 96981.64, 97067.99, 97055.25, 97126.81, 97250.0, 97233.73, 97224.46, 97125.19, 97035.06, 97122.36, 96909.99, 96804.58, 96952.74, 96946.5, 96907.99, 96831.8, 96966.82, 97011.11, 96867.92, 96875.91, 96981.31, 97025.73, 97150.01, 97228.13, 97202.8, 97271.99, 97184.63, 97123.05, 97221.99, 97289.25, 97373.98, 97290.42, 97283.53, 97194.52, 97207.92, 97436.51, 97417.09, 97492.53, 97428.36, 97400.3, 97396.23, 97319.17, 97562.19, 97732.78, 97797.0, 97729.11, 96966.91, 97061.72, 97098.22, 97216.87, 96903.77, 97413.51, 97701.13, 97943.99, 97550.73, 97757.9, 97876.49, 97935.99, 97954.95, 98211.15, 98280.79, 98279.99, 98295.08, 98415.1, 98466.79, 98369.74, 98422.8, 98430.02, 98585.7, 98612.0, 98453.61, 98304.35, 98185.81, 98114.01, 98089.46, 98143.79, 98176.78, 98307.68, 98134.95, 98258.99, 98305.75, 98400.0, 98305.0, 98475.47, 98333.27, 98138.96, 98236.32, 98174.41, 98170.29, 98208.78, 98312.0, 98355.76, 98267.32, 98173.98, 98111.12, 98150.77, 98256.79, 98143.99, 98141.99, 98232.13, 98171.5, 98259.83, 98204.01, 98260.69, 98261.4, 98362.98, 98333.58, 98365.63, 98381.06, 98380.41, 98409.99, 98451.46, 98435.92, 98278.1, 98179.76, 98248.71, 98182.2, 98209.82, 98213.41, 98352.01, 98371.97, 98214.72, 98337.7, 98431.59, 98424.0, 98531.4, 98612.0, 98578.01, 98769.41, 98712.0, 98629.3, 98628.68, 98862.79, 98787.99, 98904.0, 99316.83, 99211.5, 99335.21, 99334.93, 99120.98, 99054.77, 98646.69, 98777.77, 99195.06, 98216.01, 97600.6, 98104.04, 98587.99, 98301.89, 98366.04, 98215.81, 97973.41, 97911.98, 97132.08, 96971.9, 96731.98, 97075.48, 96845.21, 96543.52, 96570.6, 95904.13, 95447.28, 95285.11, 95287.99, 95250.88, 95357.85, 95066.25, 95377.68, 95076.0, 95176.47, 95395.03, 95552.8, 95777.01, 95750.62, 95823.53, 95800.58, 96052.91, 96162.81, 96181.98, 95986.51, 95804.0, 96142.05, 96185.9, 96269.84, 96359.91, 96413.3, 96233.2, 96221.18, 96110.01, 96431.64, 96343.22, 96213.1, 96310.91, 96193.11, 96299.07, 96435.03, 96366.18, 96439.53, 96387.36, 96398.42, 96487.72, 96529.99, 96509.83, 96490.56, 96444.0, 96353.13, 96395.18, 96416.18, 96450.0, 96447.99, 96288.09, 96163.46, 96257.84, 96214.27, 96219.8, 96369.68, 96358.54, 96395.79, 96493.95, 96499.99, 96543.01, 96536.18, 96500.16, 96524.47, 96528.3, 96595.0, 96580.0, 96646.0, 96608.67, 96714.82, 96823.94, 96828.98, 96768.45, 96658.87, 96566.03, 96608.53, 96650.02, 96623.99, 96535.9, 96596.5, 96557.3, 96550.0, 96592.0, 96734.88, 96716.98, 96641.51, 96504.01, 96605.52, 96604.48, 96673.51, 96639.38, 96673.13, 96770.0, 96649.99, 96449.99, 96454.63, 96590.59, 96611.68, 96639.99, 96584.0, 96539.17, 96575.49, 96578.01, 96582.74, 96528.02, 96624.99, 96658.57, 96644.65, 96632.44, 96668.84, 96634.06, 96633.97, 96613.58, 96600.19, 96551.01, 96497.9, 96537.99, 96587.91, 96643.46, 96554.89, 96506.0, 96418.43, 96452.83, 96484.77, 96430.91, 96459.96, 96410.27, 96447.43, 96528.26, 96497.98, 96414.0, 96445.19, 96453.14, 96432.21, 96395.88, 96354.3, 96339.99, 96273.51, 96208.62, 96207.94, 96282.91, 96326.01, 96342.91, 96321.07, 96400.01, 96558.01, 96508.85, 96432.14, 96337.39, 96352.0, 96364.32, 96317.53, 96312.97, 96336.2, 96286.02, 96242.84, 96250.0, 96132.01, 96193.88, 96213.33, 96195.0, 96156.02, 96115.99, 96016.39, 95814.64, 95761.32, 95732.93, 95850.71, 95747.16, 95886.25, 95977.96, 96028.69, 95985.99, 95836.0, 95593.89, 95630.0, 95716.0, 95608.25, 95436.18, 95561.45, 95566.99, 95553.5, 95420.5, 95343.98, 95260.76, 95574.61, 95656.78, 95655.01, 95832.01, 95760.3, 95740.0, 95767.2, 95842.21, 95791.49, 95755.99, 95746.67, 95726.0, 95741.7, 95777.7, 95720.01, 95697.82, 95685.35, 95755.25, 95689.96, 95615.3, 95840.52, 95787.13, 96161.63, 95854.28, 95989.46, 96258.0, 96465.82, 96408.6, 96292.8, 96247.35, 96131.53, 96092.52, 95852.73, 95971.24, 96084.01, 95972.43, 95943.45, 95829.35, 95742.63, 95515.01, 95747.13, 95433.21, 95473.09, 95350.0, 95256.0, 95298.0, 95471.59, 95500.74, 95698.12, 95727.39, 95664.95, 95678.65, 95729.64, 95864.31, 95772.96, 95804.27, 95753.88, 95872.02, 95719.8, 95423.99, 95544.32, 95509.49, 95730.0, 96019.5, 95847.19, 95765.76, 95756.57, 95577.83, 95553.47, 95631.66, 95471.59, 95710.61, 95772.86, 95821.45, 95787.59, 95832.0, 95846.91, 95798.46, 95778.0, 95960.74, 95874.4, 95594.57, 95412.01, 95389.01, 95140.5, 94674.44, 94855.35, 94333.52, 94100.01, 94323.95, 94726.87, 94783.79, 94774.11, 94434.49, 94613.14, 94949.86, 95118.06, 94644.0, 94667.99, 94503.51, 94359.53, 94161.67, 94315.75, 94387.36, 93770.05, 93943.51, 94260.01, 94180.0, 94362.0, 94020.0, 93861.6, 94100.38, 94243.42, 93979.44, 93166.07, 93507.72, 93135.0, 92432.06, 92500.0, 92034.77, 92033.06, 91552.88, 91006.62], "y7": [0.4819, 0.3166, 0.2997, 0.2765, 0.4028, 0.3879, 0.4051, 0.4503, 0.3902, 0.3659, 0.2875, 0.2445, 0.2605, 0.253, 0.2506, 0.193, 0.1921, 0.0935, 0.1144, 0.0204, -0.0658, -0.1281, -0.2114, -0.304, -0.4739, -0.441, -0.4349, -0.5212, -0.5407, -0.497, -0.564, -0.6008, -0.689, -0.6534, -0.7278, -0.814, -0.6749, -0.5394, -0.495, -0.3657, -0.3685, -0.2747, -0.16, -0.1552, -0.1426, -0.0457, -0.034, 0.0267, 0.1545, 0.2629, 0.4083, 0.4819, 0.603, 0.6174, 0.6856, 0.7213, 0.799, 0.9496, 0.7671, 0.6164, 0.5526, 0.4467, 0.3999, 0.331, 0.2311, 0.1328, -0.0552, -0.1331, -0.1788, -0.2983, -0.423, -0.5253, -0.6071, -0.6792, -0.8122, -0.8473, -0.9994, -0.9128, -0.7816, -0.7164, -0.5859, -0.597, -0.6481, -0.5159, -0.227, -0.1829, -0.2022, -0.118, -0.0855, 0.0555, 0.0674, 0.1198, 0.1993, 0.2787, 0.2759, 0.3903, 0.4123, 0.4264, 0.4796, 0.4808, 0.4959, 0.5364, 0.6127, 0.696, 0.7732, 0.8005, 0.8901, 0.9625, 0.7147, 0.6247, 0.5068, 0.3831, 0.2034, 0.0107, -0.2277, -0.4694, -0.5592, -0.7908, -0.6752, -0.644, -0.5808, -0.527, -0.4959, -0.3623, -0.2777, -0.271, -0.2029, -0.1742, -0.1156, -0.0448, -0.0268, -0.0334, 0.0496, 0.1057, 0.1762, 0.2412, 0.4405, 0.4585, 0.4762, 0.547, 0.602, 0.5974, 0.6474, 0.7427, 0.7702, 0.8289, 0.7054, 0.5954, 0.5647, 0.5566, 0.5922, 0.5016, 0.4018, 0.479, 0.2277, 0.0515, 0.0165, 0.1032, 0.2192, -0.0044, 0.1017, 0.1301, 0.0265, 0.0421, -0.0445, -0.0886, 0.0015, -0.0641, -0.3727, -0.3549, -0.4635, -0.6332, -0.5819, -0.5838, -0.5656, -0.5379, -0.5062, -0.5149, -0.5018, -0.5154, -0.5003, -0.4721, -0.4648, -0.4721, -0.4508, -0.4373, -0.4319, -0.4172, -0.4028, -0.3887, -0.3798, -0.3778, -0.3842, -0.3819, -0.3705, -0.3248, -0.3358, -0.3321, -0.3268, -0.31, -0.2814, -0.286, -0.2771, -0.2367, -0.228, -0.2435, -0.2259, -0.2211, -0.2054, -0.1829, -0.1786, -0.1733, -0.1797, -0.1849, -0.1671, -0.1881, -0.1953, -0.1696, -0.164, -0.1625, -0.1659, -0.1419, -0.1297, -0.1418, -0.1343, -0.1142, -0.102, -0.0794, -0.0628, -0.0597, -0.0442, -0.0491, -0.0506, -0.0313, -0.0161, 0.0013, -0.003, 0.0026, -0.0025, 0.0057, 0.0418, 0.0457, 0.0619, 0.0601, 0.063, 0.0689, 0.0654, 0.1033, 0.1319, 0.1466, 0.1443, 0.0522, 0.0709, 0.0821, 0.1039, 0.0699, 0.1423, 0.186, 0.2239, 0.1795, 0.2127, 0.2346, 0.2487, 0.2576, 0.2973, 0.3127, 0.3191, 0.3275, 0.3495, 0.3627, 0.3566, 0.3699, 0.3773, 0.404, 0.4138, 0.3998, 0.387, 0.3781, 0.3753, 0.3786, 0.3921, 0.4028, 0.4262, 0.4103, 0.4329, 0.4454, 0.464, 0.4582, 0.4867, 0.4748, 0.4561, 0.4752, 0.4737, 0.4796, 0.4911, 0.5109, 0.523, 0.518, 0.5124, 0.5108, 0.5224, 0.5426, 0.5344, 0.5406, 0.5588, 0.5574, 0.5753, 0.5745, 0.5884, 0.5949, 0.6145, 0.6172, 0.6278, 0.6363, 0.6427, 0.653, 0.6648, 0.6693, 0.6553, 0.6491, 0.6644, 0.6623, 0.6724, 0.6793, 0.7037, 0.7127, 0.6989, 0.7212, 0.7399, 0.7454, 0.7657, 0.7826, 0.7847, 0.8159, 0.815, 0.8107, 0.8171, 0.8539, 0.8507, 0.8722, 0.932, 0.9249, 0.9474, 0.9004, 0.8241, 0.7681, 0.6654, 0.6363, 0.6464, 0.4656, 0.3345, 0.3563, 0.3755, 0.2894, 0.2513, 0.1837, 0.1036, 0.0483, -0.1053, -0.1742, -0.254, -0.254, -0.3324, -0.4206, -0.4639, -0.602, -0.7114, -0.7806, -0.8271, -0.8792, -0.9115, -0.9984, -0.8873, -0.958, -0.9094, -0.8259, -0.7603, -0.6751, -0.6642, -0.6238, -0.6119, -0.5183, -0.467, -0.4425, -0.4817, -0.5171, -0.3981, -0.3663, -0.3227, -0.2772, -0.2427, -0.2773, -0.2621, -0.2763, -0.1622, -0.1696, -0.1895, -0.1417, -0.1579, -0.1077, -0.0486, -0.0503, -0.0098, -0.0065, 0.0155, 0.0608, 0.092, 0.1048, 0.1179, 0.1228, 0.1146, 0.1459, 0.1709, 0.1996, 0.2178, 0.1892, 0.171, 0.2177, 0.2235, 0.2439, 0.3071, 0.3226, 0.3524, 0.4002, 0.4208, 0.4523, 0.469, 0.4771, 0.5031, 0.523, 0.5615, 0.5758, 0.6141, 0.6218, 0.672, 0.7231, 0.7434, 0.646, 0.5004, 0.3712, 0.3752, 0.3782, 0.3147, 0.1902, 0.212, 0.1356, 0.0906, 0.0941, 0.1969, 0.1414, 0.0293, -0.1438, -0.0817, -0.1206, -0.0905, -0.1619, -0.1665, -0.109, -0.2649, -0.4996, -0.4805, -0.2646, -0.2548, -0.2449, -0.2351, -0.2628, -0.2154, -0.2055, -0.1957, -0.2456, -0.176, -0.1662, -0.1563, -0.1465, -0.1366, -0.1268, -0.1169, -0.1071, -0.0972, -0.1013, -0.1973, -0.1076, -0.0578, -0.048, -0.0443, -0.1319, -0.2337, -0.2182, -0.1447, -0.2041, -0.1744, -0.1844, -0.1746, -0.0088, -0.0593, -0.145, -0.1352, -0.1191, -0.1155, -0.1057, -0.0958, -0.086, -0.0761, -0.0663, -0.0564, -0.0466, -0.0367, -0.0269, -0.017, -0.0072, 0.2179, 0.1824, 0.1392, 0.091, 0.0734, 0.0551, 0.0203, -0.0027, -0.0179, -0.0537, -0.0875, -0.1072, -0.1619, -0.1663, -0.1826, -0.2095, -0.2421, -0.275, -0.3246, -0.4028, -0.4394, -0.4691, -0.4578, -0.5085, -0.4913, -0.4874, -0.4949, -0.5286, -0.5923, -0.6817, -0.6933, -0.691, -0.7429, -0.8127, -0.7994, -0.8196, -0.8451, -0.904, -0.9471, -0.9921, -0.7872, -0.6959, -0.6457, -0.5079, -0.492, -0.4509, -0.3865, -0.2987, -0.2725, -0.2389, -0.1924, -0.1515, -0.0927, -0.024, -0.0012, 0.0389, 0.0839, 0.1692, 0.1882, 0.2027, 0.3641, 0.389, 0.6237, 0.524, 0.6414, 0.824, 0.977, 0.8729, 0.7404, 0.642, 0.5095, 0.4143, 0.2215, 0.2029, 0.1815, 0.051, -0.0394, -0.1711, -0.2895, -0.4764, -0.4397, -0.6686, -0.7254, -0.8615, -0.9835, -0.8847, -0.6903, -0.6009, -0.3892, -0.2997, -0.2769, -0.1988, -0.0935, 0.0726, 0.0743, 0.1653, 0.1968, 0.3509, 0.3084, 0.1615, 0.3172, 0.36, 0.5886, 0.8673, 0.847, 0.8318, 0.8209, 0.8002, 0.7884, 0.7824, 0.7628, 0.7661, 0.7593, 0.7516, 0.7393, 0.7314, 0.7218, 0.7086, 0.697, 0.6971, 0.6817, 0.6552, 0.6342, 0.6225, 0.5978, 0.5605, 0.5605, 0.5201, 0.4962, 0.4987, 0.5114, 0.5043, 0.4933, 0.4633, 0.4632, 0.4721, 0.4713, 0.4336, 0.4246, 0.4047, 0.386, 0.3642, 0.3626, 0.3563, 0.3104, 0.3099, 0.3177, 0.3027, 0.3027, 0.2726, 0.2531, 0.2564, 0.2542, 0.2286, 0.1714, 0.1806, 0.1487, 0.0979, 0.0913, 0.0541, 0.0436, 0.0056, -0.0363], "y2": [-0.3304, -0.9328, -0.8135, -0.7252, 0.1005, 0.2294, 0.5169, 0.9423, 0.8328, 0.8323, 0.667, 0.6096, 0.7321, 0.7829, 0.8495, 0.7475, 0.8185, 0.5915, 0.7291, 0.5161, 0.3268, 0.2103, 0.0301, -0.1787, -0.6233, -0.4492, -0.3567, -0.5463, -0.5321, -0.3249, -0.4556, -0.494, -0.6894, -0.5069, -0.6601, -0.8494, -0.6074, -0.3749, -0.3906, -0.1751, -0.3191, -0.2, -0.0244, -0.1476, -0.2497, -0.1225, -0.2269, -0.198, 0.0134, 0.1719, 0.431, 0.495, 0.6882, 0.5912, 0.6404, 0.6012, 0.6761, 0.9496, 0.6339, 0.4029, 0.4038, 0.2924, 0.3387, 0.3258, 0.2304, 0.1392, -0.1911, -0.2281, -0.1787, -0.3266, -0.488, -0.59, -0.6371, -0.6585, -0.842, -0.7648, -0.9994, -0.8738, -0.6296, -0.5612, -0.3185, -0.4537, -0.6953, -0.4484, 0.2166, 0.2288, 0.0718, 0.1907, 0.1718, 0.4424, 0.3686, 0.4031, 0.5095, 0.6157, 0.5027, 0.7023, 0.6556, 0.5877, 0.624, 0.5218, 0.4565, 0.459, 0.557, 0.6738, 0.7742, 0.7415, 0.875, 0.9625, 0.5939, 0.6462, 0.6239, 0.5863, 0.3992, 0.1777, -0.1658, -0.5181, -0.4654, -0.7908, -0.5789, -0.5921, -0.5199, -0.473, -0.4864, -0.2266, -0.0975, -0.1758, -0.0907, -0.1107, -0.0509, 0.0415, -0.0067, -0.1207, 0.004, 0.0573, 0.149, 0.2257, 0.6608, 0.6125, 0.5633, 0.6555, 0.706, 0.5971, 0.6341, 0.7919, 0.7687, 0.8289, 0.515, 0.2468, 0.2435, 0.3161, 0.5349, 0.3312, 0.0969, 0.455, -0.2863, -0.7764, -0.7341, -0.2986, 0.2315, -0.3358, 0.1626, 0.4096, 0.23, 0.4356, 0.3114, 0.3242, 0.7707, 0.6205, -0.2868, -0.1768, -0.4611, -0.9354, -0.5969, -0.6484, -0.5526, -0.3873, -0.1923, -0.2936, -0.2349, -0.3724, -0.2993, -0.1303, -0.114, -0.2049, -0.0864, -0.0252, -0.0232, 0.0473, 0.1153, 0.1806, 0.2088, 0.1859, 0.1013, 0.0805, 0.1265, 0.4242, 0.3058, 0.2952, 0.2968, 0.3818, 0.5542, 0.4833, 0.5103, 0.7693, 0.7958, 0.644, 0.7358, 0.7335, 0.8113, 0.9381, 0.8369, 0.7577, 0.3956, 0.0622, 0.2867, -0.4311, -0.8125, -0.6933, -0.6921, -0.7156, -0.7679, -0.6587, -0.6189, -0.7224, -0.7103, -0.6238, -0.5839, -0.4829, -0.4172, -0.4306, -0.3717, -0.4326, -0.4737, -0.3921, -0.3347, -0.264, -0.3219, -0.3212, -0.3833, -0.3671, -0.1864, -0.1953, -0.1316, -0.1747, -0.1902, -0.1874, -0.2404, -0.0486, 0.0878, 0.1429, 0.0969, -0.4799, -0.4015, -0.3676, -0.2709, -0.5044, -0.1086, 0.1172, 0.3089, 0.0141, 0.1785, 0.2751, 0.3266, 0.347, 0.5489, 0.6081, 0.6134, 0.6309, 0.7287, 0.7742, 0.7059, 0.7524, 0.7639, 0.8889, 0.915, 0.3999, -0.0896, -0.4934, -0.7668, -0.9082, -0.6945, -0.5509, -0.0856, -0.6179, -0.1752, 0.0137, 0.3585, 0.0817, 0.6769, 0.2498, -0.3252, -0.0724, -0.2716, -0.3068, -0.221, 0.0484, 0.1491, -0.1254, -0.4138, -0.6158, -0.4982, -0.2058, -0.4897, -0.4817, -0.2312, -0.3777, -0.1319, -0.2657, -0.1033, -0.0882, 0.1925, 0.1282, 0.2258, 0.2796, 0.2911, 0.3822, 0.5046, 0.3597, -0.3247, -0.7836, -0.6879, -0.7512, -0.7041, -0.6851, -0.5078, -0.4697, -0.6394, -0.4804, -0.3555, -0.3497, -0.209, -0.0997, -0.1248, 0.1144, 0.0618, -0.0204, -0.0064, 0.2829, 0.2099, 0.3607, 0.8598, 0.7509, 0.9108, 0.8975, 0.8078, 0.771, 0.6118, 0.6455, 0.7817, 0.4182, 0.1849, 0.3518, 0.5118, 0.3963, 0.4061, 0.3391, 0.2392, 0.2041, -0.0881, -0.1586, -0.2576, -0.1478, -0.2434, -0.3645, -0.368, -0.6196, -0.7962, -0.8674, -0.8795, -0.906, -0.8809, -0.9984, -0.6849, -0.9685, -0.8605, -0.6374, -0.4736, -0.245, -0.2605, -0.1793, -0.1915, 0.0644, 0.1816, 0.2105, 0.0303, -0.1373, 0.2022, 0.255, 0.347, 0.4449, 0.5071, 0.3418, 0.3403, 0.2422, 0.5657, 0.4897, 0.3732, 0.4786, 0.3741, 0.4875, 0.6301, 0.5732, 0.6548, 0.6142, 0.6351, 0.7323, 0.7836, 0.7044, 0.6275, 0.4768, 0.2063, 0.2953, 0.3273, 0.3939, 0.3637, -0.0934, -0.4551, -0.3285, -0.372, -0.3549, -0.1599, -0.1633, -0.1071, 0.0241, 0.0418, 0.1051, 0.107, 0.0728, 0.1131, 0.128, 0.2205, 0.2123, 0.3039, 0.2682, 0.4093, 0.5541, 0.5706, 0.4245, 0.1677, -0.0513, 0.0354, 0.1198, 0.0517, -0.1566, -0.029, -0.1269, -0.1527, -0.0671, 0.2463, 0.1966, 0.0168, -0.3031, -0.0831, -0.0948, 0.0519, -0.0345, 0.0324, 0.2419, -0.0385, -0.4996, -0.4684, 0.0557, 0.1485, 0.2685, 0.072, -0.0826, 0.0674, 0.0906, 0.122, -0.0697, 0.308, 0.4478, 0.4092, 0.3771, 0.5274, 0.4348, 0.4254, 0.3673, 0.326, 0.1988, 0.0622, 0.1492, 0.2597, 0.3837, 0.1621, 0.0356, -0.1836, -0.1103, -0.0429, -0.1813, -0.1208, -0.2492, -0.1693, 0.0153, -0.0665, -0.2771, -0.2115, -0.2017, -0.2611, -0.3574, -0.4663, -0.5099, -0.6785, -0.8433, -0.8541, -0.4808, -0.2403, -0.109, -0.1393, 0.2506, 0.9702, 0.9006, 0.7977, 0.673, 0.6806, 0.6855, 0.6188, 0.6032, 0.6212, 0.5505, 0.4881, 0.4867, 0.3339, 0.3987, 0.4122, 0.3799, 0.3227, 0.2642, 0.1336, -0.1206, -0.1952, -0.2396, -0.1071, -0.2425, -0.0843, 0.0167, 0.068, 0.0062, -0.1853, -0.4884, -0.4547, -0.3607, -0.5012, -0.7195, -0.5779, -0.5813, -0.6077, -0.7787, -0.8814, -0.9921, -0.0874, 0.1861, 0.2308, 0.7626, 0.6167, 0.6109, 0.7345, 0.9885, 0.6633, 0.4273, 0.3449, 0.196, 0.2603, 0.4438, 0.0777, -0.0802, -0.181, 0.2012, -0.2095, -0.6751, -0.2734, -0.3095, 0.3268, -0.1085, 0.1517, 0.6214, 0.9958, 0.8989, 0.7254, 0.6439, 0.4703, 0.3973, 0.0614, 0.1945, 0.3201, 0.1521, 0.0922, -0.0791, -0.2146, -0.5345, -0.2527, -0.6856, -0.6553, -0.8384, -0.9835, -0.8825, -0.5264, -0.4504, -0.0482, 0.0281, -0.0735, -0.0275, 0.0909, 0.3715, 0.2139, 0.2941, 0.2158, 0.4644, 0.1887, -0.3655, -0.1126, -0.1607, 0.2864, 0.8673, 0.8099, 0.7794, 0.7703, 0.711, 0.6975, 0.7144, 0.6605, 0.7252, 0.7374, 0.7455, 0.7291, 0.736, 0.7341, 0.7134, 0.7011, 0.749, 0.7171, 0.6277, 0.5672, 0.5541, 0.474, 0.3294, 0.3768, 0.2156, 0.14, 0.2002, 0.3134, 0.324, 0.3148, 0.2077, 0.2545, 0.3481, 0.3917, 0.2447, 0.2455, 0.1904, 0.1414, 0.0763, 0.1158, 0.1307, -0.0588, -0.0136, 0.074, 0.0439, 0.0917, -0.0161, -0.0695, -0.0049, 0.0313, -0.0534, -0.3011, -0.206, -0.3229, -0.5379, -0.524, -0.6684, -0.6752, -0.824, -0.9925], "piv": [[35, -1, -0.814], [57, 1, 0.95], [76, -1, -0.999], [107, 1, 0.963], [117, -1, -0.791], [145, 1, 0.829], [171, -1, -0.633], [342, 1, 0.947], [371, -1, -0.998], [436, 1, 0.743], [459, -1, -0.5], [510, 1, 0.218], [549, -1, -0.992], [576, 1, 0.977], [594, -1, -0.983], [613, 1, 0.867]], "conf": [[4, -20, -1], [15, -9, 1], [59, 35, -1], [81, 57, 1], [100, 76, -1], [131, 107, 1], [141, 117, -1], [169, 145, 1], [195, 171, -1], [279, 171, -1], [298, 274, 1], [366, 342, 1], [395, 371, -1], [460, 436, 1], [483, 459, -1], [534, 510, 1], [573, 549, -1], [600, 576, 1], [618, 594, -1], [637, 613, 1]]}</script>
+<script>
+(function(){
+  const D = JSON.parse(document.getElementById('chartdata').textContent);
+  const NS = 'http://www.w3.org/2000/svg';
+  const W = 960, L = 58, R = 26, n = D.close.length;
+  const X = i => L + (W - L - R) * i / (n - 1);
+  function el(tag, attrs, parent){ const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+  function path(vals, Y){ let d = ''; vals.forEach((v, i) => { if (v === null) return; d += (d && vals[i-1] !== null ? 'L' : 'M') + X(i).toFixed(1) + ',' + Y(v).toFixed(1); }); return d; }
+  function axisY(svg, ticks, Y, fmt){ ticks.forEach(t => { el('line', {x1:L, x2:W-R, y1:Y(t), y2:Y(t), stroke:'var(--grid)', 'stroke-width':1}, svg); const tx = el('text', {x:L-6, y:Y(t)+4, 'text-anchor':'end'}, svg); tx.textContent = fmt(t); }); }
+  function axisX(svg, y){ for (let i = 0; i < n; i += 96) { const tx = el('text', {x:X(i), y:y, 'text-anchor':'middle'}, svg); tx.textContent = D.t[i].slice(0,5); } }
+
+  // pannello prezzo
+  const pv = document.getElementById('pv'), H1 = 250, T1 = 12, B1 = 26;
+  const lo = Math.min(...D.close), hi = Math.max(...D.close), pad = (hi - lo) * 0.08;
+  const Yp = v => T1 + (H1 - T1 - B1) * (1 - (v - (lo - pad)) / ((hi + pad) - (lo - pad)));
+  axisY(pv, [92000, 94000, 96000, 98000], Yp, v => (v/1000).toFixed(0) + 'k');
+  axisX(pv, H1 - 8);
+  el('path', {d: path(D.close, Yp), fill:'none', stroke:'var(--soft)', 'stroke-width':1.5}, pv);
+  // ritardo di conferma: dal pivot alla barra in cui diventa noto
+  D.conf.forEach(([known, bar, kind]) => {
+    if (bar < 0 || known >= n) return;
+    const y = Yp(D.close[bar]) + (kind > 0 ? -9 : 9);
+    el('line', {x1:X(bar), x2:X(known), y1:y, y2:y, stroke:'var(--accent)', 'stroke-width':2, 'stroke-dasharray':'4 3'}, pv);
+    el('circle', {cx:X(known), cy:y, r:3, fill:'var(--accent)'}, pv);
+  });
+  D.piv.forEach(([i, kind]) => {
+    const x = X(i), y = Yp(D.close[i]) + (kind > 0 ? -9 : 9);
+    const d = kind > 0 ? `M${x-5},${y-5} L${x+5},${y-5} L${x},${y+3} Z` : `M${x-5},${y+5} L${x+5},${y+5} L${x},${y-3} Z`;
+    el('path', {d, fill:'var(--ink)', stroke:'var(--panel)', 'stroke-width':1.5}, pv);
+  });
+
+  // pannello etichetta
+  const lv = document.getElementById('lv'), H2 = 200, T2 = 10, B2 = 26;
+  const Yl = v => T2 + (H2 - T2 - B2) * (1 - (v + 1.05) / 2.1);
+  axisY(lv, [-1, -0.5, 0, 0.5, 1], Yl, v => v.toFixed(1));
+  axisX(lv, H2 - 8);
+  el('path', {d: path(D.y2, Yl), fill:'none', stroke:'var(--s2)', 'stroke-width':2}, lv);
+  el('path', {d: path(D.y7, Yl), fill:'none', stroke:'var(--s1)', 'stroke-width':2}, lv);
+
+  // hover: mirino condiviso + tooltip
+  const tip = document.getElementById('tip'), fig = document.getElementById('viz');
+  const cross = [pv, lv].map((s, k) => el('line', {x1:0, x2:0, y1:0, y2:k ? H2 - B2 : H1 - B1, stroke:'var(--ink)', 'stroke-width':1, opacity:0}, s));
+  const dots = [el('circle', {r:4, fill:'var(--soft)', stroke:'var(--panel)', 'stroke-width':2, opacity:0}, pv),
+                el('circle', {r:4, fill:'var(--s1)', stroke:'var(--panel)', 'stroke-width':2, opacity:0}, lv),
+                el('circle', {r:4, fill:'var(--s2)', stroke:'var(--panel)', 'stroke-width':2, opacity:0}, lv)];
+  function show(evt, svg){
+    const r = svg.getBoundingClientRect(), sx = (evt.clientX - r.left) * W / r.width;
+    const i = Math.max(0, Math.min(n - 1, Math.round((sx - L) / (W - L - R) * (n - 1))));
+    cross.forEach(c => { c.setAttribute('x1', X(i)); c.setAttribute('x2', X(i)); c.setAttribute('opacity', 0.35); });
+    dots[0].setAttribute('cx', X(i)); dots[0].setAttribute('cy', Yp(D.close[i]));
+    dots[1].setAttribute('cx', X(i)); dots[1].setAttribute('cy', Yl(D.y7[i]));
+    dots[2].setAttribute('cx', X(i)); dots[2].setAttribute('cy', Yl(D.y2[i]));
+    dots.forEach(d => d.setAttribute('opacity', 1));
+    const p = D.piv.find(q => q[0] === i);
+    tip.innerHTML = `<b>2025-${D.t[i]} UTC</b><br>close ${D.close[i].toLocaleString('it-IT',{minimumFractionDigits:2})}` +
+      `<br><span style="color:var(--s1)">■</span> s 0,7 · w 24: <b>${D.y7[i].toFixed(3)}</b>` +
+      `<br><span style="color:var(--s2)">■</span> s 0,2 · w 12: <b>${D.y2[i].toFixed(3)}</b>` +
+      (p ? `<br>pivot ${p[1] > 0 ? 'massimo' : 'minimo'}, valore ${p[2].toFixed(3)}` : '');
+    tip.style.display = 'block';
+    const fr = fig.getBoundingClientRect(), tx = evt.clientX - fr.left, ty = evt.clientY - fr.top;
+    tip.style.left = (tx + 190 > fr.width ? tx - 186 : tx + 14) + 'px';
+    tip.style.top = (ty - 10) + 'px';
+  }
+  function hide(){ tip.style.display = 'none'; cross.concat(dots).forEach(c => c.setAttribute('opacity', 0)); }
+  [pv, lv].forEach(s => { s.addEventListener('pointermove', e => show(e, s)); s.addEventListener('pointerleave', hide); });
+
+  // barre: Rank IC contro etichetta e contro prezzo
+  const bs = document.getElementById('icbars');
+  const rows = [['contro l’etichetta swing', 0.4114], ['contro fwd 6 barre', -0.0405], ['contro fwd 24 barre', -0.0279], ['contro fwd 72 barre', -0.0145]];
+  const x0 = 520, scale = 380 / 0.45;
+  el('line', {x1:x0, x2:x0, y1:8, y2:170, stroke:'var(--soft)', 'stroke-width':1}, bs);
+  rows.forEach(([name, v], k) => {
+    const y = 20 + k * 40, w = Math.abs(v) * scale, x = v >= 0 ? x0 : x0 - w;
+    el('rect', {x, y, width:Math.max(w, 2), height:22, rx:4, fill:'var(--s1)'}, bs);
+    const lab = el('text', {x:10, y:y + 15}, bs); lab.textContent = name;
+    const val = el('text', {x: v >= 0 ? x + w + 6 : x - 6, y:y + 15, 'text-anchor': v >= 0 ? 'start' : 'end', class:'t-b'}, bs);
+    val.textContent = (v > 0 ? '+' : '') + v.toFixed(4).replace('.', ',');
+  });
+  const cap = el('text', {x:x0, y:186, 'text-anchor':'middle', class:'t-soft'}, bs); cap.textContent = 'Rank IC = 0';
+})();
+</script>
+</body>
+</html>

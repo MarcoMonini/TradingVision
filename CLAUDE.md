@@ -17,6 +17,10 @@ anything about the label, the windows, or the protocol** — most "obvious" idea
 number that killed them. Keep it current when a step lands; the git history reads as a sequence of
 measurements, and commit subjects are written that way ("Four branches lose to one, on every fold").
 
+`swing_leg_pipeline.html` (Italian) walks the training pipeline of the `swing_leg_target` models —
+`gru --label swing`, `legsweep` and `swing` — stage by stage, with the schema of every frame, tensor and
+checkpoint. It describes the code; when the code changes, update it with it.
+
 ## Commands
 
 ```bash
