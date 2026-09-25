@@ -273,13 +273,22 @@ footer{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);color:v
   </div>
   <div class="box def">
     <h4>Volatilità</h4>
-    <p>La <strong>volatilità</strong> è quanto i rendimenti si allargano attorno alla loro media, misurata con la <strong>deviazione standard</strong> (σ, "sigma"). Una σ di 0,28% su candele da 15 minuti vuol dire che circa due candele su tre si muovono meno dello 0,28%. Serve come metro: un movimento del 2% è enorme in un mercato calmo e normale in uno agitato.</p>
+    <p>La <strong>volatilità</strong> è quanto i rendimenti si allargano attorno alla loro media, misurata con la <strong>deviazione standard</strong> (σ, "sigma"). Su BTC a 15 minuti, nel campione qui sotto, σ vale 0,28%. Serve come metro: un movimento del 2% è enorme in un mercato calmo e normale in uno agitato.</p>
   </div>
+  <p>Un esempio concreto. Qui sotto c'è il <strong>rendimento di ogni candela da 15 minuti</strong> di BTCUSDT: per ogni candela, <code>log(chiusura di questa candela / chiusura della candela precedente)</code>. È semplicemente di quanto si è mosso il prezzo di mercato in quei 15 minuti. Non è il guadagno di nessuno: nessun modello, nessuna regola e nessun oracolo hanno scelto quando comprare o vendere. Nel codice è la stessa definizione della feature <code>log_return</code> (<code>features.py</code>: <code>np.log(c / c.shift())</code>), calcolata sulle chiusure 15m che <code>binance.load("BTC", "15m")</code> ricava raggruppando le candele da 5 minuti del dump Binance.</p>
   <figure>
-    <p class="fighead">Distribuzione dei rendimenti a 15 minuti di BTC (ottobre 2024 → marzo 2025)</p>
+    <p class="fighead">Rendimento di ogni candela da 15 minuti di BTCUSDT — il movimento del mercato, non un trade</p>
     <svg class="chart" id="c-ret" viewBox="0 0 960 230" role="img" aria-label="Istogramma dei rendimenti logaritmici di BTC a 15 minuti"></svg>
-    <figcaption>Figura 4 — <span id="ret-n"></span> rendimenti reali. La maggior parte sta vicina a zero; le linee tratteggiate segnano ±1σ. Le colonne agli estremi raccolgono tutti i valori oltre ±2%: sono poche ma grandi — le "code grasse" che nel progetto giustificano scelte robuste (mediana invece di media, loss Huber, clip in normalizzazione).</figcaption>
+    <figcaption>Figura 4 — <span id="ret-n"></span> candele consecutive, dal 1° ottobre 2024 al 31 marzo 2025: un valore per candela, calcolato per questo documento sui dati Binance con la formula qui sopra. Media praticamente zero (+0,0015%), σ = 0,28% (linee tratteggiate). L'81% delle candele sta dentro ±1σ, più del 68% che darebbe una distribuzione normale: quasi tutte le candele si muovono pochissimo e poche si muovono tantissimo. Oltre ±2% ci sono 18 candele (la peggiore −4,6%, la migliore +2,9%), raccolte nelle due colonne ai bordi e troppo poche per vedersi a questa scala. Queste "code grasse" sono il motivo di scelte robuste nel progetto: mediana invece di media, loss Huber, clip nella normalizzazione.</figcaption>
   </figure>
+  <div class="box why">
+    <h4>tre "rendimenti" diversi in questo documento</h4>
+    <ul>
+      <li><strong>Rendimento di una candela</strong> (questa figura): variazione del prezzo di mercato da una chiusura alla successiva. È un dato, non una decisione. Entra nel modello come feature (<code>log_return</code>), la sua deviazione standard è la volatilità usata nelle feature e nell'etichetta, e nel modello B è la <code>ret</code> che una posizione aperta incassa in una candela.</li>
+      <li><strong>Rendimento di una gamba</strong>: variazione fra due pivot consecutivi, per esempio dal minimo al massimo successivo (lezione 4). È l'<code>amplitude</code> di <code>find_pivots</code>, ed è ciò che l'oracolo incasserebbe per ogni gamba al lordo delle commissioni (lezione 11). Mediana sul campione BTC: 2,25%; sui 20 simboli: 3,63%.</li>
+      <li><strong>Rendimento di una strategia</strong>: la somma dei rendimenti delle candele in cui una regola tiene una posizione, meno le commissioni di ogni entrata e uscita, espressa in log all'anno (lezione 11). È l'unico dei tre che dipende da una decisione.</li>
+    </ul>
+  </div>
   <p class="back">Questi due concetti tornano ovunque: nella definizione della gamba "significativa" (lezione 5), in molte feature (lezione 6) e nel conto dei guadagni (lezione 11).</p>
 </section>
 
