@@ -1,0 +1,582 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Etichetta move_balance</title>
+<style>
+:root{
+  --bg:#fbfaf8; --panel:#fff; --ink:#1a1c1f; --soft:#5c6169; --line:#e3e1dc;
+  --accent:#1b6b4a; --amber:#8a6212; --blue:#1f5c8c; --red:#a33a2a;
+  --chip:#f1efea; --code:#f4f2ee;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --grid:#ecebe7; --up:#1baf7a; --down:#e34948;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#15161a; --panel:#1c1e23; --ink:#e8e6e3; --soft:#9aa0a8; --line:#2c2f36;
+  --accent:#5cc394; --amber:#d9a441; --blue:#6aa9d9; --red:#e08b7a;
+  --chip:#24272d; --code:#22252b;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --grid:#26292f; --up:#199e70; --down:#e66767;
+}}
+:root[data-theme="dark"]{
+  --bg:#15161a; --panel:#1c1e23; --ink:#e8e6e3; --soft:#9aa0a8; --line:#2c2f36;
+  --accent:#5cc394; --amber:#d9a441; --blue:#6aa9d9; --red:#e08b7a;
+  --chip:#24272d; --code:#22252b;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --grid:#26292f; --up:#199e70; --down:#e66767;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15.5px;line-height:1.65;margin:0}
+.wrap{max-width:1000px;margin:0 auto;padding:48px 16px 96px}
+header{border-bottom:2px solid var(--ink);padding-bottom:24px;margin-bottom:8px}
+h1{font-size:31px;line-height:1.2;margin:0 0 8px;letter-spacing:-.02em}
+.tagline{color:var(--soft);font-size:16.5px;margin:0 0 20px;max-width:74ch}
+.facts{display:flex;flex-wrap:wrap;gap:10px}
+.fact{background:var(--chip);border-radius:6px;padding:8px 12px;font-size:13px}
+.fact b{display:block;font-size:17px;font-variant-numeric:tabular-nums}
+.fact span{color:var(--soft)}
+nav.toc{margin:28px 0 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:4px 32px;font-size:14px}
+nav.toc .part{grid-column:1/-1;font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--soft);margin-top:10px;font-weight:600}
+nav.toc a{color:var(--ink);text-decoration:none;display:block;padding:2px 0}
+nav.toc a:hover{color:var(--blue)}
+nav.toc .n{color:var(--soft);font-variant-numeric:tabular-nums;display:inline-block;min-width:2.8em}
+.partbanner{margin-top:72px;padding:26px 0 8px;border-top:2px solid var(--ink)}
+.partbanner .k{font-size:12px;text-transform:uppercase;letter-spacing:.14em;color:var(--soft);font-weight:600}
+.partbanner h2.big{font-size:28px;text-transform:none;letter-spacing:-.01em;color:var(--ink);margin:4px 0 8px}
+section{margin-top:56px;scroll-margin-top:16px}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.12em;color:var(--soft);margin:0 0 4px;font-weight:600}
+h2 .n{color:var(--ink);font-variant-numeric:tabular-nums}
+.h2sub{font-size:23px;font-weight:650;letter-spacing:-.01em;margin:0 0 20px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+h3{font-size:17.5px;margin:32px 0 10px;font-weight:640;letter-spacing:-.01em}
+p{margin:0 0 12px;max-width:80ch}
+.lead{font-size:16.5px;color:var(--soft);max-width:78ch}
+.b{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border-radius:99px;vertical-align:3px;margin-left:8px}
+.b-ok{background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accent)}
+.b-msr{background:color-mix(in srgb,var(--blue) 15%,transparent);color:var(--blue)}
+.b-open{background:color-mix(in srgb,var(--amber) 18%,transparent);color:var(--amber)}
+.b-no{background:color-mix(in srgb,var(--red) 15%,transparent);color:var(--red)}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin:18px 0}
+.box>:last-child{margin-bottom:0}
+.box.why{border-left:3px solid var(--blue)}
+.box.no{border-left:3px solid var(--red)}
+.box.open{border-left:3px solid var(--amber)}
+.box.ok{border-left:3px solid var(--accent)}
+.box.def{border-left:3px solid var(--accent);background:color-mix(in srgb,var(--accent) 5%,var(--panel))}
+.box.ex{border-left:3px solid var(--amber);background:color-mix(in srgb,var(--amber) 5%,var(--panel))}
+.box h4{margin:0 0 8px;font-size:15px;font-weight:640}
+.box.def h4::before{content:"Concetto · ";color:var(--accent);font-weight:600}
+.box.ex h4::before{content:"Esempio · ";color:var(--amber);font-weight:600}
+.box.why h4::before{content:"Perché · ";color:var(--blue);font-weight:600}
+.back{font-size:13.5px;color:var(--soft);border-left:2px solid var(--line);padding:2px 0 2px 12px;margin:8px 0 16px}
+.back a{color:var(--blue)}
+.tw{overflow-x:auto;margin:18px 0;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+caption{text-align:left;padding:12px 16px;color:var(--soft);font-size:12.5px;border-bottom:1px solid var(--line)}
+th{text-align:left;font-weight:600;color:var(--soft);font-size:12px;text-transform:uppercase;letter-spacing:.05em;padding:10px 14px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:8px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+tbody tr:last-child td{border-bottom:none}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td.key{font-family:var(--mono);font-size:12.5px;overflow-wrap:anywhere}
+td.ind{padding-left:34px}
+tr.grp td{background:var(--chip);font-weight:640;font-size:12.5px;letter-spacing:.02em}
+tr.hi td{background:color-mix(in srgb,var(--accent) 8%,transparent);font-weight:600}
+td.foot{color:var(--soft);font-size:12.5px;background:var(--chip)}
+.pos{color:var(--accent)}.neg{color:var(--red)}
+code{overflow-wrap:anywhere;font-family:var(--mono);font-size:.88em;background:var(--code);padding:1.5px 5px;border-radius:4px}
+pre{font-family:var(--mono);font-size:12.5px;background:var(--code);padding:14px 16px;border-radius:8px;overflow-x:auto;margin:12px 0;line-height:1.5}
+ul,ol{margin:0 0 12px;padding-left:22px;max-width:80ch}li{margin-bottom:6px}
+strong{font-weight:650}
+.muted{color:var(--soft)}
+figure{margin:22px 0;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 14px 10px;position:relative}
+figure svg{display:block;width:100%;height:auto}
+figcaption{color:var(--soft);font-size:12.5px;margin-top:8px;max-width:92ch}
+.fighead{font-size:13.5px;font-weight:640;margin:0 0 6px}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+.cols>figure{margin:0}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12.5px;color:var(--soft);margin:0 0 6px}
+.sw{display:inline-block;width:18px;height:3px;vertical-align:middle;margin-right:6px;border-radius:2px}
+.sw.dash{height:0;border-top:2px dashed currentColor;background:none!important}
+.ctrl{display:flex;flex-wrap:wrap;gap:10px 22px;align-items:center;font-size:13.5px;margin:4px 0 10px;padding:10px 12px;background:var(--chip);border-radius:8px}
+.ctrl label{display:flex;align-items:center;gap:8px}
+.ctrl input[type=range]{width:160px;accent-color:var(--s1)}
+.ctrl select,.ctrl button{font:inherit;font-size:13px;padding:4px 8px;border-radius:6px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
+.ctrl output,.readout{font-variant-numeric:tabular-nums;font-weight:640}
+.readout{font-size:13px;color:var(--soft);font-weight:400}
+.readout b{color:var(--ink)}
+.tip{position:absolute;pointer-events:none;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.45;box-shadow:0 4px 14px rgba(0,0,0,.1);display:none;min-width:160px;font-variant-numeric:tabular-nums;z-index:5}
+.chart text{font-family:var(--sans);font-size:11px;fill:var(--soft)}
+.chart .lbl{fill:var(--ink);font-weight:600}
+.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;margin:8px 0 18px}
+.card{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--panel);cursor:pointer;text-align:left;font:inherit;color:inherit}
+.card:hover,.card.sel{border-color:var(--s1);box-shadow:0 0 0 1px var(--s1)}
+.card .nm{font-family:var(--mono);font-size:11.5px;font-weight:600;overflow-wrap:anywhere}
+.card .ds{font-size:11.5px;color:var(--soft);line-height:1.35;margin-top:4px}
+.fam{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--soft);font-weight:600;margin:16px 0 4px}
+.featdesc{font-size:14.5px;margin:6px 0 10px;max-width:80ch}
+.dg text{font-family:var(--sans);fill:var(--ink);font-size:12px}
+.dg .t-soft{fill:var(--soft);font-size:11px}
+.dg .t-mono{font-family:var(--mono);font-size:10.5px;fill:var(--soft)}
+.dg .t-b{font-weight:650}
+.dg .node{fill:var(--panel);stroke:var(--line);stroke-width:1.2}
+.dg .n-data{fill:color-mix(in srgb,var(--blue) 9%,var(--panel));stroke:var(--blue)}
+.dg .n-lab{fill:color-mix(in srgb,var(--amber) 11%,var(--panel));stroke:var(--amber)}
+.dg .n-mod{fill:color-mix(in srgb,var(--accent) 10%,var(--panel));stroke:var(--accent)}
+.dg .n-out{fill:var(--chip);stroke:var(--soft)}
+.dg .n-bad{fill:color-mix(in srgb,var(--red) 10%,var(--panel));stroke:var(--red)}
+.dg .arr{stroke:var(--soft);stroke-width:1.3;fill:none;marker-end:url(#ah)}
+.dg .arr-d{stroke:var(--soft);stroke-width:1.2;fill:none;stroke-dasharray:4 3;marker-end:url(#ah)}
+.dg .ahead{fill:var(--soft)}
+.dg .gridl{stroke:var(--grid);stroke-width:1}
+.dg .ink{stroke:var(--ink);fill:none}
+.dg .up{fill:var(--panel);stroke:var(--up);stroke-width:2}
+.dg .down{fill:var(--down);stroke:var(--down);stroke-width:2}
+dl.gloss{display:grid;grid-template-columns:minmax(150px,220px) 1fr;gap:6px 18px;font-size:14px;margin:0}
+dl.gloss dt{font-weight:650}
+dl.gloss dd{margin:0;color:var(--ink)}
+@media (max-width:600px){h1{font-size:24px}.h2sub{font-size:20px}td,th{padding:7px 10px}dl.gloss{grid-template-columns:1fr}dl.gloss dd{margin-bottom:8px}}
+.featlist{display:grid;grid-template-columns:130px 1fr;gap:4px 14px;align-items:baseline;margin:10px 0 18px;font-size:13px}
+.featlist .fl-f{color:var(--soft);font-size:12px;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chips code{font-size:12px}
+.featlist.gone .chips code{text-decoration:line-through;color:var(--soft)}
+.subbanner{margin:64px 0 8px;padding-top:18px;border-top:2px solid var(--ink);scroll-margin-top:16px}
+.subbanner .k{font-size:12px;text-transform:uppercase;letter-spacing:.14em;color:var(--soft);font-weight:600}
+.subbanner h3{margin:4px 0 10px;font-size:21px}
+@media (max-width:600px){.featlist{grid-template-columns:1fr}.featlist .fl-f{margin-top:6px}}
+footer{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);color:var(--soft);font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>L'etichetta <code>move_balance</code> — com'è fatta e come si comporta</h1>
+  <p class="tagline">Salita meno discesa del prezzo di chiusura nelle prossime 48 candele da 15 minuti (12 ore), in unità di σ·√N. Statistiche misurate su 20 coppie USDT, solo sul periodo di addestramento: nessuna candela del test entra in questo documento.</p>
+  <div class="facts">
+    <div class="fact"><b>1.692.380</b><span>righe etichettate</span></div>
+    <div class="fact"><b>N = 48</b><span>12 ore di 15m</span></div>
+    <div class="fact"><b>2023-01-01 → 2025-05-31</b><span>periodo di train</span></div>
+    <div class="fact"><b>0,71</b><span>mediana di |y|</span></div>
+    <div class="fact"><b>83%</b><span>righe con |rise − fall| sopra il costo di andata e ritorno</span></div>
+    <div class="fact"><b>61%</b><span>della varianza è comune a tutto il mercato</span></div>
+  </div>
+  <nav class="toc">
+    <a href="#s1"><span class="n">1</span>La definizione, su una candela vera</a>
+    <a href="#s2"><span class="n">2</span>La distribuzione</a>
+    <a href="#s3"><span class="n">3</span>Le code</a>
+    <a href="#s4"><span class="n">4</span>Le due componenti: rise e fall</a>
+    <a href="#s5"><span class="n">5</span>Contro il rendimento futuro</a>
+    <a href="#s6"><span class="n">6</span>Il mercato dentro l'etichetta</a>
+    <a href="#s7"><span class="n">7</span>Persistenza e sovrapposizione</a>
+    <a href="#s8"><span class="n">8</span>Volatilità, ora, giorno</a>
+    <a href="#s9"><span class="n">9</span>Coppia per coppia</a>
+    <a href="#s10"><span class="n">10</span>Se N cambia</a>
+    <a href="#s11"><span class="n">11</span>Cosa la anticipa oggi</a>
+    <a href="#s12"><span class="n">12</span>Cosa ne segue per il modello</a>
+  </nav>
+</header>
+
+<section id="s1">
+  <h2><span class="n">1</span> · Definizione</h2>
+  <p class="h2sub">La definizione, su una candela vera</p>
+  <pre>rise(t) = max(0,  max_j close[t+j] / close[t] − 1)        j = 1..N
+fall(t) = max(0,  1 − min_j close[t+j] / close[t])
+y(t)    = (rise − fall) / (σ_t · √N)                     σ_t = dev. std. dei log-rendimenti delle 96 candele fino a t</pre>
+  <p>Il numeratore dice quanto il prezzo arriva più in alto di quanto arrivi in basso, nelle prossime 48 chiusure: positivo se la salita massima supera la discesa massima, negativo nel caso opposto. Un lato che il prezzo non visita conta zero. Il denominatore è quanto si muoverebbe per caso, in 48 candele, un prezzo con la volatilità di quel momento: così y = 1 vuol dire "lo sbilanciamento è pari a un movimento tipico", sulla stessa scala per BTC e per una coppia piccola, in un mese calmo e in uno agitato. σ guarda solo indietro; il numeratore solo avanti.</p>
+  <figure id="f-anat">
+    <p class="fighead">BTCUSDT 15m, candela del 2025-02-25 00:00 UTC</p>
+    <svg class="chart" id="c-anat" viewBox="0 0 960 300" role="img" aria-label="Prezzo attorno a una candela con la finestra delle prossime N candele"></svg>
+    <figcaption>Figura 1 — la candela t è la linea verticale; la fascia è la finestra delle 48 candele successive. Chiusura a t 91.007, massimo nella finestra 92.377 (rise 1,51%), minimo 87.738 (fall 3,59%). Numeratore −2,09%; con σ_t = 0,250% per candela, √48·σ = 1,73% e y = <b>−1,20</b>.</figcaption>
+  </figure>
+  <figure id="f-week">
+    <p class="fighead">Una settimana: BTCUSDT 15m, 18 → 25 febbraio 2025</p>
+    <svg class="chart" id="c-week-p" viewBox="0 0 960 170" role="img" aria-label="Prezzo"></svg>
+    <svg class="chart" id="c-week-y" viewBox="0 0 960 150" role="img" aria-label="Etichetta"></svg>
+    <svg class="chart" id="c-week-rf" viewBox="0 0 960 150" role="img" aria-label="Rise e fall"></svg>
+    <div class="legend"><span><span class="sw" style="background:var(--s1)"></span>y</span><span><span class="sw" style="background:var(--up)"></span>rise (%)</span><span><span class="sw" style="background:var(--down)"></span>fall (%, verso il basso)</span></div>
+    <figcaption>Figura 2 — in alto il prezzo, al centro l'etichetta, in basso le due componenti in percentuale. L'etichetta anticipa: sale prima delle salite e scende prima delle discese, perché legge le 48 candele successive. Le ultime 48 candele della settimana hanno comunque un valore perché la finestra prosegue oltre il grafico. Passa il puntatore su un grafico.</figcaption>
+  </figure>
+</section>
+
+<section id="s2">
+  <h2><span class="n">2</span> · Distribuzione</h2>
+  <p class="h2sub">Una gobba sola, simmetrica, con code lunghe</p>
+  <p>Media +0,006, deviazione standard 1,41, mediana 0,00. Il 49,7% delle righe è positivo: l'etichetta non pende da nessuna parte sull'insieme del periodo. La forma centrale è quasi normale; le code no (sezione 3).</p>
+  <div class="cols">
+    <figure><p class="fighead">y, in σ·√N</p><svg class="chart" id="c-hy" viewBox="0 0 470 220" role="img" aria-label="Istogramma di y"></svg>
+      <figcaption>Figura 3 — 1.692.380 righe, valori oltre ±4 raccolti nelle colonne estreme. La linea tratteggiata è una normale con la stessa mediana e lo stesso intervallo interquartile.</figcaption></figure>
+    <figure><p class="fighead">Il numeratore, rise − fall, in % della chiusura</p><svg class="chart" id="c-hn" viewBox="0 0 470 220" role="img" aria-label="Istogramma del numeratore"></svg>
+      <figcaption>Figura 4 — lo stesso sbilanciamento prima della divisione per σ, valori oltre ±8% raccolti nelle colonne estreme. Le linee a ±0,5% sono il costo di andata e ritorno (0,25% per lato).</figcaption></figure>
+  </div>
+  <div class="cols">
+  <div class="tw" style="margin:0"><table>
+    <caption>quantili</caption>
+    <thead><tr><th class="num">quantile</th><th class="num">y</th><th class="num">rise − fall</th><th class="num">rise</th><th class="num">fall</th></tr></thead>
+    <tbody><tr><td class="num">1°</td><td class="num">−3,56</td><td class="num">−9,80%</td><td class="num">0,00%</td><td class="num">0,00%</td></tr>
+<tr><td class="num">5°</td><td class="num">−1,93</td><td class="num">−5,24%</td><td class="num">0,00%</td><td class="num">0,00%</td></tr>
+<tr><td class="num">10°</td><td class="num">−1,40</td><td class="num">−3,69%</td><td class="num">0,06%</td><td class="num">0,06%</td></tr>
+<tr><td class="num">25°</td><td class="num">−0,71</td><td class="num">−1,74%</td><td class="num">0,43%</td><td class="num">0,44%</td></tr>
+<tr><td class="num">50°</td><td class="num">0,00</td><td class="num">0,00%</td><td class="num">1,18%</td><td class="num">1,21%</td></tr>
+<tr><td class="num">75°</td><td class="num">+0,70</td><td class="num">+1,70%</td><td class="num">2,52%</td><td class="num">2,53%</td></tr>
+<tr><td class="num">90°</td><td class="num">+1,43</td><td class="num">+3,84%</td><td class="num">4,52%</td><td class="num">4,35%</td></tr>
+<tr><td class="num">95°</td><td class="num">+2,00</td><td class="num">+5,67%</td><td class="num">6,36%</td><td class="num">5,90%</td></tr>
+<tr><td class="num">99°</td><td class="num">+3,62</td><td class="num">+10,96%</td><td class="num">11,75%</td><td class="num">10,53%</td></tr></tbody>
+  </table></div>
+  <div>
+  <div class="tw" style="margin:0 0 12px"><table>
+    <caption>quanto è grande |y|</caption>
+    <tbody><tr><td class="num">|y| &lt; 0,10</td><td class="num">7,6%</td></tr>
+<tr><td class="num">|y| &lt; 0,25</td><td class="num">18,9%</td></tr>
+<tr><td class="num">|y| &lt; 0,50</td><td class="num">36,6%</td></tr>
+<tr><td class="num">|y| &lt; 1</td><td class="num">65,4%</td></tr>
+<tr><td class="num">|y| &lt; 2</td><td class="num">90,4%</td></tr>
+<tr><td class="num">|y| &lt; 3</td><td class="num">96,6%</td></tr></tbody>
+  </table></div>
+  <div class="tw" style="margin:0"><table>
+    <caption>quanto è grande il movimento in %</caption>
+    <tbody><tr><td class="num">|rise − fall| &gt; 0,5%</td><td class="num">83,4%</td></tr>
+<tr><td class="num">|rise − fall| &gt; 1,0%</td><td class="num">68,2%</td></tr>
+<tr><td class="num">|rise − fall| &gt; 2,0%</td><td class="num">44,1%</td></tr>
+<tr><td class="num">|rise − fall| &gt; 3,0%</td><td class="num">28,0%</td></tr>
+<tr><td class="num">|rise − fall| &gt; 5,0%</td><td class="num">11,9%</td></tr></tbody>
+  </table></div>
+  </div>
+  </div>
+  <p>Due letture. <strong>Quasi mai zero</strong>: solo il 7,6% delle righe ha |y| sotto 0,1, perché in 48 candele il prezzo si muove quasi sempre più da un lato che dall'altro. <strong>Quasi sempre sopra il costo</strong>: nel 83,4% delle righe lo sbilanciamento supera lo 0,5% di andata e ritorno, e nel 44,1% supera il 2%. Il movimento c'è; la domanda è se si può prevederne il segno.</p>
+</section>
+
+<section id="s3">
+  <h2><span class="n">3</span> · Code</h2>
+  <p class="h2sub">Le code sono notizie, non errori</p>
+  <p>Asimmetria 3,8 e curtosi 201 su tutte le righe; togliendo lo 0,1% più estremo la curtosi scende a 4,9. Il 3,4% delle righe supera |y| = 3, lo 0,76% supera 5, lo 0,089% supera 10. Il 99,9° percentile è 9,7, il massimo 80,9.</p>
+  <div class="tw"><table>
+    <caption>le righe più estreme — tutte lo stesso evento</caption>
+    <thead><tr><th>candela (UTC)</th><th>coppia</th><th class="num">y</th><th class="num">rise − fall</th><th class="num">σ per candela</th></tr></thead>
+    <tbody><tr><td class="key">2023-07-13 06:15</td><td>XRP</td><td class="num">+80,9</td><td class="num">+80,6%</td><td class="num">0,144%</td></tr>
+<tr><td class="key">2023-07-13 06:30</td><td>XRP</td><td class="num">+79,3</td><td class="num">+80,0%</td><td class="num">0,146%</td></tr>
+<tr><td class="key">2023-07-13 07:00</td><td>XRP</td><td class="num">+78,6</td><td class="num">+80,9%</td><td class="num">0,149%</td></tr>
+<tr><td class="key">2023-07-13 06:45</td><td>XRP</td><td class="num">+78,2</td><td class="num">+80,9%</td><td class="num">0,149%</td></tr>
+<tr><td class="key">2023-07-13 07:45</td><td>XRP</td><td class="num">+78,0</td><td class="num">+80,5%</td><td class="num">0,149%</td></tr></tbody>
+  </table></div>
+  <p>Il 13 luglio 2023 XRP ha fatto +80% in poche ore, sulla sentenza nel caso SEC contro Ripple. Le righe estreme sono candele consecutive dello stesso salto, non valori isolati. Sopra |y| = 5 la volatilità passata è in mediana il 73% di quella tipica: le code nascono quando un movimento grande arriva dopo un periodo calmo, e il denominatore piccolo lo ingrandisce. Il numeratore mediano, lì, è 12,9%.</p>
+  <div class="box why"><h4>cosa vuol dire per la loss</h4><p>Con una loss quadratica poche centinaia di righe di un solo evento peserebbero quanto centinaia di migliaia di righe normali. La Huber le tratta linearmente oltre δ, ed è il motivo per cui il progetto la usa; δ va misurato su questa etichetta (mediana di |y| sul train, 0,71 a N = 48), non portato da un'altra.</p></div>
+</section>
+
+<section id="s4">
+  <h2><span class="n">4</span> · Componenti</h2>
+  <p class="h2sub">Le due componenti: rise e fall</p>
+  <div class="cols">
+    <figure><p class="fighead">rise, in %</p><svg class="chart" id="c-hr" viewBox="0 0 470 200" role="img" aria-label="Istogramma di rise"></svg></figure>
+    <figure><p class="fighead">fall, in %</p><svg class="chart" id="c-hf" viewBox="0 0 470 200" role="img" aria-label="Istogramma di fall"></svg></figure>
+  </div>
+  <p class="muted" style="font-size:12.5px">Figura 5 — la salita massima e la discesa massima nelle 48 candele successive, prima della differenza. Valori oltre il 12% nell'ultima colonna.</p>
+  <p>Le due distribuzioni sono quasi uguali, su un periodo che contiene sia salite sia discese: il paniere ha fatto +70% nel 2023, +45% nel 2024 e −38% nei primi cinque mesi del 2025 (somme di log-rendimenti, media sulle coppie). Spearman fra rise e fall -0,45: quando il prezzo sale molto tende a scendere poco, ma non è una regola. Nel 17,0% delle finestre uno dei due lati vale zero — il prezzo non torna mai sotto (o sopra) la chiusura di partenza per 12 ore: 8,6% senza discesa, 8,4% senza salita.</p>
+</section>
+
+<section id="s5">
+  <h2><span class="n">5</span> · Rendimento futuro</h2>
+  <p class="h2sub">Contro il rendimento futuro: è quasi la stessa cosa</p>
+  <p>Il segno di y coincide con il segno del rendimento a 48 candele nel 84,8% delle righe. È la proprietà che distingue questa etichetta da <code>swing_leg_target</code>, che imitata a Rank IC 0,41 valeva −0,04 contro il prezzo: qui prevedere l'etichetta è prevedere dove va il prezzo.</p>
+  <figure>
+    <svg class="chart" id="c-dec" viewBox="0 0 960 230" role="img" aria-label="Rendimento futuro per decile di y"></svg>
+    <figcaption>Figura 6 — le righe divise in dieci decili di y. Barre: rendimento medio a 48 candele (log, in %). Punti: quota di righe con rendimento positivo, sulla scala a destra. Decile più basso −4,36% con il 1,2% di rendimenti positivi; più alto +4,69% e 99,0%.</figcaption>
+  </figure>
+  <div class="tw"><table>
+    <caption>Spearman fra y e il rendimento su altri orizzonti</caption>
+    <thead><tr><th>orizzonte del rendimento</th><th class="num">Spearman</th></tr></thead>
+    <tbody><tr><td class="num">12 candele (3 h)</td><td class="num">0,630</td></tr>
+<tr><td class="num">24 candele (6 h)</td><td class="num">0,798</td></tr>
+<tr><td class="num">48 candele (12 h)</td><td class="num">0,856</td></tr>
+<tr><td class="num">96 candele (24 h)</td><td class="num">0,593</td></tr></tbody>
+  </table></div>
+  <p>Il legame è massimo all'orizzonte stesso dell'etichetta e cala sia prima sia dopo: 0,63 con il rendimento delle prime 12 candele, 0,59 con quello a 96, che per metà cade oltre la finestra.</p>
+</section>
+
+<section id="s6">
+  <h2><span class="n">6</span> · Mercato</h2>
+  <p class="h2sub">Il mercato dentro l'etichetta</p>
+  <p><strong>Il 61% della varianza di y è comune a tutte le coppie nello stesso istante.</strong> La correlazione media fra le etichette di due coppie diverse è 0,61. Quando il mercato sale, sale quasi tutto: l'etichetta di una coppia è per più di metà l'etichetta del mercato.</p>
+  <figure>
+    <svg class="chart" id="c-mon-y" viewBox="0 0 960 170" role="img" aria-label="Media mensile di y"></svg>
+    <svg class="chart" id="c-mon-b" viewBox="0 0 960 150" role="img" aria-label="Rendimento mensile del paniere"></svg>
+    <figcaption>Figura 7 — sopra la media di y mese per mese, sotto il rendimento del paniere nello stesso mese (somma dei log-rendimenti, media sulle 20 coppie). Correlazione fra le due serie mensili: <b>0,92</b>.</figcaption>
+  </figure>
+  <div class="tw"><table>
+    <caption>anno per anno</caption>
+    <thead><tr><th>anno</th><th class="num">righe</th><th class="num">media y</th><th class="num">dev. std.</th><th class="num">y &gt; 0</th><th class="num">mediana |y|</th><th class="num">mediana |rise − fall|</th><th class="num">paniere</th></tr></thead>
+    <tbody><tr><td>2023</td><td class="num">700.700</td><td class="num">+0,049</td><td class="num">1,51</td><td class="num">50,4%</td><td class="num">0,68</td><td class="num">1,44%</td><td class="num">+70,3%</td></tr>
+<tr><td>2024</td><td class="num">702.720</td><td class="num">−0,012</td><td class="num">1,33</td><td class="num">49,5%</td><td class="num">0,71</td><td class="num">1,85%</td><td class="num">+44,6%</td></tr>
+<tr><td>2025 (gen–mag)</td><td class="num">288.960</td><td class="num">−0,057</td><td class="num">1,36</td><td class="num">48,7%</td><td class="num">0,75</td><td class="num">2,23%</td><td class="num">−37,6%</td></tr></tbody>
+  </table></div>
+  <div class="box open"><h4>una scelta da fare prima del modello</h4><p>Un modello che legge una coppia alla volta deve prevedere soprattutto il mercato: è la parte più grande dell'etichetta e anche quella che il progetto ha già visto ingannare (le etichette direzionali guadagnavano quasi tutto dall'essere short in un mercato che scendeva). La metrica del progetto, il Rank IC per data, è cieca a questa parte per costruzione: confronta le coppie nello stesso istante. Le strade sono due: tenere y così e giudicare il modello con l'esposizione fissa di <code>rotation_null</code>, oppure togliere a ogni istante la media delle coppie e allenare solo sul resto, come fa <code>cross_sectional_return</code>.</p></div>
+</section>
+
+<section id="s7">
+  <h2><span class="n">7</span> · Persistenza</h2>
+  <p class="h2sub">Persistenza e sovrapposizione</p>
+  <p>Due candele vicine condividono quasi tutta la finestra: a distanza 1 ne condividono 47 su 48. L'autocorrelazione lo mostra: 0,975 a una candela, sotto 0,5 a 24 candele, circa zero a 48. Oltre la finestra non resta memoria: l'etichetta di adesso non dice quasi nulla di quella fra 48 candele.</p>
+  <div class="cols">
+    <figure><p class="fighead">autocorrelazione di y</p><svg class="chart" id="c-acf" viewBox="0 0 470 220" role="img" aria-label="Autocorrelazione"></svg>
+      <figcaption>Figura 8 — media sulle 20 coppie. La linea verticale è N = 48.</figcaption></figure>
+    <figure><p class="fighead">quanto dura un segno</p><svg class="chart" id="c-runs" viewBox="0 0 470 220" role="img" aria-label="Durata dei tratti di segno costante"></svg>
+      <figcaption>Figura 9 — quota delle candele che stanno in un tratto di segno costante di quella lunghezza. Il segno cambia sul 7,9% delle candele; un tratto dura in mediana 3 candele, in media 12,6, e il 10% più lungo oltre 42.</figcaption></figure>
+  </div>
+  <p>Molti tratti brevissimi (il segno oscilla quando y passa vicino allo zero) e pochi tratti lunghi che contengono la maggior parte delle candele. <strong>Per le metriche</strong>: con righe così sovrapposte il numero di osservazioni indipendenti non è il numero di righe. Sul periodo di train i blocchi da 48 candele non sovrapposti sono 1.763; ogni t di questo documento è calcolato su quei blocchi (<code>metrics.signal(..., horizon=)</code>), non sulle righe.</p>
+</section>
+
+<section id="s8">
+  <h2><span class="n">8</span> · Regime</h2>
+  <p class="h2sub">Volatilità, ora, giorno</p>
+  <p>La normalizzazione fa quello per cui c'è: |y| e la volatilità passata hanno Spearman -0,12, mentre il movimento in percentuale ne ha 0,37. Ma non è piatta: nei decili più calmi |y| è più grande, perché lì il denominatore è piccolo e un risveglio del mercato pesa di più in unità di σ.</p>
+  <div class="cols">
+    <figure><p class="fighead">media di |y| per decile di volatilità</p><svg class="chart" id="c-vy" viewBox="0 0 470 200" role="img" aria-label="|y| per decile di volatilità"></svg></figure>
+    <figure><p class="fighead">media di |rise − fall| in %, e quota sopra il costo</p><svg class="chart" id="c-vn" viewBox="0 0 470 200" role="img" aria-label="Movimento in percentuale per decile di volatilità"></svg></figure>
+  </div>
+  <p class="muted" style="font-size:12.5px">Figura 10 — decili della volatilità delle ultime 96 candele, calcolati dentro ogni coppia. Dal più calmo al più agitato |y| passa da 1,22 a 0,72, il movimento in % da 1,43% a 4,44%, e la quota sopra lo 0,5% da 72% a 91%.</p>
+  <figure><p class="fighead">media di |rise − fall| in %, per ora UTC della candela</p><svg class="chart" id="c-hour" viewBox="0 0 960 200" role="img" aria-label="Movimento per ora del giorno"></svg>
+    <figcaption>Figura 11 — massimo alle 13:00 UTC (2,78%), minimo alle 23:00 (2,27%): le finestre che partono attorno all'apertura dei mercati americani (13:30 UTC) contengono più movimento. Il giorno più calmo è il sabato (1,97% contro 2,50% di media).</figcaption></figure>
+</section>
+
+<section id="s9">
+  <h2><span class="n">9</span> · Coppie</h2>
+  <p class="h2sub">Coppia per coppia</p>
+  <p>In unità di σ le coppie si somigliano (mediana di |y| fra 0,67 e 0,79); in percentuale no: il movimento mediano va da 0,88% per TRX a 2,33% per NEAR. È la differenza che la normalizzazione toglie al modello e che il costo di trading non toglie: su TRX solo il 70% dei movimenti supera lo 0,5%.</p>
+  <div class="tw"><table>
+    <caption>ordinate per movimento mediano in %</caption>
+    <thead><tr><th>coppia</th><th class="num">σ mediana per candela</th><th class="num">mediana |rise − fall|</th><th class="num">sopra 0,5%</th><th class="num">mediana |y|</th><th class="num">99° perc. |y|</th><th class="num">media y</th><th class="num">y &gt; 0</th></tr></thead>
+    <tbody><tr><td>NEAR</td><td class="num">0,481%</td><td class="num">2,33%</td><td class="num">88%</td><td class="num">0,72</td><td class="num">4,0</td><td class="num">+0,013</td><td class="num">49,0%</td></tr>
+<tr><td>CRV</td><td class="num">0,459%</td><td class="num">2,25%</td><td class="num">88%</td><td class="num">0,71</td><td class="num">4,4</td><td class="num">−0,002</td><td class="num">49,6%</td></tr>
+<tr><td>SUSHI</td><td class="num">0,459%</td><td class="num">2,21%</td><td class="num">87%</td><td class="num">0,69</td><td class="num">4,4</td><td class="num">−0,012</td><td class="num">49,1%</td></tr>
+<tr><td>SOL</td><td class="num">0,415%</td><td class="num">2,15%</td><td class="num">88%</td><td class="num">0,73</td><td class="num">4,4</td><td class="num">+0,039</td><td class="num">50,1%</td></tr>
+<tr><td>AAVE</td><td class="num">0,428%</td><td class="num">2,10%</td><td class="num">87%</td><td class="num">0,71</td><td class="num">4,1</td><td class="num">+0,042</td><td class="num">50,2%</td></tr>
+<tr><td>AVAX</td><td class="num">0,412%</td><td class="num">2,08%</td><td class="num">86%</td><td class="num">0,73</td><td class="num">4,4</td><td class="num">−0,011</td><td class="num">49,4%</td></tr>
+<tr><td>UNI</td><td class="num">0,397%</td><td class="num">1,97%</td><td class="num">86%</td><td class="num">0,72</td><td class="num">4,3</td><td class="num">+0,012</td><td class="num">49,1%</td></tr>
+<tr><td>LINK</td><td class="num">0,385%</td><td class="num">1,92%</td><td class="num">86%</td><td class="num">0,71</td><td class="num">4,4</td><td class="num">+0,020</td><td class="num">50,3%</td></tr>
+<tr><td>BAT</td><td class="num">0,365%</td><td class="num">1,86%</td><td class="num">86%</td><td class="num">0,73</td><td class="num">4,3</td><td class="num">−0,026</td><td class="num">49,8%</td></tr>
+<tr><td>DOGE</td><td class="num">0,380%</td><td class="num">1,84%</td><td class="num">85%</td><td class="num">0,71</td><td class="num">4,6</td><td class="num">+0,004</td><td class="num">49,7%</td></tr>
+<tr><td>ADA</td><td class="num">0,362%</td><td class="num">1,80%</td><td class="num">85%</td><td class="num">0,71</td><td class="num">4,4</td><td class="num">+0,005</td><td class="num">48,8%</td></tr>
+<tr><td>DOT</td><td class="num">0,349%</td><td class="num">1,72%</td><td class="num">84%</td><td class="num">0,72</td><td class="num">4,1</td><td class="num">−0,041</td><td class="num">48,8%</td></tr>
+<tr><td>XTZ</td><td class="num">0,344%</td><td class="num">1,71%</td><td class="num">84%</td><td class="num">0,70</td><td class="num">4,2</td><td class="num">−0,050</td><td class="num">48,8%</td></tr>
+<tr><td>BCH</td><td class="num">0,347%</td><td class="num">1,68%</td><td class="num">84%</td><td class="num">0,69</td><td class="num">5,0</td><td class="num">+0,035</td><td class="num">49,0%</td></tr>
+<tr><td>YFI</td><td class="num">0,343%</td><td class="num">1,66%</td><td class="num">84%</td><td class="num">0,68</td><td class="num">4,3</td><td class="num">−0,043</td><td class="num">48,5%</td></tr>
+<tr><td>LTC</td><td class="num">0,318%</td><td class="num">1,51%</td><td class="num">82%</td><td class="num">0,68</td><td class="num">4,9</td><td class="num">−0,025</td><td class="num">50,0%</td></tr>
+<tr><td>XRP</td><td class="num">0,305%</td><td class="num">1,46%</td><td class="num">81%</td><td class="num">0,67</td><td class="num">5,1</td><td class="num">+0,030</td><td class="num">49,0%</td></tr>
+<tr><td>ETH</td><td class="num">0,258%</td><td class="num">1,27%</td><td class="num">78%</td><td class="num">0,71</td><td class="num">4,9</td><td class="num">+0,005</td><td class="num">50,4%</td></tr>
+<tr><td>BTC</td><td class="num">0,213%</td><td class="num">0,98%</td><td class="num">70%</td><td class="num">0,67</td><td class="num">5,1</td><td class="num">+0,062</td><td class="num">51,8%</td></tr>
+<tr><td>TRX</td><td class="num">0,155%</td><td class="num">0,88%</td><td class="num">70%</td><td class="num">0,79</td><td class="num">5,4</td><td class="num">+0,057</td><td class="num">52,8%</td></tr></tbody>
+  </table></div>
+  <p>La colonna "media y" mostra una deriva per alcune coppie: TRX e BTC hanno y positiva più spesso delle altre nel periodo (52,8% e 51,8% delle candele). È una proprietà del periodo, non necessariamente delle coppie, e un modello può impararla come costante per simbolo.</p>
+</section>
+
+<section id="s10">
+  <h2><span class="n">10</span> · Orizzonte</h2>
+  <p class="h2sub">Se N cambia</p>
+  <p>Le stesse misure a cinque orizzonti. In unità di σ l'etichetta è quasi invariante: stessa forma, stesso legame col rendimento, stessa quota di mercato. Quello che cambia con N è il movimento in percentuale, che cresce circa come √N, e quindi quanto spesso il movimento supera il costo.</p>
+  <div class="tw"><table>
+    <caption>la riga evidenziata è N = 48</caption>
+    <thead><tr><th class="num">N</th><th class="num">durata</th><th class="num">mediana |rise − fall|</th><th class="num">90° perc.</th><th class="num">sopra 0,5%</th><th class="num">mediana |y|</th><th class="num">cambi di segno</th><th class="num">Spearman con il rendimento a N</th><th class="num">stesso segno</th><th class="num">quota di mercato</th></tr></thead>
+    <tbody><tr><td class="num">12</td><td class="num">3 h</td><td class="num">0,80%</td><td class="num">2,63%</td><td class="num">66%</td><td class="num">0,67</td><td class="num">16,5%</td><td class="num">0,857</td><td class="num">84,1%</td><td class="num">64%</td></tr>
+<tr><td class="num">24</td><td class="num">6 h</td><td class="num">1,16%</td><td class="num">3,80%</td><td class="num">76%</td><td class="num">0,68</td><td class="num">11,4%</td><td class="num">0,855</td><td class="num">84,4%</td><td class="num">62%</td></tr>
+<tr class="hi"><td class="num">48</td><td class="num">12 h</td><td class="num">1,72%</td><td class="num">5,44%</td><td class="num">83%</td><td class="num">0,71</td><td class="num">7,9%</td><td class="num">0,856</td><td class="num">84,8%</td><td class="num">61%</td></tr>
+<tr><td class="num">96</td><td class="num">24 h</td><td class="num">2,57%</td><td class="num">7,83%</td><td class="num">89%</td><td class="num">0,74</td><td class="num">5,3%</td><td class="num">0,855</td><td class="num">84,9%</td><td class="num">60%</td></tr>
+<tr><td class="num">192</td><td class="num">48 h</td><td class="num">3,74%</td><td class="num">11,40%</td><td class="num">92%</td><td class="num">0,76</td><td class="num">3,8%</td><td class="num">0,858</td><td class="num">84,8%</td><td class="num">59%</td></tr></tbody>
+  </table></div>
+  <p>A N = 48 il 83% delle righe ha un movimento che supera il costo, contro il 66% a N = 12 e il 92% a N = 192. Un orizzonte più lungo dà più margine sul costo e meno cambi di segno, ma meno finestre indipendenti per misurare, e ogni etichetta dipende da più futuro.</p>
+</section>
+
+<section id="s11">
+  <h2><span class="n">11</span> · Predittori</h2>
+  <p class="h2sub">Cosa la anticipa oggi</p>
+  <p>Ogni colonna di <code>swing.REDUCED</code> presa da sola, più l'etichetta di N candele fa (che a t è già nota: la sua finestra si è chiusa). Rank IC per data sulle 20 coppie, una data per ora; t sui 1.763 blocchi non sovrapposti; Spearman "nel tempo" su tutte le righe insieme.</p>
+  <div class="tw"><table>
+    <caption>ordinate per |Rank IC| — solo train, una colonna alla volta</caption>
+    <thead><tr><th>colonna</th><th class="num">Rank IC</th><th class="num">t (blocchi)</th><th class="num">Spearman nel tempo</th></tr></thead>
+    <tbody><tr><td class="key">log_return</td><td class="num">−0,0222</td><td class="num">−12,3</td><td class="num">−0,0088</td></tr>
+<tr><td class="key">distance_from_window_low_pct</td><td class="num">−0,0190</td><td class="num">−5,1</td><td class="num">+0,0104</td></tr>
+<tr><td class="key">distance_from_psar_pct</td><td class="num">−0,0172</td><td class="num">−8,0</td><td class="num">−0,0072</td></tr>
+<tr><td class="key">distance_from_window_high_pct</td><td class="num">−0,0140</td><td class="num">−3,8</td><td class="num">−0,0094</td></tr>
+<tr><td class="key">upper_wick_pct</td><td class="num">+0,0109</td><td class="num">+4,2</td><td class="num">+0,0109</td></tr>
+<tr><td class="key">tsi_momentum</td><td class="num">−0,0092</td><td class="num">−2,6</td><td class="num">+0,0115</td></tr>
+<tr><td class="key">adx_trend_strength</td><td class="num">+0,0079</td><td class="num">+2,0</td><td class="num">+0,0060</td></tr>
+<tr><td class="key">lower_wick_pct</td><td class="num">−0,0073</td><td class="num">−2,9</td><td class="num">+0,0063</td></tr>
+<tr><td class="key">move_balance, ritardata di N</td><td class="num">+0,0025</td><td class="num">+0,7</td><td class="num">+0,0215</td></tr>
+<tr><td class="key">volatility_expansion</td><td class="num">−0,0022</td><td class="num">−1,2</td><td class="num">+0,0059</td></tr>
+<tr><td class="key">signed_move_6</td><td class="num">+0,0022</td><td class="num">+0,9</td><td class="num">+0,0001</td></tr>
+<tr><td class="key">signed_move_24</td><td class="num">−0,0019</td><td class="num">−0,6</td><td class="num">−0,0061</td></tr>
+<tr><td class="key">deceleration</td><td class="num">+0,0019</td><td class="num">+1,1</td><td class="num">−0,0012</td></tr>
+<tr><td class="key">signed_move_12</td><td class="num">+0,0018</td><td class="num">+0,6</td><td class="num">−0,0042</td></tr>
+<tr><td class="key">divergence</td><td class="num">−0,0014</td><td class="num">−0,5</td><td class="num">+0,0163</td></tr>
+<tr><td class="key">realized_volatility</td><td class="num">+0,0008</td><td class="num">+0,2</td><td class="num">+0,0183</td></tr></tbody>
+  </table></div>
+  <p>Il più forte è <code>log_return</code> con Rank IC −0,022 (t −12,3): la coppia che è salita di più nell'ultima candela tende ad avere lo sbilanciamento peggiore nelle prossime 12 ore rispetto alle altre, una piccola inversione. Tutti i valori stanno sotto 0,025 in valore assoluto. L'etichetta ritardata non anticipa niente (Rank IC +0,0025, t +0,7): lo sbilanciamento delle ultime 12 ore non dice quello delle prossime.</p>
+  <div class="box no"><h4>non è una selezione</h4><p>Sono correlazioni univariate sul train, e servono a sapere l'ordine di grandezza, non a scegliere colonne: la selezione dello step 2 fatta così ha già perso contro il set completo quando è passata a una rete ricorrente. Una rete che legge le sequenze può comporre ciò che una colonna da sola non mostra.</p></div>
+</section>
+
+<section id="s12">
+  <h2><span class="n">12</span> · Conclusioni</h2>
+  <p class="h2sub">Cosa ne segue per il modello</p>
+  <ol>
+    <li><strong>È un'etichetta sul prezzo.</strong> Segno uguale al rendimento a 48 candele nel 84,8% dei casi: una buona misura contro l'etichetta sarà una buona misura contro il prezzo. Il giudice finale resta il rendimento futuro, ma i due numeri non possono più divergere come con <code>swing_leg_target</code>.</li>
+    <li><strong>È per il 61% mercato.</strong> Prima del modello va deciso se prevederla così o al netto della media delle coppie in ogni istante (sezione 6).</li>
+    <li><strong>Le code sono eventi veri</strong> (XRP, 13 luglio 2023): Huber, con δ rimisurato su questa etichetta — 0,71 a N = 48.</li>
+    <li><strong>Righe sovrapposte</strong>: 1.763 blocchi indipendenti sul train, non 1.692.380 righe. Ogni confronto fra modelli va letto con <code>rank_ic_t</code>, e il purging fra train e test è esatto a 48 candele.</li>
+    <li><strong>Il movimento c'è</strong>: 83% delle righe sopra il costo di andata e ritorno. Il segnale, oggi, è piccolo: nessuna delle 15 colonne arriva a |Rank IC| 0,025 da sola.</li>
+    <li><strong>N</strong>: in σ quasi nulla cambia fra 12 e 192 candele; in percentuale sì. N = 48 lascia sopra il costo il 83% delle righe; è una scelta sul costo e sul numero di finestre indipendenti, non sulla forma dell'etichetta.</li>
+  </ol>
+  <p class="muted" style="font-size:13px">Codice: <code>tradingvision.data.target.move_balance</code>, visibile su <code>app/chart.py</code> alla voce "rise minus fall ahead". Dati: dump pubblici Binance, 15m, 20 coppie, 2023-01-01 → 2025-05-31, chiusure tagliate alla fine del train così che nessuna etichetta legga una candela del test.</p>
+</section>
+<footer>Generato da uno script sullo store <code>data/</code>; ogni numero di questa pagina viene dai dati, nessuno è scritto a mano.</footer>
+</div>
+<script id="data" type="application/json">{"N":48,"tf":"15m","span":["2023-01-01","2025-05-31"],"rows":1692380,"symbols":20,"quantiles":{"q":[0.01,0.05,0.1,0.25,0.5,0.75,0.9,0.95,0.99],"y":[-3.5639649544175143,-1.9304299922432475,-1.3982109856881737,-0.7121851495886711,-7.31661982608933e-15,0.7043090040668889,1.4282730424281032,1.995571625287439,3.6164043583781287],"num":[-9.80187916184719,-5.236074935314679,-3.691230586429278,-1.7350157728706628,-1.1102230246251565e-14,1.701200261232008,3.8403719969103696,5.667216064457831,10.957269248316269],"rise":[0.0,0.0,0.0626075334318932,0.4341534008682979,1.1773273455516486,2.517985611510798,4.523469550229061,6.358528785430433,11.746453055368148],"fall":[0.0,0.0,0.05644893843243968,0.44234739015039937,1.2105665510388997,2.529761904761907,4.354838709677422,5.895042656099006,10.53213123678196]},"moments":{"mean":0.005817401627603779,"sd":1.4137476039445471,"skew":3.7810850328178316,"kurt":200.63189580059753,"num_mean":0.06216099481897445,"num_sd":3.7596653505807884},"shares":{"pos":0.4971253500986776,"abs_lt":{"0.1":0.07633155674257554,"0.25":0.18878443375601225,"0.5":0.36598458974934706,"1":0.6535984826102885,"2":0.9043211335515664,"3":0.9663208026566138},"num_gt_fee":0.834256490859027,"num_gt":{"0.5":0.834256490859027,"1":0.6820808565452203,"2":0.44089802526619315,"3":0.2804051099634834,"5":0.11898568879329702},"one_side_zero":0.17031281390704214,"rise_zero":0.08411526962029804,"fall_zero":0.08619754428674412},"tail":{"p999":9.713908699931318,"max":80.93087276792633,"gt":{"3":0.03367919734338624,"5":0.007605265956818209,"10":0.0008892801853011735,"20":7.267871281863411e-05},"sig_ratio":0.7275367735907445,"num_med_big":12.890395774923402,"kurt_trim":4.938587033965119,"top":[{"t":"2023-07-13 06:15","sym":"XRP","y":80.93087276792633,"num":80.59035888723722,"sig":0.14373027191693274},{"t":"2023-07-13 06:30","sym":"XRP","y":79.34887562898504,"num":79.99576181394363,"sig":0.14551426926722133},{"t":"2023-07-13 07:00","sym":"XRP","y":78.55468364809919,"num":80.87141339001063,"sig":0.14859436166667683},{"t":"2023-07-13 06:45","sym":"XRP","y":78.21264107172324,"num":80.94833085264726,"sig":0.1493861477116242},{"t":"2023-07-13 07:45","sym":"XRP","y":77.99752541774984,"num":80.50487908358083,"sig":0.14897752640562092},{"t":"2023-07-13 08:15","sym":"XRP","y":77.51563954971333,"num":80.56439635051984,"sig":0.15001448801258183},{"t":"2023-07-13 08:30","sym":"XRP","y":77.51316382373946,"num":80.48780487804879,"sig":0.14987665810704393},{"t":"2023-07-13 08:00","sym":"XRP","y":77.44265255949497,"num":80.02964845404489,"sig":0.14915920862407522}],"sym_share":{"TRX":0.082,"XRP":0.072,"BTC":0.071,"BCH":0.066,"ETH":0.063}},"hist_y":{"edges":[-4.0,-3.9,-3.8,-3.7,-3.6,-3.5,-3.4,-3.3,-3.2,-3.1,-3.0,-2.9,-2.8,-2.7,-2.5999999999999996,-2.5,-2.4,-2.3,-2.2,-2.0999999999999996,-2.0,-1.9,-1.7999999999999998,-1.6999999999999997,-1.5999999999999996,-1.5,-1.4,-1.2999999999999998,-1.1999999999999997,-1.0999999999999996,-1.0,-0.8999999999999999,-0.7999999999999998,-0.6999999999999997,-0.5999999999999996,-0.5,-0.3999999999999999,-0.2999999999999998,-0.19999999999999973,-0.09999999999999964,0.0,0.10000000000000053,0.20000000000000018,0.2999999999999998,0.40000000000000036,0.5,0.6000000000000005,0.7000000000000002,0.8000000000000007,0.9000000000000004,1.0,1.1000000000000005,1.2000000000000002,1.3000000000000007,1.4000000000000004,1.5,1.6000000000000005,1.7000000000000002,1.8000000000000007,1.9000000000000004,2.0,2.1000000000000005,2.2,2.3000000000000007,2.4000000000000004,2.5,2.6000000000000005,2.7,2.8000000000000007,2.9000000000000004,3.0,3.1000000000000005,3.2,3.3000000000000007,3.4000000000000004,3.5,3.6000000000000005,3.7,3.8000000000000007,3.9000000000000004,4.0],"counts":[13171,1005,1056,1237,1344,1605,1677,1957,2110,2392,2706,2966,3389,3744,4310,4973,5604,6424,7510,8586,10082,11453,13461,15883,18593,21575,25001,28730,33004,36976,41458,45558,49782,53982,56201,59023,60668,62105,63153,63545,65637,64001,62515,60449,58289,55513,52665,48165,43937,39491,34998,31364,27563,24262,20880,18136,15944,13963,11882,10568,9342,7968,7057,6099,5470,4646,4198,3645,3305,2985,2632,2362,2139,1898,1668,1594,1334,1187,1053,13577]},"hist_num":{"edges":[-8.0,-7.8,-7.6,-7.4,-7.2,-7.0,-6.8,-6.6,-6.4,-6.2,-6.0,-5.8,-5.6,-5.4,-5.199999999999999,-5.0,-4.8,-4.6,-4.4,-4.199999999999999,-4.0,-3.8,-3.5999999999999996,-3.3999999999999995,-3.1999999999999993,-3.0,-2.8,-2.5999999999999996,-2.3999999999999995,-2.1999999999999993,-2.0,-1.7999999999999998,-1.5999999999999996,-1.3999999999999995,-1.1999999999999993,-1.0,-0.7999999999999998,-0.5999999999999996,-0.39999999999999947,-0.1999999999999993,0.0,0.20000000000000107,0.40000000000000036,0.5999999999999996,0.8000000000000007,1.0,1.200000000000001,1.4000000000000004,1.6000000000000014,1.8000000000000007,2.0,2.200000000000001,2.4000000000000004,2.6000000000000014,2.8000000000000007,3.0,3.200000000000001,3.4000000000000004,3.6000000000000014,3.8000000000000007,4.0,4.200000000000001,4.4,4.600000000000001,4.800000000000001,5.0,5.200000000000001,5.4,5.600000000000001,5.800000000000001,6.0,6.200000000000001,6.4,6.600000000000001,6.800000000000001,7.0,7.200000000000001,7.4,7.600000000000001,7.800000000000001,8.0],"counts":[31529,2326,2474,2699,2985,3226,3495,3858,4292,4728,5299,5724,6296,6953,7707,8475,9443,10607,11872,12878,14124,15561,17400,19030,21018,23187,25636,27973,30859,33330,35927,38467,41155,43876,46968,49293,52047,54070,55439,55773,58359,55712,54773,52956,49618,46796,43900,40144,36852,34088,31378,28344,25856,23481,21571,19678,17616,16329,14825,13359,12324,11180,9984,9050,8430,7700,7026,6412,5981,5324,4915,4513,4246,3881,3592,3508,3149,2985,2664,41882]},"hist_rise":[262444,137844,131299,120441,108100,96638,85371,75203,67215,58907,53229,47186,42006,38086,33809,29772,27161,24124,21944,19705,17693,15959,14258,12654,11741,10518,9455,8585,7957,7167,6521,6011,5522,5146,4701,4434,4052,3856,3520,3325,2989,2800,2587,2475,2227,2049,1974,1775,1641,1581,1519,1346,1243,1139,1086,1025,983,858,832,16692],"hist_fall":[263414,132558,126847,116981,106068,95541,85065,76517,68245,61490,55820,50679,45308,40394,35550,32270,28685,25777,23327,20532,18843,16871,15196,13297,11858,10886,9660,8764,7777,7179,6590,5983,5389,4744,4355,4037,3649,3341,3038,2743,2555,2253,2146,1855,1752,1619,1537,1333,1263,1145,1067,1025,937,839,804,799,691,668,601,12223],"hist_rf_edges":[0.0,0.2,0.4,0.6000000000000001,0.8,1.0,1.2000000000000002,1.4000000000000001,1.6,1.8,2.0,2.2,2.4000000000000004,2.6,2.8000000000000003,3.0,3.2,3.4000000000000004,3.6,3.8000000000000003,4.0,4.2,4.4,4.6000000000000005,4.800000000000001,5.0,5.2,5.4,5.6000000000000005,5.800000000000001,6.0,6.2,6.4,6.6000000000000005,6.800000000000001,7.0,7.2,7.4,7.6000000000000005,7.800000000000001,8.0,8.200000000000001,8.4,8.6,8.8,9.0,9.200000000000001,9.4,9.600000000000001,9.8,10.0,10.200000000000001,10.4,10.600000000000001,10.8,11.0,11.200000000000001,11.4,11.600000000000001,11.8,12.0],"rise_fall_spearman":-0.4533650662645865,"per_symbol":[{"sym":"NEAR","n":84619,"mean":0.013380365724173044,"sd":1.2489190893561255,"pos":0.490315413795956,"med_abs":0.7180061086525789,"p99":3.956580120736539,"num_med":2.3325062034739386,"gt_fee":0.8813268887602075,"sig":0.480867911161734},{"sym":"CRV","n":84619,"mean":-0.001741393511948769,"sd":1.3468633078700627,"pos":0.49566882142308466,"med_abs":0.7080956445789452,"p99":4.363264472483831,"num_med":2.249488752556228,"gt_fee":0.8788215412614189,"sig":0.4593200992912531},{"sym":"SUSHI","n":84619,"mean":-0.011509774162540532,"sd":1.2982201242886078,"pos":0.491367187038372,"med_abs":0.6947564911706008,"p99":4.432228540993092,"num_med":2.211981566820276,"gt_fee":0.873739940202555,"sig":0.4592376872153645},{"sym":"SOL","n":84619,"mean":0.03907766547212604,"sd":1.350268185037255,"pos":0.5011994942034295,"med_abs":0.7290302441742771,"p99":4.396465419752065,"num_med":2.1513353115727107,"gt_fee":0.8755834977960033,"sig":0.41486021058472905},{"sym":"AAVE","n":84619,"mean":0.04221193037142757,"sd":1.3028506627215477,"pos":0.5017785603706023,"med_abs":0.7108072781420204,"p99":4.129550308084721,"num_med":2.099447513812147,"gt_fee":0.8683628972216642,"sig":0.42802796559118644},{"sym":"AVAX","n":84619,"mean":-0.01060585211293026,"sd":1.3565273929870272,"pos":0.49355345726137156,"med_abs":0.7321038506950952,"p99":4.409965995883939,"num_med":2.077431539187913,"gt_fee":0.8649948593105568,"sig":0.4124016805458133},{"sym":"UNI","n":84619,"mean":0.012145471787341513,"sd":1.4774498061912074,"pos":0.4906935794561505,"med_abs":0.7150569540612481,"p99":4.3277324369479935,"num_med":1.9705093833780274,"gt_fee":0.8633522022240868,"sig":0.3965305722704251},{"sym":"LINK","n":84619,"mean":0.01951561673834603,"sd":1.3122621186667904,"pos":0.5031966815963318,"med_abs":0.7122138090579555,"p99":4.37207131792951,"num_med":1.9224120047023119,"gt_fee":0.8577978940899798,"sig":0.38519279979722076},{"sym":"BAT","n":84619,"mean":-0.02562301378790006,"sd":1.294098024444287,"pos":0.4982450749831598,"med_abs":0.7289923676683095,"p99":4.256473476071708,"num_med":1.864101022248943,"gt_fee":0.85933419208452,"sig":0.3646284431476875},{"sym":"DOGE","n":84619,"mean":0.0035873062622750855,"sd":1.3588738165508003,"pos":0.4965669648660466,"med_abs":0.706296383098484,"p99":4.621278071475412,"num_med":1.8350946022906989,"gt_fee":0.8450111677046526,"sig":0.3797084553611536},{"sym":"ADA","n":84619,"mean":0.00489878558469597,"sd":1.43517846006469,"pos":0.48841276781810233,"med_abs":0.7137692510075945,"p99":4.374046412753797,"num_med":1.797842588893328,"gt_fee":0.8457556813481606,"sig":0.3615282026810342},{"sym":"DOT","n":84619,"mean":-0.040540321158254185,"sd":1.2998450513569821,"pos":0.48790460771221594,"med_abs":0.7173516743061904,"p99":4.144200892182444,"num_med":1.7225238719340896,"gt_fee":0.8391850530022809,"sig":0.3490867357585747},{"sym":"XTZ","n":84619,"mean":-0.05003324099727431,"sd":1.2767227025412282,"pos":0.48812914357295645,"med_abs":0.6980717850294321,"p99":4.182833672097799,"num_med":1.7110266159695686,"gt_fee":0.8430139803117503,"sig":0.3444315397109199},{"sym":"BCH","n":84619,"mean":0.03502063766961898,"sd":1.4111073896560962,"pos":0.49011451328897765,"med_abs":0.6886425472294688,"p99":5.019472699342517,"num_med":1.6795865633074891,"gt_fee":0.838464174712535,"sig":0.3471867286118737},{"sym":"YFI","n":84619,"mean":-0.04296279838463459,"sd":1.3019873001374027,"pos":0.4853992602134272,"med_abs":0.6762642011425309,"p99":4.254471302805603,"num_med":1.659798534798529,"gt_fee":0.8355215731691464,"sig":0.3431493004303814},{"sym":"LTC","n":84619,"mean":-0.024689561252301567,"sd":1.3470846883864875,"pos":0.5001004502534891,"med_abs":0.6794095638697518,"p99":4.911571530093573,"num_med":1.5115465360391878,"gt_fee":0.8195558917028091,"sig":0.31825963969502413},{"sym":"XRP","n":84619,"mean":0.030219274476472352,"sd":2.1578591373649303,"pos":0.4895472647986859,"med_abs":0.6663805694733782,"p99":5.133117010889534,"num_med":1.4642686614674494,"gt_fee":0.8107399047495243,"sig":0.30463543244739},{"sym":"ETH","n":84619,"mean":0.0049877200977290394,"sd":1.420070893476742,"pos":0.5042957255462721,"med_abs":0.7144130156791387,"p99":4.945961261793391,"num_med":1.2721503931705125,"gt_fee":0.7773313322067148,"sig":0.25791057382077665},{"sym":"BTC","n":84619,"mean":0.061980976465734534,"sd":1.4290485649134168,"pos":0.518086954466491,"med_abs":0.6692399745615624,"p99":5.141752437201107,"num_med":0.9788265165314392,"gt_fee":0.7048653375719401,"sig":0.21264321417814092},{"sym":"TRX","n":84619,"mean":0.05702823726991978,"sd":1.5850189116866198,"pos":0.5279310793084295,"med_abs":0.7905482467264888,"p99":5.3744862649600815,"num_med":0.8832315885179631,"gt_fee":0.7023718077500325,"sig":0.15545302724358545}],"monthly":{"month":["2023-01","2023-02","2023-03","2023-04","2023-05","2023-06","2023-07","2023-08","2023-09","2023-10","2023-11","2023-12","2024-01","2024-02","2024-03","2024-04","2024-05","2024-06","2024-07","2024-08","2024-09","2024-10","2024-11","2024-12","2025-01","2025-02","2025-03","2025-04","2025-05"],"mean":[0.3580902408986853,0.012360189014802644,-0.07057477855528366,-0.04149664824960744,-0.06582778973868546,-0.09947548639268725,0.12015518412677721,-0.18130905703673886,0.04609625432985338,0.19302359984475242,0.16329664823545678,0.14500102565949524,-0.17630930532308037,0.30906879368910645,0.02833219311773448,-0.2914723661589849,0.06357694541123284,-0.18953396720847945,-0.07408015661294612,-0.1073874810557357,0.06352010372567608,-0.02025353158733861,0.33843706289652853,-0.06283237255578895,-0.02195243766099955,-0.2925084991513016,-0.01968384705725455,-0.02463654844355755,0.05626706465706728],"pos":[0.565440188172043,0.49304315476190474,0.4785425782564793,0.48604166666666665,0.46018145161290325,0.5174479166666667,0.486307123655914,0.4391465053763441,0.5147916666666666,0.531989247311828,0.5464930555555556,0.5262936827956989,0.4571404569892473,0.5762571839080459,0.5021505376344086,0.43322916666666667,0.49507728494623654,0.4655902777777778,0.4903897849462366,0.4825772849462366,0.5145138888888889,0.4859711021505376,0.5652951388888889,0.4712197580645161,0.5110551075268818,0.45991443452380953,0.474630376344086,0.4988888888888889,0.49018101092896177],"basket":[39.20609993729845,-0.6426457092232133,0.4999313421834047,-3.9939333870238887,-8.247883786851155,1.3507119749096865,2.2883511796195326,-20.19037586497338,4.834165604750025,14.375836702671533,21.24219770977966,19.531549723518303,-12.465501804063313,27.957929974412053,22.561969071508507,-37.382199275278424,12.599388337211852,-15.986422179182135,-3.908145926725051,-11.355862423780154,10.400105696773457,-3.7596726391783672,63.44606083498492,-7.5255836983507,2.5565110997193026,-36.09489238465312,-13.865472530119552,6.199842946126412,3.6193561805271792]},"monthly_corr":0.9225532863217512,"yearly":[{"year":2023,"n":700700,"mean":0.04893217488154933,"sd":1.511317593170253,"pos":0.5037662337662338,"med_abs":0.6828366594951796,"num_med":1.435022170413336,"basket":70.25400542665896},{"year":2024,"n":702720,"mean":-0.011546570907533608,"sd":1.3298300657278712,"pos":0.4945099043715847,"med_abs":0.7149811136855164,"num_med":1.8468223791417826,"basket":44.58206596833264},{"year":2025,"n":288960,"mean":-0.05650441052337871,"sd":1.3628691678757203,"pos":0.4873823366555925,"med_abs":0.7535684993693621,"num_med":2.2346368715083775,"basket":-37.58465468839979}],"market_share":0.6070009162828842,"pair_corr":0.6123858150068422,"acf":{"lags":[1,2,4,8,12,16,24,32,40,48,56,64,72,96,120,144,192],"r":[0.9749849554312799,0.95045213928124,0.9029878422168773,0.8099344157225564,0.7169760865110711,0.6269046304845238,0.4539399264724662,0.29305106572581024,0.14598619160325627,0.03930157102251609,0.03377287499799299,0.027751924206880985,0.018842569260753537,0.0016567489708673034,0.021316665053532476,0.039188141169228884,0.020038633085295413]},"runs":{"median":3.0,"mean":12.605055786447394,"p90":42.0,"flip":0.07932236639958401,"hist_edges":[1,2,4,8,16,32,64,128,256,100000],"hist":[41717,27683,19428,14871,12757,12635,4834,336,1],"bars":[0.024649901322398044,0.03880216027133386,0.059615452794289696,0.0963223389546083,0.16871447310887625,0.34546083030997765,0.23655207459317648,0.02973150238126189,0.00015126626407780758]},"deciles":{"y":[-2.3367026624459157,-1.117261118552369,-0.7157746985897038,-0.41135184385575135,-0.13666656402851807,0.12680293282712027,0.40026894317010026,0.7086322117578672,1.1284509422523474,2.411775873740861],"fwd":[-4.363510297977259,-2.270490069404063,-1.4717531748525075,-0.8456208021793019,-0.272170619181034,0.2932157027486497,0.8538386482154782,1.4841410076281694,2.357915384989279,4.686259461678896],"fwd_pos":[0.011711317789149009,0.03926423143738404,0.09174653446625462,0.20404400902870515,0.3844822084874555,0.6100816601472483,0.7914534560796038,0.9057481180349567,0.9623843344875265,0.9899372481357614],"num":[-5.386397609325731,-3.0595416687919483,-2.073233133833141,-1.2296617979692042,-0.4197199674617679,0.3932370786937523,1.2046171783947337,2.07824250908494,3.1732837449388493,5.940783614459262]},"fwd":{"spearman":{"12":0.629558668609018,"24":0.7976216392449968,"48":0.8559881632747888,"96":0.5926174923636792},"sign":0.848498564152259},"vol":{"abs_y":[1.224282119207127,1.0829607931328855,1.0568052132953636,0.9998584249166895,0.9599836758366704,0.9258541941753957,0.8893985699618531,0.8372215029109652,0.7938592826316293,0.7234610817598768],"mean_y":[-0.07493809645136014,0.009332828308566582,0.03415118668991612,0.02292457269007156,-0.04829848096693353,-0.0007901494096939522,0.003420484210483563,0.002825998769447936,0.02142233569052448,0.0881227025411487],"abs_num":[1.4321423383363745,1.7005847729044756,1.9462363612657643,2.1016407747753405,2.240667188285609,2.426867757482464,2.6204875878890963,2.813455198565891,3.2333428658843615,4.443286754480357],"gt_fee":[0.7200898132829119,0.7748004325193067,0.8075325427354215,0.8210883951784448,0.8356416922713307,0.8470689043848245,0.8617229969274404,0.8732450957220516,0.8866993618529898,0.9146773812337509]},"abs_y_vs_sig":-0.11977666404331344,"abs_num_vs_sig":0.3660875584103754,"hour":{"abs_y":[0.871714270718786,0.8736982586655125,0.8711246085508422,0.8909000691970186,0.9148075091488463,0.9347809744283472,0.962896041922956,0.9815172695174053,0.9845018180834966,0.9882855964974542,0.9979273547808448,1.0205841787738974,1.0299862007453457,1.0556257083946765,1.050165458483504,1.017067198435767,0.9914273782986065,0.9590901831765624,0.9327275653401228,0.913230631587448,0.895031962602469,0.8940351135955312,0.8847998584032338,0.8691821282683501],"mean_y":[0.03031015158248488,0.04272581596351028,0.04938903152854854,0.028595096575533132,0.009955660757384452,-0.003662509711016445,-0.012777101889472585,-0.029937543280882006,-0.04046143053403412,-0.06502190536599485,-0.06344107523371267,-0.054889284483991115,-0.04830679255598434,-0.028590802270648138,-0.014956989593710314,-0.0027142780571860104,0.01848327117343153,0.039152563392647985,0.030152777730617128,0.04480756696100298,0.054740413913462245,0.06887793969670933,0.04783233212102894,0.039503521404599305],"abs_num":[2.277809893224472,2.2959291619330475,2.2961081048777805,2.338289046458498,2.399532785661444,2.4550875259024965,2.53005289727498,2.5800753920170547,2.597011701489732,2.616683078896502,2.6548313126521443,2.707250930995302,2.71463015989641,2.7787547598882107,2.768471417027568,2.6689879649580384,2.601799493555895,2.495858533772426,2.4434814240607206,2.4038274934327264,2.3577629589365166,2.342007765103069,2.3098260132996016,2.2674663395192742]},"weekday":{"abs_y":[1.0162347931264912,0.9027948937415379,0.9591297471028611,0.9139642576662275,0.9326461478380268,0.7590581003780024,1.1609914004317856],"mean_y":[-0.010576995965297441,-0.02041108215057654,0.0631077645201943,-0.03177920874930378,0.08118223978700805,0.07369703616257609,-0.11419742578871582],"abs_num":[2.726216930773578,2.5468176663980815,2.7023059128757088,2.5257299291331656,2.5409460108330237,1.9691367090726102,2.45787806609988]},"horizons":[{"n":12,"hours":3.0,"num_med":0.797546012269934,"num_p90":2.6314493767654126,"gt_fee":0.6615988423601677,"y_med":0.6652162546148954,"flip":0.16451969192241356,"acf_half":0.4392752009200563,"spearman_fwd":0.8569786416387091,"sign_fwd":0.8414635875022148,"market":0.6444439284972004,"pos":0.49819443624121434},{"n":24,"hours":6.0,"num_med":1.1647696686954478,"num_p90":3.797468354430378,"gt_fee":0.7599512068334062,"y_med":0.6848396659774445,"flip":0.11443432338555326,"acf_half":0.44116311588085766,"spearman_fwd":0.8553457112018608,"sign_fwd":0.8438524154389613,"market":0.6212041423896242,"pos":0.4961514832886358},{"n":48,"hours":12.0,"num_med":1.7183255273715003,"num_p90":5.441795543574248,"gt_fee":0.834256490859027,"y_med":0.7081991631950846,"flip":0.07932236639958401,"acf_half":0.4539399264724662,"spearman_fwd":0.8559881632747888,"sign_fwd":0.848498564152259,"market":0.6070009162828842,"pos":0.4971253500986776},{"n":96,"hours":24.0,"num_med":2.572976123327847,"num_p90":7.8335506152261605,"gt_fee":0.8902720790814819,"y_med":0.7438797614268041,"flip":0.05333215088092704,"acf_half":0.45345559316574385,"spearman_fwd":0.8549215474100835,"sign_fwd":0.8493886793345237,"market":0.603768236605669,"pos":0.4993727164157927},{"n":192,"hours":48.0,"num_med":3.74149659863946,"num_p90":11.397396951668652,"gt_fee":0.9236904409588635,"y_med":0.757258588818045,"flip":0.038067334327722135,"acf_half":0.44572915050696915,"spearman_fwd":0.8575778753969594,"sign_fwd":0.848227286179343,"market":0.5918603794566138,"pos":0.5059443622373483}],"predictors":[{"col":"log_return","pooled":-0.008820024757583951,"rank_ic":-0.02216489323266535,"t":-12.316940384211835},{"col":"distance_from_window_low_pct","pooled":0.010411950260960395,"rank_ic":-0.019019826432496983,"t":-5.138943165713451},{"col":"distance_from_psar_pct","pooled":-0.007211694671144056,"rank_ic":-0.017192489071261505,"t":-8.03034894753164},{"col":"distance_from_window_high_pct","pooled":-0.009424132994013915,"rank_ic":-0.013982458104653664,"t":-3.8230217886619524},{"col":"upper_wick_pct","pooled":0.010936773685730403,"rank_ic":0.01086951875943428,"t":4.2244286989639726},{"col":"tsi_momentum","pooled":0.011525423186807373,"rank_ic":-0.009231664090936554,"t":-2.5891663236870057},{"col":"adx_trend_strength","pooled":0.006008738742669511,"rank_ic":0.007852568056582798,"t":2.001695768168185},{"col":"lower_wick_pct","pooled":0.006330209051990594,"rank_ic":-0.007323492036739294,"t":-2.8616740357000117},{"col":"move_balance, ritardata di N","pooled":0.021530153150029856,"rank_ic":0.0025460124283878463,"t":0.6854551104089228},{"col":"volatility_expansion","pooled":0.0058892258417329885,"rank_ic":-0.002160514434616549,"t":-1.1867656855071784},{"col":"signed_move_6","pooled":5.168172260053019e-05,"rank_ic":0.0021588311499448026,"t":0.892496340710451},{"col":"signed_move_24","pooled":-0.006119447471150117,"rank_ic":-0.0019486717334566256,"t":-0.5751031128615672},{"col":"deceleration","pooled":-0.0012428613840501147,"rank_ic":0.0019027926143558853,"t":1.120490892501769},{"col":"signed_move_12","pooled":-0.0041864816007309074,"rank_ic":0.0018355567428581909,"t":0.6347319878276979},{"col":"divergence","pooled":0.01629307400054634,"rank_ic":-0.001434889834713278,"t":-0.4679735840311974},{"col":"realized_volatility","pooled":0.018301221373324492,"rank_ic":0.0008036372038036983,"t":0.17124004081578742}],"predictors_blocks":1763,"week":{"t":["02-18 00:00","02-18 00:15","02-18 00:30","02-18 00:45","02-18 01:00","02-18 01:15","02-18 01:30","02-18 01:45","02-18 02:00","02-18 02:15","02-18 02:30","02-18 02:45","02-18 03:00","02-18 03:15","02-18 03:30","02-18 03:45","02-18 04:00","02-18 04:15","02-18 04:30","02-18 04:45","02-18 05:00","02-18 05:15","02-18 05:30","02-18 05:45","02-18 06:00","02-18 06:15","02-18 06:30","02-18 06:45","02-18 07:00","02-18 07:15","02-18 07:30","02-18 07:45","02-18 08:00","02-18 08:15","02-18 08:30","02-18 08:45","02-18 09:00","02-18 09:15","02-18 09:30","02-18 09:45","02-18 10:00","02-18 10:15","02-18 10:30","02-18 10:45","02-18 11:00","02-18 11:15","02-18 11:30","02-18 11:45","02-18 12:00","02-18 12:15","02-18 12:30","02-18 12:45","02-18 13:00","02-18 13:15","02-18 13:30","02-18 13:45","02-18 14:00","02-18 14:15","02-18 14:30","02-18 14:45","02-18 15:00","02-18 15:15","02-18 15:30","02-18 15:45","02-18 16:00","02-18 16:15","02-18 16:30","02-18 16:45","02-18 17:00","02-18 17:15","02-18 17:30","02-18 17:45","02-18 18:00","02-18 18:15","02-18 18:30","02-18 18:45","02-18 19:00","02-18 19:15","02-18 19:30","02-18 19:45","02-18 20:00","02-18 20:15","02-18 20:30","02-18 20:45","02-18 21:00","02-18 21:15","02-18 21:30","02-18 21:45","02-18 22:00","02-18 22:15","02-18 22:30","02-18 22:45","02-18 23:00","02-18 23:15","02-18 23:30","02-18 23:45","02-19 00:00","02-19 00:15","02-19 00:30","02-19 00:45","02-19 01:00","02-19 01:15","02-19 01:30","02-19 01:45","02-19 02:00","02-19 02:15","02-19 02:30","02-19 02:45","02-19 03:00","02-19 03:15","02-19 03:30","02-19 03:45","02-19 04:00","02-19 04:15","02-19 04:30","02-19 04:45","02-19 05:00","02-19 05:15","02-19 05:30","02-19 05:45","02-19 06:00","02-19 06:15","02-19 06:30","02-19 06:45","02-19 07:00","02-19 07:15","02-19 07:30","02-19 07:45","02-19 08:00","02-19 08:15","02-19 08:30","02-19 08:45","02-19 09:00","02-19 09:15","02-19 09:30","02-19 09:45","02-19 10:00","02-19 10:15","02-19 10:30","02-19 10:45","02-19 11:00","02-19 11:15","02-19 11:30","02-19 11:45","02-19 12:00","02-19 12:15","02-19 12:30","02-19 12:45","02-19 13:00","02-19 13:15","02-19 13:30","02-19 13:45","02-19 14:00","02-19 14:15","02-19 14:30","02-19 14:45","02-19 15:00","02-19 15:15","02-19 15:30","02-19 15:45","02-19 16:00","02-19 16:15","02-19 16:30","02-19 16:45","02-19 17:00","02-19 17:15","02-19 17:30","02-19 17:45","02-19 18:00","02-19 18:15","02-19 18:30","02-19 18:45","02-19 19:00","02-19 19:15","02-19 19:30","02-19 19:45","02-19 20:00","02-19 20:15","02-19 20:30","02-19 20:45","02-19 21:00","02-19 21:15","02-19 21:30","02-19 21:45","02-19 22:00","02-19 22:15","02-19 22:30","02-19 22:45","02-19 23:00","02-19 23:15","02-19 23:30","02-19 23:45","02-20 00:00","02-20 00:15","02-20 00:30","02-20 00:45","02-20 01:00","02-20 01:15","02-20 01:30","02-20 01:45","02-20 02:00","02-20 02:15","02-20 02:30","02-20 02:45","02-20 03:00","02-20 03:15","02-20 03:30","02-20 03:45","02-20 04:00","02-20 04:15","02-20 04:30","02-20 04:45","02-20 05:00","02-20 05:15","02-20 05:30","02-20 05:45","02-20 06:00","02-20 06:15","02-20 06:30","02-20 06:45","02-20 07:00","02-20 07:15","02-20 07:30","02-20 07:45","02-20 08:00","02-20 08:15","02-20 08:30","02-20 08:45","02-20 09:00","02-20 09:15","02-20 09:30","02-20 09:45","02-20 10:00","02-20 10:15","02-20 10:30","02-20 10:45","02-20 11:00","02-20 11:15","02-20 11:30","02-20 11:45","02-20 12:00","02-20 12:15","02-20 12:30","02-20 12:45","02-20 13:00","02-20 13:15","02-20 13:30","02-20 13:45","02-20 14:00","02-20 14:15","02-20 14:30","02-20 14:45","02-20 15:00","02-20 15:15","02-20 15:30","02-20 15:45","02-20 16:00","02-20 16:15","02-20 16:30","02-20 16:45","02-20 17:00","02-20 17:15","02-20 17:30","02-20 17:45","02-20 18:00","02-20 18:15","02-20 18:30","02-20 18:45","02-20 19:00","02-20 19:15","02-20 19:30","02-20 19:45","02-20 20:00","02-20 20:15","02-20 20:30","02-20 20:45","02-20 21:00","02-20 21:15","02-20 21:30","02-20 21:45","02-20 22:00","02-20 22:15","02-20 22:30","02-20 22:45","02-20 23:00","02-20 23:15","02-20 23:30","02-20 23:45","02-21 00:00","02-21 00:15","02-21 00:30","02-21 00:45","02-21 01:00","02-21 01:15","02-21 01:30","02-21 01:45","02-21 02:00","02-21 02:15","02-21 02:30","02-21 02:45","02-21 03:00","02-21 03:15","02-21 03:30","02-21 03:45","02-21 04:00","02-21 04:15","02-21 04:30","02-21 04:45","02-21 05:00","02-21 05:15","02-21 05:30","02-21 05:45","02-21 06:00","02-21 06:15","02-21 06:30","02-21 06:45","02-21 07:00","02-21 07:15","02-21 07:30","02-21 07:45","02-21 08:00","02-21 08:15","02-21 08:30","02-21 08:45","02-21 09:00","02-21 09:15","02-21 09:30","02-21 09:45","02-21 10:00","02-21 10:15","02-21 10:30","02-21 10:45","02-21 11:00","02-21 11:15","02-21 11:30","02-21 11:45","02-21 12:00","02-21 12:15","02-21 12:30","02-21 12:45","02-21 13:00","02-21 13:15","02-21 13:30","02-21 13:45","02-21 14:00","02-21 14:15","02-21 14:30","02-21 14:45","02-21 15:00","02-21 15:15","02-21 15:30","02-21 15:45","02-21 16:00","02-21 16:15","02-21 16:30","02-21 16:45","02-21 17:00","02-21 17:15","02-21 17:30","02-21 17:45","02-21 18:00","02-21 18:15","02-21 18:30","02-21 18:45","02-21 19:00","02-21 19:15","02-21 19:30","02-21 19:45","02-21 20:00","02-21 20:15","02-21 20:30","02-21 20:45","02-21 21:00","02-21 21:15","02-21 21:30","02-21 21:45","02-21 22:00","02-21 22:15","02-21 22:30","02-21 22:45","02-21 23:00","02-21 23:15","02-21 23:30","02-21 23:45","02-22 00:00","02-22 00:15","02-22 00:30","02-22 00:45","02-22 01:00","02-22 01:15","02-22 01:30","02-22 01:45","02-22 02:00","02-22 02:15","02-22 02:30","02-22 02:45","02-22 03:00","02-22 03:15","02-22 03:30","02-22 03:45","02-22 04:00","02-22 04:15","02-22 04:30","02-22 04:45","02-22 05:00","02-22 05:15","02-22 05:30","02-22 05:45","02-22 06:00","02-22 06:15","02-22 06:30","02-22 06:45","02-22 07:00","02-22 07:15","02-22 07:30","02-22 07:45","02-22 08:00","02-22 08:15","02-22 08:30","02-22 08:45","02-22 09:00","02-22 09:15","02-22 09:30","02-22 09:45","02-22 10:00","02-22 10:15","02-22 10:30","02-22 10:45","02-22 11:00","02-22 11:15","02-22 11:30","02-22 11:45","02-22 12:00","02-22 12:15","02-22 12:30","02-22 12:45","02-22 13:00","02-22 13:15","02-22 13:30","02-22 13:45","02-22 14:00","02-22 14:15","02-22 14:30","02-22 14:45","02-22 15:00","02-22 15:15","02-22 15:30","02-22 15:45","02-22 16:00","02-22 16:15","02-22 16:30","02-22 16:45","02-22 17:00","02-22 17:15","02-22 17:30","02-22 17:45","02-22 18:00","02-22 18:15","02-22 18:30","02-22 18:45","02-22 19:00","02-22 19:15","02-22 19:30","02-22 19:45","02-22 20:00","02-22 20:15","02-22 20:30","02-22 20:45","02-22 21:00","02-22 21:15","02-22 21:30","02-22 21:45","02-22 22:00","02-22 22:15","02-22 22:30","02-22 22:45","02-22 23:00","02-22 23:15","02-22 23:30","02-22 23:45","02-23 00:00","02-23 00:15","02-23 00:30","02-23 00:45","02-23 01:00","02-23 01:15","02-23 01:30","02-23 01:45","02-23 02:00","02-23 02:15","02-23 02:30","02-23 02:45","02-23 03:00","02-23 03:15","02-23 03:30","02-23 03:45","02-23 04:00","02-23 04:15","02-23 04:30","02-23 04:45","02-23 05:00","02-23 05:15","02-23 05:30","02-23 05:45","02-23 06:00","02-23 06:15","02-23 06:30","02-23 06:45","02-23 07:00","02-23 07:15","02-23 07:30","02-23 07:45","02-23 08:00","02-23 08:15","02-23 08:30","02-23 08:45","02-23 09:00","02-23 09:15","02-23 09:30","02-23 09:45","02-23 10:00","02-23 10:15","02-23 10:30","02-23 10:45","02-23 11:00","02-23 11:15","02-23 11:30","02-23 11:45","02-23 12:00","02-23 12:15","02-23 12:30","02-23 12:45","02-23 13:00","02-23 13:15","02-23 13:30","02-23 13:45","02-23 14:00","02-23 14:15","02-23 14:30","02-23 14:45","02-23 15:00","02-23 15:15","02-23 15:30","02-23 15:45","02-23 16:00","02-23 16:15","02-23 16:30","02-23 16:45","02-23 17:00","02-23 17:15","02-23 17:30","02-23 17:45","02-23 18:00","02-23 18:15","02-23 18:30","02-23 18:45","02-23 19:00","02-23 19:15","02-23 19:30","02-23 19:45","02-23 20:00","02-23 20:15","02-23 20:30","02-23 20:45","02-23 21:00","02-23 21:15","02-23 21:30","02-23 21:45","02-23 22:00","02-23 22:15","02-23 22:30","02-23 22:45","02-23 23:00","02-23 23:15","02-23 23:30","02-23 23:45","02-24 00:00","02-24 00:15","02-24 00:30","02-24 00:45","02-24 01:00","02-24 01:15","02-24 01:30","02-24 01:45","02-24 02:00","02-24 02:15","02-24 02:30","02-24 02:45","02-24 03:00","02-24 03:15","02-24 03:30","02-24 03:45","02-24 04:00","02-24 04:15","02-24 04:30","02-24 04:45","02-24 05:00","02-24 05:15","02-24 05:30","02-24 05:45","02-24 06:00","02-24 06:15","02-24 06:30","02-24 06:45","02-24 07:00","02-24 07:15","02-24 07:30","02-24 07:45","02-24 08:00","02-24 08:15","02-24 08:30","02-24 08:45","02-24 09:00","02-24 09:15","02-24 09:30","02-24 09:45","02-24 10:00","02-24 10:15","02-24 10:30","02-24 10:45","02-24 11:00","02-24 11:15","02-24 11:30","02-24 11:45","02-24 12:00","02-24 12:15","02-24 12:30","02-24 12:45","02-24 13:00","02-24 13:15","02-24 13:30","02-24 13:45","02-24 14:00","02-24 14:15","02-24 14:30","02-24 14:45","02-24 15:00","02-24 15:15","02-24 15:30","02-24 15:45","02-24 16:00","02-24 16:15","02-24 16:30","02-24 16:45","02-24 17:00","02-24 17:15","02-24 17:30","02-24 17:45","02-24 18:00","02-24 18:15","02-24 18:30","02-24 18:45","02-24 19:00","02-24 19:15","02-24 19:30","02-24 19:45","02-24 20:00","02-24 20:15","02-24 20:30","02-24 20:45","02-24 21:00","02-24 21:15","02-24 21:30","02-24 21:45","02-24 22:00","02-24 22:15","02-24 22:30","02-24 22:45","02-24 23:00","02-24 23:15","02-24 23:30","02-24 23:45","02-25 00:00","02-25 00:15","02-25 00:30","02-25 00:45","02-25 01:00","02-25 01:15","02-25 01:30","02-25 01:45","02-25 02:00","02-25 02:15","02-25 02:30","02-25 02:45","02-25 03:00","02-25 03:15","02-25 03:30","02-25 03:45","02-25 04:00","02-25 04:15","02-25 04:30","02-25 04:45","02-25 05:00","02-25 05:15","02-25 05:30","02-25 05:45","02-25 06:00","02-25 06:15","02-25 06:30","02-25 06:45","02-25 07:00","02-25 07:15","02-25 07:30","02-25 07:45","02-25 08:00","02-25 08:15","02-25 08:30","02-25 08:45","02-25 09:00","02-25 09:15","02-25 09:30","02-25 09:45","02-25 10:00","02-25 10:15","02-25 10:30","02-25 10:45","02-25 11:00","02-25 11:15","02-25 11:30","02-25 11:45","02-25 12:00","02-25 12:15","02-25 12:30","02-25 12:45","02-25 13:00","02-25 13:15","02-25 13:30","02-25 13:45","02-25 14:00","02-25 14:15","02-25 14:30","02-25 14:45","02-25 15:00","02-25 15:15","02-25 15:30","02-25 15:45","02-25 16:00","02-25 16:15","02-25 16:30","02-25 16:45","02-25 17:00","02-25 17:15","02-25 17:30","02-25 17:45","02-25 18:00","02-25 18:15","02-25 18:30","02-25 18:45","02-25 19:00","02-25 19:15","02-25 19:30","02-25 19:45","02-25 20:00","02-25 20:15","02-25 20:30","02-25 20:45","02-25 21:00","02-25 21:15","02-25 21:30","02-25 21:45","02-25 22:00","02-25 22:15","02-25 22:30","02-25 22:45","02-25 23:00","02-25 23:15","02-25 23:30","02-25 23:45"],"c":[95900.88,95601.31,95626.46,95637.93,95976.19,96005.62,96105.38,96266.24,96196.9,96205.71,96096.43,96064.47,96161.43,96207.03,96263.88,96200.0,96260.04,96106.5,96214.32,96070.81,95944.32,95870.0,95750.0,95609.49,95300.01,95433.96,95509.43,95382.75,95402.11,95559.79,95475.24,95456.93,95326.0,95466.04,95365.34,95238.89,95437.9,95628.58,95600.32,95775.95,95634.57,95725.13,95865.61,95742.5,95638.03,95735.85,95629.34,95640.34,95812.46,95937.86,96151.99,96194.0,96350.0,96249.99,96278.94,96230.0,96281.59,96508.45,95941.32,95536.83,95578.01,95403.51,95531.77,95546.48,95402.58,95266.78,94671.66,94639.98,94774.17,94529.58,94258.86,94102.16,94051.23,94049.54,93736.37,93924.03,93512.71,93679.63,94021.77,94104.14,94444.0,94225.49,93849.83,94196.02,95159.77,95159.1,94908.4,95065.46,95018.86,95399.95,95272.21,95304.43,95442.93,95581.18,95395.56,95671.74,95584.0,95464.96,95499.99,95330.15,95215.01,95199.99,95326.06,95479.99,95609.56,95542.67,95721.11,95831.76,95660.0,95704.98,95711.6,95710.26,95631.99,95535.98,95377.2,95213.85,95259.05,95109.54,95314.72,95289.33,95351.46,95387.62,95362.09,95616.31,95736.76,95644.65,95719.99,95687.71,95737.08,95819.91,95758.63,95629.99,95745.88,95788.68,95870.68,95937.4,96371.3,96309.95,96247.74,96330.32,96370.13,96246.81,96272.83,96422.6,96386.94,96436.83,96289.71,96166.44,96181.45,96236.14,96367.11,96277.54,96172.01,96375.7,96005.47,95766.33,95774.01,95994.27,96265.67,95943.74,96197.97,96316.34,96204.0,96300.0,96217.62,96209.3,96435.52,96389.57,95919.34,96019.21,95898.12,95670.54,96016.89,95952.22,96042.81,96206.54,96401.68,96284.5,96335.99,96180.72,96247.34,96415.09,96421.85,96315.64,96430.2,96484.3,96476.0,96539.85,96601.17,96659.62,96678.92,96644.37,96544.8,96512.51,96550.59,96853.98,96718.78,96697.23,96688.56,96767.67,96939.02,96853.85,96871.95,97134.52,97152.0,96981.64,97067.99,97055.25,97126.81,97250.0,97233.73,97224.46,97125.19,97035.06,97122.36,96909.99,96804.58,96952.74,96946.5,96907.99,96831.8,96966.82,97011.11,96867.92,96875.91,96981.31,97025.73,97150.01,97228.13,97202.8,97271.99,97184.63,97123.05,97221.99,97289.25,97373.98,97290.42,97283.53,97194.52,97207.92,97436.51,97417.09,97492.53,97428.36,97400.3,97396.23,97319.17,97562.19,97732.78,97797.0,97729.11,96966.91,97061.72,97098.22,97216.87,96903.77,97413.51,97701.13,97943.99,97550.73,97757.9,97876.49,97935.99,97954.95,98211.15,98280.79,98279.99,98295.08,98415.1,98466.79,98369.74,98422.8,98430.02,98585.7,98612.0,98453.61,98304.35,98185.81,98114.01,98089.46,98143.79,98176.78,98307.68,98134.95,98258.99,98305.75,98400.0,98305.0,98475.47,98333.27,98138.96,98236.32,98174.41,98170.29,98208.78,98312.0,98355.76,98267.32,98173.98,98111.12,98150.77,98256.79,98143.99,98141.99,98232.13,98171.5,98259.83,98204.01,98260.69,98261.4,98362.98,98333.58,98365.63,98381.06,98380.41,98409.99,98451.46,98435.92,98278.1,98179.76,98248.71,98182.2,98209.82,98213.41,98352.01,98371.97,98214.72,98337.7,98431.59,98424.0,98531.4,98612.0,98578.01,98769.41,98712.0,98629.3,98628.68,98862.79,98787.99,98904.0,99316.83,99211.5,99335.21,99334.93,99120.98,99054.77,98646.69,98777.77,99195.06,98216.01,97600.6,98104.04,98587.99,98301.89,98366.04,98215.81,97973.41,97911.98,97132.08,96971.9,96731.98,97075.48,96845.21,96543.52,96570.6,95904.13,95447.28,95285.11,95287.99,95250.88,95357.85,95066.25,95377.68,95076.0,95176.47,95395.03,95552.8,95777.01,95750.62,95823.53,95800.58,96052.91,96162.81,96181.98,95986.51,95804.0,96142.05,96185.9,96269.84,96359.91,96413.3,96233.2,96221.18,96110.01,96431.64,96343.22,96213.1,96310.91,96193.11,96299.07,96435.03,96366.18,96439.53,96387.36,96398.42,96487.72,96529.99,96509.83,96490.56,96444.0,96353.13,96395.18,96416.18,96450.0,96447.99,96288.09,96163.46,96257.84,96214.27,96219.8,96369.68,96358.54,96395.79,96493.95,96499.99,96543.01,96536.18,96500.16,96524.47,96528.3,96595.0,96580.0,96646.0,96608.67,96714.82,96823.94,96828.98,96768.45,96658.87,96566.03,96608.53,96650.02,96623.99,96535.9,96596.5,96557.3,96550.0,96592.0,96734.88,96716.98,96641.51,96504.01,96605.52,96604.48,96673.51,96639.38,96673.13,96770.0,96649.99,96449.99,96454.63,96590.59,96611.68,96639.99,96584.0,96539.17,96575.49,96578.01,96582.74,96528.02,96624.99,96658.57,96644.65,96632.44,96668.84,96634.06,96633.97,96613.58,96600.19,96551.01,96497.9,96537.99,96587.91,96643.46,96554.89,96506.0,96418.43,96452.83,96484.77,96430.91,96459.96,96410.27,96447.43,96528.26,96497.98,96414.0,96445.19,96453.14,96432.21,96395.88,96354.3,96339.99,96273.51,96208.62,96207.94,96282.91,96326.01,96342.91,96321.07,96400.01,96558.01,96508.85,96432.14,96337.39,96352.0,96364.32,96317.53,96312.97,96336.2,96286.02,96242.84,96250.0,96132.01,96193.88,96213.33,96195.0,96156.02,96115.99,96016.39,95814.64,95761.32,95732.93,95850.71,95747.16,95886.25,95977.96,96028.69,95985.99,95836.0,95593.89,95630.0,95716.0,95608.25,95436.18,95561.45,95566.99,95553.5,95420.5,95343.98,95260.76,95574.61,95656.78,95655.01,95832.01,95760.3,95740.0,95767.2,95842.21,95791.49,95755.99,95746.67,95726.0,95741.7,95777.7,95720.01,95697.82,95685.35,95755.25,95689.96,95615.3,95840.52,95787.13,96161.63,95854.28,95989.46,96258.0,96465.82,96408.6,96292.8,96247.35,96131.53,96092.52,95852.73,95971.24,96084.01,95972.43,95943.45,95829.35,95742.63,95515.01,95747.13,95433.21,95473.09,95350.0,95256.0,95298.0,95471.59,95500.74,95698.12,95727.39,95664.95,95678.65,95729.64,95864.31,95772.96,95804.27,95753.88,95872.02,95719.8,95423.99,95544.32,95509.49,95730.0,96019.5,95847.19,95765.76,95756.57,95577.83,95553.47,95631.66,95471.59,95710.61,95772.86,95821.45,95787.59,95832.0,95846.91,95798.46,95778.0,95960.74,95874.4,95594.57,95412.01,95389.01,95140.5,94674.44,94855.35,94333.52,94100.01,94323.95,94726.87,94783.79,94774.11,94434.49,94613.14,94949.86,95118.06,94644.0,94667.99,94503.51,94359.53,94161.67,94315.75,94387.36,93770.05,93943.51,94260.01,94180.0,94362.0,94020.0,93861.6,94100.38,94243.42,93979.44,93166.07,93507.72,93135.0,92432.06,92500.0,92034.77,92033.06,91552.88,91006.62,91662.16,91646.24,91857.29,91727.1,91793.48,92360.0,92018.41,91808.65,92098.71,92325.35,92376.68,92151.5,92075.48,92294.14,92153.93,92076.93,92294.84,92019.98,91900.01,91953.12,91918.42,91932.0,92070.34,91758.23,91560.0,91584.83,91275.99,90383.97,89405.59,89094.01,89320.01,89841.17,89659.24,89676.0,89400.53,89347.57,88650.0,88969.18,88303.73,87746.64,87782.01,88020.01,88213.77,88158.02,87738.02,88848.86,89239.39,89244.03,89301.88,88994.28,89395.98,89384.0,89051.49,89048.05,88826.11,89118.92,89165.44,88022.0,87157.25,86828.15,86620.21,86992.59,87231.26,87102.98,86388.0,87278.01,87460.0,87494.96,87521.09,87126.01,87259.99,87392.62,86943.4,87509.43,87070.07,86716.98,86898.57,87279.99,87947.25,87834.6,88680.59,88258.47,88161.03,87947.31,88301.89,88446.02,88821.0,88987.38,88841.58,88648.61,88807.64,88995.2,89048.69,88756.5,88680.4],"y":[-0.2838,0.2882,0.2403,0.2185,-0.3371,-0.3939,-0.5784,-0.8792,-0.7511,-0.6198,-0.4175,-0.358,-0.539,-0.6241,-0.7296,-0.6102,-0.7243,-0.4367,-1.1728,-0.9303,-0.6989,-0.6685,-0.6997,-0.5801,-0.038,-0.29,-0.7226,-0.4854,-0.7307,-1.0209,-0.8689,-0.8368,-0.5923,-0.8532,-0.664,-0.4279,-0.793,-1.1352,-1.0849,-1.4014,-1.1525,-1.3191,-1.5804,-1.3505,-1.1612,-1.339,-1.1446,-1.1649,-1.4803,-1.7041,-2.073,-2.1574,-2.4308,-2.2471,-2.2986,-2.2115,-2.4407,-2.9006,-2.2059,-1.5359,-1.6163,-1.302,-1.5712,-1.6739,-1.3946,-1.1355,0.001,0.0579,-0.1853,0.2597,0.7474,1.0282,1.1282,1.1359,1.6897,1.3372,2.0187,1.8632,1.3806,1.2402,0.6534,1.0118,1.6175,1.3012,0.2907,0.2917,0.6625,0.5706,0.9434,0.4645,0.6391,0.5965,0.4054,0.2165,0.468,0.1265,0.2446,0.4182,0.3705,0.6,0.7663,0.7871,0.6127,0.4012,0.2232,0.3146,0.0707,-0.0794,0.1533,0.0923,0.0834,0.0853,0.1914,0.3224,0.5385,0.7615,0.7005,0.904,0.7425,0.7788,0.744,0.7028,0.7386,0.5592,0.4032,0.5298,0.4269,0.471,0.4043,0.2914,0.3756,0.5522,0.4221,0.3647,0.2515,0.1602,-0.4274,-0.3132,-0.2299,-0.304,-0.3166,-0.1105,-0.1328,-0.3342,-0.2871,-0.3549,-0.1563,0.1302,0.1101,0.0356,-0.1425,-0.0208,0.1805,-0.0963,0.4171,0.9007,0.9023,0.588,0.2033,0.6466,0.2928,0.1976,0.3686,0.2302,0.349,0.3643,0.0361,0.1035,0.7711,0.6276,0.811,1.1372,0.8484,0.9446,0.8902,0.7475,0.4647,0.6427,0.5793,0.8272,0.9132,0.6653,0.6832,0.8805,0.7731,0.7373,0.7728,0.7657,0.651,0.5412,0.509,0.5853,0.8419,0.9089,0.9261,0.4582,0.7203,0.7621,0.7812,0.7744,0.6398,0.8675,0.8378,0.32,0.2887,0.6155,0.448,0.4725,0.335,0.0977,0.2725,0.2928,0.4858,0.665,0.4972,0.9177,1.3711,1.1701,1.1827,1.289,1.5597,1.377,1.2903,1.5656,1.5582,1.4926,1.4324,1.1903,1.0382,1.0879,0.952,1.1221,1.3008,1.096,0.9583,0.7843,0.9539,0.9726,1.1532,1.1317,0.6518,0.6915,0.541,0.6746,0.732,0.7406,0.9008,0.3963,0.0506,-0.0795,0.0609,1.4767,1.2965,1.24,1.0291,1.6329,1.0934,0.6827,0.2443,0.9185,0.7338,0.63,0.5835,0.5674,0.2497,0.1252,0.1271,0.1014,-0.1197,-0.216,-0.0353,-0.1345,-0.149,-0.441,-0.4903,-0.3217,-0.041,0.1812,0.3155,0.3627,0.2813,0.2192,0.0255,0.4223,0.1905,0.2498,0.0746,0.2503,-0.0649,0.2824,0.6346,0.5025,1.004,1.0119,0.9571,0.7636,0.6857,0.8514,1.0241,1.1571,1.1107,0.9146,0.6142,0.618,0.4464,0.5626,0.3941,0.4997,0.393,0.3926,-0.2455,-0.3459,-0.6399,-0.6724,-0.6712,-0.9112,-0.993,-1.5881,-1.7165,-1.6898,-1.8213,-1.7275,-1.781,-1.9734,-2.2341,-2.2731,-1.9595,-2.193,-2.3713,-2.3609,-2.5618,-2.7152,-2.6553,-2.9969,-2.8928,-2.7307,-2.7599,-3.1696,-3.0264,-3.2408,-3.8761,-3.6753,-3.8958,-3.9384,-3.6582,-3.536,-2.7012,-3.3679,-4.0454,-2.255,-1.1909,-1.9164,-2.6414,-2.3828,-2.4967,-2.4354,-2.2469,-2.204,-1.483,-1.2921,-0.9528,-1.4204,-1.2532,-1.0146,-1.0544,-0.1425,0.4645,0.6796,0.6757,0.7279,0.5839,0.968,0.5543,0.9438,0.8762,0.7283,0.6242,0.4685,0.5033,0.4426,0.4729,0.1521,0.0462,0.0221,0.3012,0.532,0.337,0.3505,0.2485,0.1361,0.0698,0.2936,0.3086,0.4472,0.0792,0.1878,0.3476,0.2273,0.3723,0.2415,0.0748,0.159,0.0693,0.1331,0.1196,0.0104,-0.0412,-0.0166,0.0069,0.0639,0.1751,0.1235,0.0979,0.0565,0.059,0.2548,0.4078,0.3226,0.3762,0.3728,0.2737,0.2874,0.2649,0.1779,0.1707,0.118,0.1265,0.1708,0.141,0.1368,0.0547,0.0731,-0.008,0.0381,-0.0929,-0.2271,-0.2375,-0.1988,-0.0813,0.0355,-0.0181,-0.0704,-0.0381,0.0696,-0.0083,0.0477,0.0612,-0.003,-0.2375,-0.2106,-0.0854,0.1315,-0.0726,-0.0829,-0.2848,-0.2832,-0.3518,-0.5504,-0.4188,-0.0233,-0.0326,-0.3458,-0.4255,-0.5009,-0.3613,-0.2501,-0.3413,-0.3614,-0.3889,-0.2532,-0.5268,-0.6352,-0.6018,-0.5809,-0.8034,-0.7385,-0.7386,-0.7021,-0.6649,-0.5355,-0.5378,-1.012,-1.3679,-1.6131,-1.4496,-1.2824,-0.9679,-1.1181,-1.2332,-1.0467,-1.2678,-1.3559,-1.5319,-1.8697,-1.7711,-1.7578,-1.9267,-1.9717,-1.8925,-1.7723,-1.7552,-1.8924,-1.5971,-1.3077,-1.3052,-1.6238,-1.8237,-1.9008,-1.8055,-2.1366,-2.7398,-2.7105,-2.5768,-2.3093,-2.3785,-2.4323,-2.3478,-2.3276,-2.4348,-2.3453,-2.2265,-2.265,-1.7802,-2.0492,-2.1367,-2.0955,-2.0059,-1.6064,-0.6871,0.2092,0.4445,0.578,0.0546,0.501,-0.0975,-0.4853,-0.6989,-0.5192,0.1131,1.0652,0.9246,0.5785,0.9935,1.6309,1.1559,1.1344,1.1814,1.6961,2.0084,2.3233,1.0132,0.7172,0.7245,0.0997,0.3494,0.4319,0.3344,0.0674,0.2502,0.3785,0.4129,0.4881,0.4317,0.3008,0.5087,0.5899,0.6409,0.384,0.6201,0.8886,0.0706,0.2553,-0.9387,0.0197,-0.377,-1.1182,-1.6658,-1.5868,-1.4222,-1.3616,-1.2009,-1.1482,-0.4917,-0.8045,-1.0982,-0.8853,-0.9619,-1.2727,-1.0428,-0.879,-1.7384,-0.9157,-1.0127,-0.7087,-0.4785,-0.5801,-0.9889,-1.058,-1.5076,-1.5775,-1.4292,-1.4645,-1.5839,-1.8869,-1.6701,-1.7463,-2.034,-2.2994,-1.9333,-1.2126,-1.4786,-1.3997,-1.8669,-2.4409,-2.1172,-1.9411,-2.5736,-2.1733,-2.1624,-3.0816,-2.7244,-3.5889,-3.7153,-4.3153,-4.8283,-4.9719,-5.0065,-4.9042,-4.8805,-5.2262,-5.1564,-4.7821,-4.5651,-4.5436,-4.2531,-3.2022,-3.525,-2.3708,-1.9235,-2.317,-2.95,-3.0466,-3.0298,-2.3931,-2.6838,-3.1889,-3.5118,-2.988,-3.0263,-2.9012,-2.7564,-2.4195,-3.1683,-4.0861,-3.1825,-3.427,-3.8397,-3.7193,-3.9659,-3.5014,-3.2628,-3.9027,-4.0928,-4.1345,-3.4512,-3.8432,-3.5842,-2.9486,-3.08,-2.5442,-2.5493,-1.9197,-1.203,-1.9246,-1.9063,-2.1418,-1.9891,-2.0645,-2.6447,-2.2477,-2.011,-2.3164,-2.5528,-2.9353,-2.9124,-2.9538,-3.1936,-3.0553,-2.9714,-3.3274,-3.1396,-3.0082,-3.0744,-3.0374,-3.0644,-3.2095,-3.0254,-2.9009,-2.929,-2.7554,-2.1547,-1.3275,-1.0066,-1.2312,-1.7161,-1.624,-1.6429,-1.5055,-1.4624,-0.7541,-1.0583,-0.399,0.1399,0.1058,-0.1221,-0.3053,-0.2527,0.1467,-0.8368,-1.1623,-1.166,-1.2149,-0.9508,-1.2785,-1.2735,-1.087,-1.084,-0.8975,-1.138,-1.1763,-0.248,0.4532,0.8119,0.9888,0.6763,0.4818,0.5907,1.1628,0.5512,0.4102,0.3838,0.3655,0.6725,0.5697,0.4655,0.8131,0.3672,0.7003,0.9708,0.8984,0.7519,0.4463,0.5323,-0.0509,0.2511,0.3219,0.4762,0.292,0.1887,-0.078,-0.1982,-0.0943,0.0449,-0.0709,-0.2074,-0.2476,-0.0336,0.0223],"rise":[0.381,0.696,0.669,0.657,0.389,0.359,0.255,0.087,0.159,0.315,0.429,0.462,0.361,0.313,0.254,0.321,0.258,0.418,0.306,0.456,0.588,0.666,0.792,0.94,1.268,1.126,1.046,1.18,1.16,0.993,1.082,1.102,1.24,1.092,1.199,1.333,1.122,0.92,0.95,0.765,0.914,0.818,0.671,0.8,0.91,0.807,0.919,0.908,0.726,0.595,0.371,0.327,0.164,0.269,0.238,0.289,0.236,0.0,0.0,0.309,0.265,0.449,0.314,0.299,0.45,0.593,1.225,1.259,1.116,1.378,1.669,1.838,1.893,1.895,2.235,2.031,2.48,2.297,1.925,1.836,1.469,1.705,2.112,1.737,0.706,0.707,1.014,0.917,1.423,1.018,1.154,1.119,0.973,0.827,1.023,0.785,0.877,1.018,0.981,1.161,1.283,1.299,1.165,1.002,0.865,0.936,0.748,0.631,0.812,0.765,0.758,0.759,0.842,0.943,1.111,1.284,1.236,1.396,1.177,1.204,1.138,1.1,1.127,0.858,0.731,0.828,0.749,0.783,0.731,0.644,0.708,0.844,0.722,0.677,0.591,0.521,0.068,0.181,0.246,0.218,0.24,0.429,0.422,0.266,0.303,0.251,0.404,0.715,0.699,0.642,0.505,0.599,0.798,0.585,0.972,1.429,1.439,1.206,0.921,1.259,0.992,0.969,1.087,0.987,1.073,1.082,0.845,0.893,1.387,1.282,1.41,1.651,1.284,1.353,1.257,1.085,0.88,1.003,0.949,1.112,1.042,0.866,0.882,0.993,0.873,0.816,0.843,0.864,0.8,0.739,0.719,0.755,0.924,0.957,0.976,0.659,0.8,0.822,0.832,0.821,0.819,0.974,0.955,0.682,0.664,0.841,0.751,0.764,0.69,0.562,0.73,0.74,0.843,0.937,0.846,1.078,1.453,1.37,1.376,1.431,1.635,1.547,1.501,1.651,1.642,1.654,1.635,1.505,1.423,1.45,1.378,1.469,1.533,1.43,1.36,1.271,1.358,1.366,1.458,1.444,1.206,1.227,1.148,1.215,1.244,1.248,1.328,1.076,0.9,0.833,0.903,1.697,1.597,1.559,1.435,1.763,1.23,0.932,0.682,1.088,0.874,0.751,0.69,0.671,0.408,0.337,0.338,0.322,0.2,0.147,0.246,0.192,0.185,0.027,0.0,0.022,0.174,0.295,0.368,0.394,0.338,0.304,0.228,0.486,0.359,0.472,0.375,0.472,0.298,0.538,0.738,0.68,1.164,1.168,1.147,1.041,0.996,1.087,1.183,1.248,1.207,1.098,1.214,1.216,1.123,1.185,1.094,1.152,1.094,1.093,0.988,1.019,0.986,0.97,0.971,0.94,0.898,0.914,1.076,1.177,1.106,1.174,1.146,1.142,1.0,0.979,1.141,1.014,0.918,0.926,0.816,0.733,0.768,0.573,0.631,0.716,0.716,0.478,0.554,0.436,0.019,0.125,0.0,0.0,0.075,0.142,0.556,0.422,0.0,0.379,1.012,0.493,0.0,0.065,0.0,0.0,0.0,0.0,0.0,0.107,0.355,0.0,0.0,0.028,0.0,0.653,1.134,1.306,1.303,1.343,1.229,1.54,1.208,1.529,1.422,1.19,1.023,0.8,0.828,0.751,0.775,0.51,0.449,0.429,0.687,0.879,0.596,0.663,0.581,0.487,0.431,0.619,0.632,0.748,0.412,0.504,0.64,0.538,0.661,0.55,0.409,0.48,0.404,0.458,0.447,0.354,0.31,0.331,0.351,0.399,0.494,0.45,0.428,0.393,0.395,0.562,0.692,0.593,0.639,0.633,0.477,0.488,0.449,0.347,0.341,0.296,0.303,0.341,0.315,0.311,0.242,0.258,0.189,0.228,0.118,0.005,0.0,0.002,0.115,0.211,0.167,0.124,0.151,0.243,0.18,0.22,0.228,0.184,0.036,0.055,0.133,0.276,0.17,0.171,0.1,0.135,0.1,0.0,0.02,0.227,0.222,0.081,0.059,0.03,0.088,0.134,0.097,0.094,0.089,0.146,0.045,0.011,0.025,0.038,0.0,0.01,0.01,0.031,0.045,0.096,0.151,0.109,0.058,0.0,0.003,0.054,0.145,0.109,0.076,0.132,0.102,0.153,0.115,0.031,0.062,0.149,0.117,0.109,0.13,0.168,0.211,0.226,0.296,0.363,0.364,0.286,0.241,0.223,0.246,0.164,0.0,0.0,0.0,0.028,0.013,0.0,0.019,0.024,0.0,0.0,0.007,0.0,0.085,0.02,0.0,0.0,0.006,0.148,0.468,0.68,0.736,0.766,0.642,0.751,0.604,0.508,0.455,0.5,0.657,0.912,0.874,0.783,0.897,1.079,0.946,0.941,0.955,1.095,1.177,1.265,0.932,0.846,0.848,0.661,0.737,0.758,0.729,0.651,0.704,0.741,0.751,0.773,0.756,0.718,0.779,0.803,0.816,0.742,0.811,0.89,0.652,0.709,0.316,0.638,0.496,0.216,0.0,0.0,0.0,0.0,0.0,0.0,0.241,0.118,0.0,0.049,0.079,0.198,0.289,0.528,0.284,0.614,0.572,0.702,0.802,0.757,0.574,0.543,0.336,0.305,0.371,0.356,0.303,0.162,0.257,0.225,0.277,0.154,0.313,0.624,0.497,0.534,0.302,0.0,0.118,0.204,0.213,0.401,0.426,0.344,0.512,0.261,0.196,0.145,0.181,0.134,0.119,0.169,0.191,0.0,0.0,0.0,0.0,0.0,0.0,0.469,0.277,0.832,1.082,0.842,0.413,0.353,0.363,0.724,0.534,0.177,0.0,0.025,0.0,0.0,0.029,0.24,0.076,0.0,0.631,0.445,0.108,0.193,0.0,0.238,0.407,0.152,0.0,0.0,0.367,0.0,0.0,0.074,0.0,0.372,0.373,0.9,1.505,0.78,0.797,0.565,0.708,0.635,0.018,0.389,0.619,0.302,0.056,0.0,0.156,0.238,0.001,0.153,0.237,0.0,0.055,0.185,0.127,0.165,0.15,0.0,0.0,0.027,0.0,0.0,0.0,0.487,0.839,0.583,0.0,0.019,0.0,0.0,0.054,0.841,0.48,1.237,1.88,1.839,1.563,1.34,1.404,1.89,0.616,0.175,0.17,0.105,0.451,0.0,0.0,0.128,0.132,0.382,0.052,0.0,1.166,2.17,2.814,3.061,2.619,2.339,2.489,3.338,2.284,2.071,2.03,2.0,2.462,2.305,2.15,2.678,2.013,2.528,2.946,2.73,2.282,1.506,1.636,0.666,1.148,1.259,1.505,1.098,0.933,0.507,0.319,0.484,0.702,0.522,0.31,0.25,0.58,0.666],"fall":[0.69,0.379,0.405,0.417,0.768,0.799,0.902,1.067,0.996,1.005,0.892,0.859,0.959,1.006,1.065,0.999,1.061,0.903,1.603,1.489,1.359,1.398,1.557,1.577,1.31,1.451,1.856,1.726,1.98,2.142,2.056,2.037,1.902,2.046,1.943,1.812,2.017,2.213,2.184,2.363,2.219,2.311,2.454,2.329,2.222,2.322,2.213,2.225,2.4,2.528,2.745,2.787,2.945,2.844,2.873,2.824,2.876,3.104,2.531,2.119,2.161,1.982,2.113,2.129,1.981,1.841,1.224,1.191,1.331,1.076,0.792,0.626,0.573,0.571,0.239,0.438,0.0,0.0,0.183,0.27,0.629,0.399,0.0,0.0,0.264,0.263,0.0,0.049,0.0,0.304,0.171,0.204,0.349,0.493,0.3,0.588,0.496,0.372,0.409,0.231,0.111,0.095,0.227,0.388,0.523,0.453,0.639,0.754,0.575,0.622,0.629,0.628,0.546,0.446,0.281,0.11,0.157,0.0,0.027,0.0,0.0,0.027,0.0,0.0,0.112,0.015,0.094,0.06,0.112,0.198,0.134,0.0,0.079,0.123,0.209,0.278,0.727,0.664,0.6,0.685,0.726,0.599,0.626,0.78,0.743,0.795,0.643,0.516,0.531,0.588,0.723,0.63,0.521,0.732,0.349,0.1,0.108,0.337,0.618,0.285,0.548,0.67,0.555,0.654,0.569,0.56,0.793,0.746,0.259,0.363,0.237,0.0,0.067,0.0,0.0,0.027,0.229,0.108,0.161,0.0,0.0,0.103,0.11,0.0,0.0,0.009,0.0,0.028,0.092,0.152,0.172,0.136,0.033,0.0,0.0,0.171,0.031,0.009,0.0,0.0,0.139,0.051,0.07,0.34,0.358,0.183,0.271,0.258,0.332,0.458,0.441,0.432,0.33,0.238,0.327,0.109,0.0,0.125,0.118,0.079,0.0,0.102,0.148,0.0,0.0,0.08,0.126,0.253,0.334,0.308,0.379,0.289,0.226,0.327,0.396,0.483,0.397,0.39,0.299,0.313,0.547,0.527,0.604,0.538,0.51,0.506,0.427,0.675,0.848,0.913,0.845,0.065,0.163,0.2,0.322,0.0,0.0,0.154,0.402,0.0,0.0,0.0,0.0,0.0,0.124,0.195,0.194,0.209,0.331,0.383,0.285,0.339,0.346,0.503,0.53,0.37,0.219,0.098,0.025,0.0,0.033,0.067,0.2,0.024,0.15,0.198,0.294,0.197,0.37,0.226,0.028,0.127,0.064,0.06,0.099,0.204,0.249,0.159,0.064,0.0,0.009,0.117,0.554,0.552,0.643,0.582,0.671,0.614,0.672,0.672,1.251,1.385,1.661,1.676,1.676,1.897,1.938,2.572,2.88,2.948,3.016,2.986,3.013,3.204,3.341,3.36,3.206,3.327,3.419,3.412,3.517,3.596,3.562,3.749,3.693,3.613,3.612,3.84,3.767,3.88,4.28,4.178,4.298,4.297,4.091,4.027,3.63,3.757,4.162,3.207,2.597,3.096,3.572,3.292,3.355,3.207,2.967,2.906,2.127,1.965,1.722,2.07,1.837,1.53,1.558,0.874,0.399,0.23,0.233,0.194,0.306,0.0,0.316,0.0,0.0,0.0,0.0,0.028,0.0,0.024,0.0,0.259,0.373,0.393,0.19,0.0,0.033,0.079,0.166,0.259,0.315,0.128,0.116,0.0,0.278,0.187,0.052,0.153,0.031,0.141,0.282,0.21,0.286,0.232,0.244,0.336,0.38,0.359,0.339,0.291,0.197,0.24,0.262,0.297,0.295,0.129,0.0,0.045,0.0,0.0,0.012,0.0,0.0,0.046,0.052,0.096,0.089,0.052,0.077,0.081,0.15,0.135,0.203,0.164,0.274,0.386,0.391,0.329,0.249,0.153,0.197,0.24,0.213,0.13,0.193,0.152,0.145,0.188,0.336,0.317,0.239,0.112,0.26,0.274,0.414,0.446,0.481,0.581,0.457,0.251,0.256,0.396,0.418,0.447,0.389,0.343,0.381,0.383,0.388,0.332,0.432,0.466,0.452,0.439,0.555,0.52,0.519,0.498,0.485,0.451,0.499,0.749,0.856,0.942,0.851,0.801,0.711,0.746,0.779,0.724,0.754,0.847,0.885,0.968,0.937,1.014,1.046,1.054,1.033,1.012,1.049,1.12,1.052,0.985,0.985,1.062,1.106,1.123,1.101,1.182,1.343,1.293,1.215,1.118,1.133,1.145,1.097,1.092,1.116,1.065,1.02,1.028,0.906,0.97,0.99,0.971,0.931,0.89,0.787,0.578,0.523,0.493,0.615,0.508,0.652,0.747,0.8,0.756,0.6,0.348,0.386,0.476,0.363,0.184,0.315,0.32,0.311,0.172,0.092,0.005,0.333,0.419,0.417,0.601,0.527,0.506,0.534,0.612,0.559,0.522,0.512,0.491,0.507,0.545,0.485,0.462,0.449,0.521,0.454,0.376,0.61,0.554,0.942,0.624,0.764,1.041,1.254,1.196,1.077,1.03,0.911,0.871,0.623,0.745,0.862,0.746,0.837,1.205,1.116,1.237,1.72,1.397,1.438,1.311,1.214,1.257,1.437,1.467,1.67,1.7,1.636,1.65,1.702,1.84,1.747,1.779,2.072,2.192,2.037,1.733,1.857,1.821,2.047,2.343,2.167,2.084,2.705,2.523,2.531,3.346,3.184,3.841,3.905,4.455,4.991,5.035,5.05,5.002,4.982,5.163,5.077,4.799,4.617,4.594,4.345,3.874,4.057,3.527,3.287,3.517,3.927,3.985,3.975,3.63,3.812,4.153,4.322,3.843,3.868,3.7,3.553,3.351,4.169,5.278,4.987,5.162,5.481,5.4,5.583,5.239,5.079,5.792,5.935,6.039,5.817,6.161,5.786,5.069,5.139,4.669,4.667,4.167,3.592,4.281,4.264,4.484,4.349,4.418,5.004,4.652,4.434,4.735,4.969,5.65,5.777,5.925,6.148,6.005,5.926,6.4,6.12,5.998,6.052,6.017,6.031,6.172,5.853,5.649,5.674,5.355,4.421,3.375,3.037,3.283,3.844,3.649,3.667,3.37,3.312,2.552,2.901,2.169,1.548,1.588,1.854,2.07,2.008,1.539,2.77,3.195,3.2,3.263,2.929,3.365,3.352,2.991,2.987,2.745,3.064,3.115,1.856,0.883,0.507,0.268,0.695,0.967,0.821,0.0,0.643,0.85,0.889,0.919,0.469,0.622,0.773,0.26,0.906,0.406,0.0,0.0,0.0,0.128,0.0,0.827,0.353,0.242,0.0,0.172,0.335,0.755,0.941,0.778,0.562,0.741,0.95,1.009,0.683,0.598]},"anatomy":{"t":["02-24 18:00","02-24 18:15","02-24 18:30","02-24 18:45","02-24 19:00","02-24 19:15","02-24 19:30","02-24 19:45","02-24 20:00","02-24 20:15","02-24 20:30","02-24 20:45","02-24 21:00","02-24 21:15","02-24 21:30","02-24 21:45","02-24 22:00","02-24 22:15","02-24 22:30","02-24 22:45","02-24 23:00","02-24 23:15","02-24 23:30","02-24 23:45","02-25 00:00","02-25 00:15","02-25 00:30","02-25 00:45","02-25 01:00","02-25 01:15","02-25 01:30","02-25 01:45","02-25 02:00","02-25 02:15","02-25 02:30","02-25 02:45","02-25 03:00","02-25 03:15","02-25 03:30","02-25 03:45","02-25 04:00","02-25 04:15","02-25 04:30","02-25 04:45","02-25 05:00","02-25 05:15","02-25 05:30","02-25 05:45","02-25 06:00","02-25 06:15","02-25 06:30","02-25 06:45","02-25 07:00","02-25 07:15","02-25 07:30","02-25 07:45","02-25 08:00","02-25 08:15","02-25 08:30","02-25 08:45","02-25 09:00","02-25 09:15","02-25 09:30","02-25 09:45","02-25 10:00","02-25 10:15","02-25 10:30","02-25 10:45","02-25 11:00","02-25 11:15","02-25 11:30","02-25 11:45","02-25 12:00","02-25 12:15","02-25 12:30","02-25 12:45","02-25 13:00","02-25 13:15","02-25 13:30","02-25 13:45","02-25 14:00"],"c":[94667.99,94503.51,94359.53,94161.67,94315.75,94387.36,93770.05,93943.51,94260.01,94180.0,94362.0,94020.0,93861.6,94100.38,94243.42,93979.44,93166.07,93507.72,93135.0,92432.06,92500.0,92034.77,92033.06,91552.88,91006.62,91662.16,91646.24,91857.29,91727.1,91793.48,92360.0,92018.41,91808.65,92098.71,92325.35,92376.68,92151.5,92075.48,92294.14,92153.93,92076.93,92294.84,92019.98,91900.01,91953.12,91918.42,91932.0,92070.34,91758.23,91560.0,91584.83,91275.99,90383.97,89405.59,89094.01,89320.01,89841.17,89659.24,89676.0,89400.53,89347.57,88650.0,88969.18,88303.73,87746.64,87782.01,88020.01,88213.77,88158.02,87738.02,88848.86,89239.39,89244.03,89301.88,88994.28,89395.98,89384.0,89051.49,89048.05,88826.11,89118.92],"at":24,"N":48,"close":91006.62,"hi":92376.68,"lo":87738.02,"hi_at":35,"lo_at":69,"sigma":0.002503043640927572,"y":-1.2029781144998857,"when":"2025-02-25 00:00"},"lookback":96}</script>
+<script>
+(function(){
+const D = JSON.parse(document.getElementById('data').textContent);
+const NS = 'http://www.w3.org/2000/svg';
+const $ = id => document.getElementById(id);
+function el(tag, a, p){ const e = document.createElementNS(NS, tag); for (const k in a) e.setAttribute(k, a[k]); if (p) p.appendChild(e); return e; }
+function txt(p, x, y, s, a){ const t = el('text', Object.assign({x, y}, a || {}), p); t.textContent = s; return t; }
+function clear(s){ while (s.firstChild) s.removeChild(s.firstChild); }
+const it = (v, d) => (v === null || v === undefined || !isFinite(v)) ? '—' : v.toLocaleString('it-IT', {minimumFractionDigits: d, maximumFractionDigits: d});
+function ext(arrs){ let lo = Infinity, hi = -Infinity; arrs.forEach(a => a.forEach(v => { if (v !== null && isFinite(v)) { if (v < lo) lo = v; if (v > hi) hi = v; } })); if (lo === hi) { lo -= 1; hi += 1; } return [lo, hi]; }
+function ticks(lo, hi, n){ const s0 = (hi - lo) / (n || 4), m = Math.pow(10, Math.floor(Math.log10(s0))), e = s0 / m; const st = (e >= 7.5 ? 10 : e >= 3.5 ? 5 : e >= 1.5 ? 2 : 1) * m; const out = []; for (let v = Math.ceil(lo / st) * st; v <= hi + st * 1e-9; v += st) out.push(+v.toPrecision(12)); return out; }
+function vb(svg){ const b = svg.viewBox.baseVal; return [b.width, b.height]; }
+
+// ---------- cornice di un grafico a linee su un asse x discreto
+function frame(svg, o){
+  const [W, H] = vb(svg), L = o.L || 58, R = o.R || 20, T = o.T || 10, B = o.B === undefined ? 24 : o.B;
+  const n = o.n, [lo, hi] = o.y || [0, 1];
+  const X = i => L + (W - L - R) * (n > 1 ? i / (n - 1) : 0.5);
+  const Y = v => T + (H - T - B) * (1 - (v - lo) / (hi - lo));
+  (o.yt || ticks(lo, hi, o.nt || 4)).forEach(t => { if (t < lo - 1e-12 || t > hi + 1e-12) return; el('line', {x1: L, x2: W - R, y1: Y(t), y2: Y(t), stroke: 'var(--grid)', 'stroke-width': 1}, svg); txt(svg, L - 6, Y(t) + 4, (o.yf || (v => it(v, 2)))(t), {'text-anchor': 'end'}); });
+  if (o.zero && lo < 0 && hi > 0) el('line', {x1: L, x2: W - R, y1: Y(0), y2: Y(0), stroke: 'var(--soft)', 'stroke-width': 1}, svg);
+  if (o.xl && B) { const every = o.every || Math.ceil(n / 7); for (let i = 0; i < n; i += every) txt(svg, X(i), H - 7, o.xl[i], {'text-anchor': 'middle'}); }
+  return {X, Y, W, H, L, R, T, B, n};
+}
+function line(svg, f, v, a){ let d = '', pen = false; v.forEach((y, i) => { if (y === null || !isFinite(y)) { pen = false; return; } d += (pen ? 'L' : 'M') + f.X(i).toFixed(1) + ',' + f.Y(y).toFixed(1); pen = true; }); return el('path', Object.assign({d, fill: 'none', 'stroke-width': 2, 'stroke-linejoin': 'round'}, a), svg); }
+function tri(svg, x, y, up, fill){ const d = up ? `M${x-5},${y+5} L${x+5},${y+5} L${x},${y-4} Z` : `M${x-5},${y-5} L${x+5},${y-5} L${x},${y+4} Z`; return el('path', {d, fill: fill || 'var(--ink)', stroke: 'var(--panel)', 'stroke-width': 1.5}, svg); }
+
+// ---------- hover condiviso fra più grafici della stessa figura
+function tipOf(fig){ let t = fig.querySelector(':scope > .tip'); if (!t) { t = document.createElement('div'); t.className = 'tip'; fig.appendChild(t); } return t; }
+function hover(fig, panels, n, html){
+  const tip = tipOf(fig);
+  const parts = panels.map(p => ({p, line: el('line', {y1: p.f.T, y2: p.f.H - p.f.B, stroke: 'var(--ink)', 'stroke-width': 1, opacity: 0}, p.svg),
+    dots: (p.dots || []).map(d => ({d, c: el('circle', {r: 4, fill: d.color, stroke: 'var(--panel)', 'stroke-width': 2, opacity: 0}, p.svg)}))}));
+  function show(e, p){
+    const r = p.svg.getBoundingClientRect(), sx = (e.clientX - r.left) * p.f.W / r.width;
+    const i = Math.max(0, Math.min(n - 1, Math.round((sx - p.f.L) / (p.f.W - p.f.L - p.f.R) * (n - 1))));
+    parts.forEach(q => { q.line.setAttribute('x1', q.p.f.X(i)); q.line.setAttribute('x2', q.p.f.X(i)); q.line.setAttribute('opacity', .35);
+      q.dots.forEach(({d, c}) => { const v = d.v()[i]; if (v === null || !isFinite(v)) { c.setAttribute('opacity', 0); return; } c.setAttribute('cx', q.p.f.X(i)); c.setAttribute('cy', q.p.f.Y(v)); c.setAttribute('opacity', 1); }); });
+    tip.innerHTML = html(i); tip.style.display = 'block';
+    const fr = fig.getBoundingClientRect(), tx = e.clientX - fr.left, ty = e.clientY - fr.top;
+    tip.style.left = (tx + 200 > fr.width ? tx - 196 : tx + 14) + 'px'; tip.style.top = Math.max(0, ty - 20) + 'px';
+  }
+  function hide(){ tip.style.display = 'none'; parts.forEach(q => { q.line.setAttribute('opacity', 0); q.dots.forEach(({c}) => c.setAttribute('opacity', 0)); }); }
+  panels.forEach(p => { p.svg.onpointermove = e => show(e, p); p.svg.onpointerleave = hide; });
+}
+
+// ---------- istogramma
+function hist(svg, o){
+  clear(svg);
+  const [W, H] = vb(svg), L = o.L || 46, R = 14, T = 12, B = 26, n = o.counts.length;
+  const mx = Math.max(...o.counts), bw = (W - L - R) / n;
+  const X = v => L + (W - L - R) * (v - o.lo) / (o.hi - o.lo), Y = c => T + (H - T - B) * (1 - c / mx);
+  ticks(0, mx, 3).forEach(t => { el('line', {x1: L, x2: W - R, y1: Y(t), y2: Y(t), stroke: 'var(--grid)'}, svg); txt(svg, L - 6, Y(t) + 4, t >= 1000 ? it(t / 1000, 0) + 'k' : it(t, 0), {'text-anchor': 'end'}); });
+  o.counts.forEach((c, k) => { if (!c) return; const h = Math.max(1, (H - T - B) * c / mx); el('rect', {x: L + k * bw + 1, y: H - B - h, width: Math.max(1, bw - 2), height: h, rx: Math.min(3, bw / 3), fill: o.color || 'var(--s1)'}, svg); });
+  (o.xt || ticks(o.lo, o.hi, 5)).forEach(t => txt(svg, X(t), H - 8, (o.xf || (v => it(v, 2)))(t), {'text-anchor': 'middle'}));
+  (o.marks || []).forEach(m => { el('line', {x1: X(m.x), x2: X(m.x), y1: T, y2: H - B, stroke: 'var(--ink)', 'stroke-width': 1.5, 'stroke-dasharray': m.dash ? '4 3' : ''}, svg); if (m.label) txt(svg, X(m.x) + (m.right ? -4 : 4), T + 12 + (m.dy || 0), m.label, {class: 'lbl', 'text-anchor': m.right ? 'end' : 'start'}); });
+  return {X, Y};
+}
+
+
+const pc = (v, d) => it(v, d) + '%';
+
+// ---------- Figura 1: anatomia
+(function(){
+  const A = D.anatomy, svg = $('c-anat'), n = A.c.length, [lo, hi] = ext([A.c]), pad = (hi - lo) * .12;
+  const f = frame(svg, {n, y: [lo - pad, hi + pad], xl: A.t, every: 12, yf: v => it(v / 1000, 1) + 'k', L: 56});
+  el('rect', {x: f.X(A.at + 1), y: f.T, width: f.X(A.at + A.N) - f.X(A.at + 1), height: f.H - f.T - f.B, fill: 'var(--s1)', 'fill-opacity': .08}, svg);
+  [[A.close, 'var(--soft)', 'chiusura a t'], [A.hi, 'var(--up)', 'massimo avanti'], [A.lo, 'var(--down)', 'minimo avanti']].forEach(([v, c, l]) => {
+    el('line', {x1: f.X(A.at), x2: f.X(A.at + A.N), y1: f.Y(v), y2: f.Y(v), stroke: c, 'stroke-width': 1.5, 'stroke-dasharray': '5 3'}, svg);
+    txt(svg, f.X(A.at + A.N) + 6, f.Y(v) + 4, l, {class: 'lbl', style: 'fill:' + c}); });
+  el('line', {x1: f.X(A.at), x2: f.X(A.at), y1: f.T, y2: f.H - f.B, stroke: 'var(--ink)', 'stroke-width': 1.5}, svg);
+  line(svg, f, A.c, {stroke: 'var(--ink)', 'stroke-width': 1.6});
+  el('circle', {cx: f.X(A.hi_at), cy: f.Y(A.hi), r: 5, fill: 'var(--up)'}, svg); el('circle', {cx: f.X(A.lo_at), cy: f.Y(A.lo), r: 5, fill: 'var(--down)'}, svg);
+  txt(svg, f.X(A.at) + 6, f.T + 12, 't', {class: 'lbl'}); txt(svg, (f.X(A.at + 1) + f.X(A.at + A.N)) / 2, f.T + 12, 'le prossime ' + A.N + ' candele', {'text-anchor': 'middle'});
+})();
+
+// ---------- Figura 2: una settimana
+(function(){
+  const W = D.week, n = W.t.length, sp = $('c-week-p'), sy = $('c-week-y'), sr = $('c-week-rf'), fig = sp.closest('figure');
+  const [lo, hi] = ext([W.c]), pad = (hi - lo) * .08;
+  const f1 = frame(sp, {n, y: [lo - pad, hi + pad], yf: v => it(v / 1000, 0) + 'k', B: 0}); line(sp, f1, W.c, {stroke: 'var(--soft)', 'stroke-width': 1.5});
+  const [a, b] = ext([W.y]), m = Math.max(Math.abs(a), Math.abs(b)) * 1.05;
+  const f2 = frame(sy, {n, y: [-m, m], yf: v => it(v, 1), B: 0, zero: true}); line(sy, f2, W.y, {stroke: 'var(--s1)', 'stroke-width': 1.6});
+  const neg = W.fall.map(v => v === null ? null : -v), [c, e] = ext([W.rise, neg]);
+  const f3 = frame(sr, {n, y: [c * 1.05, e * 1.05], xl: W.t.map(q => q.slice(0, 5)), every: 96, yf: v => it(v, 0) + '%', zero: true});
+  line(sr, f3, W.rise, {stroke: 'var(--up)', 'stroke-width': 1.4}); line(sr, f3, neg, {stroke: 'var(--down)', 'stroke-width': 1.4});
+  hover(fig, [{svg: sp, f: f1, dots: [{v: () => W.c, color: 'var(--soft)'}]}, {svg: sy, f: f2, dots: [{v: () => W.y, color: 'var(--s1)'}]}, {svg: sr, f: f3, dots: [{v: () => W.rise, color: 'var(--up)'}, {v: () => neg, color: 'var(--down)'}]}], n,
+    i => `<b>${W.t[i]} UTC</b><br>chiusura ${it(W.c[i], 0)}<br><span style="color:var(--s1)">■</span> y ${it(W.y[i], 2)}<br><span style="color:var(--up)">■</span> rise ${pc(W.rise[i], 2)} · <span style="color:var(--down)">■</span> fall ${pc(W.fall[i], 2)}`);
+})();
+
+// ---------- Figure 3-5: istogrammi
+(function(){
+  const H = D.hist_y, lo = H.edges[0], hi = H.edges[H.edges.length - 1];
+  const r = hist($('c-hy'), {counts: H.counts, lo, hi, xt: [-4, -2, 0, 2, 4], xf: v => it(v, 0), color: 'var(--s1)', marks: [{x: 0}]});
+  // the normal with the same median and IQR: sd = IQR / 1.349
+  const q = D.quantiles, sd = (q.y[5] - q.y[3]) / 1.349, tot = H.counts.reduce((s, c) => s + c, 0), w = H.edges[1] - H.edges[0];
+  let d = ''; for (let k = 0; k <= 160; k++) { const x = lo + (hi - lo) * k / 160, p = tot * w * Math.exp(-0.5 * ((x - q.y[4]) / sd) ** 2) / (sd * Math.sqrt(2 * Math.PI)); d += (k ? 'L' : 'M') + r.X(x).toFixed(1) + ',' + r.Y(p).toFixed(1); }
+  el('path', {d, fill: 'none', stroke: 'var(--s2)', 'stroke-width': 1.6, 'stroke-dasharray': '5 3'}, $('c-hy'));
+  const Hn = D.hist_num;
+  hist($('c-hn'), {counts: Hn.counts, lo: Hn.edges[0], hi: Hn.edges[Hn.edges.length - 1], xt: [-8, -4, -2, 0, 2, 4, 8], xf: v => it(v, 0) + '%', color: 'var(--s3)', marks: [{x: -0.5, dash: true}, {x: 0.5, dash: true, label: '±0,5%'}]});
+  const e = D.hist_rf_edges;
+  hist($('c-hr'), {counts: D.hist_rise, lo: e[0], hi: e[e.length - 1], xt: [0, 2, 4, 6, 8, 10, 12], xf: v => it(v, 0) + '%', color: 'var(--up)'});
+  hist($('c-hf'), {counts: D.hist_fall, lo: e[0], hi: e[e.length - 1], xt: [0, 2, 4, 6, 8, 10, 12], xf: v => it(v, 0) + '%', color: 'var(--down)'});
+})();
+
+// ---------- barre per categoria, con asse destro opzionale per una serie di punti
+function bars(svg, labels, v, o){
+  clear(svg); const n = labels.length, [lo0, hi0] = ext([v, [0]]), pad = (hi0 - lo0) * .1;
+  const f = frame(svg, {n, y: [Math.min(0, lo0 - (lo0 < 0 ? pad : 0)), hi0 + pad], yf: o.yf, B: 26, L: o.L || 50, R: o.R || 20, zero: true, nt: 4});
+  const step = (f.W - f.L - f.R) / n, X = i => f.L + step * (i + .5);
+  v.forEach((y, i) => { const y0 = f.Y(0), y1 = f.Y(y); el('rect', {x: X(i) - step * .36, y: Math.min(y0, y1), width: step * .72, height: Math.max(1, Math.abs(y1 - y0)), rx: 2, fill: typeof o.color === 'function' ? o.color(y, i) : (o.color || 'var(--s1)')}, svg); });
+  labels.forEach((l, i) => { if (i % (o.every || 1) === 0) txt(svg, X(i), f.H - 8, l, {'text-anchor': 'middle'}); });
+  if (o.pts) { const [a, b] = o.ptsRange, Y2 = p => f.T + (f.H - f.T - f.B) * (1 - (p - a) / (b - a));
+    [a, (a + b) / 2, b].forEach(t => txt(svg, f.W - f.R + 6, Y2(t) + 4, o.ptsf(t), {}));
+    let d = ''; o.pts.forEach((p, i) => { d += (i ? 'L' : 'M') + X(i) + ',' + Y2(p); el('circle', {cx: X(i), cy: Y2(p), r: 4, fill: 'var(--s2)', stroke: 'var(--panel)', 'stroke-width': 1.5}, svg); });
+    el('path', {d, fill: 'none', stroke: 'var(--s2)', 'stroke-width': 1.4}, svg); }
+  return f;
+}
+const signCol = y => y >= 0 ? 'var(--up)' : 'var(--down)';
+bars($('c-dec'), D.deciles.y.map((_, i) => 'D' + (i + 1)), D.deciles.fwd, {yf: v => it(v, 1) + '%', color: signCol, R: 50, pts: D.deciles.fwd_pos, ptsRange: [0, 1], ptsf: v => it(v * 100, 0) + '%'});
+
+// ---------- Figura 7: mensile
+(function(){
+  const Mo = D.monthly, n = Mo.month.length;
+  bars($('c-mon-y'), Mo.month.map(m => m.slice(2)), Mo.mean, {yf: v => it(v, 2), color: signCol, every: 3});
+  bars($('c-mon-b'), Mo.month.map(m => m.slice(2)), Mo.basket, {yf: v => it(v, 0) + '%', color: signCol, every: 3});
+})();
+
+// ---------- Figure 8-9: autocorrelazione e tratti
+(function(){
+  const svg = $('c-acf'), L = D.acf.lags, r = D.acf.r, mx = L[L.length - 1];
+  const f = frame(svg, {n: mx + 1, y: [-0.05, 1.02], yt: [0, .25, .5, .75, 1], yf: v => it(v, 2), zero: true, L: 44});
+  const X = k => f.L + (f.W - f.L - f.R) * k / mx;
+  el('line', {x1: X(D.N), x2: X(D.N), y1: f.T, y2: f.H - f.B, stroke: 'var(--s2)', 'stroke-dasharray': '4 3', 'stroke-width': 1.5}, svg);
+  txt(svg, X(D.N) + 4, f.T + 12, 'N = ' + D.N, {class: 'lbl'});
+  let d = ''; L.forEach((k, i) => { d += (i ? 'L' : 'M') + X(k) + ',' + f.Y(r[i]); el('circle', {cx: X(k), cy: f.Y(r[i]), r: 3, fill: 'var(--s1)'}, svg); });
+  el('path', {d, fill: 'none', stroke: 'var(--s1)', 'stroke-width': 1.8}, svg);
+  [0, 48, 96, 144, 192].forEach(k => txt(svg, X(k), f.H - 8, k, {'text-anchor': 'middle'}));
+  const e = D.runs.hist_edges, lab = e.slice(0, -1).map((a, i) => i === e.length - 2 ? '≥' + a : (e[i + 1] - a === 1 ? '' + a : a + '–' + (e[i + 1] - 1)));
+  bars($('c-runs'), lab, D.runs.bars.map(v => v * 100), {yf: v => it(v, 0) + '%', color: 'var(--s1)'});
+})();
+
+// ---------- Figure 10-11: regime
+(function(){
+  const dl = D.vol.abs_y.map((_, i) => 'D' + (i + 1));
+  bars($('c-vy'), dl, D.vol.abs_y, {yf: v => it(v, 1), color: 'var(--s1)'});
+  bars($('c-vn'), dl, D.vol.abs_num, {yf: v => it(v, 0) + '%', color: 'var(--s3)', R: 50, pts: D.vol.gt_fee, ptsRange: [0.5, 1], ptsf: v => it(v * 100, 0) + '%'});
+  bars($('c-hour'), D.hour.abs_num.map((_, i) => i + ''), D.hour.abs_num, {yf: v => it(v, 1) + '%', color: 'var(--s3)'});
+})();
+})();
+</script>
+</body>
+</html>

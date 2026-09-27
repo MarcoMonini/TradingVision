@@ -23,6 +23,11 @@ concept per chapter with charts on real candles; Part II walks the pipeline stag
 schema of every frame, tensor and checkpoint. Its data and JS are generated, not hand-edited numbers,
 and it describes the code: when the code changes, update it with it.
 
+`move_balance_label.html` (Italian) is the statistics of `data.target.move_balance`, the label that
+follows `swing_leg_target`: distribution, tails, the market's share of it, overlap, regimes, per
+pair, per horizon, and what anticipates it — at N = 48 on 15m, train period only. Generated like
+the pipeline document; its numbers are measurements, not hand-written.
+
 ## Commands
 
 ```bash
