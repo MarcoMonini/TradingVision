@@ -1250,15 +1250,15 @@ target(i)       = valori[k] + x · (valori[k+1] − valori[k])
     </tbody>
   </table></div>
 
-  <h3>Modello B — <code>swing.build(symbols, tf="4h", since="2021", window=24, steps=24)</code></h3>
-  <p>Per ogni simbolo: <code>frame</code> (sezione II.7) → scaler fittato sulle righe del simbolo <em>prima del 2023-01</em> → <code>sequences</code>: <code>out[k:, 23−k, :] = z[:len(z)−k]</code>, step 23 = barra corrente → si scartano le righe con una cella non finita (le prime 23). I blocchi dei simboli vengono concatenati; le righe restano contigue e in ordine temporale dentro ogni simbolo, che è ciò che permette allo stadio 2 di tagliare episodi senza riordinare.</p>
+  <h3>Modello B — <code>swing.build(symbols, tf="4h", since="2021", window=24, steps=24, keep, label, before)</code></h3>
+  <p>Per ogni simbolo: <code>frame</code> (sezione II.7) → scaler fittato sulle righe del simbolo prima di <code>before</code> (il primo taglio, <code>--test-start</code>) → le righe scalate, <em>una per barra</em>. Le finestre non si salvano: <code>windows(rows, steps)</code> è una vista numpy (<code>sliding_window_view</code>) in cui la finestra <code>i</code> è <code>rows[i : i+steps]</code>, e un batch copia solo le proprie. Materializzate, 96 passi × 15 colonne su tre milioni di righe 15m sarebbero 17 GB contro 180 MB. Le prime <code>steps−1</code> righe di ogni simbolo non hanno una finestra e non ricevono un <code>row</code>, quindi nessuna finestra usata attraversa due simboli. Le righe restano contigue e in ordine temporale dentro ogni simbolo, che è ciò che permette allo stadio 2 di tagliare episodi senza riordinare. Il self-check verifica che la vista coincida con <code>sequences</code>, che resta la definizione (e la usa la pagina).</p>
   <div class="tw"><table>
-    <caption>i tre file di <code>swing.cached(path)</code> — path = <code>data/swing-{tf}-{basic|full}</code></caption>
+    <caption>i tre file di <code>swing.cached(path)</code> — path = <code>data/swing-{tf}-{inputs}-{label}-s{steps}-t{test_start}</code></caption>
     <thead><tr><th>file</th><th>struttura</th></tr></thead>
     <tbody>
-      <tr><td class="key">swing-4h-full.npy</td><td>(N, 24, 65) float32, già scalato, mmap</td></tr>
+      <tr><td class="key">swing-4h-full.npy</td><td>(righe, 65) float32, già scalato, mmap; <code>cached</code> restituisce la vista (N, steps, 65)</td></tr>
       <tr><td class="key">swing-4h-full.parquet</td><td>indice <code>open_time</code> (DatetimeIndex UTC, <em>non</em> univoco fra simboli); colonne <code>target</code> f64, <code>next_pivot</code> datetime, <code>close</code> f64, <code>ret</code> f64, <code>symbol</code> str, <code>row</code> int (posizione nel .npy)</td></tr>
-      <tr><td class="key">swing-4h-full.json</td><td><code>{tf, since, window, steps, symbols:[…], inputs:[65 nomi]}</code></td></tr>
+      <tr><td class="key">swing-4h-full.json</td><td><code>{tf, since, window, steps, label, before, symbols:[…], inputs:[65 nomi], store_ends:{…}}</code></td></tr>
       <tr><td colspan="2" class="foot"><code>--inputs basic</code> usa 29 feature + stato a 24 soltanto (39 colonne). Una riga con meno di <code>steps + 100</code> barre utili esclude il simbolo.</td></tr>
     </tbody>
   </table></div>
@@ -1513,7 +1513,7 @@ loss   = −mean_episodi(R) + 0,1 · Huber(ŷ, y)          anchor: l'encoder non
       <tr><td class="key">oracle_log · oracle_net</td><td>oracolo a posteriori (lag 0) <em>ricalcolato sulle stesse barre</em></td></tr>
       <tr><td class="key">reachable_log</td><td>stesso oracolo a lag = 24: il primo istante in cui un pivot è conoscibile. Il riferimento da citare</td></tr>
       <tr><td class="key">hold_log · share · reach</td><td>buy&amp;hold; netto / oracolo; netto / reachable</td></tr>
-      <tr><td colspan="2" class="foot"><code>summarise</code> ne fa una riga: gross, net, net_sd, oracle, share, reachable, reach, hold, excess, trades, win_rate, in_market, beat_hold, positive. File: <code>data/pos-swing-4h-both.parquet</code> con colonne <code>symbol, close, position</code> indicizzate per open_time.</td></tr>
+      <tr><td colspan="2" class="foot"><code>summarise</code> ne fa una riga: gross, net, net_sd, oracle, share, reachable, reach, hold, excess, trades, win_rate, in_market, beat_hold, positive. File: <code>data/pos-swing-{tf}-{inputs}-{label}-s{steps}-t{test_start}-{stage}.parquet</code> con colonne <code>symbol, close, target, pred, position</code> indicizzate per open_time — <code>pred</code> è ciò che la regola ha letto (testa etichetta, o logit se lo stadio 2 ha girato).</td></tr>
     </tbody>
   </table></div>
   <div class="tw"><table>

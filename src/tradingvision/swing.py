@@ -38,6 +38,13 @@ the P&L at once.
 
     uv run python -m tradingvision.swing --stage both
     uv run python -m tradingvision.swing --timeframe 1h --folds 4 --save
+    uv run python -m tradingvision.swing --timeframe 15m --label balance --inputs reduced --steps 96 \
+        --stage label --test-start 2025-06 --seeds 5
+
+The last line is the model that follows this one: `move_balance` instead of the swing label, the 15
+columns of `REDUCED`, 96 bars of history for a label that reads 48 ahead, and the protocol of
+step 3 — the horizon and the column cut were both decided on 2023-01 -> 2025-05, which the default
+`TEST_START` would put in the test.
 
 Every number the CLI prints is out of sample: four expanding walk-forward folds, the train side of
 each purged of every bar whose leg closes past its cut, thresholds and epochs chosen on a purged
@@ -54,12 +61,13 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import torch
+from numpy.lib.stride_tricks import sliding_window_view
 from torch import nn
 
 from tradingvision import legs, normalize
 from tradingvision.data.binance import STORE, SYMBOLS, ends, load
 from tradingvision.data.pivots import EXTREMA_WINDOW, find_pivots
-from tradingvision.data.target import swing_leg_target
+from tradingvision.data.target import MOVE_HORIZON, move_balance, swing_leg_target
 from tradingvision.features import COLUMNS, features
 from tradingvision.oracle import FEE
 from tradingvision.oracle import run as oracle_run
@@ -146,20 +154,43 @@ def inputs(bars: pd.DataFrame, window: int = W, keep: list[str] | None = None) -
     return pd.concat(parts, axis=1)[INPUTS if keep is None else keep]
 
 
-def frame(symbol: str, tf: str = TF, since: str = SINCE, window: int = W, keep: list[str] | None = None):
+def ahead(index: pd.Index, bars: int) -> pd.Series:
+    """The timestamp `bars` rows after each one, NaT where the series ends first.
+
+    Rows and not a clock: `load` drops the bars nobody traded, and `move_balance` counts the closes
+    it reads, so a clock would purge short across every hole in the data.
+    """
+    return pd.Series(index, index=index).shift(-bars)
+
+
+def frame(
+    symbol: str,
+    tf: str = TF,
+    since: str = SINCE,
+    window: int = W,
+    keep: list[str] | None = None,
+    label: str = "swing",
+):
     """One symbol's rows: inputs, label, the next bar's return, the close, the purging horizon.
 
     The label's pivots and the leg state's pivots are the same turns read from two sides — the
     centred frame for what is being predicted, `legs.confirmed` for what was knowable. Mixing them
     up is the one mistake that would make every number here meaningless, so they are built by
     different functions in different modules and meet only in this frame.
+
+    `label="balance"` writes `move_balance` instead, and its purging horizon with it: the label
+    reads exactly `MOVE_HORIZON` closes ahead and no pivot, so a row reaches that far and no
+    further. The column keeps the name `next_pivot` because `purge` reads it.
     """
     bars = load(symbol, tf).loc[since:]
     close = bars.close
-    piv = find_pivots(close, window)
     out = inputs(bars, window, keep)
-    out["target"] = swing_leg_target(close, piv)
-    out["next_pivot"] = legs.next_pivot(close, window)
+    if label == "balance":
+        out["target"] = move_balance(close)
+        out["next_pivot"] = ahead(close.index, MOVE_HORIZON)
+    else:
+        out["target"] = swing_leg_target(close, find_pivots(close, window))
+        out["next_pivot"] = legs.next_pivot(close, window)
     out = out.dropna()
     out["close"] = close.reindex(out.index)
     # The return a position taken at this close earns by being held to the next *kept* bar, which
@@ -199,35 +230,62 @@ def sequences(f: pd.DataFrame, stats: pd.DataFrame, steps: int = STEPS, keep: li
     return out
 
 
-def build(symbols, tf: str = TF, since: str = SINCE, window: int = W, steps: int = STEPS, keep=None):
-    """`(tensor, meta)` over every symbol — the tensor positional, the meta indexed by time.
+def windows(z: np.ndarray, steps: int) -> np.ndarray:
+    """`(len(z) - steps + 1, steps, width)` over the scaled rows `z`, as a view — nothing is copied.
+
+    Window `i` is `z[i : i + steps]`, oldest first, so it ends at row `i + steps - 1`: the same
+    thing `sequences` materialises. Materialised it no longer fits: 96 steps of 15 columns over
+    three million 15m rows is 17 GB on disk, against 180 MB for the rows it repeats. A batch indexes
+    the view and copies only its own windows. Windows that straddle two symbols exist in the view
+    and no `row` points at one — see `build`.
+    """
+    return sliding_window_view(z, steps, axis=0).transpose(0, 2, 1)
+
+
+def build(
+    symbols,
+    tf: str = TF,
+    since: str = SINCE,
+    window: int = W,
+    steps: int = STEPS,
+    keep=None,
+    label: str = "swing",
+    before: str = TEST_START,
+):
+    """`(rows, meta)` over every symbol — the scaled rows positional, the meta indexed by time.
+
+    `rows` is one line per bar, not one window per bar: `windows(rows, steps)[meta.row]` is the
+    tensor. A symbol's rows are contiguous, so the window of its `k`-th row starts `steps - 1`
+    before it and never reaches into the symbol before; its first `steps - 1` rows have no window
+    and get no `row`, which is what `sequences` expresses with NaN.
 
     Rows are grouped by symbol and ordered in time inside each group, which is what lets the
     reinforcement stage cut contiguous episodes out of a fold without re-sorting anything.
+    `before` is where the scaler stops reading, the first fold's cut.
     """
     blocks, metas, at = [], [], 0
     for symbol in symbols:
-        f = frame(symbol, tf, since, window, keep)
+        f = frame(symbol, tf, since, window, keep, label)
         if len(f) < steps + 100:
             continue
-        x = sequences(f, scaler(f, TEST_START, keep), steps, keep)
-        # `filled` and not `keep`: the column list is already called that, and the mask overwrote
-        # it on the first symbol — silently, because a one-symbol build never reaches the second.
-        filled = np.isfinite(x).all(axis=(1, 2))
-        f, x = f[filled], x[filled]
-        meta = f[["target", "next_pivot", "close", "ret"]].copy()
+        cols = INPUTS if keep is None else keep
+        z = normalize.apply(f[cols], scaler(f, before, keep)).to_numpy("float32")
+        if not np.isfinite(z).all():
+            raise ValueError(f"{symbol}: a scaled input is not finite, and a window over it would be NaN")
+        meta = f[["target", "next_pivot", "close", "ret"]].iloc[steps - 1 :].copy()
         meta["symbol"] = symbol
-        meta["row"] = np.arange(at, at + len(f))
-        blocks.append(x)
+        meta["row"] = np.arange(at, at + len(meta))
+        blocks.append(z)
         metas.append(meta)
-        at += len(f)
-    tensor = np.concatenate(blocks)
-    meta = pd.concat(metas)
-    return tensor, meta
+        at += len(z)
+    return np.concatenate(blocks), pd.concat(metas)
 
 
 def cached(path: Path, symbols: list[str], **params):
-    """`build` on disk with a stamp of what produced it — `dataset.cached`'s contract, on a tensor."""
+    """`build` on disk with a stamp of what produced it — `dataset.cached`'s contract, on a tensor.
+
+    Returns `(windows, meta)`: the rows are stored and the windows are a view over them.
+    """
     stamp, npy, pq = path.with_suffix(".json"), path.with_suffix(".npy"), path.with_suffix(".parquet")
     # `keep` travels as `inputs` and not as itself: it is the column list, and recording it twice
     # would make two stamps of the same build disagree on nothing.
@@ -243,12 +301,15 @@ def cached(path: Path, symbols: list[str], **params):
             raise SystemExit(f"{npy} has no {stamp.name} recording how it was built — delete it")
         if (was := json.loads(stamp.read_text())) != written:
             raise SystemExit(f"{npy} was built with {was}, not {written} — delete it")
-        return np.load(npy, mmap_mode="r"), pd.read_parquet(pq)
-    tensor, meta = build(symbols, **params)
-    np.save(npy, tensor)
+        rows = np.load(npy, mmap_mode="r")
+        if rows.ndim != 2:
+            raise SystemExit(f"{npy} holds windows, not rows — it predates `windows`, delete it")
+        return windows(rows, params["steps"]), pd.read_parquet(pq)
+    rows, meta = build(symbols, **params)
+    np.save(npy, rows)
     meta.to_parquet(pq)
     stamp.write_text(json.dumps(written, indent=2, sort_keys=True))
-    return np.load(npy, mmap_mode="r"), meta
+    return windows(np.load(npy, mmap_mode="r"), params["steps"]), meta
 
 
 def purge(meta: pd.DataFrame, cut: pd.Timestamp) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -766,6 +827,7 @@ def walk_forward(
     held = pd.Series(0.0, index=meta.index)
     held.index = pd.RangeIndex(len(meta))  # positional, keyed by `row` below
     pos = np.zeros(len(x))
+    pred = np.zeros(len(x))
     seen = np.zeros(len(x), dtype=bool)
     rows = []
     for i, (train, test) in enumerate(folds(meta, start, n), 1):
@@ -804,6 +866,7 @@ def walk_forward(
             params = choose(score(order.row.to_numpy()), order, fee=fee)
         order = ordered(test)
         use = score(order.row.to_numpy())
+        pred[order.row.to_numpy()] = use
         for _, g in order.assign(s=use).groupby("symbol", sort=False):
             pos[g.row.to_numpy()] = book(g.s.to_numpy(), params)
             seen[g.row.to_numpy()] = True
@@ -820,6 +883,8 @@ def walk_forward(
     return {
         "folds": pd.DataFrame(rows),
         "pos": pd.Series(pos[test_meta.row.to_numpy()], index=test_meta.index),
+        # What the rule read: the label head, or the policy logit when the policy stage ran.
+        "pred": pd.Series(pred[test_meta.row.to_numpy()], index=test_meta.index),
         "meta": test_meta,
     }
 
@@ -913,6 +978,12 @@ def _selfcheck() -> None:
     assert np.isfinite(seq[2]).all()
     assert seq[5, -1, 0] > seq[5, 0, 0], "the last step is the current bar"
     assert np.array_equal(seq[:11], sequences(f.iloc[:11], stats, steps=3), equal_nan=True), "truncation is invisible"
+    # The view `build` stores is the same tensor: window i is the sequence of row i + steps - 1.
+    view = windows(normalize.apply(f, stats).to_numpy("float32"), 3)
+    assert view.shape == (18, 3, len(INPUTS)) and np.array_equal(view, seq[2:]), "the view is the tensor"
+    # The purging horizon of `move_balance` counts rows, holes included: 10:00 -> 10:30 is one row.
+    gappy = pd.DatetimeIndex(["2024-01-01 09:00", "2024-01-01 09:15", "2024-01-01 10:00", "2024-01-01 10:30"], tz="UTC")
+    assert list(ahead(gappy, 2)[:2]) == list(gappy[2:]) and ahead(gappy, 2)[2:].isna().all()
 
     # And the learning, end to end, on a toy built so the two stages cannot both be right.
     #
@@ -1000,7 +1071,7 @@ def baselines(meta: pd.DataFrame, tf: str, fee: float = FEE) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def save(path, model, tf, window, steps, params, stage, keep=None, cal=None):
+def save(path, model, tf, window, steps, params, stage, keep=None, cal=None, label="swing", test_start=TEST_START):
     """The weights and everything needed to feed them. A model without its inputs is not a model.
 
     The per-symbol scaler is deliberately *not* in here: it is fitted on the symbol the model is
@@ -1021,7 +1092,8 @@ def save(path, model, tf, window, steps, params, stage, keep=None, cal=None):
             "exit": None if params is None else params[1],
             "sign": None if params is None else params[2],
             "stage": stage,
-            "test_start": TEST_START,
+            "label": label,
+            "test_start": test_start,
             # The map back onto the label's range, fitted on train. Stored rather than recomputed:
             # the chart has no train period of its own and a calibration fitted on the window on
             # screen would be a different statement in every screenshot.
@@ -1110,19 +1182,39 @@ def main() -> None:
     ap.add_argument("--cache", type=Path, default=TENSOR)
     ap.add_argument(
         "--inputs",
-        choices=["basic", "full"],
+        choices=["basic", "full", "reduced"],
         default="full",
-        help="basic: the 29 candidates plus the leg state at N=24. full: adds the faster scales and exhaustion",
+        help="basic: the 29 candidates plus the leg state at N=24. full: adds the faster scales and exhaustion. "
+        "reduced: the 15 of REDUCED",
     )
+    ap.add_argument(
+        "--label",
+        choices=["swing", "balance"],
+        default="swing",
+        help=f"swing: swing_leg_target. balance: move_balance, the rise minus the fall over {MOVE_HORIZON} bars ahead",
+    )
+    ap.add_argument("--steps", type=int, default=STEPS, help="bars of history the encoder reads")
     ap.add_argument("--save", type=Path, nargs="?", const=CHECKPOINT, help="also fit one model on train and save it")
     args = ap.parse_args()
 
     _selfcheck()
-    keep = BASIC if args.inputs == "basic" else INPUTS
-    path = args.cache.with_name(f"{args.cache.name}-{args.timeframe}-{args.inputs}")
-    x, meta = cached(path, args.symbols, tf=args.timeframe, since=args.since, window=W, steps=STEPS, keep=keep)
+    keep = {"basic": BASIC, "full": INPUTS, "reduced": REDUCED}[args.inputs]
+    # Every choice that changes the tensor is in its name, so two runs never fight over one file.
+    tag = f"{args.timeframe}-{args.inputs}-{args.label}-s{args.steps}-t{args.test_start}"
+    path = args.cache.with_name(f"{args.cache.name}-{tag}")
+    x, meta = cached(
+        path,
+        args.symbols,
+        tf=args.timeframe,
+        since=args.since,
+        window=W,
+        steps=args.steps,
+        keep=keep,
+        label=args.label,
+        before=args.test_start,
+    )
     print(
-        f"{len(meta):,} rows x {STEPS} steps x {len(keep)} inputs on {args.timeframe}, "
+        f"{len(meta):,} rows x {args.steps} steps x {len(keep)} inputs on {args.timeframe}, label {args.label}, "
         f"{meta.symbol.nunique()} symbols, {meta.index.min():%Y-%m-%d} to {meta.index.max():%Y-%m-%d}, {DEVICE}"
     )
     print(f"{args.folds} folds from {args.test_start}, stage {args.stage}, fee {args.fee * 100:.2f}% per side\n")
@@ -1150,9 +1242,10 @@ def main() -> None:
         print("\nthe same rows, read by one column and a threshold\n")
         print(baselines(out["meta"], args.timeframe, args.fee).round(3).to_string(index=False))
 
-    written = STORE / f"pos-swing-{args.timeframe}-{args.stage}.parquet"
-    out["meta"].assign(position=out["pos"].to_numpy())[["symbol", "close", "position"]].to_parquet(written)
-    print(f"\npositions written to {written}")
+    written = STORE / f"pos-swing-{tag}-{args.stage}.parquet"
+    columns = ["symbol", "close", "target", "pred", "position"]
+    out["meta"].assign(pred=out["pred"].to_numpy(), position=out["pos"].to_numpy())[columns].to_parquet(written)
+    print(f"\npredictions and positions written to {written}")
 
     if args.save:
         train, _ = purge(meta, pd.Timestamp(args.test_start, tz="UTC"))
@@ -1167,7 +1260,9 @@ def main() -> None:
             order = ordered(valid if args.stage == "label" else train)
             label, logit = outputs(model, x, order.row.to_numpy())
             params = choose(logit if args.stage != "label" else label, order, fee=args.fee)
-        save(args.save, model, args.timeframe, W, STEPS, params, args.stage, keep, cal)
+        save(
+            args.save, model, args.timeframe, W, args.steps, params, args.stage, keep, cal, args.label, args.test_start
+        )
         print(f"fitted on {len(inner):,} rows to {args.test_start} and saved to {args.save}")
 
 

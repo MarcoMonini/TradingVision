@@ -52,6 +52,7 @@ uv run python -m tradingvision.gru --seeds 5         # step 3/4: the model
 uv run python -m tradingvision.simulation --pred data/pred-*.parquet   # what it is worth in money
 uv run python -m tradingvision.factor --price --baseline --by-quarter # step 6: the cross-sectional factor
 uv run python -m tradingvision.swing --timeframe 4h --baseline        # step 7: the tradable swing rule
+uv run python -m tradingvision.swing --timeframe 15m --label balance --inputs reduced --steps 96 --stage label --test-start 2025-06 --seeds 5  # the move_balance model
 uv run python -m tradingvision.swingrule --pred data/pred-swing-*.parquet  # the long-only rule on the swing label
 uv run python -m tradingvision.threshold --pred data/pred-swing-*.parquet --at 0.5  # the always-in flip rule
 uv run python -m tradingvision.stops --pred data/pred-swing-*.parquet --at 0.5 --grid  # the same rule with exits
