@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this is
 
 A research pipeline, not a trading system. It measures whether a recurrent net on multi-timeframe
-crypto candles can predict which of 20 USDT pairs beats the basket. The deployed artefact is only
+crypto candles can predict which USDT pairs beat the basket. The deployed artefact is only
 the Streamlit chart page; everything else runs by hand as a module.
 
 `HANDOFF.md` is the state of the current branch: what was added, what has *not* been measured yet,
@@ -72,6 +72,13 @@ refuses to draw a model fitted on another cell. `legsweep.CURRENT` — 0.7 / 24 
 (`data.binance`, no API key, 2017+). Alpaca (`data.candles`) is the live feed the chart page uses
 and the venue whose fees every cost figure assumes; its history is too short for training. `data/`
 is gitignored; runs are reproduced by re-fetching.
+
+**Three universes, in `data.binance`.** `SYMBOLS` is the training universe (15 pairs, chosen on
+liquidity and data quality, no meme coin) and every module's default. `TRADABLE` is its subset
+Alpaca lists (13, without BNB and NEAR): a metric that means money is read on these alone, and they
+are the chart page's list. `STUDY` is the 20 pairs every number measured before 2026-09-27 was
+taken on — pass it as `--symbols` to reproduce one; the cache stamps refuse a file built on the
+other list.
 
 **One label, swappable in one place.** `dataset.build` writes the target into a column called
 `target` and `dataset.relabel` / `relabel_cross` rewrite it afterwards, so `gru --label` switches

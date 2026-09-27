@@ -725,15 +725,13 @@ def main() -> None:
     st.set_page_config(page_title="Trading Vision", layout="wide")
     st.title("Trading Vision")
 
-    # The study's twenty pairs, and a typed one as well. Which of them Alpaca lists is not
-    # something this project can know — its crypto coverage is narrower than Binance's and moves —
-    # so the list is the universe the spec's numbers were measured on, not a claim about the
-    # venue. A pair it serves nothing for draws the warning below and nothing else breaks.
+    # The tradable pairs of the training universe, and a typed one as well. Alpaca's coverage
+    # moves, so a pair it stops serving draws the warning below and nothing else breaks.
     symbol = st.sidebar.selectbox(
         "Pair",
         SYMBOLS,
         accept_new_options=True,
-        help="the twenty pairs the study measures on, quoted in USD. Type any other Alpaca pair "
+        help="the pairs of the training universe that Alpaca lists, quoted in USD. Type any other Alpaca pair "
         "(`BASE/USD`) to draw it — the page says so if the venue serves nothing for it.",
     )
     timeframe = st.sidebar.selectbox("Timeframe", list(TIMEFRAMES), index=1)

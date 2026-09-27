@@ -370,6 +370,15 @@ footer{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);color:v
     </table>
   </div>
 
+  <h3>L'universo cambia — 20 → 15 per l'addestramento, 13 per il trading <span class="b b-ok">2026-09-27</span></h3>
+  <p>Le 20 coppie qui sopra erano scelte solo sulla storia (almeno 70 mesi a 5m, nessun mese mancante), e la regola aveva lasciato entrare una meme coin e quattro coppie troppo sottili per un modello. Rimisurate sul periodo di train (15m, 2023-01 → 2025-05) su liquidità, candele piatte (chiusura uguale alla precedente) e correlazione con BTC, insieme a nove coppie nuove scaricate per l'occasione:</p>
+  <ul>
+    <li><strong>Addestramento, 15</strong> (<code>binance.SYMBOLS</code>): BTC, ETH, SOL, XRP, BNB, AVAX, ADA, LTC, LINK, NEAR, FIL, DOT, BCH, AAVE, UNI. Almeno ~15 M$ al giorno su Binance, meno del 10% di candele piatte, nessuna meme, storia dal 2020 o prima.</li>
+    <li><strong>Trading, 13</strong> (<code>binance.TRADABLE</code>): le stesse meno BNB e NEAR, che Alpaca non lista. Le metriche in denaro si leggono su queste sole.</li>
+    <li><strong>Fuori</strong>: DOGE (meme); BAT, YFI, XTZ, SUSHI a 1-5 M$ al giorno, XTZ e SUSHI con 13-17% di candele piatte; CRV al limite (15 M$, 6,4%); TRX, liquida ma diversa (correlazione 0,43 con BTC, volatilità dimezzata). Misurate e lasciate fuori: ATOM, ETC, ICP, HBAR, GRT, ALGO, XLM, fra 7 e 14 M$.</li>
+  </ul>
+  <p>Tutti i numeri di questo documento misurati prima di questa data sono sulle 20 (<code>binance.STUDY</code>) e non si confrontano con quelli sulle 15: cambia la sezione trasversale e cambia il campione.</p>
+
   <p><strong>Due trappole nei dump</strong>, entrambe gestite: <code>open_time</code> è passato da millisecondi a microsecondi nel 2025 senza marcatore di versione, e alcuni file hanno una riga di header. L'unità si deduce per file dall'ordine di grandezza.</p>
 </section>
 
