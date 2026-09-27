@@ -260,9 +260,9 @@ def cached(path: Path, **params) -> pd.DataFrame:
     # different set of rows, on a grid where the symbols are out of phase with each other. Without
     # this key such a file would be read back as a match — which is the one thing the stamp exists
     # to prevent — so the name is recorded and every cache built before the clock rule is refused.
-    written = dict(
-        params, symbols=sorted(params.get("symbols") or binance.SYMBOLS), lags_at=list(LAGS), sampling=SAMPLING
-    )
+    # And where the store ends, per symbol: see `binance.ends` for the build that needed it.
+    symbols = sorted(params.get("symbols") or binance.SYMBOLS)
+    written = dict(params, symbols=symbols, lags_at=list(LAGS), sampling=SAMPLING, store_ends=binance.ends(symbols))
     if path.exists():
         if not stamp.exists():
             raise SystemExit(f"{path} has no {stamp.name} recording how it was built — delete it and rebuild")
@@ -302,12 +302,29 @@ def _selfcheck() -> None:
             except SystemExit:
                 break
             raise AssertionError("a cache with no stamp has to stop the run")
+        # `ends` answers from the real store, and None where it has no file, which is CI: either way
+        # it is the answer `cached` itself will compute, so the stamp matches wherever this runs.
+        here = binance.ends(["BTC"])
         path.with_suffix(".json").write_text(
-            json.dumps(dict(stride=12, symbols=["BTC"], lags_at=list(LAGS), sampling=SAMPLING))
+            json.dumps(dict(stride=12, symbols=["BTC"], lags_at=list(LAGS), sampling=SAMPLING, store_ends=here))
         )
         assert len(cached(path, stride=12, symbols=["BTC"])) == 1, "a matching stamp reads the file back"
+        # The same arguments over a store that has moved since: other rows, refused.
+        path.with_suffix(".json").write_text(
+            json.dumps(
+                dict(stride=12, symbols=["BTC"], lags_at=list(LAGS), sampling=SAMPLING, store_ends={"BTC": "1999"})
+            )
+        )
+        try:
+            cached(path, stride=12, symbols=["BTC"])
+        except SystemExit:
+            pass
+        else:
+            raise AssertionError("a cache built on another store has to stop the run")
         # And a file built before the clock rule: same arguments, different rows, refused.
-        path.with_suffix(".json").write_text(json.dumps(dict(stride=12, symbols=["BTC"], lags_at=list(LAGS))))
+        path.with_suffix(".json").write_text(
+            json.dumps(dict(stride=12, symbols=["BTC"], lags_at=list(LAGS), store_ends=here))
+        )
         try:
             cached(path, stride=12, symbols=["BTC"])
         except SystemExit:
@@ -315,7 +332,7 @@ def _selfcheck() -> None:
         else:
             raise AssertionError("a cache with no sampling rule recorded has to stop the run")
         path.with_suffix(".json").write_text(
-            json.dumps(dict(stride=12, symbols=["BTC"], lags_at=list(LAGS), sampling=SAMPLING))
+            json.dumps(dict(stride=12, symbols=["BTC"], lags_at=list(LAGS), sampling=SAMPLING, store_ends=here))
         )
         for wrong in (dict(stride=6, symbols=["BTC"]), dict(stride=12, symbols=["ETH"])):
             try:

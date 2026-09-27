@@ -57,7 +57,7 @@ import torch
 from torch import nn
 
 from tradingvision import legs, normalize
-from tradingvision.data.binance import STORE, SYMBOLS, load
+from tradingvision.data.binance import STORE, SYMBOLS, ends, load
 from tradingvision.data.pivots import EXTREMA_WINDOW, find_pivots
 from tradingvision.data.target import swing_leg_target
 from tradingvision.features import COLUMNS, features
@@ -235,6 +235,8 @@ def cached(path: Path, symbols: list[str], **params):
         {k: v for k, v in params.items() if k != "keep"},
         symbols=sorted(symbols),
         inputs=list(params.get("keep") or INPUTS),
+        # Where the store ends, as `dataset.cached` records it and for its reason.
+        store_ends=ends(sorted(symbols)),
     )
     if npy.exists():
         if not stamp.exists():

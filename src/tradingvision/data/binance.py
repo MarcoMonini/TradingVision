@@ -90,6 +90,25 @@ def load(symbol: str, timeframe: str = "5m", *, stored: str = "5m", store: Path 
     return df.resample(rule).agg(OHLC).dropna(subset=["open"])
 
 
+def ends(symbols: list[str], interval: str = "5m", store: Path = STORE) -> dict[str, str | None]:
+    """The last bar in the store of each symbol, None where it has no file — for the cache stamps.
+
+    A dataset is a function of the store as much as of its arguments. On 2026-09-27 a step2 build
+    over fifteen pairs, two of them fetched that day and thirteen last updated on 2026-09-02, came
+    out with 24 days at the end whose cross-section was two pairs wide; the rebuild after bringing
+    the thirteen up to date had the same arguments, the same universe, and so the same stamp. A
+    store that grows changes which rows exist without changing anything a caller passes, so where
+    it ends goes into the stamp and a cache built on another store is refused.
+
+    Reads the index alone, a few hundredths of a second per symbol.
+    """
+    out = {}
+    for s in symbols:
+        path = store / f"{s}USDT-{interval}.parquet"
+        out[s] = str(pd.read_parquet(path, columns=[]).index[-1]) if path.exists() else None
+    return out
+
+
 def _keys(prefix: str) -> list[str]:
     """ZIP names under an S3 prefix. A listing page holds 1000 keys and the daily folder of an old
     pair holds more, so callers must narrow the prefix down to the months they want."""
