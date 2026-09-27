@@ -84,6 +84,34 @@ SCALES = (6, 12, W)
 # leg state at 0.623 against 0.577 and 0.584 alone: they are not the same information.
 BASIC = list(COLUMNS) + [f"{c}_{W}" for c in legs.STATE]
 INPUTS = list(COLUMNS) + [f"{c}_{w}" for w in SCALES for c in legs.STATE] + list(legs.EXHAUSTION)
+# The input set of the next model: 15 of the 65, cut by hand on 2026-09-27 in seven passes over the
+# rank-correlation map of INPUTS on 15m bars, train period only (swing_leg_pipeline.html, lesson 6,
+# where every column taken out is listed with the pass that took it). Out: the volume family and
+# every column built on volume, all of the leg state but `signed_move`, the distance-from-the-mean
+# group whole, the redundant volatility and trend columns. No pair of the fifteen reaches |rho| 0.8;
+# the highest is distance_from_window_high_pct / tsi_momentum at 0.65.
+#
+# Decided, not measured: no label has been read to choose it. Step 2's selection lost 0.004 of Rank
+# IC to the full set once it reached a recurrent net, and dropped `rsi_centered`, one of the two
+# strongest columns near the pivot — which this cut drops too. An ablation against the full set,
+# judged on the forward return, is what keeps or undoes it. A parameter beside INPUTS, not a deletion.
+REDUCED = [
+    "log_return",
+    "realized_volatility",
+    "volatility_expansion",
+    "upper_wick_pct",
+    "lower_wick_pct",
+    "distance_from_window_high_pct",
+    "distance_from_window_low_pct",
+    "distance_from_psar_pct",
+    "adx_trend_strength",
+    "tsi_momentum",
+    "signed_move_6",
+    "signed_move_12",
+    "signed_move_24",
+    "divergence",
+    "deceleration",
+]
 
 H = 48
 DROPOUT = 0.2
@@ -823,6 +851,9 @@ def summarise(table: pd.DataFrame) -> dict[str, float]:
 
 def _selfcheck() -> None:
     """A saw whose turns are in the data, so the arithmetic and the learning can both be pinned."""
+    # A misspelt name in the reduced set would be a KeyError at build time at best, a silently
+    # narrower model at worst; and INPUTS' order is the tensor's.
+    assert REDUCED == [c for c in INPUTS if c in REDUCED] and len(set(REDUCED)) == 15, REDUCED
     # The rule and its price, on a triangle wave with a known answer.
     ramp = np.concatenate([np.linspace(0, 1, 20), np.linspace(1, 0, 20)])
     close = np.exp(0.02 * np.tile(ramp, 10))
