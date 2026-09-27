@@ -42,9 +42,11 @@ from tradingvision.data.candles import BAR, SYMBOLS, TIMEFRAMES, get_candles
 from tradingvision.data.pivots import EXTREMA_WINDOW, find_pivots
 from tradingvision.data.target import (
     CROSS_HORIZON,
+    MOVE_HORIZON,
     SMOOTHING,
     cross_sectional_return,
     leg_significance,
+    move_balance,
     remaining_excursion,
     swing_leg_target,
 )
@@ -154,14 +156,17 @@ def load_pivots(close, window: int):
 PREDICTIVE = "remaining excursion (predictive)"
 RETROSPECTIVE = "swing leg position (retrospective)"
 CROSS = "cross-sectional return (predictive)"
+BALANCE = "rise minus fall ahead (predictive)"
 # `gru`'s name for each of them, as written into a checkpoint. No entry for `CROSS`: no model is
 # trained on it yet, which is what keeps the prediction from ever being drawn against it.
 TRAINED_ON = {"excursion": PREDICTIVE, "swing": RETROSPECTIVE}
 
 
 @st.cache_data(show_spinner=False)
-def load_target(close, window: int, label: str, smoothing: float, significance: bool):
+def load_target(close, window: int, label: str, smoothing: float, significance: bool, horizon: int):
     """Recomputed when a target control moves; the pivots underneath come from their own cache."""
+    if label == BALANCE:
+        return move_balance(close, horizon)
     pivots = load_pivots(close, window)
     if label == PREDICTIVE:
         return remaining_excursion(close, pivots, window)
@@ -740,7 +745,7 @@ def main() -> None:
     # is asked — but the answer the rest of the page is built on is this one.
     label = st.sidebar.radio(
         "Label",
-        [PREDICTIVE, RETROSPECTIVE, CROSS],
+        [PREDICTIVE, RETROSPECTIVE, CROSS, BALANCE],
         index=1,
         help="what the model is asked to output",
     )
@@ -756,6 +761,15 @@ def main() -> None:
     horizon = CROSS_HORIZON
     if label == CROSS:
         horizon = st.sidebar.slider("Forward horizon (bars)", 4, 288, CROSS_HORIZON, 4)
+    if label == BALANCE:
+        # Bars of the timeframe on screen, like the cross-sectional horizon and for its reason.
+        horizon = st.sidebar.slider(
+            "Move horizon (bars)",
+            1,
+            288,
+            MOVE_HORIZON,
+            help="the label is the rise minus the fall of the close over this many bars ahead, in sigma",
+        )
     if retrospective:
         # Unlike the fee, this one is explicitly a tunable: 0.7 is a starting value. 1.0 is a pure
         # time ramp between pivots, 0.0 follows price alone. Stepped by 0.1 and not 0.05 so every
@@ -1005,7 +1019,7 @@ def main() -> None:
                 per = factor.pnl(pos, panel["close"], step)
                 weight = pos[fetched[0]] if fetched[0] in pos else None
     else:
-        target = load_target(df.close, leg_window, label, smoothing, significance)
+        target = load_target(df.close, leg_window, label, smoothing, significance, horizon)
     swung = load_swing(df, str(swing_at), swing_at.stat().st_mtime) if swinging else None
     if swung is not None and not swung.position.notna().any():
         # Not an error and not an empty chart: the model reads 24 bars of history through features
@@ -1352,7 +1366,8 @@ def main() -> None:
     st.caption(
         f"{len(df)} candles — {df.index[0]:%Y-%m-%d %H:%M} to {df.index[-1]:%Y-%m-%d %H:%M} UTC · "
         f"{len(pivots)} pivots, median leg {pivots.amplitude.median() * 100:.2f}% · "
-        f"{target.notna().sum()} labelled bars ({target.isna().sum()} unlabelled: head and tail) · "
+        f"{target.notna().sum()} labelled bars ({target.isna().sum()} unlabelled: "
+        f"{'the volatility warm-up and the last ' + str(horizon) if label == BALANCE else 'head and tail'}) · "
         + (
             f"smoothing {smoothing:.2f} time / {1 - smoothing:.2f} price · "
             f"median leg significance {strength.median():.2f}, "
@@ -1371,8 +1386,15 @@ def main() -> None:
                     )
                 )
                 if label == CROSS
-                else f"median |target| {target.abs().median():.2f} sigma, "
-                f"99th percentile {target.abs().quantile(0.99):.1f} sigma"
+                else (
+                    f"rise minus fall of the close over the next {horizon} bars, in sigma of a "
+                    f"{horizon}-bar walk · median |target| {target.abs().median():.2f}, "
+                    f"99th percentile {target.abs().quantile(0.99):.1f} · "
+                    f"{(target.dropna() > 0).mean() * 100:.0f}% of bars up"
+                    if label == BALANCE
+                    else f"median |target| {target.abs().median():.2f} sigma, "
+                    f"99th percentile {target.abs().quantile(0.99):.1f} sigma"
+                )
             )
         )
         + (
