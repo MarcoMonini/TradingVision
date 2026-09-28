@@ -125,6 +125,8 @@ footer{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);color:v
         <tr><td class="num">6</td><td>GRU ramo singolo, tutte le colonne</td><td>(B, 24, 29) rankate — 15m</td><td class="num">0.1059 ± 0.0241</td><td class="num">—</td><td>perde sul composito a due colonne<span class="b b-no">no</span></td></tr>
         <tr><td class="num">6</td><td>composito, finestra del progetto</td><td>2 colonne rankate, N=24</td><td class="num">0.0985 ± 0.0187</td><td class="num">t = 2.74</td><td>la riga da battere<span class="b b-ok">4 fold</span></td></tr>
         <tr class="hi"><td class="num">6</td><td>composito, finestra scelta su train</td><td>2 colonne rankate, N=2880</td><td class="num">0.1099 ± 0.0124</td><td class="num">t = 2.88</td><td>batte N=24 su 4 fold su 4, e il netto passa da −0.77 a +0.18<span class="b b-ok">0 parametri</span></td></tr>
+        <tr><td class="num">7</td><td colspan="5"><em>cambio di etichetta: <code>move_balance</code>, N = 48 su 15m — 15 coppie di training, 13 tradabili</em></td></tr>
+        <tr><td class="num">7</td><td>GRU ramo singolo (<code>swing --label balance</code>)</td><td>(B, 96, 15) <code>REDUCED</code> — 15m</td><td class="num">+0.0015 (t 0.27)</td><td class="num">—</td><td>zero su tutto: Pearson con l'etichetta −0.009, segno del rendimento a 48 barre 49.5%, decili rovesciati sul grezzo e piatti al netto del mercato, −0.24 log/anno netti sulle 13. In validazione +0.016…+0.056, sparito nel test; sd della predizione 0.17 contro 1.36 dell'etichetta<span class="b b-no">1 seed</span></td></tr>
       </tbody>
     </table>
   </div>

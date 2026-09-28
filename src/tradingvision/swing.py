@@ -1093,6 +1093,9 @@ def save(path, model, tf, window, steps, params, stage, keep=None, cal=None, lab
             "sign": None if params is None else params[2],
             "stage": stage,
             "label": label,
+            # The horizon the label read, in bars of `tf`. A prediction of the rise minus the fall
+            # over 48 bars drawn against the label over 24 would share the axis and not the question.
+            "horizon": MOVE_HORIZON if label == "balance" else None,
             "test_start": test_start,
             # The map back onto the label's range, fitted on train. Stored rather than recomputed:
             # the chart has no train period of its own and a calibration fitted on the window on

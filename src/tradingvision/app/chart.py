@@ -160,6 +160,9 @@ BALANCE = "rise minus fall ahead (predictive)"
 # `gru`'s name for each of them, as written into a checkpoint. No entry for `CROSS`: no model is
 # trained on it yet, which is what keeps the prediction from ever being drawn against it.
 TRAINED_ON = {"excursion": PREDICTIVE, "swing": RETROSPECTIVE}
+# Where `swing --label balance --save` is pointed: beside `swing.pt` and not over it, which is the
+# 4h model the retrospective label draws.
+BALANCE_CHECKPOINT = "swing-balance.pt"
 
 
 @st.cache_data(show_spinner=False)
@@ -858,6 +861,8 @@ def main() -> None:
         st.sidebar.caption(
             f"No swing model. `python -m tradingvision.swing --save`, then copy it into `{MODELS.name}/`."
         )
+    elif label == BALANCE:
+        pass  # the balance model below has its own line for this label
     elif label != RETROSPECTIVE:
         st.sidebar.caption(f"The swing model predicts the **{RETROSPECTIVE}** label.")
     elif timeframe != swing_card["timeframe"]:
@@ -868,6 +873,32 @@ def main() -> None:
             value=True,
             help=f"{swing_at.name}, stage {swing_card['stage']}, trained to {swing_card['test_start']}",
         )
+
+    # The model of `swing --label balance`: the same net, fitted on `move_balance` over the 15 of
+    # `REDUCED`. Its own checkpoint beside `swing.pt`, found by the same two-directory rule, and
+    # drawn under the same condition as every other model here — only against the label it
+    # predicts, on the timeframe it reads, and at the horizon it was fitted on: the slider moves
+    # the label and a line fitted at 48 bars says nothing about the label at 24.
+    balance_at = saved(swing, BALANCE_CHECKPOINT) if swing is not None else None
+    balance_card = load_swing_model(str(balance_at), balance_at.stat().st_mtime)[1] if balance_at else None
+    balancing = False
+    if label == BALANCE and swing is not None:
+        if not balance_card:
+            st.sidebar.caption(
+                f"No balance model. `python -m tradingvision.swing --label balance --save "
+                f"data/{BALANCE_CHECKPOINT}`, then copy it into `{MODELS.name}/`."
+            )
+        elif timeframe != balance_card["timeframe"]:
+            st.sidebar.caption(f"The balance model reads **{balance_card['timeframe']}** candles.")
+        elif horizon != balance_card["horizon"]:
+            st.sidebar.caption(f"The balance model was fitted at a **{balance_card['horizon']}-bar** horizon.")
+        else:
+            balancing = st.sidebar.toggle(
+                "Balance prediction",
+                value=True,
+                help=f"{balance_at.name}, {len(balance_card['inputs'])} inputs x {balance_card['steps']} bars, "
+                f"trained to {balance_card['test_start']}",
+            )
 
     # The always-in rule of `threshold`, drawn on whatever swing leg position the row below shows.
     # It reads the *prediction* and never the target: the retrospective label is built from a
@@ -1029,11 +1060,22 @@ def main() -> None:
         )
         swung = None
     swing_pos = swung.position.fillna(0.0) if swung is not None else None
+    # Only the line: the band `choose` stored with it was fitted for a rule nobody has priced on
+    # this label yet, so no trade is drawn from it.
+    balanced = load_swing(df, str(balance_at), balance_at.stat().st_mtime) if balancing else None
+    if balanced is not None and not balanced.label.notna().any():
+        st.info(
+            f"The balance model reads {balance_card['steps']} bars through features that need about "
+            f"{6 * EXTREMA_WINDOW} behind them — this window has {len(df)} candles. Widen **History (days)**."
+        )
+        balanced = None
     strength = load_significance(df.close, leg_window)
     feats = load_features(df, EXTREMA_WINDOW, tuple(COLUMNS))[picked]
     # The two models never draw together: each predicts a different label, and the sidebar only
     # offers whichever one the label on screen belongs to.
     pred = factor_pred if factor_pred is not None else None
+    if pred is None and balanced is not None:
+        pred = balanced.label.rename("prediction")
     if pred is None and swung is not None:
         # Calibrated back onto the label's own range on the way out of the model, so the two lines
         # in the second row share a unit as well as an axis. The map is fitted on the train period
