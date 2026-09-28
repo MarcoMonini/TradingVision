@@ -28,6 +28,16 @@ The grid's 117 fits are 15-epoch proxies used to rank the cells, and the cell th
 sits on (0.7 / 24) is `gru.pt` itself, fitted on the full four folds. A cell that is not here draws
 nothing and says which command trains it.
 
-Both files are small — a 32-unit GRU and a 48-unit encoder — so they belong in git rather than in
+`swing-v2.pt` is the **Swing Leg Position v2** checkbox: 15m, pivots and features at 12, time
+weight 0.5, the 15 inputs of `swing.reduced(12)` over 48 bars, label stage. It carries each training
+pair's scaler, so the page feeds a known pair the inputs the walk-forward measured.
+
+```bash
+uv run python -m tradingvision.swing --timeframe 15m --window 12 --smoothing 0.5 --inputs reduced \
+    --steps 48 --stage label --test-start 2025-06 --save data/swing-v2.pt
+cp data/swing-v2.pt models/
+```
+
+All the files are small — a 32-unit GRU and a 48-unit encoder — so they belong in git rather than in
 LFS. `TRADINGVISION_MODELS=/some/disk` moves the lookup to a mounted disk if a checkpoint ever
 outgrows that.

@@ -163,6 +163,17 @@ TRAINED_ON = {"excursion": PREDICTIVE, "swing": RETROSPECTIVE}
 # Where `swing --label balance --save` is pointed: beside `swing.pt` and not over it, which is the
 # 4h model the retrospective label draws.
 BALANCE_CHECKPOINT = "swing-balance.pt"
+# The second swing-leg-position model: 15m, pivots *and* features at 12, time weight 0.5, the 15
+# inputs of `REDUCED` over 48 bars. Its label parameters are read from the checkpoint and never
+# restated here, so the checkbox cannot draw the label at one setting against a model fitted at
+# another.
+V2 = "Swing Leg Position v2"
+V2_CHECKPOINT = "swing-v2.pt"
+
+
+def store_name(pair: str) -> str:
+    """`BTC/USD` -> `BTC`, the name the training store and a checkpoint's scalers use."""
+    return pair.split("/")[0]
 
 
 @st.cache_data(show_spinner=False)
@@ -257,13 +268,14 @@ def load_swing_model(path: str, _mtime: float):
 
 
 @st.cache_data(show_spinner="Running the swing model…")
-def load_swing(df, path: str, _mtime: float):
+def load_swing(df, path: str, _mtime: float, symbol: str | None = None):
     """`label`, `logit` and `position` at every bar on screen — the model of step 7.
 
-    Unlike the GRU this one needs no store: its inputs are computed from the candles on screen and
-    its scaler is fitted on their own history, so it runs on a pair the training set never held.
+    Unlike the GRU this one needs no store: its inputs are computed from the candles on screen.
+    `symbol` picks the training scaler the checkpoint ships for that pair, when it ships one; a
+    pair the training set never held is scaled on its own history instead.
     """
-    return swing.predict_frame(*load_swing_model(path, _mtime), df)
+    return swing.predict_frame(*load_swing_model(path, _mtime), df, symbol)
 
 
 @st.cache_data(show_spinner="Computing features…")
@@ -756,6 +768,28 @@ def main() -> None:
     smoothing = SMOOTHING
     leg_window = EXTREMA_WINDOW
     significance = True
+    # The v2 swing model, and the checkbox that selects it. Ticked, it pins the label to the two
+    # numbers the checkpoint was trained on — the sliders below show them and cannot move them —
+    # and it moves the features' window with the pivots', because v2 moved both together. Offered
+    # only where there is a checkpoint to read them from.
+    v2_at = saved(swing, V2_CHECKPOINT) if swing is not None else None
+    v2_card = load_swing_model(str(v2_at), v2_at.stat().st_mtime)[1] if v2_at else None
+    v2 = False
+    if retrospective and v2_card:
+        v2 = st.sidebar.checkbox(
+            V2,
+            value=False,
+            help=f"{v2_at.name}: {v2_card['timeframe']} candles, pivots and features at {v2_card['window']} bars, "
+            f"time weight {v2_card['smoothing']}, {len(v2_card['inputs'])} inputs x {v2_card['steps']} bars, "
+            f"trained to {v2_card['test_start']}",
+        )
+    elif retrospective and swing is not None:
+        st.sidebar.caption(
+            f"No {V2} model. `python -m tradingvision.swing --timeframe 15m --window 12 --smoothing 0.5 "
+            f"--inputs reduced --steps 48 --stage label --test-start 2025-06 --save data/{V2_CHECKPOINT}`, "
+            f"then copy it into `{MODELS.name}/`."
+        )
+    feature_window = v2_card["window"] if v2 else EXTREMA_WINDOW
     # Counted in bars of the timeframe on screen, like every other window here. 48 bars of 15m is
     # the 12h the horizon sweep pointed at; on another timeframe the same number is another period,
     # which is why it is a control and not a constant.
@@ -777,22 +811,40 @@ def main() -> None:
         # position on it is a cell `legsweep` trained a model for — the two controls below pick
         # the label *and* the checkpoint, and a half-step between two models would draw the label
         # at one setting against a model fitted on another.
-        smoothing = st.sidebar.slider("Target smoothing (time weight)", 0.0, 1.0, SMOOTHING, 0.1)
+        smoothing = st.sidebar.slider(
+            "Target smoothing (time weight)",
+            0.0,
+            1.0,
+            v2_card["smoothing"] if v2 else SMOOTHING,
+            0.1,
+            disabled=v2,
+        )
         # The pivots the label ramps between. `EXTREMA_WINDOW = 24` is calibrated in `oracle`, but
         # on the *hindsight P&L of the legs* and never against what the model can rank, which is
         # what `legsweep` measures. The features stay on 24 whatever this says: the sweep moved
         # the label alone, so a checkpoint here reads the same inputs as every other one. The
         # options are the sweep's own grid and not a range, so every position is a cell someone
         # trained; without torch there is no sweep to ask and the label stays on the calibrated 24.
-        if legsweep is not None:
+        if v2:
+            leg_window = v2_card["window"]
+            st.sidebar.select_slider(
+                "Leg window (label pivots)",
+                options=sorted({*(legsweep.WINDOWS if legsweep else ()), leg_window}),
+                value=leg_window,
+                disabled=True,
+                help=f"fixed by {V2}: the pivots and the features both at {leg_window} bars",
+            )
+        elif legsweep is not None:
             leg_window = st.sidebar.select_slider(
                 "Leg window (label pivots)",
                 options=legsweep.WINDOWS,
                 value=EXTREMA_WINDOW,
                 help="bars of the 15m reference the pivot detector needs clear on both sides",
             )
-        # Off shows the flat +/-1 labelling, which the weighting is meant to be read against.
-        significance = st.sidebar.toggle("Weight pivots by leg significance", value=True)
+        # Off shows the flat +/-1 labelling, which the weighting is meant to be read against. v2
+        # was trained on the weighted one, so under it the switch is not offered.
+        if not v2:
+            significance = st.sidebar.toggle("Weight pivots by leg significance", value=True)
     # The feature windows all derive from the extrema window, so they follow it rather than being
     # tuned here; the per-branch values are still to be measured.
     # A toggle and not a 28-item checklist: after the selection there are only two sets anyone
@@ -836,7 +888,9 @@ def main() -> None:
     # has no line for, and the old subscript turned that into a KeyError on import of the sidebar.
     trained_on = TRAINED_ON.get(checkpoint.get("label", "excursion")) if checkpoint else None
     predicting = False
-    if gru is None:
+    if v2:
+        pass  # v2 is the prediction for these two knobs, and two models never draw together
+    elif gru is None:
         st.sidebar.caption("This install has no torch, so no GRU prediction. The factor below needs none.")
     elif not model_at:
         st.sidebar.caption(missing)
@@ -857,6 +911,8 @@ def main() -> None:
     swinging = False
     if swing is None:
         st.sidebar.caption("This install has no torch, so no swing trades.")
+    elif v2:
+        pass  # the v1 model reads 24-bar pivots on another timeframe; under v2 it has no line
     elif not swing_at:
         st.sidebar.caption(
             f"No swing model. `python -m tradingvision.swing --save`, then copy it into `{MODELS.name}/`."
@@ -900,6 +956,11 @@ def main() -> None:
                 f"trained to {balance_card['test_start']}",
             )
 
+    # v2 draws on the timeframe it was fitted on and nowhere else, like every model here.
+    v2_drawn = v2 and timeframe == v2_card["timeframe"]
+    if v2 and not v2_drawn:
+        st.sidebar.caption(f"{V2} reads **{v2_card['timeframe']}** candles.")
+
     # The always-in rule of `threshold`, drawn on whatever swing leg position the row below shows.
     # It reads the *prediction* and never the target: the retrospective label is built from a
     # centred window, so a rule trading it would be reading `EXTREMA_WINDOW` bars of future and
@@ -907,7 +968,7 @@ def main() -> None:
     # a model is on, and says so when it is not.
     ruling, band = False, THRESHOLD
     take, stop, after_stop, after_take, tie_stop, trail = None, None, stops.AFTER[0], stops.AFTER[0], True, False
-    if retrospective and (swinging or predicting):
+    if retrospective and (swinging or predicting or v2_drawn):
         ruling = st.sidebar.toggle(
             "Always-in rule",
             value=True,
@@ -986,7 +1047,9 @@ def main() -> None:
     # varies the pivots the target ramps between and leaves the features on 24 throughout.
     st.sidebar.divider()
     st.sidebar.caption(
-        f"**Feature window** &nbsp; {EXTREMA_WINDOW} bars — calibrated, see the spec  \n"
+        f"**Feature window** &nbsp; {feature_window} bars — "
+        + (f"{V2}'s, with its pivots" if v2 else "calibrated, see the spec")
+        + "  \n"
         f"**Fee** &nbsp; {FEE * 100:.2f}% per side, {FEE * 200:.2f}% round trip — Alpaca taker tier 1"
     )
 
@@ -1049,7 +1112,8 @@ def main() -> None:
                 weight = pos[fetched[0]] if fetched[0] in pos else None
     else:
         target = load_target(df.close, leg_window, label, smoothing, significance, horizon)
-    swung = load_swing(df, str(swing_at), swing_at.stat().st_mtime) if swinging else None
+    pair = store_name(fetched[0])
+    swung = load_swing(df, str(swing_at), swing_at.stat().st_mtime, pair) if swinging else None
     if swung is not None and not swung.position.notna().any():
         # Not an error and not an empty chart: the model reads 24 bars of history through features
         # that need another hundred behind them, so a short window leaves nothing to score. Said
@@ -1062,20 +1126,36 @@ def main() -> None:
     swing_pos = swung.position.fillna(0.0) if swung is not None else None
     # Only the line: the band `choose` stored with it was fitted for a rule nobody has priced on
     # this label yet, so no trade is drawn from it.
-    balanced = load_swing(df, str(balance_at), balance_at.stat().st_mtime) if balancing else None
+    balanced = load_swing(df, str(balance_at), balance_at.stat().st_mtime, pair) if balancing else None
     if balanced is not None and not balanced.label.notna().any():
         st.info(
             f"The balance model reads {balance_card['steps']} bars through features that need about "
             f"{6 * EXTREMA_WINDOW} behind them — this window has {len(df)} candles. Widen **History (days)**."
         )
         balanced = None
+    # v2's line, on the label's own range: the calibration fitted on train maps the head's shrunk
+    # output back onto +-1, monotonically, so the always-in band reads it in the label's units.
+    v2_line = load_swing(df, str(v2_at), v2_at.stat().st_mtime, pair) if v2_drawn else None
+    if v2_line is not None and not v2_line.label.notna().any():
+        st.info(
+            f"{V2} reads {v2_card['steps']} bars through features that need about {6 * v2_card['window']} "
+            f"behind them — this window has {len(df)} candles. Widen **History (days)**."
+        )
+        v2_line = None
+    if v2_line is not None and pair not in (v2_card.get("scalers") or {}):
+        st.caption(
+            f"{fetched[0]} is not one of the pairs {V2} was trained on, so its inputs are scaled on the "
+            f"window on screen — including bars after the one each prediction is drawn at."
+        )
     strength = load_significance(df.close, leg_window)
-    feats = load_features(df, EXTREMA_WINDOW, tuple(COLUMNS))[picked]
+    feats = load_features(df, feature_window, tuple(COLUMNS))[picked]
     # The two models never draw together: each predicts a different label, and the sidebar only
     # offers whichever one the label on screen belongs to.
     pred = factor_pred if factor_pred is not None else None
     if pred is None and balanced is not None:
         pred = balanced.label.rename("prediction")
+    if pred is None and v2_line is not None:
+        pred = v2_line.label.rename("prediction")
     if pred is None and swung is not None:
         # Calibrated back onto the label's own range on the way out of the model, so the two lines
         # in the second row share a unit as well as an axis. The map is fitted on the train period

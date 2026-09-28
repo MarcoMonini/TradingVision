@@ -995,7 +995,7 @@ h_t = (1 − z) ⊙ h̃ + z ⊙ h_{t−1}               ⊙ = prodotto elemento 
       <tr><td colspan="7" class="foot">r0 → r2 sono tre minimi di fila, ognuno più basso: il lettore tiene 38, poi 111 da barra 135, poi 211 da barra 235. <code>find_pivots</code> terrebbe solo 211 — e per tutto il tempo prima di 235 avrebbe mentito su cosa era noto.</td></tr>
     </tbody>
   </table></div>
-  <p><code>legs.next_pivot(close, window)</code> invece usa di proposito i pivot <em>centrati</em>: è l'orizzonte di purging, e il purging riguarda ciò che l'etichetta ha visto.</p>
+  <p><code>legs.label_reach(close, window)</code> invece usa di proposito i pivot <em>centrati</em>: è l'orizzonte di purging, e il purging riguarda ciò che l'etichetta ha visto. Non è il pivot successivo ma l'ultima barra che l'etichetta legge: il pivot è definitivo solo quando la sua serie di estremi dello stesso tipo si chiude, cioè <code>window</code> barre dopo il primo estremo grezzo di tipo opposto che lo segue — in mediana 46 barre 15m avanti a finestra 12, contro le 13 del pivot (vedi II.10).</p>
 </section>
 
 <section id="d5">
@@ -1258,7 +1258,7 @@ target(i)       = valori[k] + x · (valori[k+1] − valori[k])
     <tbody>
       <tr><td class="key">swing-4h-full.npy</td><td>(righe, 65) float32, già scalato, mmap; <code>cached</code> restituisce la vista (N, steps, 65)</td></tr>
       <tr><td class="key">swing-4h-full.parquet</td><td>indice <code>open_time</code> (DatetimeIndex UTC, <em>non</em> univoco fra simboli); colonne <code>target</code> f64, <code>next_pivot</code> datetime, <code>close</code> f64, <code>ret</code> f64, <code>symbol</code> str, <code>row</code> int (posizione nel .npy)</td></tr>
-      <tr><td class="key">swing-4h-full.json</td><td><code>{tf, since, window, steps, label, before, symbols:[…], inputs:[65 nomi], store_ends:{…}}</code></td></tr>
+      <tr><td class="key">swing-4h-full.json</td><td><code>{tf, since, window, steps, label, before, smoothing, symbols:[…], inputs:[65 nomi], store_ends:{…}, build}</code> — <code>build</code> (oggi 2) cambia quando <code>build</code> scrive altro a parità di argomenti; accanto, <code>&lt;nome&gt;-scalers.parquet</code> con lo scaler di ogni simbolo</td></tr>
       <tr><td colspan="2" class="foot"><code>--inputs basic</code> usa 29 feature + stato a 24 soltanto (39 colonne). Una riga con meno di <code>steps + 100</code> barre utili esclude il simbolo.</td></tr>
     </tbody>
   </table></div>
@@ -1272,6 +1272,7 @@ target(i)       = valori[k] + x · (valori[k+1] − valori[k])
 <pre>train = df[(open_time &lt; cut) &amp; (next_pivot &lt; cut)]        # split.temporal / swing.purge
 test  = df[open_time &gt;= cut]</pre>
   <p>Vale su ogni confine: train→test e train→valid (un valid non purgato contamina l'early stopping).</p>
+  <p><strong>Modello B, dal 2026-09-28.</strong> Per <code>swing</code> la colonna <code>next_pivot</code> contiene <code>legs.label_reach</code> e non più il pivot: l'etichetta interpola verso un pivot che è definitivo solo quando la sua serie si chiude, <code>window</code> barre dopo il primo estremo di tipo opposto che lo segue. Sui dati v2 (15m, finestra 12, 15 coppie) l'etichetta legge p50 46 / p95 104 / p99 153 barre avanti, contro 13 / 60 / 100 fino al pivot; il purge sul solo pivot lasciava nel train 350–700 righe per taglio etichettate con prezzi del lato test. <code>legs._selfcheck</code> fissa entrambe le metà: troncare la serie dopo <code>t</code> non muove nessuna etichetta con reach ≤ <code>t</code>, e ne muove qualcuna con pivot ≤ <code>t</code>. Il modello A (<code>dataset</code>, <code>legsweep</code>) purga ancora sul pivot.</p>
   <figure>
   <svg class="dg" viewBox="0 0 960 250" role="img" aria-label="Walk-forward espansivo a quattro fold con purging">
     <text x="10" y="20" class="t-soft">tempo →</text>
@@ -1332,11 +1333,11 @@ test  = df[open_time &gt;= cut]</pre>
     <thead><tr><th></th><th>modello A</th><th>modello B</th></tr></thead>
     <tbody>
       <tr><td>chi</td><td class="key">gru.Branches(x, inner.row) → stats_of</td><td class="key">swing.scaler(f, "2023-01")</td></tr>
-      <tr><td>su quali righe</td><td>inner train <em>di ogni fold</em>, solo l'ultimo step (x[train, −1])</td><td>righe del simbolo prima del 2023-01 (sottoinsieme di ogni train, perché i fold espandono)</td></tr>
+      <tr><td>su quali righe</td><td>inner train <em>di ogni fold</em>, solo l'ultimo step (x[train, −1])</td><td>righe del simbolo <em>strettamente</em> prima di <code>--test-start</code> (sottoinsieme di ogni train, perché i fold espandono). Fino al 2026-09-28 era <code>f.loc[:"2023-01"]</code>, che per le stringhe parziali include tutto il mese: il primo mese di test entrava nei quartili</td></tr>
       <tr><td>granularità</td><td>una tabella per ramo, condivisa fra i simboli</td><td>una tabella <em>per simbolo</em> (log_dollar_volume BTC vs BAT)</td></tr>
       <tr><td>quando si applica</td><td>al volo, per batch (<code>Branches.__getitem__</code>): il tensore resta mmap</td><td>una volta, dentro il tensore salvato</td></tr>
       <tr><td>formato</td><td colspan="2">DataFrame indicizzato per colonna, due colonne <code>center</code>, <code>scale</code>; <code>fit</code> solleva su scale ≤ 0</td></tr>
-      <tr><td>in inferenza</td><td>salvato nel checkpoint (<code>stats</code>)</td><td><strong>non</strong> salvato: <code>live_scaler</code> sulla storia della finestra a schermo, IQR nullo → 1</td></tr>
+      <tr><td>in inferenza</td><td>salvato nel checkpoint (<code>stats</code>)</td><td>salvato nel checkpoint dal 2026-09-28 (<code>scalers</code>, uno per simbolo di train) e usato dalla pagina per quelle coppie; <code>live_scaler</code> sulla finestra a schermo, IQR nullo → 1, resta solo per una coppia mai vista — e legge anche le barre dopo quella predetta</td></tr>
     </tbody>
   </table></div>
 </section>

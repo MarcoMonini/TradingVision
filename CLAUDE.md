@@ -53,6 +53,7 @@ uv run python -m tradingvision.simulation --pred data/pred-*.parquet   # what it
 uv run python -m tradingvision.factor --price --baseline --by-quarter # step 6: the cross-sectional factor
 uv run python -m tradingvision.swing --timeframe 4h --baseline        # step 7: the tradable swing rule
 uv run python -m tradingvision.swing --timeframe 15m --label balance --inputs reduced --steps 96 --stage label --test-start 2025-06 --seeds 5  # the move_balance model
+uv run python -m tradingvision.swing --timeframe 15m --window 12 --smoothing 0.5 --inputs reduced --steps 48 --stage label --test-start 2025-06 --save data/swing-v2.pt  # Swing Leg Position v2
 uv run python -m tradingvision.swingrule --pred data/pred-swing-*.parquet  # the long-only rule on the swing label
 uv run python -m tradingvision.threshold --pred data/pred-swing-*.parquet --at 0.5  # the always-in flip rule
 uv run python -m tradingvision.stops --pred data/pred-swing-*.parquet --at 0.5 --grid  # the same rule with exits
@@ -104,6 +105,9 @@ are placed on the 5m grid at `label + tf - 5m` and forward filled. One bar of an
 past the cut — the distance is unbounded (max measured 754 bars), so a fixed embargo both leaks and
 throws away clean bars. Applies to train/valid as much as train/test: an unpurged valid contaminates
 early stopping. `split.walk_forward` repeats the cut for the four folds every comparison is made on.
+The label reads further than its next pivot: the pivot is only final once its same-kind run closes,
+`window` bars after the first opposite extreme. `swing` purges on that (`legs.label_reach`, p50 46
+bars ahead at window 12 against 13 to the pivot); `dataset` and `legsweep` still purge on the pivot.
 
 **Anything that decides something is measured on train only** — feature selection, normalisation
 statistics (`normalize` fits quantiles on train and applies them unchanged), thresholds. Measuring a
