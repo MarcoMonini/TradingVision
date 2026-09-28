@@ -1479,6 +1479,7 @@ test  = df[open_time &gt;= cut]</pre>
     <li>Huber con δ = mediana |target| del train del fold; AdamW 1e−3, wd 1e−4, batch 512, clip 1.0; 40 epoche, patience 6.</li>
     <li>Early stopping sulla <strong>correlazione di Pearson</strong> fra testa di etichetta e target sulla validazione (serie temporale, non cross-sectional).</li>
     <li><strong>Calibrazione</strong> (<code>swing.calibration</code>): 201 quantili dell'output fittato e dell'etichetta sul train; <code>np.interp</code> in uscita. Monotona, non sposta nessuna decisione; ripristina l'unità (la Huber schiaccia la predizione a ±0,4 mentre l'etichetta tocca ±1). Nel checkpoint reale: quantili dell'output da −1,134 a +1,024 mappati su −1 … +1.</li>
+    <li><strong>Due target</strong> (<code>--label swing+balance</code>, dal 2026-09-28): <code>target</code> è <code>move_balance</code> a 48 barre — la testa <code>head</code>, quella che legge ogni regola, la calibrazione e l'early stopping — e <code>target2</code> è <code>swing_leg_target</code>, imparato da una terza testa <code>aux</code> sullo stesso encoder. Loss = Huber₁/δ₁ + <code>aux</code> · Huber₂/δ₂, ciascuna divisa per il proprio δ perché nessuna scala decida il mix. Il purging usa il più lontano dei due orizzonti (48 barre avanti, o <code>legs.label_reach</code>); NaT in uno dei due è NaT.</li>
   </ul>
   <h3>Stadio 2 — <code>fit_policy</code>, rinforzo diretto (Moody &amp; Saffell)</h3>
 <pre>p_t    = sigmoid(SHARPNESS · logit_t)                 SHARPNESS = 2   (a 4 satura e scappa in "sempre flat")

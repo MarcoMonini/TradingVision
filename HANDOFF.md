@@ -760,3 +760,45 @@ la regola always-in legge la predizione v2 calibrata.
 - Non leggere il ρ con l'etichetta come un risultato: 0,644 contro 0,596 di un RSI grezzo.
 - Non ripetere la run policy a 12/15m senza cambiare il costo: converge su zero trade, che è la
   risposta giusta alla domanda che le viene posta.
+
+---
+
+## 15. Due target su un encoder — `--label swing+balance` (2026-09-28)
+
+**Domanda.** Se l'encoder impara la struttura delle gambe (etichetta swing) *e* il movimento che
+viene dopo (`move_balance` a 48 barre) nello stesso momento, la seconda testa legge il prezzo
+meglio di un modello che vede solo il secondo?
+
+**Come.** `swing.Net(aux=True)` ha tre teste sull'encoder: `head` impara `move_balance` — è
+`target`, quindi la leggono la regola, la calibrazione e l'early stopping —, `aux` impara
+`swing_leg_target` (`target2`), `policy` resta quella di prima. Loss = Huber₁/δ₁ + `aux` ·
+Huber₂/δ₂, ognuna divisa per il suo δ perché nessuna scala decida il mix. Purging sul più lontano
+dei due orizzonti. Tutto il resto è v2: 15m, finestra 12, peso tempo 0,5, `reduced(12)`, 48 barre,
+4 fold da 2025-06, 1 seed. Il riferimento è **la stessa run con `--aux 0`**: stessi input, stesse
+righe, stesso purging, la testa ausiliaria senza gradiente — l'unica differenza è il compito
+ausiliario.
+
+| | aux 1 (congiunto) | aux 0 (solo forward) |
+|---|---|---|
+| validazione, correlazione con `move_balance`, per fold | 0,020 / 0,038 / 0,016 / 0,016 — **0,022** | 0,048 / 0,032 / 0,014 / 0,003 — **0,024** |
+| test, ρ con `move_balance` per fold | +0,013 / −0,016 / −0,027 / +0,046 | +0,006 / −0,022 / −0,038 / +0,054 |
+| test, ρ pooled | +0,008 | −0,017 |
+| testa ausiliaria contro l'etichetta swing | **0,640** (v2 da solo: 0,644) | −0,101 (non addestrata) |
+| ρ col forward neutrale a 12 / 48 barre | −0,003 / −0,007 | −0,000 / −0,002 |
+| banda long-only scelta in validazione, 13 tradabili | lordo +0,006, **netto −0,253** | lordo −0,524, netto −0,718 |
+| regola scelta sui fold precedenti, fold 2 / 3 / 4 | −1,34 / −1,46 / +0,70 | −0,00 / −0,65 / +0,05 |
+| buy and hold, fold 2 / 3 / 4 | −1,52 / −1,21 / +0,95 | |
+
+**Risposta: no.** L'encoder condiviso impara l'etichetta quanto v2 da solo (0,640), quindi la
+struttura delle gambe ce l'ha; non passa alla testa del prezzo. La correlazione di validazione non
+distingue i due pesi (0,022 contro 0,024: scelto sulla validazione vincerebbe `aux 0`), quella di
+test cambia segno fra un fold e l'altro in entrambe le run, e il forward neutrale è piatto. Il netto
+migliore della run congiunta (−0,253, 25 punti sopra il buy and hold) è dentro la dispersione fra
+coppie (sd 0,48) con un lordo di +0,006; il +0,70 del fold 4 è un'esposizione di 2 trade l'anno in
+un fold dove il mercato fa +0,95.
+
+**Cosa resta in piedi.** Il multi-task è implementato e testato (`_selfcheck` fa imparare a ogni
+testa il suo target sul giocattolo), e i checkpoint salvati prima si caricano ancora: la terza
+testa esiste solo nei modelli congiunti. Con gli stessi 15 input a 12/48, il prezzo delle 12 ore
+dopo non si legge né da solo né con l'etichetta come maestra; la leva, se c'è, è negli input o nel
+costo, non nella loss.
