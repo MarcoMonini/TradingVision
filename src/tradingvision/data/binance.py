@@ -23,11 +23,36 @@ from pathlib import Path
 import pandas as pd
 import requests
 
-# 20 USDT pairs with at least 70 months of 5m history and no missing month.
-SYMBOLS = [
+# The universe every number measured before 2026-09-27 was taken on: 20 USDT pairs with at least
+# 70 months of 5m history and no missing month. History was the only criterion, and it let in a
+# meme coin and four pairs too thin to model. Kept under its own name so those numbers stay
+# reproducible — pass it as `--symbols` — and never the default again.
+STUDY = [
     "BTC", "ETH", "LTC", "ADA", "XRP", "TRX", "LINK", "BAT", "DOGE", "XTZ",
     "BCH", "YFI", "DOT", "SOL", "CRV", "UNI", "AVAX", "SUSHI", "NEAR", "AAVE",
 ]  # fmt: skip
+
+# The training universe, from 2026-09-27. Measured on 15m bars over the train period, 2023-01 ->
+# 2025-05: at least ~15 M$ a day on Binance, fewer than 10% of bars whose close repeats the one
+# before (a price nobody traded, or a tick coarse against the price), no meme coin, history from
+# 2020 or earlier. Ordered by that volume, 1,745 M$ for BTC to 15 M$ for UNI.
+#
+# Out of STUDY: DOGE (meme); BAT, YFI, XTZ, SUSHI at 1-5 M$ a day, XTZ and SUSHI with 13-17% flat
+# bars; CRV at the edge (15 M$, 6.4% flat); TRX, liquid but another animal — correlation 0.43 with
+# BTC, half the volatility, the most tail rows of the label. In: BNB, fifth by volume at 145 M$,
+# history from 2017, and FIL at 25 M$. Measured and left out: ATOM, ETC, ICP, HBAR, GRT, ALGO, XLM,
+# all 7-14 M$, HBAR and XLM with 14-15% flat bars.
+#
+# Not every pair here can be traded: see TRADABLE. A model learns from all of them.
+SYMBOLS = [
+    "BTC", "ETH", "SOL", "XRP", "BNB", "AVAX", "ADA", "LTC",
+    "LINK", "NEAR", "FIL", "DOT", "BCH", "AAVE", "UNI",
+]  # fmt: skip
+
+# The pairs of SYMBOLS that Alpaca serves, checked against its feed on 2026-09-27: every cost
+# figure in the project is Alpaca's fee, so only these can be traded, and a metric that means money
+# is read on these alone. BNB and NEAR stay in training; Alpaca lists neither.
+TRADABLE = [s for s in SYMBOLS if s not in ("BNB", "NEAR")]
 
 BASE = "https://data.binance.vision/data/spot"
 LISTING = "https://s3-ap-northeast-1.amazonaws.com/data.binance.vision"
@@ -63,6 +88,25 @@ def load(symbol: str, timeframe: str = "5m", *, stored: str = "5m", store: Path 
         return df
     rule = re.sub(r"m$", "min", timeframe)  # pandas wants "15min", not "15m"
     return df.resample(rule).agg(OHLC).dropna(subset=["open"])
+
+
+def ends(symbols: list[str], interval: str = "5m", store: Path = STORE) -> dict[str, str | None]:
+    """The last bar in the store of each symbol, None where it has no file — for the cache stamps.
+
+    A dataset is a function of the store as much as of its arguments. On 2026-09-27 a step2 build
+    over fifteen pairs, two of them fetched that day and thirteen last updated on 2026-09-02, came
+    out with 24 days at the end whose cross-section was two pairs wide; the rebuild after bringing
+    the thirteen up to date had the same arguments, the same universe, and so the same stamp. A
+    store that grows changes which rows exist without changing anything a caller passes, so where
+    it ends goes into the stamp and a cache built on another store is refused.
+
+    Reads the index alone, a few hundredths of a second per symbol.
+    """
+    out = {}
+    for s in symbols:
+        path = store / f"{s}USDT-{interval}.parquet"
+        out[s] = str(pd.read_parquet(path, columns=[]).index[-1]) if path.exists() else None
+    return out
 
 
 def _keys(prefix: str) -> list[str]:

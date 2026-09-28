@@ -34,15 +34,15 @@ BAR = {
     "1d": pd.Timedelta("1D"),
 }
 
-# The study's twenty pairs, quoted in USD because that is what Alpaca serves where Binance serves
-# USDT. `data.binance.SYMBOLS` is the same list and the same order, which is the point: a pair on
-# the chart should be a pair the numbers in the spec were measured on, not a different universe.
+# The tradable pairs of the training universe, quoted in USD because that is what Alpaca serves
+# where Binance serves USDT. `data.binance.TRADABLE`, same order: the pairs a model is trained on
+# that the venue actually lists, checked against its feed when the universe was chosen. BNB and
+# NEAR are trained on and cannot be drawn here.
 #
-# Which of them Alpaca actually lists is not something this file can know — the venue's coverage is
-# narrower than Binance's and changes — so a pair it serves nothing for is not an error here. The
-# page says so and moves on, and the combo box takes a typed pair as well as a listed one, so the
-# list is a starting point rather than a ceiling.
-SYMBOLS = [f"{base}/USD" for base in binance.SYMBOLS]
+# The venue's coverage changes, so a pair it stops serving is not an error here: the page says so
+# and moves on, and the combo box takes a typed pair as well as a listed one, so the list is a
+# starting point rather than a ceiling.
+SYMBOLS = [f"{base}/USD" for base in binance.TRADABLE]
 
 _client = CryptoHistoricalDataClient()
 

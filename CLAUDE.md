@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this is
 
 A research pipeline, not a trading system. It measures whether a recurrent net on multi-timeframe
-crypto candles can predict which of 20 USDT pairs beats the basket. The deployed artefact is only
+crypto candles can predict which USDT pairs beat the basket. The deployed artefact is only
 the Streamlit chart page; everything else runs by hand as a module.
 
 `HANDOFF.md` is the state of the current branch: what was added, what has *not* been measured yet,
@@ -16,6 +16,17 @@ numbers, open points, and the table of what was tried and failed. **Read it befo
 anything about the label, the windows, or the protocol** — most "obvious" ideas are in it with the
 number that killed them. Keep it current when a step lands; the git history reads as a sequence of
 measurements, and commit subjects are written that way ("Four branches lose to one, on every fold").
+
+`swing_leg_pipeline.html` (Italian) explains the training pipeline of the `swing_leg_target` models —
+`gru --label swing`, `legsweep` and `swing`. Part I is a lesson for a reader new to the subject, one
+concept per chapter with charts on real candles; Part II walks the pipeline stage by stage with the
+schema of every frame, tensor and checkpoint. Its data and JS are generated, not hand-edited numbers,
+and it describes the code: when the code changes, update it with it.
+
+`move_balance_label.html` (Italian) is the statistics of `data.target.move_balance`, the label that
+follows `swing_leg_target`: distribution, tails, the market's share of it, overlap, regimes, per
+pair, per horizon, and what anticipates it — at N = 48 on 15m, train period only. Generated like
+the pipeline document; its numbers are measurements, not hand-written.
 
 ## Commands
 
@@ -41,6 +52,7 @@ uv run python -m tradingvision.gru --seeds 5         # step 3/4: the model
 uv run python -m tradingvision.simulation --pred data/pred-*.parquet   # what it is worth in money
 uv run python -m tradingvision.factor --price --baseline --by-quarter # step 6: the cross-sectional factor
 uv run python -m tradingvision.swing --timeframe 4h --baseline        # step 7: the tradable swing rule
+uv run python -m tradingvision.swing --timeframe 15m --label balance --inputs reduced --steps 96 --stage label --test-start 2025-06 --seeds 5  # the move_balance model
 uv run python -m tradingvision.swingrule --pred data/pred-swing-*.parquet  # the long-only rule on the swing label
 uv run python -m tradingvision.threshold --pred data/pred-swing-*.parquet --at 0.5  # the always-in flip rule
 uv run python -m tradingvision.stops --pred data/pred-swing-*.parquet --at 0.5 --grid  # the same rule with exits
@@ -61,6 +73,13 @@ refuses to draw a model fitted on another cell. `legsweep.CURRENT` — 0.7 / 24 
 (`data.binance`, no API key, 2017+). Alpaca (`data.candles`) is the live feed the chart page uses
 and the venue whose fees every cost figure assumes; its history is too short for training. `data/`
 is gitignored; runs are reproduced by re-fetching.
+
+**Three universes, in `data.binance`.** `SYMBOLS` is the training universe (15 pairs, chosen on
+liquidity and data quality, no meme coin) and every module's default. `TRADABLE` is its subset
+Alpaca lists (13, without BNB and NEAR): a metric that means money is read on these alone, and they
+are the chart page's list. `STUDY` is the 20 pairs every number measured before 2026-09-27 was
+taken on — pass it as `--symbols` to reproduce one; the cache stamps refuse a file built on the
+other list.
 
 **One label, swappable in one place.** `dataset.build` writes the target into a column called
 `target` and `dataset.relabel` / `relabel_cross` rewrite it afterwards, so `gru --label` switches

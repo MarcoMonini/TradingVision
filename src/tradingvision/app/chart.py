@@ -42,9 +42,11 @@ from tradingvision.data.candles import BAR, SYMBOLS, TIMEFRAMES, get_candles
 from tradingvision.data.pivots import EXTREMA_WINDOW, find_pivots
 from tradingvision.data.target import (
     CROSS_HORIZON,
+    MOVE_HORIZON,
     SMOOTHING,
     cross_sectional_return,
     leg_significance,
+    move_balance,
     remaining_excursion,
     swing_leg_target,
 )
@@ -154,14 +156,20 @@ def load_pivots(close, window: int):
 PREDICTIVE = "remaining excursion (predictive)"
 RETROSPECTIVE = "swing leg position (retrospective)"
 CROSS = "cross-sectional return (predictive)"
+BALANCE = "rise minus fall ahead (predictive)"
 # `gru`'s name for each of them, as written into a checkpoint. No entry for `CROSS`: no model is
 # trained on it yet, which is what keeps the prediction from ever being drawn against it.
 TRAINED_ON = {"excursion": PREDICTIVE, "swing": RETROSPECTIVE}
+# Where `swing --label balance --save` is pointed: beside `swing.pt` and not over it, which is the
+# 4h model the retrospective label draws.
+BALANCE_CHECKPOINT = "swing-balance.pt"
 
 
 @st.cache_data(show_spinner=False)
-def load_target(close, window: int, label: str, smoothing: float, significance: bool):
+def load_target(close, window: int, label: str, smoothing: float, significance: bool, horizon: int):
     """Recomputed when a target control moves; the pivots underneath come from their own cache."""
+    if label == BALANCE:
+        return move_balance(close, horizon)
     pivots = load_pivots(close, window)
     if label == PREDICTIVE:
         return remaining_excursion(close, pivots, window)
@@ -720,15 +728,13 @@ def main() -> None:
     st.set_page_config(page_title="Trading Vision", layout="wide")
     st.title("Trading Vision")
 
-    # The study's twenty pairs, and a typed one as well. Which of them Alpaca lists is not
-    # something this project can know — its crypto coverage is narrower than Binance's and moves —
-    # so the list is the universe the spec's numbers were measured on, not a claim about the
-    # venue. A pair it serves nothing for draws the warning below and nothing else breaks.
+    # The tradable pairs of the training universe, and a typed one as well. Alpaca's coverage
+    # moves, so a pair it stops serving draws the warning below and nothing else breaks.
     symbol = st.sidebar.selectbox(
         "Pair",
         SYMBOLS,
         accept_new_options=True,
-        help="the twenty pairs the study measures on, quoted in USD. Type any other Alpaca pair "
+        help="the pairs of the training universe that Alpaca lists, quoted in USD. Type any other Alpaca pair "
         "(`BASE/USD`) to draw it — the page says so if the venue serves nothing for it.",
     )
     timeframe = st.sidebar.selectbox("Timeframe", list(TIMEFRAMES), index=1)
@@ -740,7 +746,7 @@ def main() -> None:
     # is asked — but the answer the rest of the page is built on is this one.
     label = st.sidebar.radio(
         "Label",
-        [PREDICTIVE, RETROSPECTIVE, CROSS],
+        [PREDICTIVE, RETROSPECTIVE, CROSS, BALANCE],
         index=1,
         help="what the model is asked to output",
     )
@@ -756,6 +762,15 @@ def main() -> None:
     horizon = CROSS_HORIZON
     if label == CROSS:
         horizon = st.sidebar.slider("Forward horizon (bars)", 4, 288, CROSS_HORIZON, 4)
+    if label == BALANCE:
+        # Bars of the timeframe on screen, like the cross-sectional horizon and for its reason.
+        horizon = st.sidebar.slider(
+            "Move horizon (bars)",
+            1,
+            288,
+            MOVE_HORIZON,
+            help="the label is the rise minus the fall of the close over this many bars ahead, in sigma",
+        )
     if retrospective:
         # Unlike the fee, this one is explicitly a tunable: 0.7 is a starting value. 1.0 is a pure
         # time ramp between pivots, 0.0 follows price alone. Stepped by 0.1 and not 0.05 so every
@@ -846,6 +861,8 @@ def main() -> None:
         st.sidebar.caption(
             f"No swing model. `python -m tradingvision.swing --save`, then copy it into `{MODELS.name}/`."
         )
+    elif label == BALANCE:
+        pass  # the balance model below has its own line for this label
     elif label != RETROSPECTIVE:
         st.sidebar.caption(f"The swing model predicts the **{RETROSPECTIVE}** label.")
     elif timeframe != swing_card["timeframe"]:
@@ -856,6 +873,32 @@ def main() -> None:
             value=True,
             help=f"{swing_at.name}, stage {swing_card['stage']}, trained to {swing_card['test_start']}",
         )
+
+    # The model of `swing --label balance`: the same net, fitted on `move_balance` over the 15 of
+    # `REDUCED`. Its own checkpoint beside `swing.pt`, found by the same two-directory rule, and
+    # drawn under the same condition as every other model here — only against the label it
+    # predicts, on the timeframe it reads, and at the horizon it was fitted on: the slider moves
+    # the label and a line fitted at 48 bars says nothing about the label at 24.
+    balance_at = saved(swing, BALANCE_CHECKPOINT) if swing is not None else None
+    balance_card = load_swing_model(str(balance_at), balance_at.stat().st_mtime)[1] if balance_at else None
+    balancing = False
+    if label == BALANCE and swing is not None:
+        if not balance_card:
+            st.sidebar.caption(
+                f"No balance model. `python -m tradingvision.swing --label balance --save "
+                f"data/{BALANCE_CHECKPOINT}`, then copy it into `{MODELS.name}/`."
+            )
+        elif timeframe != balance_card["timeframe"]:
+            st.sidebar.caption(f"The balance model reads **{balance_card['timeframe']}** candles.")
+        elif horizon != balance_card["horizon"]:
+            st.sidebar.caption(f"The balance model was fitted at a **{balance_card['horizon']}-bar** horizon.")
+        else:
+            balancing = st.sidebar.toggle(
+                "Balance prediction",
+                value=True,
+                help=f"{balance_at.name}, {len(balance_card['inputs'])} inputs x {balance_card['steps']} bars, "
+                f"trained to {balance_card['test_start']}",
+            )
 
     # The always-in rule of `threshold`, drawn on whatever swing leg position the row below shows.
     # It reads the *prediction* and never the target: the retrospective label is built from a
@@ -1005,7 +1048,7 @@ def main() -> None:
                 per = factor.pnl(pos, panel["close"], step)
                 weight = pos[fetched[0]] if fetched[0] in pos else None
     else:
-        target = load_target(df.close, leg_window, label, smoothing, significance)
+        target = load_target(df.close, leg_window, label, smoothing, significance, horizon)
     swung = load_swing(df, str(swing_at), swing_at.stat().st_mtime) if swinging else None
     if swung is not None and not swung.position.notna().any():
         # Not an error and not an empty chart: the model reads 24 bars of history through features
@@ -1017,11 +1060,22 @@ def main() -> None:
         )
         swung = None
     swing_pos = swung.position.fillna(0.0) if swung is not None else None
+    # Only the line: the band `choose` stored with it was fitted for a rule nobody has priced on
+    # this label yet, so no trade is drawn from it.
+    balanced = load_swing(df, str(balance_at), balance_at.stat().st_mtime) if balancing else None
+    if balanced is not None and not balanced.label.notna().any():
+        st.info(
+            f"The balance model reads {balance_card['steps']} bars through features that need about "
+            f"{6 * EXTREMA_WINDOW} behind them — this window has {len(df)} candles. Widen **History (days)**."
+        )
+        balanced = None
     strength = load_significance(df.close, leg_window)
     feats = load_features(df, EXTREMA_WINDOW, tuple(COLUMNS))[picked]
     # The two models never draw together: each predicts a different label, and the sidebar only
     # offers whichever one the label on screen belongs to.
     pred = factor_pred if factor_pred is not None else None
+    if pred is None and balanced is not None:
+        pred = balanced.label.rename("prediction")
     if pred is None and swung is not None:
         # Calibrated back onto the label's own range on the way out of the model, so the two lines
         # in the second row share a unit as well as an axis. The map is fitted on the train period
@@ -1352,7 +1406,8 @@ def main() -> None:
     st.caption(
         f"{len(df)} candles — {df.index[0]:%Y-%m-%d %H:%M} to {df.index[-1]:%Y-%m-%d %H:%M} UTC · "
         f"{len(pivots)} pivots, median leg {pivots.amplitude.median() * 100:.2f}% · "
-        f"{target.notna().sum()} labelled bars ({target.isna().sum()} unlabelled: head and tail) · "
+        f"{target.notna().sum()} labelled bars ({target.isna().sum()} unlabelled: "
+        f"{'the volatility warm-up and the last ' + str(horizon) if label == BALANCE else 'head and tail'}) · "
         + (
             f"smoothing {smoothing:.2f} time / {1 - smoothing:.2f} price · "
             f"median leg significance {strength.median():.2f}, "
@@ -1371,8 +1426,15 @@ def main() -> None:
                     )
                 )
                 if label == CROSS
-                else f"median |target| {target.abs().median():.2f} sigma, "
-                f"99th percentile {target.abs().quantile(0.99):.1f} sigma"
+                else (
+                    f"rise minus fall of the close over the next {horizon} bars, in sigma of a "
+                    f"{horizon}-bar walk · median |target| {target.abs().median():.2f}, "
+                    f"99th percentile {target.abs().quantile(0.99):.1f} · "
+                    f"{(target.dropna() > 0).mean() * 100:.0f}% of bars up"
+                    if label == BALANCE
+                    else f"median |target| {target.abs().median():.2f} sigma, "
+                    f"99th percentile {target.abs().quantile(0.99):.1f} sigma"
+                )
             )
         )
         + (

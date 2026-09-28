@@ -254,7 +254,7 @@ def _selfcheck() -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--symbols", nargs="*", default=list(SYMBOLS), help="default is all twenty")
+    ap.add_argument("--symbols", nargs="*", default=list(SYMBOLS), help="default is the training universe")
     ap.add_argument("--timeframe", default="15m")
     ap.add_argument("--since", default="2025-06", help="the test slice the model was scored on")
     ap.add_argument("--horizons", type=int, nargs="+", default=list(HORIZONS))

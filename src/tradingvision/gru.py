@@ -624,7 +624,14 @@ def _market_beta(pred: pd.Series, target: pd.Series) -> dict[str, float]:
 
 
 def save(
-    path: Path, model: Net, x: Branches, branches: list[str], keep: list[str], label: str, rank: bool = False
+    path: Path,
+    model: Net,
+    x: Branches,
+    branches: list[str],
+    keep: list[str],
+    label: str,
+    rank: bool = False,
+    steps: int = STEPS,
 ) -> None:
     """The weights and everything needed to feed them: the scaling of the train period, the
     columns, the branches and their widths. A model without its scaler is not a model."""
@@ -640,7 +647,7 @@ def save(
             "widths": x.widths,
             "branches": branches,
             "keep": keep,
-            "steps": STEPS,
+            "steps": steps,
             "shared": model.shared,
             "label": label,
             "rank": rank,
@@ -990,6 +997,12 @@ def main() -> None:
         action="store_true",
         help="feed each feature as its percentile across the symbols of its own timestamp",
     )
+    ap.add_argument(
+        "--steps",
+        type=int,
+        default=STEPS,
+        help="bars of each branch the encoder reads; independent of EXTREMA_WINDOW, which finds the legs",
+    )
     ap.add_argument("--band", type=int, default=0, help="train only on rows within this many 5m bars of the pivot")
     ap.add_argument(
         "--weight",
@@ -1076,19 +1089,22 @@ def main() -> None:
     # own name. A run without it therefore still matches the tensors already on disk instead of
     # asking for 1.7 GB to be rebuilt to record a False.
     extra = {"rank": True} if args.rank else {}
+    # Same reasoning for the depth: the default keeps the names already on disk, any other depth
+    # gets its own file and its own predictions instead of tripping the stamp of the 24-step one.
+    depth = f"-s{args.steps}" if args.steps != STEPS else ""
     x = [
         cached_sequences(
-            TENSOR.with_stem(f"{TENSOR.stem}-{tf}-{args.features}{'-rank' if args.rank else ''}"),
+            TENSOR.with_stem(f"{TENSOR.stem}-{tf}-{args.features}{'-rank' if args.rank else ''}{depth}"),
             rows,
             keep=keep,
             tf=tf,
-            steps=STEPS,
+            steps=args.steps,
             **extra,
         )
         for tf in branches
     ]
     print(
-        f"{len(rows):,} rows ({len(df):,} labelled), {STEPS} steps x {len(keep)} features on "
+        f"{len(rows):,} rows ({len(df):,} labelled), {args.steps} steps x {len(keep)} features on "
         f"{'+'.join(branches)}, {args.encoder}, "
         f"{'cross-sectional ranks' if args.rank else 'levels'}, {DEVICE}"
     )
@@ -1102,7 +1118,7 @@ def main() -> None:
         model = fit(
             z, inner, valid, epochs=args.epochs, delta=delta, shared=args.encoder == "shared", quiet=not args.verbose
         )
-        save(args.save, model, z, branches, keep, args.label, args.rank)
+        save(args.save, model, z, branches, keep, args.label, args.rank, args.steps)
         print(f"fitted on {len(inner):,} rows to {args.test_start} and saved to {args.save}")
         return
 
@@ -1127,7 +1143,7 @@ def main() -> None:
     # Always written, whatever else the run was asked to print: the predictions are what every
     # economic reading is taken on, and retraining twenty models to look at them again is a waste.
     predictions = (
-        STORE / f"pred-{args.label}-{args.features}{'-rank' if args.rank else ''}-{'+'.join(branches)}.parquet"
+        STORE / f"pred-{args.label}-{args.features}{'-rank' if args.rank else ''}{depth}-{'+'.join(branches)}.parquet"
     )
     out["pred"].rename("pred").to_frame().to_parquet(predictions)
     print(out["folds"].round(4).to_string())
