@@ -2,9 +2,8 @@
 
 The page is the only artefact this project ships, and its dependency list is `pyproject`'s runtime
 group — not what a developer's `.venv` happens to hold. The two differ by the dev group, and the
-gap is not academic: **scipy is in this checkout only because lightgbm pulls it in**, lightgbm is
-dev-only on purpose (`CLAUDE.md`: torch and lightgbm never meet in one process, and the image has
-torch), and nothing declares scipy anywhere.
+gap is not academic: **scipy is in this checkout only as a dev dependency**, for the one self-check
+that compares `metrics.spearman` against pandas' own, and the image does not carry it.
 
 That gap ate the page once. `Series.corr(method="spearman")` imports scipy *lazily*, from inside
 `pandas.core.nanops`, so the call is invisible to every import-time check and to every test run in
@@ -29,11 +28,11 @@ import pytest
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "tradingvision"
 PAGE = SRC / "app" / "chart.py"
-# `selection` is the one module allowed to import scipy: it clusters the feature correlation matrix
-# with `scipy.cluster.hierarchy`, it is a by-hand pipeline step, and nothing the page imports
-# touches it. It is named here rather than exempted by a rule, so adding a second one is a choice
-# somebody makes on purpose.
-MAY_IMPORT_SCIPY = {"selection.py"}
+# No module may import scipy. `selection` was the one exception — it clustered the feature
+# correlation matrix with `scipy.cluster.hierarchy` — and it is archived in `OLD/` with the label it
+# selected for. Kept as a set rather than deleted, so adding an exception is a choice somebody makes
+# on purpose.
+MAY_IMPORT_SCIPY: set[str] = set()
 # And `metrics` is the one module allowed to *call* pandas' Spearman: its self-check compares the
 # replacement against it and asserts they are equal, which cannot be done without calling it. That
 # comparison is the reason every other module may stop calling it.
@@ -86,7 +85,7 @@ else:
 {modules}
 
 import numpy as np, pandas as pd
-from tradingvision import factor, metrics, stops, threshold
+from tradingvision import metrics, stops, threshold
 
 n = 400
 when = pd.date_range("2025-01-01", periods=n, freq="15min", tz="UTC")
@@ -102,15 +101,6 @@ target = pred.shift(3)
 # The caption that broke, and the NaN-tail shape it really has.
 assert np.isfinite(metrics.spearman(pred, target))
 assert np.isnan(metrics.spearman(pred.iloc[:1], target.iloc[:1]))
-
-# The cross-sectional metrics, which are ranks all the way down.
-idx = pd.MultiIndex.from_product([when[:100], list("abcde")])
-a = pd.Series(rng.normal(size=len(idx)), index=idx)
-b = a + rng.normal(0, 0.5, len(idx))
-assert np.isfinite(metrics.signal(b, a)["rank_ic"])
-assert np.isfinite(metrics.blocked(metrics.by_date(b, a, rank=True).dropna(), pd.Timedelta("1h"))["t"])
-wide = b.unstack()
-assert factor.cross_rank(wide).notna().any().any()
 
 # The rule the page draws, with every exit on.
 lifted, ohlc = threshold.on_one(pred), threshold.on_one(df[list(stops.OHLC)])
@@ -130,7 +120,7 @@ print("ok")
 
 @pytest.mark.parametrize("path", sorted(SRC.rglob("*.py")), ids=lambda p: p.name)
 def test_no_module_hides_scipy_behind_pandas(path: Path):
-    """`method="spearman"` is banned as a *call*, and a bare scipy import outside `selection`.
+    """`method="spearman"` is banned as a *call*, and so is a bare scipy import.
 
     The ban is on the spelling and not on the behaviour, deliberately. A lazy import only fails on
     the branch that reaches it, so a test that exercises today's branches proves nothing about

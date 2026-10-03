@@ -37,29 +37,29 @@ where = ["src"]
 [tool.black]
 line-length = 120
 target-version = ["py312"]
+# `OLD/` is an archive, frozen as it was at the tag `archive-predictive`: not linted, not tested.
+extend-exclude = "^/OLD/"
 
 [tool.ruff]
 line-length = 120
 target-version = "py312"
+extend-exclude = ["OLD"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]
 
 [dependency-groups]
-# lightgbm stays out of the runtime dependencies: it trains the step-2 reference and the chart page
-# never calls it, so the image has no reason to carry its OpenMP runtime. Keeping it out is also
-# what keeps the rule of `CLAUDE.md` true where it now matters most — torch and lightgbm each ship
-# their own libomp and abort with `OMP: Error #15` in one process, and the image has torch in it.
-# torch moved *into* the runtime dependencies when the page started serving predictions.
+# Dev only, and never runtime: the deployed image is the chart page. lightgbm left with the step-2
+# reference it trained, archived in `OLD/` on 2026-10-03.
 dev = [
     "black>=26.5.1",
-    "lightgbm==4.7.0",
-    # Declared, though lightgbm already drags it in. `selection` imports `scipy.cluster.hierarchy`
-    # directly to cluster the correlation matrix, so this is a real dependency of the dev group and
-    # not a happy accident of lightgbm's own tree — the day lightgbm stops needing it, `selection`
-    # still does. Dev and never runtime: the deployed image is the chart page, and the page not
-    # reaching scipy is a rule `tests/test_deploy.py` enforces after a lazy
-    # `Series.corr(method="spearman")` took the page down in production.
+    # The one place scipy is needed: `metrics`' self-check calls pandas' own Spearman, which imports
+    # scipy lazily, to prove `metrics.spearman` returns the same number. The page not reaching scipy
+    # is a rule `tests/test_deploy.py` enforces after that lazy import took the page down in
+    # production.
     "scipy>=1.14",
     "pytest>=9.1.1",
     "ruff>=0.16.6",

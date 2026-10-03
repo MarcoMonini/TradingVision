@@ -214,12 +214,22 @@ def exhaustion(bars: pd.DataFrame, window: int = EXTREMA_WINDOW) -> pd.DataFrame
     return out[list(EXHAUSTION)].replace([np.inf, -np.inf], np.nan)
 
 
-def next_pivot(close: pd.Series, window: int = EXTREMA_WINDOW) -> pd.Series:
-    """When the leg each bar sits on ends — the purging horizon `swing_leg_target` needs.
+def label_reach(close: pd.Series, window: int = EXTREMA_WINDOW) -> pd.Series:
+    """The last bar each bar's `swing_leg_target` reads — the purging horizon that label needs.
 
-    The *label's* pivots and not the causal ones: purging is about what the label saw, and the
-    label interpolates towards the centred frame's next turn. NaT past the last pivot, where there
-    is no label either.
+    The *label's* pivots and not the causal ones: purging is about what the label saw. And not the
+    next pivot itself, which is what this returned until 2026-09-28 (as `next_pivot`), because the
+    label reads further than the turn it ramps towards. That turn is only final once two things are
+    known: that it is an extreme at all, which takes `window` bars past it, and that no more
+    extreme bar of the same kind follows it in its run — `find_pivots` keeps the most extreme of a
+    run, and a run ends at the first raw extreme of the other kind. So a bar's label is settled
+    `window` bars after the first opposite extreme that follows its next pivot, typically a whole
+    leg past the pivot. Purging on the pivot alone kept every train bar within that distance of
+    the cut labelled with prices from the other side of it; `_selfcheck` pins both halves.
+
+    NaT past the last pivot, where there is no label, and wherever the closing extreme is not in
+    the series yet — the label there is still provisional, and `purge` reads NaT as reaching past
+    any cut.
     """
     from tradingvision.data.pivots import find_pivots
 
@@ -228,8 +238,20 @@ def next_pivot(close: pd.Series, window: int = EXTREMA_WINDOW) -> pd.Series:
     if piv.empty:
         return out
     at = close.index.get_indexer(piv.index)
+    kinds = piv.kind.to_numpy()
+    raw, raw_kind = raw_extrema(close, window)
+    settled = np.full(len(at), -1)
+    for k in (1, -1):
+        mine = kinds == k
+        other = raw[raw_kind == -k]
+        j = np.searchsorted(other, at[mine], side="right")
+        found = j < len(other)
+        settled[np.flatnonzero(mine)[found]] = other[j[found]] + window
+    settled[settled >= len(close)] = -1
     i = np.arange(at[-1] + 1)
-    out.iloc[i] = close.index[at[np.searchsorted(at, i, side="left")]]
+    reach = settled[np.searchsorted(at, i, side="left")]
+    known = reach >= 0
+    out.iloc[i[known]] = close.index[reach[known]]
     return out
 
 
@@ -275,10 +297,26 @@ def _selfcheck() -> None:
     assert state(flat, 5).isna().all().all(), "no pivots, no state"
     assert confirmed(flat, 5).empty
 
-    # The purging horizon is the label's, so it is allowed to be the centred frame's next turn.
-    when = pd.date_range("2024", periods=n, freq="15min", tz="UTC")
-    reach = next_pivot(pd.Series(x.to_numpy(), index=when), 5).dropna()
-    assert (reach.index <= reach.to_numpy()).all(), "a leg never ends before the bar it holds"
+    # The purging horizon is the label's, so it is allowed to read the centred frame's future — but
+    # all of it. The property that defines it: cutting the series after bar `t` leaves the label
+    # of every bar whose reach is at or before `t` exactly as it was. The next pivot alone, the old
+    # horizon, fails the same property, which is the leak it had.
+    from tradingvision.data.target import swing_leg_target
+
+    rng = np.random.default_rng(1)
+    when = pd.date_range("2024", periods=3000, freq="15min", tz="UTC")
+    walk = pd.Series(100 * np.exp(np.cumsum(rng.normal(0, 0.004, len(when)))), index=when)
+    full, reach = swing_leg_target(walk, window=12), label_reach(walk, 12)
+    assert (reach.dropna().index < reach.dropna().to_numpy()).all(), "a label reads past its own bar"
+    pivots = find_pivots(walk, 12)
+    pivot_only = pd.Series(pivots.index, index=pivots.index).reindex(when, method="bfill")
+    leaked = 0
+    for t in (900, 1500, 2100, 2700):
+        cut = swing_leg_target(walk.iloc[: t + 1], window=12)
+        same = np.isclose(cut, full.iloc[: t + 1], equal_nan=True)
+        assert same[(reach.iloc[: t + 1] <= when[t]).to_numpy()].all(), f"a settled label moved at {t}"
+        leaked += int((~same[(pivot_only.iloc[: t + 1] <= when[t]).to_numpy()]).sum())
+    assert leaked > 0, "the next pivot alone would have been enough, and the test proves nothing"
     # Exhaustion, on candles rather than on a close alone. A wave that turns has to show a
     # rejection wick and a deceleration at its turns, or the columns are measuring nothing.
     bars = pd.DataFrame({"open": x, "high": x + 0.4, "low": x - 0.4, "close": x, "volume": 100.0 + (np.arange(n) % 20)})

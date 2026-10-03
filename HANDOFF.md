@@ -11,6 +11,10 @@ Base: merge di `book-on-screen` in `claude/fervent-knuth-se8cw5`.
 codice (nessuna misura nuova, nessun numero spostato): sezione 13. Contiene un crash della pagina
 deployata, tre cache che non invalidavano, e un'ottimizzazione da 61x su `features`.
 
+**Aggiornamento 2026-10-03** — ramo `claude/retrospective-only`: il progetto lavora solo su
+etichette retrospettive. Tutto il lavoro predittivo e la prima pipeline (`dataset` → `gru` →
+`legsweep`) sono in `OLD/`, congelati al tag `archive-predictive`: sezione 16.
+
 ---
 
 ## 1. Cosa è stato misurato, e su cosa
@@ -668,3 +672,214 @@ di chi riprende e non correzioni silenziose:
 - **`simulation.sweep` campiona per posizione** (`np.arange(len(close)) % step == 0`) dove
   `factor.hourly` campiona sull'orologio. Sicuro sull'indice-unione, incoerente con la regola che
   `dataset.build` documenta.
+
+---
+
+## 14. Swing Leg Position v2 — pivot e feature a 12, peso tempo 0,5, 48 barre (2026-09-28)
+
+**Configurazione, decisa e non misurata.** `swing --timeframe 15m --window 12 --smoothing 0.5
+--inputs reduced --steps 48 --stage label --test-start 2025-06`, sulle 15 coppie di `SYMBOLS` dal
+2021. La finestra 12 è sia quella dei pivot dell'etichetta sia quella delle feature: ogni colonna
+che derivava da `N` è ricalcolata a 12 (ATR, ADX, RSI, TSI, massimi/minimi di finestra, volatilità,
+EMA e sigma di `legs.exhaustion`). Lo stato della gamba segue la finestra per proporzione,
+`swing.scales(w) = (w/4, w/2, w)`: a 24 resta (6, 12, 24), a 12 diventa (3, 6, 12), quindi
+`reduced(12)` ha `signed_move_3/_6/_12` al posto di `_6/_12/_24` e resta a 15 colonne. La
+significatività dell'etichetta legge ancora 96 barre di volatilità (`SIGNIFICANCE_LOOKBACK`): è
+parte della definizione dell'etichetta e non una feature, e la pagina disegna la stessa.
+3.013.026 righe × 48 × 15, tensore di righe da 181 MB.
+
+### I numeri (4 fold da 2025-06, 1 seed, fuori campione)
+
+| lettura | valore |
+|---|---|
+| ρ con l'etichetta, per fold | 0,652 / 0,663 / 0,624 / 0,640 — pooled **0,644** |
+| `rsi_centered` a 12, stesse righe | 0,596 → il modello aggiunge 0,048, **il 92,5% è un RSI** |
+| ρ con il rendimento forward neutrale a 4 / 12 / 48 barre | **−0,026 / −0,026 / −0,023** |
+| decili del forward a 12 barre | forma a U, estremi +1,4 / +2,6 bps (t 1,3 / 1,7) contro 50 bps di round trip |
+| banda long-only scelta in validazione, 13 tradabili | lordo +0,033, **netto −0,275** log/anno, 81 trade/anno, buy and hold −0,263 |
+| stadio policy (`--stage both`), 4 fold su 4 | converge su **zero trade** |
+| always-in / long-flat, 30 configurazioni, soglia scelta sui fold precedenti | netto −0,09 / −0,28 / −1,02 sui fold 2-4, lordo ≈ 0 |
+| `rsi_centered` a 12, regole a una colonna | −2,5 … −10 netti: turnover di 670-2500 trade/anno |
+| l'etichetta conosciuta perfettamente, always-in | +11,7 / +19,5 log/anno — il tetto sta tutto nel futuro che l'etichetta legge |
+
+**Le gambe a 12, test period, 13 tradabili:** ~1.400 gambe/anno per coppia, gamba mediana
+**2,37%** contro lo 0,50% di round trip (BTC 1,05%), 18-21 barre. Oracolo col senno di poi +15,8
+log/anno; lo stesso oracolo che entra 12 barre dopo il pivot, il primo momento in cui lo si può
+sapere, fa **+0,11**, ed è negativo su BTC, ETH, SOL, XRP e LTC. È il soffitto di qualunque regola
+che reagisca ai pivot confermati, e a 12 non paga il costo.
+
+**Perché 0,644 non vale niente.** La predizione non è in ritardo sull'etichetta: la correlazione di
+`pred(t)` con `target(t−k)` ha il picco a k = 0 (0,651), e anzi è più alta con i 6 bar successivi
+(0,466) che con i 6 precedenti (0,307). Il modello sa *dove sta sulla gamba* e un po' dove andrà
+l'etichetta — ma a peso tempo 0,5 metà dell'avanzamento dell'etichetta è un orologio, e prevedere
+l'orologio non dice nulla sul prezzo. Il rendimento forward è la lettura che conta, ed è zero.
+
+**Il checkpoint.** `data/swing-v2.pt` (copiato in `models/`): stadio label, fittato fino al
+2025-06, con la calibrazione e — novità — lo scaler di ogni simbolo di train. La pagina lo disegna
+dietro il checkbox **Swing Leg Position v2** sotto l'etichetta retrospettiva: blocca smoothing e
+finestra ai valori del checkpoint, porta la finestra delle feature a 12, spegne GRU e swing v1, e
+la regola always-in legge la predizione v2 calibrata.
+
+### Leak e difetti trovati, e corretti
+
+1. **Il purging sul pivot successivo perde.** L'etichetta interpola verso un pivot che è
+   definitivo solo quando la sua serie di estremi dello stesso tipo si chiude, cioè `window` barre
+   dopo il primo estremo grezzo di tipo opposto. `legs.label_reach` sostituisce `legs.next_pivot`:
+   a 12 l'etichetta legge p50 46 / p95 104 / p99 153 barre avanti, contro 13 / 60 / 100 fino al
+   pivot. Il purge vecchio lasciava nel train 350-700 righe per taglio etichettate con prezzi del
+   test. `legs._selfcheck` fissa la proprietà per troncamento, e mostra che il vecchio orizzonte la
+   viola. **Il modello A (`dataset`, `legsweep`) purga ancora sul pivot** — task separato.
+2. **Lo scaler leggeva il primo mese di test.** `f.loc[:"2025-06"]` con una stringa parziale
+   finisce a *fine* giugno. Ora il confronto è stretto.
+3. **La pagina scalava sulla finestra a schermo.** Trenta giorni di quartili al posto di quattro
+   anni, ricentrati sul regime locale e calcolati anche sulle barre *dopo* quella predetta: la
+   linea sulla pagina non era la predizione misurata nel walk-forward. Ora `save` spedisce lo
+   scaler di train di ogni simbolo e `predict_frame(..., symbol)` lo usa; `live_scaler` resta solo
+   per una coppia mai vista, e la pagina lo dice.
+4. **Un checkpoint di stadio label veniva prenotato sulla linea calibrata** con una banda scelta
+   sull'uscita grezza (±0,4 contro ±1): un'altra regola. Ora la regola legge l'uscita grezza e la
+   calibrazione serve solo a disegnare.
+5. **`cached` con `with_suffix`** metteva `-m0.50` e `-m0.60` sotto lo stesso `-m0`: ora aggiunge
+   l'estensione. Lo stamp registra `smoothing` e `build = 2`, quindi i tensori `swing` costruiti
+   prima delle correzioni 1-2 vengono rifiutati e non riletti.
+
+### Cosa serve per ottenere di più a valle — in ordine di quanto sposta
+
+1. **Il costo, prima del modello.** A 12 barre di 15m la gamba mediana è 4,7 round trip e
+   l'oracolo raggiungibile è +0,11: nessun modello che reagisce può pagare lo 0,25% per lato. Le
+   leve sono il costo (ordini maker, un venue più economico) o gambe più lunghe per trade (1h/4h,
+   dove `rsi_centered` a 4h fa +0,116 netto).
+2. **Un'etichetta che sia già il trade.** Il 92,5% di ρ è RSI e l'altra parte è l'orologio del
+   peso tempo. Ciò che rende il tetto enorme sono le 46 barre di futuro che l'etichetta legge; un
+   target sul rendimento netto dei costi (barriera tripla, o `move_balance` sui rendimenti oltre
+   il round trip) misura direttamente la sola cosa che paga.
+3. **Scegliere la regola sulla validazione del fold, non sul test.** Sulle soglie scelte sui fold
+   precedenti il netto è negativo in 3 fold su 3; la stessa griglia letta su tutto il test ha righe
+   meno negative, nessuna positiva, e sceglierne una a posteriori sarebbe la promozione per test.
+4. **Seed ed ensemble non servono qui.** Riducono la varianza di un segnale che non c'è: il
+   forward è −0,026 a ogni orizzonte.
+
+### Non rifare
+
+- Non leggere il ρ con l'etichetta come un risultato: 0,644 contro 0,596 di un RSI grezzo.
+- Non ripetere la run policy a 12/15m senza cambiare il costo: converge su zero trade, che è la
+  risposta giusta alla domanda che le viene posta.
+
+---
+
+## 15. Due target su un encoder — `--label swing+balance` (2026-09-28)
+
+**Domanda.** Se l'encoder impara la struttura delle gambe (etichetta swing) *e* il movimento che
+viene dopo (`move_balance` a 48 barre) nello stesso momento, la seconda testa legge il prezzo
+meglio di un modello che vede solo il secondo?
+
+**Come.** `swing.Net(aux=True)` ha tre teste sull'encoder: `head` impara `move_balance` — è
+`target`, quindi la leggono la regola, la calibrazione e l'early stopping —, `aux` impara
+`swing_leg_target` (`target2`), `policy` resta quella di prima. Loss = Huber₁/δ₁ + `aux` ·
+Huber₂/δ₂, ognuna divisa per il suo δ perché nessuna scala decida il mix. Purging sul più lontano
+dei due orizzonti. Tutto il resto è v2: 15m, finestra 12, peso tempo 0,5, `reduced(12)`, 48 barre,
+4 fold da 2025-06, 1 seed. Il riferimento è **la stessa run con `--aux 0`**: stessi input, stesse
+righe, stesso purging, la testa ausiliaria senza gradiente — l'unica differenza è il compito
+ausiliario.
+
+| | aux 1 (congiunto) | aux 0 (solo forward) |
+|---|---|---|
+| validazione, correlazione con `move_balance`, per fold | 0,020 / 0,038 / 0,016 / 0,016 — **0,022** | 0,048 / 0,032 / 0,014 / 0,003 — **0,024** |
+| test, ρ con `move_balance` per fold | +0,013 / −0,016 / −0,027 / +0,046 | +0,006 / −0,022 / −0,038 / +0,054 |
+| test, ρ pooled | +0,008 | −0,017 |
+| testa ausiliaria contro l'etichetta swing | **0,640** (v2 da solo: 0,644) | −0,101 (non addestrata) |
+| ρ col forward neutrale a 12 / 48 barre | −0,003 / −0,007 | −0,000 / −0,002 |
+| banda long-only scelta in validazione, 13 tradabili | lordo +0,006, **netto −0,253** | lordo −0,524, netto −0,718 |
+| regola scelta sui fold precedenti, fold 2 / 3 / 4 | −1,34 / −1,46 / +0,70 | −0,00 / −0,65 / +0,05 |
+| buy and hold, fold 2 / 3 / 4 | −1,52 / −1,21 / +0,95 | |
+
+**Risposta: no.** L'encoder condiviso impara l'etichetta quanto v2 da solo (0,640), quindi la
+struttura delle gambe ce l'ha; non passa alla testa del prezzo. La correlazione di validazione non
+distingue i due pesi (0,022 contro 0,024: scelto sulla validazione vincerebbe `aux 0`), quella di
+test cambia segno fra un fold e l'altro in entrambe le run, e il forward neutrale è piatto. Il netto
+migliore della run congiunta (−0,253, 25 punti sopra il buy and hold) è dentro la dispersione fra
+coppie (sd 0,48) con un lordo di +0,006; il +0,70 del fold 4 è un'esposizione di 2 trade l'anno in
+un fold dove il mercato fa +0,95.
+
+**Cosa resta in piedi.** Il multi-task è implementato e testato (`_selfcheck` fa imparare a ogni
+testa il suo target sul giocattolo), e i checkpoint salvati prima si caricano ancora: la terza
+testa esiste solo nei modelli congiunti. Con gli stessi 15 input a 12/48, il prezzo delle 12 ore
+dopo non si legge né da solo né con l'etichetta come maestra; la leva, se c'è, è negli input o nel
+costo, non nella loss.
+
+---
+
+## 16. Pulizia: solo etichette retrospettive (2026-10-03)
+
+**Decisione.** Le etichette predittive sono state misurate contro il prezzo tre volte, e il
+risultato è sempre nullo o non pagabile:
+
+| Etichetta | Contro il prezzo |
+|---|---|
+| `remaining_excursion` | −0,033 |
+| `move_balance` | +0,0015, t 0,27 |
+| `move_balance` con lo swing come compito ausiliario | da −0,027 a +0,046 fra i fold |
+
+Il progetto lavora quindi solo su `swing_leg_target` e sulle strategie che leggono la sua
+previsione. Tutto il resto è in `OLD/`, congelato al tag `archive-predictive` (`983c4eb`).
+`OLD/README.md` elenca ogni file con il numero che lo ha chiuso e spiega come rieseguirlo.
+
+**Cosa è uscito, in breve:**
+
+- **Le tre etichette predittive.** `data/target.py` → `OLD/.../data/target_predictive.py`.
+- **La prima pipeline:** `dataset`, `split`, `linear`, `gbm`, `selection`, `nearpivot`,
+  `crosscheck`, `gru`, `legsweep`, `legcheck`, `exhaustcheck`.
+  - `gru.pt` e le celle di `legsweep` erano sull'etichetta swing. Escono lo stesso, per tre ragioni:
+    - il loro campione è quello di `remaining_excursion`;
+    - il loro purge legge il pivot successivo, non `legs.label_reach`;
+    - `swing.py` fa lo stesso lavoro con il purge corretto.
+  - Il task che chiedeva di correggere quel purge è decaduto.
+- **Il fattore cross-sectional e la simulazione** (`factor`, `simulation`). Il fattore **non** ha
+  fallito: è l'unico netto positivo del progetto, +0,238 l'anno a 25 bp, misurato su `STUDY`. Esce
+  per concentrazione, e il README di `OLD/` lo dichiara come eccezione.
+- **Nei moduli vivi:**
+  - `swing.py` perde `--label balance`, `--label swing+balance`, `--aux` e la terza testa;
+  - `features.SELECTED` (la coppia del fattore) è rimossa;
+  - `lightgbm` esce dal gruppo dev.
+- **Dalla pagina** escono:
+  - il selettore dell'etichetta;
+  - le heatmap e il libro del fattore;
+  - la linea GRU e le celle della griglia;
+  - il modello `move_balance`.
+
+  La pagina disegna l'etichetta swing, il modello a 4h dello step 7, v2, la regola always-in con
+  le uscite e l'oracolo. Spenta *All 29 candidates*, mostra le colonne di candela di `REDUCED`.
+
+**Verificato.**
+
+- ruff, black e 46 test passano. Erano 77: la differenza sono i test dei moduli archiviati.
+- La pagina gira su BTC/USD in due configurazioni, senza errori in console né nel server:
+  - 15m con v2: previsione, regola, Spearman 0,71 sulla finestra;
+  - 4h con `swing.pt`: book, oracoli, regola.
+- L'asserzione del Dockerfile ora controlla `swing.pt` e `swing-v2.pt`.
+
+**Cache locali.** Il tag dei tensori di `swing` non contiene più l'etichetta. Per esempio
+`swing-15m-reduced-swing-s48-…` diventa `swing-15m-reduced-s48-…`, e lo stamp non registra più
+`label`. Le cache in `data/` costruite prima vengono quindi ricostruite al primo run; quelle
+congiunte non servono più.
+
+**Cosa resta vero.**
+
+- Il retrospettivo non ha ancora guadagnato soldi. v2 predice l'etichetta a 0,644, ma il forward
+  neutrale è −0,026 e la regola long-only perde contro l'hold (§14).
+- Delle leve di §14 la 2, un target sul rendimento netto, è predittiva: è fuori strada.
+- Restano le altre:
+  1. il costo: ordini maker, gambe più lunghe per trade;
+  2. la regola scelta sulla validazione del fold.
+
+**Aperto, in ordine.**
+
+1. **Le CLI di `threshold`, `stops` e `swingrule` leggono `pred-swing-*.parquet` nel formato di
+   `gru`**, che ora non scrive più nessuno. Le loro funzioni le usa la pagina e sono testate, ma i
+   `__main__` vanno ricollegati a `pos-swing-*.parquet` di `swing.py` prima di prezzare una
+   strategia sulla v2.
+2. **L'analisi di `legcheck` per `swing.py`.** Decili del forward per previsione e controllo
+   parziale sull'età della gamba. Oggi sta in uno script fuori dal repo: va promossa a modulo.
+3. **Il fattore, se si torna a una strategia di portafoglio**: va rimisurato su `SYMBOLS` (15),
+   non su `STUDY`.
+

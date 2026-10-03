@@ -2,7 +2,7 @@
 
 <img src="https://capsule-render.vercel.app/api?type=waving&color=0:000C3D,100:0A4FD6&height=180&section=header&text=TradingVision&fontSize=48&fontColor=ffffff&desc=End-to-end%20ML%20research%20pipeline%20%7C%20PyTorch%20GRU%20%2B%20LightGBM%20on%20crypto%20candles&descSize=15&descAlignY=72" />
 
-<a href="https://git.io/typing-svg"><img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=20&pause=1000&color=7CFFA0&center=true&vCenter=true&width=680&lines=35+modules%3A+ingestion+to+cost-aware+backtest;Leakage-resistant+protocol%3A+exact+purging%2C+4-fold+walk-forward;GRU+in+PyTorch+vs+LightGBM+baselines;29+candidate+features+reduced+by+measurement;Every+number+here+was+measured%2C+not+assumed" /></a>
+<a href="https://git.io/typing-svg"><img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=20&pause=1000&color=7CFFA0&center=true&vCenter=true&width=680&lines=21+modules%3A+ingestion+to+cost-aware+backtest;Leakage-resistant+protocol%3A+exact+purging%2C+4-fold+walk-forward;GRU+in+PyTorch+vs+LightGBM+baselines;29+candidate+features+reduced+by+measurement;Every+number+here+was+measured%2C+not+assumed" /></a>
 
 [![CI](https://github.com/MarcoMonini/TradingVision/actions/workflows/ci.yml/badge.svg)](https://github.com/MarcoMonini/TradingVision/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white)
@@ -26,10 +26,17 @@
 
 ## 🎯 What this is
 
-**A research pipeline, not a trading system.** It measures whether a recurrent network on
+**A research pipeline, not a trading system.** It began by asking whether a recurrent network on
 multi-timeframe crypto candles can predict *which of 20 USDT pairs will beat the basket over the
-next 72 hours*. Every step has to beat the previous one on out-of-sample signal metrics, on the
+next 72 hours*. Every step had to beat the previous one on out-of-sample signal metrics, on the
 same four purged walk-forward folds — and several of them did not.
+
+**Since 2026-10-03 it works on one retrospective label only:** `swing_leg_target`, where each bar
+sits along the leg between two pivots, the models that predict it causally, and the rules that
+trade that prediction. Every predictive label it tried read nothing tradable of the price, so they
+are archived in [`OLD/`](OLD/README.md) together with the first pipeline and the cross-sectional
+factor, frozen at the git tag `archive-predictive`. Steps 1–6 below were measured with that code
+and are kept as results.
 
 The lab notebook is [`swing_dataset_schema.html`](swing_dataset_schema.html) (Italian): closed
 decisions, measured numbers, open points, and the table of what was tried and failed. The git
@@ -38,33 +45,30 @@ branches lose to one, on every fold"*.
 
 <div align="center">
 
-| 20 USDT pairs | 14.9M 5m candles | 35 modules | 4 walk-forward folds | 5 seeds per fold |
+| 20 USDT pairs | 14.9M 5m candles | 21 modules | 4 walk-forward folds | 5 seeds per fold |
 |:---:|:---:|:---:|:---:|:---:|
 | **2017 → 2026** | **Binance public dumps** | **ruff · black · pytest in CI** | **exact purging** | **mean ± std** |
 
 </div>
 
-## 🧱 The pipeline — 35 modules
+## 🧱 The pipeline — 21 modules
 
-28 pipeline modules and 7 test modules, each pipeline stage a `python -m` entry point, in the
+15 pipeline modules and 6 test modules, each pipeline stage a `python -m` entry point, in the
 order they depend on each other. Ingestion → labelling → feature engineering → training →
-evaluation → cost-aware backtesting → the tradable rule and its exits.
+cost-aware backtesting → the tradable rule and its exits.
 
 ```bash
 uv run python -m tradingvision.data.binance        # ingestion: one Parquet per (symbol, interval)
 uv run python -m tradingvision.oracle              # step 0: calibrates EXTREMA_WINDOW = 24
-uv run python -m tradingvision.linear              # step 1: leakage alarm + lower bound
-uv run python -m tradingvision.gbm --horizon       # step 2: LightGBM reference IC
-uv run python -m tradingvision.selection           # step 2b: the 28 -> 12 column cut
-uv run python -m tradingvision.gru --seeds 5       # steps 3/4: the recurrent model
-uv run python -m tradingvision.simulation --pred data/pred-*.parquet   # what it is worth in money
-uv run python -m tradingvision.factor --price --baseline --by-quarter  # step 6: the cross-sectional factor
 uv run python -m tradingvision.swing --timeframe 4h --baseline         # step 7: the tradable swing rule
+uv run python -m tradingvision.swing --timeframe 15m --window 12 --smoothing 0.5 --inputs reduced \
+    --steps 48 --stage label --test-start 2025-06 --save data/swing-v2.pt   # Swing Leg Position v2
 uv run python -m tradingvision.threshold --pred data/pred-swing-*.parquet --at 0.5   # the always-in rule
 uv run python -m tradingvision.stops --pred data/pred-swing-*.parquet --at 0.5 --grid  # its exits
-uv run python -m tradingvision.legcheck --pred data/pred-swing-*.parquet   # does it lead, or summarise?
-uv run python -m tradingvision.legsweep --table                        # step 8: the 9x13 label grid
 ```
+
+The steps in between — the OLS floor, LightGBM, feature selection, the GRUs, the cross-sectional
+factor, the label grid — are in [`OLD/`](OLD/README.md), each with the number that closed it.
 
 <details>
 <summary><b>Module map</b></summary>
@@ -72,16 +76,13 @@ uv run python -m tradingvision.legsweep --table                        # step 8:
 | Layer | Modules | What it does |
 |---|---|---|
 | **Ingestion** | `data.binance` · `data.candles` | Bulk OHLCV from `data.binance.vision` (static S3 ZIPs, no API key, 2017+). Alpaca is the live feed and the venue whose fees every cost figure assumes. |
-| **Labelling** | `data.pivots` · `data.target` · `legs` · `reference` · `crosscheck` | Local extrema on Close, three interchangeable targets, the *causal* twin of a pivot (`legs.confirmed`, dated from its own confirmation), the scale that makes a leg comparable across symbols and regimes, and the experiment that retired a label. |
-| **Features** | `features` · `normalize` | 29 causal candidates on every branch — the original 28, plus `log_dollar_volume`, the only one whose *level* is the information; robust scaling with clip, fitted on train only. |
-| **Assembly** | `dataset` | One row per 5m bar, four timeframe branches aligned side by side, plus the purging horizon. |
-| **Protocol** | `split` · `metrics` | Exact purging, expanding walk-forward, the four qlib signal metrics cross-sectionally. |
-| **Models** | `linear` · `gbm` · `gru` · `swing` · `factor` | OLS floor, LightGBM baseline, GRU encoders + linear head, the two-stage swing model (Huber on the label, then direct policy optimisation on the net P&L), and the two-column composite that beats all of them. |
-| **Selection** | `selection` · `nearpivot` · `legsweep` | Five-pass reduction, the per-column signal check near the pivot, and the 9×13 sweep of the label's own two knobs. |
-| **Economics** | `oracle` · `threshold` · `stops` · `swingrule` · `simulation` | Hindsight ceiling and its causal twin, the always-in rule priced at a raw number, its exits (two barriers, three re-entry policies, a trailing option), the long-only rule with a rotation null, and the break-even skill table. |
-| **Judges** | `legcheck` · `exhaustcheck` | Does the prediction lead the price or only summarise it, and the six exhaustion columns priced against forward return rather than against a label. |
-| **App** | `app.chart` | Streamlit page: candles, pivots, label, features, the model, the rule with its fills and exits, and the cross-sectional heatmaps. Containerised, deployed from `models/`. |
-| **Tests** | `tests/*` (7) | Invariants, `test_selfchecks.py` which runs every module's own asserts, and `test_deploy.py` which walks the page's import graph with scipy made unimportable. |
+| **Labelling** | `data.pivots` · `data.target` · `legs` · `reference` | Local extrema on Close, the swing leg label, the *causal* twin of a pivot (`legs.confirmed`, dated from its own confirmation) and the label's true reach for purging (`legs.label_reach`), and the scale that makes a leg comparable across symbols and regimes. |
+| **Features** | `features` · `normalize` | 29 causal candidates — the original 28, plus `log_dollar_volume`, the only one whose *level* is the information; robust scaling with clip, fitted on train only. |
+| **Model** | `swing` | The two-stage swing model: Huber on the label, then direct policy optimisation on the net P&L, with its own purged walk-forward and the per-pair scalers it ships with the checkpoint. |
+| **Economics** | `oracle` · `threshold` · `stops` · `swingrule` · `metrics` | Hindsight ceiling and its causal twin, the always-in rule priced at a raw number, its exits (two barriers, three re-entry policies, a trailing option), the long-only rule with a rotation null, and the signal metrics. |
+| **App** | `app.chart` | Streamlit page: candles, pivots, the swing label, features, the step-7 model and v2, the rule with its fills and exits. Containerised, deployed from `models/`. |
+| **Tests** | `tests/*` (6) | Invariants, `test_selfchecks.py` which runs every module's own asserts, and `test_deploy.py` which walks the page's import graph with scipy made unimportable. |
+| **Archive** | `OLD/` | The predictive labels, the multi-branch dataset, OLS, LightGBM, selection, the GRUs, the label grid, the factor and its judges — frozen at the tag `archive-predictive`, outside lint and tests. |
 
 </details>
 
@@ -160,8 +161,8 @@ No output activation: `tanh` reached ±1 only asymptotically, so the gradient va
 the pivots. GRU over LSTM: at 24 steps the LSTM's advantage does not exist, and the GRU has ~25%
 fewer parameters at equal hidden state — which counts on a low signal-to-noise problem.
 
-torch and lightgbm never meet in one process — each ships its own OpenMP runtime and importing
-both aborts. The only place they coexist is a test that runs one in a subprocess.
+torch and lightgbm never met in one process — each ships its own OpenMP runtime and importing
+both aborts. lightgbm left with the archive.
 
 ## 📊 Evaluation — Rank IC, Rank ICIR, and the price of a trade
 
@@ -285,13 +286,13 @@ Kept here because re-reading it costs less than re-measuring it.
 - **Reproducible builds with uv** — `uv.lock` pins everything; torch resolves to the CPU index on Linux so CI does not pull 73 nvidia wheels for a job that never sees a GPU.
 - **Containerised deployment** — multi-stage-style Docker layering (dependencies before sources), non-training runtime deps only, port injected at runtime for Render.
 - **Cached datasets carry their parameters** — a JSON stamp next to the Parquet, and loading refuses a file built with different arguments. The stamp also records what is *not* an argument (the lag set, the sampling rule), because those change which rows exist without changing anything a caller passes.
-- **The deployed image is guarded by test, not by memory** — the page died in production on a caption, because `Series.corr(method="spearman")` imports scipy *lazily* and scipy reaches this project only through lightgbm, which is dev-only. `test_deploy.py` walks the page's import graph (read off `chart.py` with the AST, so it updates itself) in a subprocess with scipy made unimportable, and bans the call everywhere but `metrics`, which has to make it to prove the replacement equals it.
+- **The deployed image is guarded by test, not by memory** — the page died in production on a caption, because `Series.corr(method="spearman")` imports scipy *lazily* and scipy is a dev dependency only. `test_deploy.py` walks the page's import graph (read off `chart.py` with the AST, so it updates itself) in a subprocess with scipy made unimportable, and bans the call everywhere but `metrics`, which has to make it to prove the replacement equals it.
 - **Checkpoints ship in `models/`** — `data/` is gitignored and never copied into the image, so a model reaches Render only by being committed there. The page reads the store first and `models/` after, and says in the sidebar which of its conditions is unmet rather than drawing nothing.
 - **Checkpoints are saved device-free** — a file written on `mps` names that device inside the pickle and cannot be unpickled where there is no Metal, which is the deploy host. Saved on CPU at the source, and `map_location` on the way in for the files written the other way.
 - **Module docstrings carry the reasoning** — what the module measures, which numbers came out, why the alternative was rejected. That is where the project's memory lives.
 
 ```bash
-uv sync                                          # torch is a runtime dep; the dev group adds lightgbm, scipy
+uv sync                                          # torch is a runtime dep; the dev group adds scipy, pytest, ruff, black
 uv run pytest -q
 uv run ruff check . && uv run black --check .    # what CI runs, line-length 120
 uv run streamlit run src/tradingvision/app/chart.py
