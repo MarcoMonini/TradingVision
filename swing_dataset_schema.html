@@ -130,6 +130,7 @@ footer{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);color:v
         <tr><td class="num">8</td><td colspan="5"><em>ritorno a <code>swing_leg_target</code>: pivot <strong>e</strong> feature a 12 su 15m, peso tempo 0,5 — non confrontabile con le righe sopra</em></td></tr>
         <tr><td class="num">8</td><td>GRU ramo singolo (<code>swing</code>, v2)</td><td>(B, 48, 15) <code>reduced(12)</code> — 15m</td><td class="num">ρ 0.644 con l'etichetta</td><td class="num">—</td><td>il 92,5% è <code>rsi_centered</code> a 12 (0.596); ρ col rendimento forward −0.026 a 4, 12 e 48 barre; banda long-only −0.275 netti sulle 13 (buy and hold −0.263); lo stadio policy converge su zero trade in 4 fold su 4<span class="b b-no">1 seed</span></td></tr>
         <tr><td class="num">8</td><td>GRU, due target (<code>swing --label swing+balance</code>)</td><td>(B, 48, 15) <code>reduced(12)</code> — 15m, tre teste</td><td class="num">+0.008 (pooled)</td><td class="num">—</td><td>la testa ausiliaria impara l'etichetta (0.640), quella del prezzo no: ρ per fold +0.013 / −0.016 / −0.027 / +0.046, forward neutrale −0.003; senza compito ausiliario −0.017, e la validazione non distingue i due (0.022 contro 0.024). Banda long-only −0.253 netti sulle 13 (buy and hold −0.277), lordo +0.006<span class="b b-no">1 seed</span></td></tr>
+        <tr><td class="num">9</td><td colspan="5"><em>pulizia del 2026-10-03: le etichette predittive, il modello A e il fattore passano in <code>OLD/</code>, congelati al tag <code>archive-predictive</code>. Da qui il progetto lavora solo su <code>swing_leg_target</code> con <code>swing.py</code>.</em></td></tr>
       </tbody>
     </table>
   </div>
@@ -528,6 +529,33 @@ footer{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);color:v
   <p><strong>A 12 il costo decide prima del modello.</strong> Gamba mediana 2,37% (BTC 1,05%) contro 0,50% di round trip, ~1.400 gambe l'anno per coppia; l'oracolo che entra 12 barre dopo ogni pivot — il primo istante in cui lo si può sapere — fa +0,11 log/anno ed è negativo su cinque coppie su tredici. Il tetto dell'etichetta conosciuta perfettamente (+11,7…+19,5) sta tutto nelle 46 barre mediane di futuro che l'etichetta legge.</p>
   <p><strong>Purging corretto.</strong> Il reach dell'etichetta non è il pivot successivo: il pivot è definitivo solo quando la sua serie si chiude, <code>window</code> barre dopo il primo estremo di tipo opposto (<code>legs.label_reach</code>). A 12: p50 46 barre contro 13, e 350–700 righe per taglio erano rimaste nel train con prezzi del test. Corretto per <code>swing</code>; il modello A purga ancora sul pivot. Nello stesso passaggio: lo scaler di <code>swing</code> leggeva il primo mese di test (<code>.loc[:"2025-06"]</code>), e la pagina scalava il modello sulla finestra a schermo invece che sui quartili di train — ora spediti nel checkpoint.</p>
   <p><strong>Due target su un encoder</strong> (<code>--label swing+balance</code>): <code>move_balance</code> a 48 barre come target principale e l'etichetta swing come testa ausiliaria, a confronto con la stessa run senza compito ausiliario. L'encoder impara l'etichetta quanto v2 da solo (ρ 0,640) e non la passa alla testa del prezzo: ρ con <code>move_balance</code> fra −0,027 e +0,046 per fold in entrambe le run, forward neutrale piatto, validazione indistinguibile (0,022 contro 0,024). La struttura delle gambe c'è, e non predice le 12 ore dopo.</p>
+
+  <h3>Pulizia — solo etichette retrospettive <span class="b b-ok">fatto</span></h3>
+  <p><strong>Decisione, 2026-10-03.</strong> Tre etichette predittive, misurate contro il prezzo, hanno dato:
+    <code>remaining_excursion</code> −0,033; <code>move_balance</code> +0,0015 (t 0,27); <code>move_balance</code> con
+    l'etichetta swing come maestra da −0,027 a +0,046 fra i fold. Il progetto lavora da qui solo su
+    <code>swing_leg_target</code> e sulle strategie che ne leggono la previsione.</p>
+  <p><strong>Dove sono finite.</strong> Le tre etichette (<code>OLD/src/tradingvision/data/target_predictive.py</code>)
+    sono uscite insieme a tutta la prima pipeline: <code>dataset</code>, <code>split</code>, <code>linear</code>,
+    <code>gbm</code>, <code>selection</code>, <code>nearpivot</code>, <code>crosscheck</code>, <code>gru</code>,
+    <code>legsweep</code>, <code>legcheck</code> ed <code>exhaustcheck</code>. Con loro sono usciti il fattore e la sua
+    simulazione, <code>models/gru.pt</code> e questo documento sorella, <code>move_balance_label.html</code>.
+    <code>gru.pt</code> e la griglia <code>legsweep</code> stavano sull'etichetta swing, ma sono costruiti sul campione
+    di <code>remaining_excursion</code> e fanno il purge sul pivot invece che su <code>legs.label_reach</code>.
+    <code>swing.py</code> fa lo stesso lavoro con il purge corretto. Ogni file, con il numero che l'ha chiuso, è in
+    <code>OLD/README.md</code>; il codice gira al tag <code>archive-predictive</code>.</p>
+  <p><strong>Cosa è cambiato nei moduli vivi e nella pagina.</strong> <code>swing</code> perde
+    <code>--label balance</code>, <code>--label swing+balance</code> e la testa ausiliaria. <code>features</code> perde
+    <code>SELECTED</code>, la coppia del fattore. La pagina perde il selettore dell'etichetta, le heatmap, il libro
+    fattoriale, la linea GRU e le celle della griglia. Restano l'etichetta swing, il modello a 4h dello step 7, la
+    casella v2, la regola always-in con le uscite e l'oracolo.</p>
+  <p><strong>L'eccezione, scritta perché non si perda.</strong> Il fattore cross-sectional dello step 6 è predittivo
+    ma <em>non</em> ha fallito: Rank IC 0,110 ± 0,012, +0,238 l'anno netti a 25 bp, positivo in 15 trimestri su 15. È
+    uscito per concentrazione, non per un numero. Era misurato sulle 20 coppie di <code>STUDY</code>, e prima di
+    riprenderlo va rimisurato sulle 15 di <code>SYMBOLS</code>.</p>
+  <p><strong>Cosa la pulizia non dice.</strong> Che il retrospettivo paghi. v2 predice l'etichetta a 0,644 e legge
+    −0,026 contro il rendimento forward neutrale: la previsione descrive la gamba, e una regola costruita sopra deve
+    ancora battere il prezzo e il costo.</p>
 </section>
 
 <section>

@@ -38,13 +38,6 @@ the P&L at once.
 
     uv run python -m tradingvision.swing --stage both
     uv run python -m tradingvision.swing --timeframe 1h --folds 4 --save
-    uv run python -m tradingvision.swing --timeframe 15m --label balance --inputs reduced --steps 96 \
-        --stage label --test-start 2025-06 --seeds 5
-
-The last line is the model that follows this one: `move_balance` instead of the swing label, the 15
-columns of `REDUCED`, 96 bars of history for a label that reads 48 ahead, and the protocol of
-step 3 — the horizon and the column cut were both decided on 2023-01 -> 2025-05, which the default
-`TEST_START` would put in the test.
 
     uv run python -m tradingvision.swing --timeframe 15m --window 12 --smoothing 0.5 --inputs reduced \
         --steps 48 --stage label --test-start 2025-06 --save data/swing-v2.pt
@@ -57,13 +50,11 @@ the policy stage, paid in money, settles on no trade in all four folds. At 12 th
 2.4% against a 0.5% round trip and the oracle that fills 12 bars after each pivot nets +0.11:
 the fee decides before the model does.
 
-    uv run python -m tradingvision.swing --timeframe 15m --window 12 --smoothing 0.5 --inputs reduced \
-        --steps 48 --label swing+balance --aux 1 --stage label --test-start 2025-06
-
-Two targets on one encoder: `move_balance` the head the rule reads, the swing label an auxiliary
-head. The encoder learns the label as well as v2 alone (0.640) and hands none of it to the price
-head: rho with move_balance -0.027..+0.046 across folds, flat against the neutral forward return,
-and validation cannot tell it from the same run with `--aux 0` (0.022 against 0.024).
+The swing label is the only one this module trains. Two predictive targets ran on the same encoder
+and read nothing of the price — `move_balance` alone (Rank IC +0.0015, t 0.27) and beside the swing
+label as an auxiliary head (rho -0.027..+0.046 across folds) — and left on 2026-10-03 with the rest
+of the predictive work: `OLD/README.md` has the numbers, and the git tag `archive-predictive` the
+code that produced them.
 
 Every number the CLI prints is out of sample: four expanding walk-forward folds, the train side of
 each purged of every bar whose leg closes past its cut, thresholds and epochs chosen on a purged
@@ -86,7 +77,7 @@ from torch import nn
 from tradingvision import legs, normalize
 from tradingvision.data.binance import STORE, SYMBOLS, TRADABLE, ends, load
 from tradingvision.data.pivots import EXTREMA_WINDOW, find_pivots
-from tradingvision.data.target import MOVE_HORIZON, SMOOTHING, move_balance, swing_leg_target
+from tradingvision.data.target import SMOOTHING, swing_leg_target
 from tradingvision.features import COLUMNS, features
 from tradingvision.oracle import FEE
 from tradingvision.oracle import run as oracle_run
@@ -170,12 +161,6 @@ def reduced(window: int = W) -> list[str]:
 # instead of the next pivot, and the scaler strictly before the cut instead of through its month.
 BUILD = 2
 
-# Two targets on one encoder. `move_balance` is the one that pays, so it is `target`: the head every
-# rule, calibration and early stop already reads. The swing label is `target2`, learned by a third
-# head as an auxiliary task — the leg structure the encoder should know — weighted by `--aux`.
-JOINT = "swing+balance"
-AUX = 1.0
-
 H = 48
 DROPOUT = 0.2
 LEARNING_RATE = 1e-3
@@ -209,57 +194,33 @@ def inputs(bars: pd.DataFrame, window: int = W, keep: list[str] | None = None) -
     return pd.concat(parts, axis=1)[columns(window) if keep is None else keep]
 
 
-def ahead(index: pd.Index, bars: int) -> pd.Series:
-    """The timestamp `bars` rows after each one, NaT where the series ends first.
-
-    Rows and not a clock: `load` drops the bars nobody traded, and `move_balance` counts the closes
-    it reads, so a clock would purge short across every hole in the data.
-    """
-    return pd.Series(index, index=index).shift(-bars)
-
-
 def frame(
     symbol: str,
     tf: str = TF,
     since: str = SINCE,
     window: int = W,
     keep: list[str] | None = None,
-    label: str = "swing",
     smoothing: float = SMOOTHING,
 ):
     """One symbol's rows: inputs, label, the next bar's return, the close, the purging horizon.
 
     `window` is both the features' window and the label's pivots, on purpose: the v2 model moves
-    the two together (12), where `legsweep` moved the label alone. `smoothing` is the label's time
-    weight and nothing else reads it.
+    the two together (12), where the archived `legsweep` moved the label alone. `smoothing` is the
+    label's time weight and nothing else reads it.
 
     The label's pivots and the leg state's pivots are the same turns read from two sides — the
     centred frame for what is being predicted, `legs.confirmed` for what was knowable. Mixing them
     up is the one mistake that would make every number here meaningless, so they are built by
     different functions in different modules and meet only in this frame.
 
-    `label="balance"` writes `move_balance` instead, and its purging horizon with it: the label
-    reads exactly `MOVE_HORIZON` closes ahead and no pivot, so a row reaches that far and no
-    further. The column keeps the name `next_pivot` because `purge` reads it; for the swing label it
-    holds `legs.label_reach`, which is past the next pivot — see there for why.
+    The column `next_pivot` keeps its name because `purge` reads it, and holds `legs.label_reach`,
+    which is past the next pivot — see there for why.
     """
     bars = load(symbol, tf).loc[since:]
     close = bars.close
     out = inputs(bars, window, keep)
-    if label == "balance":
-        out["target"] = move_balance(close)
-        out["next_pivot"] = ahead(close.index, MOVE_HORIZON)
-    elif label == JOINT:
-        # The forward move is the target the rule reads and early stopping judges; the swing label
-        # rides along as `target2` for the auxiliary head. A row reaches as far as the further of
-        # the two, and NaT in either is NaT: a label still provisional is purged from every train.
-        out["target"] = move_balance(close)
-        out["target2"] = swing_leg_target(close, find_pivots(close, window), smoothing=smoothing)
-        reach = pd.concat([ahead(close.index, MOVE_HORIZON), legs.label_reach(close, window)], axis=1)
-        out["next_pivot"] = reach.max(axis=1, skipna=False)
-    else:
-        out["target"] = swing_leg_target(close, find_pivots(close, window), smoothing=smoothing)
-        out["next_pivot"] = legs.label_reach(close, window)
+    out["target"] = swing_leg_target(close, find_pivots(close, window), smoothing=smoothing)
+    out["next_pivot"] = legs.label_reach(close, window)
     out = out.dropna()
     out["close"] = close.reindex(out.index)
     # The return a position taken at this close earns by being held to the next *kept* bar, which
@@ -322,7 +283,6 @@ def build(
     window: int = W,
     steps: int = STEPS,
     keep=None,
-    label: str = "swing",
     before: str = TEST_START,
     smoothing: float = SMOOTHING,
 ):
@@ -341,7 +301,7 @@ def build(
     """
     blocks, metas, stats, at = [], [], {}, 0
     for symbol in symbols:
-        f = frame(symbol, tf, since, window, keep, label, smoothing)
+        f = frame(symbol, tf, since, window, keep, smoothing)
         if len(f) < steps + 100:
             continue
         cols = INPUTS if keep is None else keep
@@ -349,7 +309,7 @@ def build(
         z = normalize.apply(f[cols], stats[symbol]).to_numpy("float32")
         if not np.isfinite(z).all():
             raise ValueError(f"{symbol}: a scaled input is not finite, and a window over it would be NaN")
-        meta = f[[c for c in ("target", "target2", "next_pivot", "close", "ret") if c in f]].iloc[steps - 1 :].copy()
+        meta = f[["target", "next_pivot", "close", "ret"]].iloc[steps - 1 :].copy()
         meta["symbol"] = symbol
         meta["row"] = np.arange(at, at + len(meta))
         blocks.append(z)
@@ -359,7 +319,7 @@ def build(
 
 
 def cached(path: Path, symbols: list[str], **params):
-    """`build` on disk with a stamp of what produced it — `dataset.cached`'s contract, on a tensor.
+    """`build` on disk with a stamp of what produced it — the contract of the archived `dataset.cached`.
 
     Returns `(windows, meta, stats)`: the rows are stored and the windows are a view over them.
     """
@@ -374,7 +334,7 @@ def cached(path: Path, symbols: list[str], **params):
         {k: v for k, v in params.items() if k != "keep"},
         symbols=sorted(symbols),
         inputs=list(params.get("keep") or INPUTS),
-        # Where the store ends, as `dataset.cached` records it and for its reason.
+        # Where the store ends: a store refetched since would hold other rows under the same arguments.
         store_ends=ends(sorted(symbols)),
         build=BUILD,
     )
@@ -398,8 +358,8 @@ def cached(path: Path, symbols: list[str], **params):
 def purge(meta: pd.DataFrame, cut: pd.Timestamp) -> tuple[pd.DataFrame, pd.DataFrame]:
     """`(train, test)` around `cut`, train purged of every bar whose leg closes past it.
 
-    `split.temporal` says the same thing on a (timestamp, symbol) index; this one reads a plain
-    time index with a `symbol` column, which is the shape the episodes need.
+    The archived `split.temporal` said the same thing on a (timestamp, symbol) index; this one
+    reads a plain time index with a `symbol` column, which is the shape the episodes need.
     """
     when = meta.index
     return meta[(when < cut) & (meta.next_pivot < cut)], meta[when >= cut]
@@ -424,12 +384,9 @@ class Net(nn.Module):
     the label teaches it for free. The policy head is initialised as the negated label head, so
     the reinforcement stage starts from exactly the rule the supervised model implies: long when
     the predicted label is low, which is to say when the bar sits near a pivot low.
-
-    `aux` adds a third head for the second target of a `JOINT` run. Only then: a checkpoint's state
-    has to match the net it is loaded into, and the ones saved before it have no such head.
     """
 
-    def __init__(self, width: int, hidden: int = H, dropout: float = DROPOUT, aux: bool = False):
+    def __init__(self, width: int, hidden: int = H, dropout: float = DROPOUT):
         super().__init__()
         self.gru = nn.GRU(width, hidden, batch_first=True)
         self.drop = nn.Dropout(dropout)
@@ -437,9 +394,6 @@ class Net(nn.Module):
         self.policy = nn.Linear(hidden, 1)
         nn.init.zeros_(self.head.bias)
         nn.init.zeros_(self.policy.bias)
-        if aux:
-            self.aux = nn.Linear(hidden, 1)
-            nn.init.zeros_(self.aux.bias)
 
     def encode(self, x: torch.Tensor) -> torch.Tensor:
         return self.drop(self.gru(x)[1][-1])
@@ -470,18 +424,6 @@ def outputs(model: Net, x, rows: np.ndarray, batch: int = 4096) -> tuple[np.ndar
             label.append(a.cpu().numpy())
             logit.append(b.cpu().numpy())
     return np.concatenate(label), np.concatenate(logit)
-
-
-def auxiliary(model: Net, x, rows: np.ndarray, batch: int = 4096) -> np.ndarray:
-    """The auxiliary head over `rows` — the swing label a `JOINT` model learned alongside."""
-    model.eval()
-    out = []
-    with torch.no_grad():
-        for at in np.array_split(rows, max(1, len(rows) // batch)):
-            out.append(
-                model.aux(model.encode(torch.from_numpy(np.asarray(x[at])).to(DEVICE))).squeeze(-1).cpu().numpy()
-            )
-    return np.concatenate(out)
 
 
 # ---------------------------------------------------------------- the rule and its price
@@ -717,7 +659,6 @@ def fit_label(
     patience: int = 6,
     batch_size: int = BATCH,
     quiet: bool = True,
-    aux: float = AUX,
 ) -> Net:
     """Stage one: a Huber on `swing_leg_target`, stopped on the validation correlation.
 
@@ -726,15 +667,9 @@ def fit_label(
     like — at a cost of one pass over a label that is already computed. The measurement that
     justifies stopping here rather than continuing is in the module docstring: fitting this label
     harder does not make the rule more profitable, because the residual concentrates at the turns.
-
-    With a `target2` column (a `JOINT` run) the net grows the auxiliary head and the loss is two
-    Hubers, each divided by its own delta so both are in units of a typical error and neither
-    target's scale decides the mix — `aux` does. Early stopping still reads `target` alone: the
-    auxiliary task is there to shape the encoder, not to choose the epoch.
     """
     torch.manual_seed(seed)
-    joint = "target2" in train
-    model = Net(x.shape[2], aux=joint).to(DEVICE)
+    model = Net(x.shape[2]).to(DEVICE)
     opt = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
     # Delta is the median of |target| on this fold's train side, the criterion the project fixes
     # every Huber with: the label lives in [-1, 1] here, so a delta carried from another one would
@@ -743,23 +678,14 @@ def fit_label(
     loss_fn = nn.HuberLoss(delta=delta)
     at = train.row.to_numpy()
     y = torch.from_numpy(train.target.to_numpy("float32"))
-    if joint:
-        delta2 = float(train.target2.abs().median())
-        loss2 = nn.HuberLoss(delta=delta2)
-        y2 = torch.from_numpy(train.target2.to_numpy("float32"))
     rng = np.random.default_rng(seed)
     best, state, since = -np.inf, None, 0
     for epoch in range(epochs):
         model.train()
         for batch in np.array_split(rng.permutation(len(at)), max(1, len(at) // batch_size)):
             opt.zero_grad()
-            if joint:
-                h = model.encode(torch.from_numpy(np.asarray(x[at[batch]])).to(DEVICE))
-                loss = loss_fn(model.head(h).squeeze(-1), y[batch].to(DEVICE)) / delta
-                loss = loss + aux * loss2(model.aux(h).squeeze(-1), y2[batch].to(DEVICE)) / delta2
-            else:
-                label, _ = model(torch.from_numpy(np.asarray(x[at[batch]])).to(DEVICE))
-                loss = loss_fn(label, y[batch].to(DEVICE))
+            label, _ = model(torch.from_numpy(np.asarray(x[at[batch]])).to(DEVICE))
+            loss = loss_fn(label, y[batch].to(DEVICE))
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP)
             opt.step()
@@ -947,25 +873,12 @@ def walk_forward(
     held.index = pd.RangeIndex(len(meta))  # positional, keyed by `row` below
     pos = np.zeros(len(x))
     pred = np.zeros(len(x))
-    # The auxiliary head of a `JOINT` model, averaged over seeds like `pred`; NaN when there is none.
-    aux = np.full(len(x), np.nan)
     seen = np.zeros(len(x), dtype=bool)
     rows = []
     for i, (train, test) in enumerate(folds(meta, start, n), 1):
         inner, valid = purge(train, train.index.min() + (train.index.max() - train.index.min()) * (1 - VALID_FRACTION))
-        model = fit_label(x, inner, valid, seed, quiet=quiet, **{k: v for k, v in kw.items() if k in ("epochs", "aux")})
-        models = [model]
-        for extra in range(1, seeds):
-            models.append(
-                fit_label(
-                    x,
-                    inner,
-                    valid,
-                    seed + extra,
-                    quiet=quiet,
-                    **{k: v for k, v in kw.items() if k in ("epochs", "aux")},
-                )
-            )
+        epochs = {k: v for k, v in kw.items() if k == "epochs"}
+        models = [fit_label(x, inner, valid, seed + extra, quiet=quiet, **epochs) for extra in range(seeds)]
         if stage in ("policy", "both"):
             models = [fit_policy(m, x, inner, valid, seed + j, fee=fee, quiet=quiet) for j, m in enumerate(models)]
 
@@ -993,8 +906,6 @@ def walk_forward(
         order = ordered(test)
         use = score(order.row.to_numpy())
         pred[order.row.to_numpy()] = use
-        if hasattr(models[0], "aux"):
-            aux[order.row.to_numpy()] = np.mean([auxiliary(m, x, order.row.to_numpy()) for m in models], axis=0)
         for _, g in order.assign(s=use).groupby("symbol", sort=False):
             pos[g.row.to_numpy()] = book(g.s.to_numpy(), params)
             seen[g.row.to_numpy()] = True
@@ -1013,7 +924,6 @@ def walk_forward(
         "pos": pd.Series(pos[test_meta.row.to_numpy()], index=test_meta.index),
         # What the rule read: the label head, or the policy logit when the policy stage ran.
         "pred": pd.Series(pred[test_meta.row.to_numpy()], index=test_meta.index),
-        "aux": pd.Series(aux[test_meta.row.to_numpy()], index=test_meta.index),
         "meta": test_meta,
     }
 
@@ -1133,9 +1043,6 @@ def _selfcheck() -> None:
     # The view `build` stores is the same tensor: window i is the sequence of row i + steps - 1.
     view = windows(normalize.apply(f, stats).to_numpy("float32"), 3)
     assert view.shape == (18, 3, len(INPUTS)) and np.array_equal(view, seq[2:]), "the view is the tensor"
-    # The purging horizon of `move_balance` counts rows, holes included: 10:00 -> 10:30 is one row.
-    gappy = pd.DatetimeIndex(["2024-01-01 09:00", "2024-01-01 09:15", "2024-01-01 10:00", "2024-01-01 10:30"], tz="UTC")
-    assert list(ahead(gappy, 2)[:2]) == list(gappy[2:]) and ahead(gappy, 2)[2:].isna().all()
 
     # And the learning, end to end, on a toy built so the two stages cannot both be right.
     #
@@ -1173,22 +1080,6 @@ def _selfcheck() -> None:
     model = fit_policy(model, x, inner, valid, epochs=12, patience=12, steps=10, chunk=64, count=16, fee=0.0005)
     after, _ = valid_score(model, x, valid, "policy", fee=0.0005)
     assert after > 0, f"the reward has to overturn the supervised prior: {before:+.3f} -> {after:+.3f}"
-
-    # Two targets on one encoder: each head learns its own, and the second is not the first's echo.
-    toy2 = toy.assign(target2=-saw)
-    inner2, valid2 = toy2.iloc[: int(n * 0.7)], toy2.iloc[int(n * 0.7) :]
-    joint = fit_label(x, inner2, valid2, epochs=12, patience=12, batch_size=256, aux=1.0)
-    rows = valid2.row.to_numpy()
-    main, _ = outputs(joint, x, rows)
-    assert (
-        np.corrcoef(main, valid2.target)[0, 1] > 0.8
-        and np.corrcoef(auxiliary(joint, x, rows), valid2.target2)[0, 1] > 0.8
-    )
-    # The joint purging horizon is the further of the two, and unknown if either is.
-    a = pd.Series(pd.to_datetime(["2024-01-01", "2024-01-03", None], utc=True))
-    b = pd.Series(pd.to_datetime(["2024-01-02", "2024-01-02", "2024-01-02"], utc=True))
-    reach = pd.concat([a, b], axis=1).max(axis=1, skipna=False)
-    assert list(reach[:2]) == list(pd.to_datetime(["2024-01-02", "2024-01-03"], utc=True)) and pd.isna(reach[2])
     print(f"ok — label corr {corr:.3f}, policy {before:+.3f} -> {after:+.3f} log/yr on the saw")
 
 
@@ -1249,7 +1140,6 @@ def save(
     stage,
     keep=None,
     cal=None,
-    label="swing",
     test_start=TEST_START,
     smoothing=SMOOTHING,
     stats=None,
@@ -1277,12 +1167,11 @@ def save(
             "exit": None if params is None else params[1],
             "sign": None if params is None else params[2],
             "stage": stage,
-            "label": label,
-            # The horizon the label read, in bars of `tf`. A prediction of the rise minus the fall
-            # over 48 bars drawn against the label over 24 would share the axis and not the question.
-            "horizon": MOVE_HORIZON if label in ("balance", JOINT) else None,
+            # Always the swing label now. Written all the same: the checkpoints from before the
+            # cleanup carry the name, and the page reads a card whatever wrote it.
+            "label": "swing",
             # The label's time weight; `window` above is its pivots as well as the features'.
-            "smoothing": smoothing if label in ("swing", JOINT) else None,
+            "smoothing": smoothing,
             "scalers": None if stats is None else {s: g.droplevel(0) for s, g in stats.groupby(level=0)},
             "test_start": test_start,
             # The map back onto the label's range, fitted on train. Stored rather than recomputed:
@@ -1298,7 +1187,7 @@ def restore(path: Path = CHECKPOINT) -> tuple[Net, dict]:
     # `map_location` is what loads a checkpoint trained on `mps` where there is no Metal; the
     # files written before `save` went device-free still carry the device of every storage.
     checkpoint = torch.load(path, weights_only=False, map_location=DEVICE)
-    model = Net(len(checkpoint["inputs"]), aux=checkpoint.get("label") == JOINT).to(DEVICE)
+    model = Net(len(checkpoint["inputs"])).to(DEVICE)
     model.load_state_dict(checkpoint["state"])
     model.eval()
     return model, checkpoint
@@ -1387,14 +1276,6 @@ def main() -> None:
         help="basic: the 29 candidates plus the leg state at N=24. full: adds the faster scales and exhaustion. "
         "reduced: the 15 of REDUCED",
     )
-    ap.add_argument(
-        "--label",
-        choices=["swing", "balance", JOINT],
-        default="swing",
-        help=f"swing: swing_leg_target. balance: move_balance, the rise minus the fall over {MOVE_HORIZON} bars ahead. "
-        f"{JOINT}: both on one encoder, move_balance the target the rule reads and the swing label an auxiliary head",
-    )
-    ap.add_argument("--aux", type=float, default=AUX, help=f"weight of the auxiliary swing-label loss in a {JOINT} run")
     ap.add_argument("--steps", type=int, default=STEPS, help="bars of history the encoder reads")
     ap.add_argument(
         "--window",
@@ -1415,9 +1296,9 @@ def main() -> None:
     }[args.inputs]
     # Every choice that changes the tensor is in its name, so two runs never fight over one file.
     # The window and the smoothing only when they move, so the files already on disk keep theirs.
-    tag = f"{args.timeframe}-{args.inputs}-{args.label}-s{args.steps}-t{args.test_start}"
+    tag = f"{args.timeframe}-{args.inputs}-s{args.steps}-t{args.test_start}"
     tag += f"-w{w}" if w != W else ""
-    tag += f"-m{args.smoothing:.2f}" if args.label in ("swing", JOINT) and args.smoothing != SMOOTHING else ""
+    tag += f"-m{args.smoothing:.2f}" if args.smoothing != SMOOTHING else ""
     path = args.cache.with_name(f"{args.cache.name}-{tag}")
     x, meta, stats = cached(
         path,
@@ -1427,12 +1308,11 @@ def main() -> None:
         window=w,
         steps=args.steps,
         keep=keep,
-        label=args.label,
         before=args.test_start,
         smoothing=args.smoothing,
     )
     print(
-        f"{len(meta):,} rows x {args.steps} steps x {len(keep)} inputs on {args.timeframe}, label {args.label}, "
+        f"{len(meta):,} rows x {args.steps} steps x {len(keep)} inputs on {args.timeframe}, "
         f"{meta.symbol.nunique()} symbols, {meta.index.min():%Y-%m-%d} to {meta.index.max():%Y-%m-%d}, {DEVICE}"
     )
     print(f"{args.folds} folds from {args.test_start}, stage {args.stage}, fee {args.fee * 100:.2f}% per side\n")
@@ -1449,7 +1329,6 @@ def main() -> None:
         args.seeds,
         args.band,
         epochs=args.epochs,
-        aux=args.aux,
     )
     table = by_symbol(out["pos"], out["meta"], args.fee, w)
     pd.set_option("display.width", 200)
@@ -1466,18 +1345,15 @@ def main() -> None:
         print("\nthe same rows, read by one column and a threshold\n")
         print(baselines(out["meta"], args.timeframe, args.fee, w).round(3).to_string(index=False))
 
-    # The auxiliary weight is not in the tensor, so it names the predictions and not the cache.
-    joint = args.label == JOINT
-    written = STORE / f"pos-swing-{tag}{f'-aux{args.aux:g}' if joint else ''}-{args.stage}.parquet"
-    kept = ["symbol", "close", "target", "pred", "position"] + (["target2", "aux"] if joint else [])
-    got = out["meta"].assign(pred=out["pred"].to_numpy(), position=out["pos"].to_numpy(), aux=out["aux"].to_numpy())
-    got[kept].to_parquet(written)
+    written = STORE / f"pos-swing-{tag}-{args.stage}.parquet"
+    got = out["meta"].assign(pred=out["pred"].to_numpy(), position=out["pos"].to_numpy())
+    got[["symbol", "close", "target", "pred", "position"]].to_parquet(written)
     print(f"\npredictions and positions written to {written}")
 
     if args.save:
         train, _ = purge(meta, pd.Timestamp(args.test_start, tz="UTC"))
         inner, valid = purge(train, train.index.min() + (train.index.max() - train.index.min()) * (1 - VALID_FRACTION))
-        model = fit_label(x, inner, valid, args.seed, epochs=args.epochs, quiet=not args.verbose, aux=args.aux)
+        model = fit_label(x, inner, valid, args.seed, epochs=args.epochs, quiet=not args.verbose)
         fitted, _ = outputs(model, x, inner.row.to_numpy())
         cal = calibration(fitted, inner.target.to_numpy())
         if args.stage in ("policy", "both"):
@@ -1497,7 +1373,6 @@ def main() -> None:
             args.stage,
             keep,
             cal,
-            args.label,
             args.test_start,
             args.smoothing,
             stats,

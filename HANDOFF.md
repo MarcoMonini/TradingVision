@@ -11,6 +11,10 @@ Base: merge di `book-on-screen` in `claude/fervent-knuth-se8cw5`.
 codice (nessuna misura nuova, nessun numero spostato): sezione 13. Contiene un crash della pagina
 deployata, tre cache che non invalidavano, e un'ottimizzazione da 61x su `features`.
 
+**Aggiornamento 2026-10-03** — ramo `claude/retrospective-only`: il progetto lavora solo su
+etichette retrospettive. Tutto il lavoro predittivo e la prima pipeline (`dataset` → `gru` →
+`legsweep`) sono in `OLD/`, congelati al tag `archive-predictive`: sezione 16.
+
 ---
 
 ## 1. Cosa è stato misurato, e su cosa
@@ -802,3 +806,80 @@ testa il suo target sul giocattolo), e i checkpoint salvati prima si caricano an
 testa esiste solo nei modelli congiunti. Con gli stessi 15 input a 12/48, il prezzo delle 12 ore
 dopo non si legge né da solo né con l'etichetta come maestra; la leva, se c'è, è negli input o nel
 costo, non nella loss.
+
+---
+
+## 16. Pulizia: solo etichette retrospettive (2026-10-03)
+
+**Decisione.** Le etichette predittive sono state misurate contro il prezzo tre volte, e il
+risultato è sempre nullo o non pagabile:
+
+| Etichetta | Contro il prezzo |
+|---|---|
+| `remaining_excursion` | −0,033 |
+| `move_balance` | +0,0015, t 0,27 |
+| `move_balance` con lo swing come compito ausiliario | da −0,027 a +0,046 fra i fold |
+
+Il progetto lavora quindi solo su `swing_leg_target` e sulle strategie che leggono la sua
+previsione. Tutto il resto è in `OLD/`, congelato al tag `archive-predictive` (`983c4eb`).
+`OLD/README.md` elenca ogni file con il numero che lo ha chiuso e spiega come rieseguirlo.
+
+**Cosa è uscito, in breve:**
+
+- **Le tre etichette predittive.** `data/target.py` → `OLD/.../data/target_predictive.py`.
+- **La prima pipeline:** `dataset`, `split`, `linear`, `gbm`, `selection`, `nearpivot`,
+  `crosscheck`, `gru`, `legsweep`, `legcheck`, `exhaustcheck`.
+  - `gru.pt` e le celle di `legsweep` erano sull'etichetta swing. Escono lo stesso, per tre ragioni:
+    - il loro campione è quello di `remaining_excursion`;
+    - il loro purge legge il pivot successivo, non `legs.label_reach`;
+    - `swing.py` fa lo stesso lavoro con il purge corretto.
+  - Il task che chiedeva di correggere quel purge è decaduto.
+- **Il fattore cross-sectional e la simulazione** (`factor`, `simulation`). Il fattore **non** ha
+  fallito: è l'unico netto positivo del progetto, +0,238 l'anno a 25 bp, misurato su `STUDY`. Esce
+  per concentrazione, e il README di `OLD/` lo dichiara come eccezione.
+- **Nei moduli vivi:**
+  - `swing.py` perde `--label balance`, `--label swing+balance`, `--aux` e la terza testa;
+  - `features.SELECTED` (la coppia del fattore) è rimossa;
+  - `lightgbm` esce dal gruppo dev.
+- **Dalla pagina** escono:
+  - il selettore dell'etichetta;
+  - le heatmap e il libro del fattore;
+  - la linea GRU e le celle della griglia;
+  - il modello `move_balance`.
+
+  La pagina disegna l'etichetta swing, il modello a 4h dello step 7, v2, la regola always-in con
+  le uscite e l'oracolo. Spenta *All 29 candidates*, mostra le colonne di candela di `REDUCED`.
+
+**Verificato.**
+
+- ruff, black e 46 test passano. Erano 77: la differenza sono i test dei moduli archiviati.
+- La pagina gira su BTC/USD in due configurazioni, senza errori in console né nel server:
+  - 15m con v2: previsione, regola, Spearman 0,71 sulla finestra;
+  - 4h con `swing.pt`: book, oracoli, regola.
+- L'asserzione del Dockerfile ora controlla `swing.pt` e `swing-v2.pt`.
+
+**Cache locali.** Il tag dei tensori di `swing` non contiene più l'etichetta. Per esempio
+`swing-15m-reduced-swing-s48-…` diventa `swing-15m-reduced-s48-…`, e lo stamp non registra più
+`label`. Le cache in `data/` costruite prima vengono quindi ricostruite al primo run; quelle
+congiunte non servono più.
+
+**Cosa resta vero.**
+
+- Il retrospettivo non ha ancora guadagnato soldi. v2 predice l'etichetta a 0,644, ma il forward
+  neutrale è −0,026 e la regola long-only perde contro l'hold (§14).
+- Delle leve di §14 la 2, un target sul rendimento netto, è predittiva: è fuori strada.
+- Restano le altre:
+  1. il costo: ordini maker, gambe più lunghe per trade;
+  2. la regola scelta sulla validazione del fold.
+
+**Aperto, in ordine.**
+
+1. **Le CLI di `threshold`, `stops` e `swingrule` leggono `pred-swing-*.parquet` nel formato di
+   `gru`**, che ora non scrive più nessuno. Le loro funzioni le usa la pagina e sono testate, ma i
+   `__main__` vanno ricollegati a `pos-swing-*.parquet` di `swing.py` prima di prezzare una
+   strategia sulla v2.
+2. **L'analisi di `legcheck` per `swing.py`.** Decili del forward per previsione e controllo
+   parziale sull'età della gamba. Oggi sta in uno script fuori dal repo: va promossa a modulo.
+3. **Il fattore, se si torna a una strategia di portafoglio**: va rimisurato su `SYMBOLS` (15),
+   non su `STUDY`.
+

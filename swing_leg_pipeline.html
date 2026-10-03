@@ -161,6 +161,15 @@ footer{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);color:v
     <div class="fact"><b>0,41</b><span>Rank IC contro l'etichetta</span></div>
     <div class="fact"><b>−0,04</b><span>Rank IC contro il prezzo</span></div>
   </div>
+  <div class="box open">
+    <h4>Aggiornamento 2026-10-03 — resta solo il modello B</h4>
+    <p>Il progetto lavora ora solo su etichette retrospettive. Il <strong>modello A</strong> (la GRU a 15m di
+    <code>gru --label swing</code>, il dataset step 2 su cui era costruito e la griglia <code>legsweep</code>) è
+    archiviato in <code>OLD/</code>: il campione era scelto dall'etichetta predittiva <code>remaining_excursion</code>
+    e il purging leggeva il pivot successivo invece di <code>legs.label_reach</code>. Il <strong>modello B</strong>,
+    <code>swing.py</code> (lo step 7 a 4h e la v2 a 15m), è quello vivo. Le sezioni II.8, II.12, II.14 e II.15 e le
+    parti sul modello A restano come documento storico; <code>OLD/README.md</code> dice perché ogni pezzo è uscito.</p>
+  </div>
   <nav class="toc" aria-label="Indice">
     <div class="part">Parte I — La lezione</div>
     <a href="#l1"><span class="n">1</span>Il problema in una pagina</a>
@@ -182,14 +191,14 @@ footer{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);color:v
     <a href="#d5"><span class="n">II.5</span>L'etichetta <code>swing_leg_target</code></a>
     <a href="#d6"><span class="n">II.6</span>Feature: le 29 candidate</a>
     <a href="#d7"><span class="n">II.7</span>Stato della gamba ed esaurimento — 36 colonne in più</a>
-    <a href="#d8"><span class="n">II.8</span>Il dataset step 2 e la regola di allineamento</a>
+    <a href="#d8"><span class="n">II.8</span>Il dataset step 2 e la regola di allineamento — archiviato</a>
     <a href="#d9"><span class="n">II.9</span>Dalle righe alle sequenze</a>
     <a href="#d10"><span class="n">II.10</span>Split, purging esatto e walk-forward</a>
     <a href="#d11"><span class="n">II.11</span>Normalizzazione robusta con clip</a>
-    <a href="#d12"><span class="n">II.12</span>GRU a ramo singolo 15m sull'etichetta swing</a>
+    <a href="#d12"><span class="n">II.12</span>GRU a ramo singolo 15m sull'etichetta swing — archiviato</a>
     <a href="#d13"><span class="n">II.13</span>Il modello swing a due stadi</a>
-    <a href="#d14"><span class="n">II.14</span>La griglia <code>legsweep</code>: 9 smoothing × 13 finestre</a>
-    <a href="#d15"><span class="n">II.15</span>Come si misura il modello A — cross-sectional</a>
+    <a href="#d14"><span class="n">II.14</span>La griglia <code>legsweep</code>: 9 smoothing × 13 finestre — archiviato</a>
+    <a href="#d15"><span class="n">II.15</span>Come si misura il modello A — cross-sectional — archiviato</a>
     <a href="#d16"><span class="n">II.16</span>Cosa hanno prodotto questi modelli</a>
     <a href="#d17"><span class="n">II.17</span>I moduli che leggono le predizioni</a>
     <a href="#d18"><span class="n">II.18</span>Dal checkpoint alla pagina Streamlit</a>
@@ -1131,6 +1140,7 @@ target(i)       = valori[k] + x · (valori[k+1] − valori[k])
 <section id="d8">
   <h2><span class="n">II.8</span> · Assemblaggio (modello A)</h2>
   <p class="h2sub">Il dataset step 2 e la regola di allineamento</p>
+  <div class="box open"><p><strong>Archiviato il 2026-10-03.</strong> Questa parte descrive il modello A (<code>dataset</code> → <code>gru</code> → <code>legsweep</code>), spostato in <code>OLD/</code> con il lavoro predittivo. Resta come documento storico: il codice gira al tag git <code>archive-predictive</code>, e <code>OLD/README.md</code> spiega perché è uscito.</p></div>
   <p class="back">Concetti di base: <a href="#l7">lezione 7 · Imparare senza barare</a></p>
   <p>Il modello A non costruisce righe proprie: legge l'<strong>indice</strong>, <code>target</code> e <code>next_pivot</code> di <code>data/step2.parquet</code>, il dataset che <code>gbm --horizon</code> materializza con <code>dataset.cached(start="2023", stride=12, lags=True)</code>. Stesse righe, stessi fold, stesso campione: il confronto fra modelli misura solo i modelli.</p>
 
@@ -1212,6 +1222,7 @@ target(i)       = valori[k] + x · (valori[k+1] − valori[k])
   <p class="h2sub">Dalle righe alle sequenze</p>
   <p class="back">Concetti di base: <a href="#l8">lezione 8 · Reti neurali e GRU</a></p>
   <h3>Modello A — <code>gru.sequences(index, keep=COLUMNS, tf="15m", steps=24)</code></h3>
+  <div class="box open"><p><strong>Archiviato il 2026-10-03.</strong> Questa parte descrive il modello A (<code>dataset</code> → <code>gru</code> → <code>legsweep</code>), spostato in <code>OLD/</code> con il lavoro predittivo. Resta come documento storico: il codice gira al tag git <code>archive-predictive</code>, e <code>OLD/README.md</code> spiega perché è uscito.</p></div>
   <p>Per ogni simbolo: <code>features(load(sym, "15m"), 24)[keep]</code>, indice spostato di <code>+10 min</code> sulla griglia 5m; poi per ogni riga le ultime 24 candele 15m chiuse, più vecchia per prima: <code>np.stack([f.shift(k).reindex(when, method="ffill") for k in 23..0], axis=1)</code>. Non è una finestra rolling sulla 5m: lo step k è la stessa serie spostata di k barre <em>sue</em>. Solleva se una cella non è finita (warm-up insufficiente).</p>
   <figure>
   <svg class="dg" viewBox="0 0 960 200" role="img" aria-label="Forma del tensore di sequenza">
@@ -1345,6 +1356,7 @@ test  = df[open_time &gt;= cut]</pre>
 <section id="d12">
   <h2><span class="n">II.12</span> · Modello A</h2>
   <p class="h2sub">GRU a ramo singolo 15m sull'etichetta swing</p>
+  <div class="box open"><p><strong>Archiviato il 2026-10-03.</strong> Questa parte descrive il modello A (<code>dataset</code> → <code>gru</code> → <code>legsweep</code>), spostato in <code>OLD/</code> con il lavoro predittivo. Resta come documento storico: il codice gira al tag git <code>archive-predictive</code>, e <code>OLD/README.md</code> spiega perché è uscito.</p></div>
   <p class="back">Concetti di base: <a href="#l8">lezione 8 · Reti neurali e GRU</a> · <a href="#l9">lezione 9 · L’addestramento</a></p>
   <figure>
   <svg class="dg" viewBox="0 0 960 170" role="img" aria-label="Architettura della GRU a ramo singolo">
@@ -1479,7 +1491,7 @@ test  = df[open_time &gt;= cut]</pre>
     <li>Huber con δ = mediana |target| del train del fold; AdamW 1e−3, wd 1e−4, batch 512, clip 1.0; 40 epoche, patience 6.</li>
     <li>Early stopping sulla <strong>correlazione di Pearson</strong> fra testa di etichetta e target sulla validazione (serie temporale, non cross-sectional).</li>
     <li><strong>Calibrazione</strong> (<code>swing.calibration</code>): 201 quantili dell'output fittato e dell'etichetta sul train; <code>np.interp</code> in uscita. Monotona, non sposta nessuna decisione; ripristina l'unità (la Huber schiaccia la predizione a ±0,4 mentre l'etichetta tocca ±1). Nel checkpoint reale: quantili dell'output da −1,134 a +1,024 mappati su −1 … +1.</li>
-    <li><strong>Due target</strong> (<code>--label swing+balance</code>, dal 2026-09-28): <code>target</code> è <code>move_balance</code> a 48 barre — la testa <code>head</code>, quella che legge ogni regola, la calibrazione e l'early stopping — e <code>target2</code> è <code>swing_leg_target</code>, imparato da una terza testa <code>aux</code> sullo stesso encoder. Loss = Huber₁/δ₁ + <code>aux</code> · Huber₂/δ₂, ciascuna divisa per il proprio δ perché nessuna scala decida il mix. Il purging usa il più lontano dei due orizzonti (48 barre avanti, o <code>legs.label_reach</code>); NaT in uno dei due è NaT.</li>
+    <li><strong>Due target</strong> (<code>--label swing+balance</code>): provato il 2026-09-28 — <code>move_balance</code> come testa principale e l'etichetta swing come testa ausiliaria. L'encoder imparava le gambe (0,640) e la testa del prezzo non leggeva niente; archiviato il 2026-10-03 con le etichette predittive (<code>OLD/README.md</code>).</li>
   </ul>
   <h3>Stadio 2 — <code>fit_policy</code>, rinforzo diretto (Moody &amp; Saffell)</h3>
 <pre>p_t    = sigmoid(SHARPNESS · logit_t)                 SHARPNESS = 2   (a 4 satura e scappa in "sempre flat")
@@ -1535,6 +1547,7 @@ loss   = −mean_episodi(R) + 0,1 · Huber(ŷ, y)          anchor: l'encoder non
 <section id="d14">
   <h2><span class="n">II.14</span> · Step 8</h2>
   <p class="h2sub">La griglia <code>legsweep</code>: 9 smoothing × 13 finestre</p>
+  <div class="box open"><p><strong>Archiviato il 2026-10-03.</strong> Questa parte descrive il modello A (<code>dataset</code> → <code>gru</code> → <code>legsweep</code>), spostato in <code>OLD/</code> con il lavoro predittivo. Resta come documento storico: il codice gira al tag git <code>archive-predictive</code>, e <code>OLD/README.md</code> spiega perché è uscito.</p></div>
   <p class="back">Concetti di base: <a href="#l5">lezione 5 · L’etichetta</a></p>
   <p>Le due manopole dell'etichetta, mai misurate contro il modello: <code>smoothing</code> ∈ {0,1 … 0,9} e <code>window</code> ∈ {12, 16, … 60}. 117 celle, un checkpoint ciascuna. Si muove solo il target: feature ferme su N = 24, stesso tensore <code>step3-15m-all.npy</code>. <code>next_pivot</code> invece si ricalcola per finestra (le gambe cambiano).</p>
   <div class="tw"><table>
@@ -1573,6 +1586,7 @@ loss   = −mean_episodi(R) + 0,1 · Huber(ŷ, y)          anchor: l'encoder non
 <section id="d15">
   <h2><span class="n">II.15</span> · Metriche</h2>
   <p class="h2sub">Come si misura il modello A — cross-sectional</p>
+  <div class="box open"><p><strong>Archiviato il 2026-10-03.</strong> Questa parte descrive il modello A (<code>dataset</code> → <code>gru</code> → <code>legsweep</code>), spostato in <code>OLD/</code> con il lavoro predittivo. Resta come documento storico: il codice gira al tag git <code>archive-predictive</code>, e <code>OLD/README.md</code> spiega perché è uscito.</p></div>
   <p class="back">Concetti di base: <a href="#l10">lezione 10 · La misura</a></p>
   <div class="tw"><table>
     <caption><code>metrics.signal(pred, target, horizon=None)</code> → dict</caption>
@@ -1676,8 +1690,8 @@ loss   = −mean_episodi(R) + 0,1 · Huber(ŷ, y)          anchor: l'encoder non
   </table></div>
   <ul>
     <li><strong>Dove cerca il file</strong> (<code>chart.saved</code>): prima <code>data/</code>, poi <code>models/</code> (o <code>$TRADINGVISION_MODELS</code>). <code>data/</code> non entra nell'immagine Docker: un modello arriva su Render solo committato in <code>models/</code>.</li>
-    <li><strong>Quale file</strong>: sull'etichetta retrospettiva i due slider (smoothing a passo 0,1, leg window sulle 13 finestre) scelgono <code>gru-swing-s&lt;s&gt;-w&lt;w&gt;.pt</code>; la cella 0,7 / 24 usa <code>gru.pt</code>. Su una cella non addestrata la pagina non ripiega: scrive il comando che la addestra.</li>
-    <li><strong>Cache</strong>: <code>load_model</code>, <code>load_prediction</code>, <code>load_swing_model</code> hanno l'<code>mtime</code> del file nella chiave, così un riaddestramento invalida la predizione.</li>
+    <li><strong>Quale file</strong>: <code>swing.pt</code> (lo step 7, 4h) quando il timeframe sullo schermo è il suo; <code>swing-v2.pt</code> quando è spuntata la casella <em>Swing Leg Position v2</em>, che blocca smoothing e finestra ai valori del checkpoint. Fino al 2026-10-03 i due slider sceglievano una cella di <code>legsweep</code> (<code>gru-swing-s&lt;s&gt;-w&lt;w&gt;.pt</code>); la GRU è archiviata, e gli slider oggi muovono solo l'etichetta disegnata.</li>
+    <li><strong>Cache</strong>: <code>load_swing_model</code> e <code>load_swing</code> hanno l'<code>mtime</code> del file nella chiave, così un riaddestramento invalida la predizione.</li>
     <li><strong>Portabilità</strong>: <code>save</code> scrive lo stato su CPU; <code>restore</code> usa <code>map_location</code> per i file scritti su <code>mps</code>.</li>
   </ul>
 </section>

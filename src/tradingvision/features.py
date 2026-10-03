@@ -13,11 +13,13 @@ Column names are the spec's 28 candidates spelled out as descriptive identifiers
 spec's families, plus `log_dollar_volume` — the one column here whose *level* is the information,
 added when the label became cross-sectional. The other definitions are unchanged.
 
-These 29 are candidates, not the final set: the spec reduces them by correlation and permutation
-importance, and on the cross-sectional label `SELECTED` is down to two.
+These 29 are candidates, not the final set: each model reads its own cut of them, and the swing
+models read `swing.REDUCED`. The selections measured against the predictive labels — twelve
+columns on `remaining_excursion`, then two on the cross-sectional return — are archived in `OLD/`
+with the labels they were run against.
 
 Every column comes back finite or NaN, never an infinity. NaN is a value the pipeline handles —
-`dataset` drops the row — while an infinity is one nothing downstream sees: it passes `dropna`,
+`swing.frame` drops the row — while an infinity is one nothing downstream sees: it passes `dropna`,
 survives a quantile fit and reaches the model as an extreme.
 """
 
@@ -62,41 +64,6 @@ FAMILIES: dict[str, tuple[str, ...]] = {
     "momentum": ("adx_trend_strength", "tsi_momentum", "rsi_centered"),
 }
 COLUMNS = [c for cols in FAMILIES.values() for c in cols]
-
-# What the cross-sectional label at 72h rewards. Two columns, and that is not a typo.
-#
-# The twelve that used to be here were selected by `tradingvision.selection` against
-# `remaining_excursion`, a label since measured to be *anti*-correlated with tradable money
-# (Rank IC -0.033 against the market-neutral forward return). A selection is only ever valid for
-# the target it was run against, so that list had to be redone rather than trimmed.
-#
-# Univariate Rank IC against the new label, measured on the train period alone (pre-2025, fifteen
-# symbols) and then confirmed on three walk-forward folds. Three families separate from the rest:
-#
-#     volatility  vol_24h -0.076, average_true_range_pct -0.073, realized_volatility -0.069
-#     liquidity   trades_24h +0.063, log_dollar_volume +0.062
-#     reversal    ret_72h -0.049, ret_7d -0.049
-#
-# and then a cliff: every momentum, trend and position column lands under 0.04, including
-# `close_position_in_window`, which was step 2's most important feature by a factor of thirty on
-# the old label. The volatility columns are one factor wearing five names (mutual |rho| > 0.9);
-# `realized_volatility` is the representative, on the same `n` as everything else here.
-#
-# Reversal is measured and then dropped, which is the one non-obvious call. It has a real
-# univariate signal, but added to the pair below it *lowers* the combined Rank IC from 0.121 to
-# 0.103 across the three folds — it is correlated with volatility and contributes noise where it
-# does not contribute information.
-#
-# Two more things this list assumes, both of them measured and neither of them in this file. The
-# features have to be ranked inside each timestamp before a model reads them: the label is a
-# ranking inside a timestamp, and the same LightGBM on the same columns goes from 0.054 to 0.098
-# on that transform alone. And past that, less machinery wins — an equal-weight composite of these
-# two ranked columns scores 0.121 +- 0.025 against 0.104 for a fitted tree on all 29. The set is a
-# factor pair, not a feature set, and no recurrent model has been re-measured on it yet.
-SELECTED = [
-    "realized_volatility",
-    "log_dollar_volume",
-]
 
 # Chart labels: the identifier is what the dataset carries, this is what a reader sees on a plot.
 LABELS = {

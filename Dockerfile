@@ -18,12 +18,13 @@ COPY models ./models
 
 # The build fails here rather than at the first request. It asserts the two things that were once
 # broken at the same moment and that CI cannot see, because the image job builds the container and
-# never starts it: that `--no-dev` really carries torch, which `gru` and `swing` import at module
-# scope and whose absence used to take the page down before Streamlit drew anything, and that both
-# checkpoints landed under the directory `chart.MODELS` resolves to. Spelled from the modules' own
-# `CHECKPOINT` names so a rename cannot leave this checking a file nobody looks for.
-RUN python -c "from pathlib import Path; from tradingvision import gru, swing; \
-    assert all(Path('models', m.CHECKPOINT.name).exists() for m in (gru, swing))"
+# never starts it: that `--no-dev` really carries torch, which `swing` imports at module scope and
+# whose absence used to take the page down before Streamlit drew anything, and that both swing
+# checkpoints landed under the directory `chart.MODELS` resolves to. Spelled from the code's own
+# names so a rename cannot leave this checking a file nobody looks for.
+RUN python -c "from pathlib import Path; from tradingvision import swing; \
+    from tradingvision.app.chart import V2_CHECKPOINT; \
+    assert all(Path('models', n).exists() for n in (swing.CHECKPOINT.name, V2_CHECKPOINT))"
 
 # Stateless: the page draws Alpaca downloads and the committed checkpoints only. The Parquet store
 # under data/ is read by the oracle sweep and the Binance fetcher, neither of which runs here, so
