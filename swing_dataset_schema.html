@@ -983,6 +983,45 @@ L = δ·(|e| − 0.5·δ)  altrimenti</pre>
     <p>La spiegazione è già nello spec e questa misura la conferma sul campo. <code>SMOOTHING = 0.7</code> pesa il termine temporale, quindi l'etichetta è ≈ <code>elapsed / (elapsed + remaining)</code>, e <code>elapsed</code> — distanza dal pivot precedente — è passato e noto. La correlazione fra la predizione e il controllo puramente causale <code>elapsed_position</code> è <strong>0,34</strong>, e togliendola la Rank IC non migliora: <code>ic_residual</code> −0,0363 contro <code>ic_raw</code> −0,0405. Non c'è una metà buona da isolare.</p>
     <p><strong>Perché questa misura non si poteva fare prima.</strong> Il file di predizioni precedente veniva dal build a stride posizionale: breadth 7,82, <em>zero</em> timestamp con venti simboli e 15.989 timestamp con un simbolo solo — dove la neutralizzazione cross-sectional demedia un valore contro sé stesso e restituisce esattamente zero. Quelle righe erano il 7,3% del totale, abbastanza da diluire e non abbastanza da spiegare il risultato: sulle righe corrette il verdetto è lo stesso, un po' più netto.</p>
   </div>
+
+  <h3>Lo studio delle regole sulla v2 — ETH, BTC, SOL <span class="b b-msr">misurato</span></h3>
+  <p><code>strategy</code> costruisce una regola un passo alla volta sulle predizioni fuori campione della v2 (15m, finestra 12, peso tempo 0,5, quattro fold da 2025-06). Protocollo fissato prima: asset scelti per Rank IC contro l'etichetta sui fold 1-2 (ETH 0,703, BTC 0,688, SOL 0,683 tra i tradabili); sviluppo sui fold 1-2 (2025-06 → 2026-01), hold-out sui fold 3-4 (2026-01 → 2026-09) letto una volta; regimi sulle date del ciclo BTC (massimo 2025-10-06, minimo 2026-07-01); senza commissioni, con il lordo per trade come misura da confrontare con l'andata e ritorno.</p>
+
+  <div class="tw">
+    <table>
+      <caption>soglia 0,40, bp di lordo per trade (errore standard), senza commissioni</caption>
+      <thead><tr><th>regola</th><th class="num">sviluppo</th><th class="num">hold-out</th><th>nota</th></tr></thead>
+      <tbody>
+        <tr><td>banda, sempre in posizione</td><td class="num">+1,7 (9,8)</td><td class="num">−25,2 (13,9)</td><td>il segno lo fa il mercato: long vincono nel rialzo, short nel ribasso</td></tr>
+        <tr><td>rientro nel range</td><td class="num">+15,0 (10,1)</td><td class="num">−42,9 (13,9)</td><td>la banda ritardata del tempo passato fuori; per fold −1,8 / +32,8 / −44,8 / −40,9</td></tr>
+        <tr><td>rientro + stop 6 ATR</td><td class="num">+12,4 (6,7)</td><td class="num">−23,0 (7,6)</td><td>lo stop riduce perdite e drawdown in entrambi i periodi, non crea guadagno</td></tr>
+        <tr><td>rientro + BTC sotto media 200 giorni</td><td class="num">+41,0 (16,1)</td><td class="num">−40,5 (14,9)</td><td>filtro scelto sullo sviluppo, dove il ribasso era il fold 2</td></tr>
+        <tr><td>rientro + stop 6 ATR, poi solo segnale opposto</td><td class="num">+26,1 (7,9)</td><td class="num">−26,5 (8,9)</td><td>provata dopo l'hold-out: controllo, non prova pulita</td></tr>
+        <tr><td>inversa della peggiore dello sviluppo (banda 0,55)</td><td class="num">+70,6</td><td class="num">+11,6 (38,6)</td><td>positiva per costruzione sullo sviluppo; indistinguibile da zero dopo</td></tr>
+        <tr><td colspan="4" class="foot">media breve della predizione (2-8 barre): pari fino a 4, peggio a 8. Take profit: peggiora sempre. Soglie sopra 0,5: con la regola sempre in posizione diventano tenute di settimane. Filtro di volatilità: non separa i trade</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="tw">
+    <table>
+      <caption>le svolte della predizione, finestra 12 barre per lato, bp di lordo per trade (sviluppo / hold-out)</caption>
+      <thead><tr><th>svolte di</th><th class="num">col senno di poi</th><th class="num">alla conferma (causale)</th></tr></thead>
+      <tbody>
+        <tr><td>predizione</td><td class="num">+180,4 / +164,4</td><td class="num">+4,8 / −3,3</td></tr>
+        <tr><td><code>rsi_centered</code> a 12</td><td class="num">+169,7 / +157,5</td><td class="num">+5,6 / +1,4</td></tr>
+        <tr><td>prezzo (oracolo)</td><td class="num">+209,6 / +193,3</td><td class="num">+5,1 / −3,1</td></tr>
+        <tr><td colspan="3" class="foot">a 6, 24 e 48 barre stessa forma: col senno di poi +122 … +475, alla conferma tra −10 e +16 con segni che cambiano fra fold</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="box why">
+    <h4>Cosa insegna <span class="b b-msr">misurato</span></h4>
+    <p><strong>Nessuna regola si ripete fra i fold.</strong> Quasi ogni risultato dello sviluppo cambia segno sull'hold-out, e il guadagno dello sviluppo era il fold 2 da solo: "funziona nel ribasso" e "il secondo modello era migliore" davano la stessa tabella, e l'hold-out, quasi tutto in ribasso, ha dato ragione alla seconda.</p>
+    <p><strong>Il segnale c'è, ed è dove sono le svolte, non quando.</strong> Tradate col senno di poi, le svolte della predizione raccolgono il 96% del lordo dell'oracolo, e battono quelle di un RSI <strong>in ogni fold e a ogni finestra</strong> — l'unico risultato dello studio che non cambia segno. Alla conferma valgono circa zero, come quelle del prezzo e dell'RSI: la predizione non conferma le sue svolte prima del prezzo. È lo stesso confine dell'oracolo a <code>lag=24</code> sopra, letto sulla predizione invece che sul prezzo.</p>
+    <p><strong>La pagina.</strong> <code>chart.py</code> esegue ogni regola dello studio con <code>strategy.play</code>, lo stesso codice delle tabelle: regola, soglia o finestra delle svolte, media, inversione, filtro BTC e uscite.</p>
+  </div>
 </section>
 
 <section>

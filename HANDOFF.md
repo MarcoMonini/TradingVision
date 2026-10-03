@@ -15,6 +15,9 @@ deployata, tre cache che non invalidavano, e un'ottimizzazione da 61x su `featur
 etichette retrospettive. Tutto il lavoro predittivo e la prima pipeline (`dataset` → `gru` →
 `legsweep`) sono in `OLD/`, congelati al tag `archive-predictive`: sezione 16.
 
+**Aggiornamento 2026-10-03, più tardi** — ramo `claude/strategy-study`: lo studio delle regole di
+trading sulla predizione v2 (`strategy.py`) e tutte quelle regole sulla pagina chart: sezione 17.
+
 ---
 
 ## 1. Cosa è stato misurato, e su cosa
@@ -882,4 +885,71 @@ congiunte non servono più.
    parziale sull'età della gamba. Oggi sta in uno script fuori dal repo: va promossa a modulo.
 3. **Il fattore, se si torna a una strategia di portafoglio**: va rimisurato su `SYMBOLS` (15),
    non su `STUDY`.
+
+---
+
+## 17. Lo studio delle regole sulla v2 (`strategy.py`, ramo `claude/strategy-study`, 2026-10-03)
+
+**Domanda.** Una regola di trading sulla predizione v2 di `swing_leg_target` che guadagni, costruita
+un passo alla volta: punto di ingresso, uscite, filtri, regimi. Senza commissioni, guardando il
+lordo per trade contro l'andata e ritorno (50 bp taker, ~20 maker).
+
+**Protocollo, fissato prima.** Predizioni fuori campione della v2
+(`pos-swing-15m-reduced-swing-s48-t2025-06-w12-m0.50-label.parquet`). Asset: i tre tradabili con il
+Rank IC più alto contro l'etichetta sui fold 1-2, ETH, BTC, SOL. Sviluppo sui fold 1-2, hold-out
+sui fold 3-4. Regimi sulle date del ciclo BTC: ribasso dal massimo del 2025-10-06, rialzo dal minimo
+del 2026-07-01.
+
+| soglia 0,40, bp per trade (errore) | sviluppo | hold-out |
+|---|---|---|
+| banda, sempre in posizione | +1,7 (9,8) | −25,2 (13,9) |
+| rientro nel range | +15,0 (10,1) | −42,9 (13,9) |
+| rientro + stop 6 ATR | +12,4 (6,7) | −23,0 (7,6) |
+| rientro + BTC sotto media 200 giorni | +41,0 (16,1) | −40,5 (14,9) |
+| rientro + stop 6 ATR, poi solo segnale opposto | +26,1 (7,9) | −26,5 (8,9) controllo |
+| svolte della predizione col senno di poi, finestra 12 | +180,4 | +164,4 |
+| svolte della predizione alla conferma, finestra 12 | +4,8 | −3,3 |
+
+**Risultati.**
+
+- **Nessuna regola si ripete fra i fold.** Il guadagno dello sviluppo era il fold 2: il rientro fa
+  −1,8 / +32,8 / −44,8 / −40,9 bp per fold. Nello sviluppo il ribasso coincideva con il fold 2, e
+  l'hold-out ha detto che era il modello, non il regime.
+- **Lo stop a 6 ATR è l'unico effetto con lo stesso segno nei due periodi:** riduce perdite e
+  drawdown, non crea guadagno.
+- **Le svolte della predizione sono nel posto giusto e arrivano tardi.** Col senno di poi valgono il
+  96% del lordo dell'oracolo e battono quelle di `rsi_centered` in ogni fold e a ogni finestra (6, 12,
+  24, 48). Alla conferma valgono circa zero, come quelle del prezzo e dell'RSI.
+- Le altre prove (media breve, take profit, soglie alte, filtro di volatilità, momentum, inversa
+  della peggiore) sono nella docstring di `strategy.py`, con i numeri.
+
+**L'hold-out è usato.** Letto il 2026-10-03 sulle cinque `CANDIDATES` e poi, come controlli
+dichiarati, sulla regola "solo segnale opposto", sull'inversa della banda a 0,55 e sulle svolte.
+Ogni regola nuova sui fold 3-4 sarebbe scelta su dati già visti.
+
+**Cosa è cambiato nel codice.**
+
+- `strategy.py`: il modulo dello studio, con `--candidates`, `--tp/--sl/--trail/--after`,
+  `--filter`, `--invert`, `--smooth`, `--path`, `--hindsight [--causal]` e un `_selfcheck`
+  registrato in `tests/test_selfchecks.py`. `play` esegue qualunque regola su qualunque
+  predizione; `walked` è `stops.walk` su qualunque segnale, con filtro.
+- `chart.py`: la sezione **Trading rule** passa da `strategy.play` invece che da `stops.run`.
+  Regole: banda, rientro, momentum, svolte alla conferma, svolte col senno di poi (sotto un avviso).
+  Poi soglia o finestra delle svolte, media della predizione, inversione, filtro BTC sui giornalieri
+  di Alpaca (scaricati con le candele), uscite. Nuove metriche: bp per trade con la commissione di
+  pareggio, e la curva del capitale della regola. **Con la v2 l'ATR degli stop è ora a 12 barre,
+  la finestra del modello, invece di 24**: gli stessi multipli di ATR possono dare stop diversi
+  da prima.
+- Un bug trovato e corretto durante lo studio: `--filter` veniva ignorato dalla CLI con `--tp`. Le
+  misure con filtro passavano da `--candidates`, che lo applicava, e non ne sono toccate.
+
+**Aperto.**
+
+1. **Il walk-forward della v2 dal 2023-01** (`--test-start 2023-01`): circa 3,7 anni fuori campione e
+   due cicli, per provare regole nuove con selezione a rotazione sui fold precedenti. Non è stato
+   cronometrato.
+2. **Una regola che riconosca la svolta prima della conferma.** È lì che sta il valore: la svolta a
+   finestra 12 vale ~165 bp col senno di poi e ~0 alla conferma.
+3. Le CLI di `threshold`, `stops` e `swingrule` leggono ancora il formato di `gru` (§16, punto 1).
+   `strategy` legge già quello di `swing`.
 
