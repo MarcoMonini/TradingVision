@@ -12,7 +12,7 @@ import sys
 
 import pytest
 
-from tradingvision import stops, swingrule, threshold
+from tradingvision import stops, strategy, swingrule, threshold
 
 SELF_CHECKED = [
     "tradingvision.data.candles",
@@ -46,6 +46,11 @@ def test_stops_selfcheck():
     """`stops` keeps its checks in a function: its `__main__` reads a real prediction file and the
     5m store behind it. The checks themselves run on a saw and need neither."""
     stops._selfcheck()
+
+
+def test_strategy_selfcheck():
+    """`strategy` keeps its checks in a function: its `__main__` reads the v2 prediction file."""
+    strategy._selfcheck()
 
 
 def test_swing_selfcheck():

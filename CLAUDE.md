@@ -56,6 +56,7 @@ uv run python -m tradingvision.swing --timeframe 15m --window 12 --smoothing 0.5
 uv run python -m tradingvision.swingrule --pred data/pred-swing-*.parquet  # the long-only rule on the swing label
 uv run python -m tradingvision.threshold --pred data/pred-swing-*.parquet --at 0.5  # the always-in flip rule
 uv run python -m tradingvision.stops --pred data/pred-swing-*.parquet --at 0.5 --grid  # the same rule with exits
+uv run python -m tradingvision.strategy --candidates --at 0.40  # the rule study on v2's predictions, ETH/BTC/SOL
 ```
 
 `swing --save` writes `data/swing.pt`, and v2 is `--save data/swing-v2.pt`; the page reads the store
