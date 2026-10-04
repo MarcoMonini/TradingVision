@@ -163,6 +163,15 @@ delay 6 the RSI's turns pay more (+47.6 / +40.7 against +41.3 / +34.5). Only at 
 prediction keep it (+178.9 / +172.7 against +165.9 / +160.1). Every number here is an upper bound:
 an early reader would also act on turns that never come, and these rows have none.
 
+**The same curve on a price nobody can predict** (`--null N`, `signflip`). Rebuilt from its own
+returns with every sign drawn at random, the price keeps its volatility clusters and tails and loses
+any direction. Its turns at 12 bars make +216 to +219 bp a trade against +201 on the real price, an
+RSI's turns +169 to +172 against +164, and at 24 bars +325 to +328 against +308. The share left at
+each delay is the real one within 0.01-0.03, and it follows 1 - sqrt(d / window), the share a
+Brownian path keeps after an extreme: 0.71 / 0.59 / 0.42 / 0.29 at d = 1 / 2 / 4 / 6 of 12, against
+0.73 / 0.59 / 0.40 / 0.27 measured. The value of a turn, and the speed it runs out at, is the
+geometry of the extremes of any noisy path. What a causal reader can get of it is `detect`'s.
+
 **On the chart page.** `play` runs any rule above on any prediction, and `chart.py` draws through
 it, so the page and these tables share one code path: rule, threshold or turn window, the mean of
 the prediction, inversion, the BTC filter (on Alpaca's daily closes there) and every exit.
@@ -172,6 +181,7 @@ the prediction, inversion, the BTC filter (on Alpaca's daily closes there) and e
     uv run python -m tradingvision.strategy --at 0.35 0.4 --path 1 2 4 8 12 24 48 96 192
     uv run python -m tradingvision.strategy --at 0.35 0.4 --tp 0 3 6 10 15 --sl 0 3 6 10 15 [--trail]
     uv run python -m tradingvision.strategy --hindsight 6 12 24 48 --delay 0 1 2 3 4 5 6 12
+    uv run python -m tradingvision.strategy --hindsight 12 24 --delay 0 1 2 3 4 6 12 --null 3
 """
 
 from __future__ import annotations
@@ -581,13 +591,14 @@ def fold_of(when: pd.DatetimeIndex, path: Path = PRED) -> np.ndarray:
     return np.searchsorted(pd.DatetimeIndex(edges), when, side="right") + 1
 
 
-def rsi(index: pd.MultiIndex, window: int = WINDOW) -> pd.Series:
+def rsi(index: pd.MultiIndex, window: int = WINDOW, close: pd.Series | None = None) -> pd.Series:
     """`rsi_centered` at `window` on each asset's 15m close, the column `features` computes, read
-    from the whole store so the warm-up is over before the first row."""
+    from the whole store so the warm-up is over before the first row. `close` replaces the store
+    for a path that is not in it (`signflip`); its first `window` bars are then warm-up, at 0."""
     parts = []
     for symbol in index.get_level_values(1).unique():
-        close = candles(symbol, "15m").close
-        r = RSIIndicator(close, window=window).rsi() / 50 - 1
+        one = candles(symbol, "15m").close if close is None else close.xs(symbol, level=1)
+        r = (RSIIndicator(one, window=window).rsi() / 50 - 1).fillna(0.0)
         parts.append(r.set_axis(pd.MultiIndex.from_arrays([r.index, [symbol] * len(r)], names=index.names)))
     return pd.concat(parts).reindex(index)
 
@@ -749,6 +760,36 @@ def delayed(pred: pd.Series, close: pd.Series, cut: pd.Timestamp, windows, delay
     return pd.DataFrame(rows).set_index(["signal", "window", "delay"]).astype(float)
 
 
+def signflip(close: pd.Series, seed: int) -> pd.Series:
+    """`close` rebuilt from its own 15m returns with every sign drawn at random.
+
+    The sizes stay, and with them the volatility clusters and the tails; any direction, trend or
+    reversion goes. No reader can predict this path, so whatever the turns of it are worth is the
+    geometry of the extremes of noise.
+    """
+    rng = np.random.default_rng(seed)
+    logp = np.log(close)
+    r = logp.groupby(level=1).diff().fillna(0.0)
+    walk = (r.abs() * rng.choice([-1.0, 1.0], len(r))).groupby(level=1).cumsum()
+    return np.exp(logp.groupby(level=1).transform("first") + walk)
+
+
+def null_delays(close: pd.Series, windows, delays, seeds) -> pd.DataFrame:
+    """`delayed`'s curve on the real price and on sign-randomised ones (`signflip`), all 16 months.
+
+    The turns of the price and of an RSI at 12, bp a trade at each delay. If the curves agree,
+    the value of a turn and the speed it runs out at belong to any noisy path, not to the market.
+    """
+    paths = {"real": close} | {f"random signs #{k}": signflip(close, k) for k in seeds}
+    rows = {}
+    for path, c in paths.items():
+        for name, x in (("price", c), ("rsi 12", rsi(c.index, close=c))):
+            for w in windows:
+                e = turn_events(x, w)
+                rows[(path, name, w)] = [plain(hold(late(e, d)), c)[2].gross.mean() * 1e4 for d in delays]
+    return pd.DataFrame(rows, index=list(delays)).T.rename_axis(["path", "turns of", "window"])
+
+
 def _selfcheck() -> None:
     """Two symbols, a known position path, every number checked by hand; then the wiring to `stops`."""
     t = pd.date_range("2025-09-30", periods=8, freq="1D", tz="UTC")
@@ -827,6 +868,11 @@ def _selfcheck() -> None:
     assert (play(pred, bars, "reentry", 0.4, smooth=3)[0] == reentry(threshold.smoothed(pred, 3), 0.4)).all()
     # The saw has no twins, so the live reader holds the same turns `window` bars later.
     assert (confirmed_turns(pred, 5) == hold(late(turn_events(pred, 5), 5))).all()
+    # A sign-randomised path starts where the price does and moves by the same amounts, bar for bar.
+    walk = signflip(bars.close, 0)
+    size = np.log(bars.close).groupby(level=1).diff().abs().dropna()
+    assert np.allclose(np.log(walk).groupby(level=1).diff().abs().dropna(), size)
+    assert np.isclose(walk.iloc[0], bars.close.iloc[0]) and not np.allclose(walk, bars.close)
 
 
 def main() -> None:
@@ -855,6 +901,7 @@ def main() -> None:
     )
     ap.add_argument("--causal", action="store_true", help="with --hindsight: act on each turn when it is confirmed")
     ap.add_argument("--delay", type=int, nargs="+", help="with --hindsight: act on each turn these many bars late")
+    ap.add_argument("--null", type=int, metavar="N", help="with --delay: the same on N sign-randomised prices")
     args = ap.parse_args()
 
     _selfcheck()
@@ -873,6 +920,19 @@ def main() -> None:
             print(rep.astype(float).round(3).to_string())
         share = below(pred.index)[label(when, cut).period.eq(period).to_numpy()].mean()
         print(f"\nBTC under its 200-day mean on {share:.0%} of the bars")
+    elif args.hindsight and args.delay and args.null:
+        t = null_delays(close, args.hindsight, args.delay, range(1, args.null + 1)).sort_index(level=[2, 1, 0])
+        print("bp a trade, all 16 months, no fees: real prices against prices with every return's sign at random\n")
+        print(t.round(1).to_string())
+        share = t.div(t[0], axis=0)
+        w = share.index.get_level_values("window").to_numpy()[:, None]
+        brownian = pd.DataFrame(1 - np.sqrt(np.minimum(np.array(args.delay) / w, 1)), index=share.index)
+        print("\nshare of delay 0 left, and 1 - sqrt(d / w) under it\n")
+        print(
+            pd.concat({"measured": share, "1 - sqrt(d/w)": brownian.set_axis(share.columns, axis=1)}, axis=1)
+            .round(2)
+            .to_string()
+        )
     elif args.hindsight and args.delay:
         table = delayed(pred, close, cut, args.hindsight, args.delay)
         print("looks ahead: the centred turns, each acted on `delay` bars after it\n")

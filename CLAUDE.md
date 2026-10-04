@@ -57,6 +57,7 @@ uv run python -m tradingvision.swingrule --pred data/pred-swing-*.parquet  # the
 uv run python -m tradingvision.threshold --pred data/pred-swing-*.parquet --at 0.5  # the always-in flip rule
 uv run python -m tradingvision.stops --pred data/pred-swing-*.parquet --at 0.5 --grid  # the same rule with exits
 uv run python -m tradingvision.strategy --candidates --at 0.40  # the rule study on v2's predictions, ETH/BTC/SOL
+uv run python -m tradingvision.detect --shiryaev 0.5 0.9 0.99 --split  # recognising v2's turns causally: what it earns
 ```
 
 `swing --save` writes `data/swing.pt`, and v2 is `--save data/swing-v2.pt`; the page reads the store

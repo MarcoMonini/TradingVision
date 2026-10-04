@@ -12,7 +12,7 @@ import sys
 
 import pytest
 
-from tradingvision import stops, strategy, swingrule, threshold
+from tradingvision import detect, stops, strategy, swingrule, threshold
 
 SELF_CHECKED = [
     "tradingvision.data.candles",
@@ -60,3 +60,8 @@ def test_swing_selfcheck():
     """
     code = "from tradingvision import swing; swing._selfcheck()"
     subprocess.run([sys.executable, "-c", code], check=True)
+
+
+def test_detect_selfcheck():
+    """`detect` keeps its checks in a function: its `__main__` runs the detectors on v2's predictions."""
+    detect._selfcheck()

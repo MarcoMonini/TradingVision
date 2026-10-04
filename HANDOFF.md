@@ -910,6 +910,8 @@ del 2026-07-01.
 | svolte della predizione col senno di poi, finestra 12 | +180,4 | +164,4 |
 | svolte della predizione alla conferma, finestra 12 | +4,8 | −3,3 |
 | svolte col senno di poi, finestra 12, eseguite 2 / 4 / 6 barre dopo | +99,4 / +68,0 / +41,3 | +88,9 / +54,9 / +34,5 |
+| rivelatore bayesiano (Shiryaev) sulle svolte, soglia 0,5 / 0,9 | −1,0 / +6,7 | +0,1 / −13,3 |
+| zigzag (CUSUM) sulla predizione, h 0,2 | −0,3 | −1,5 |
 
 **Risultati.**
 
@@ -925,6 +927,19 @@ del 2026-07-01.
   70% dopo una barra di ritardo, il 55% dopo due, il 23% dopo sei; a metà finestra il 20-25% a ogni
   finestra. Contro 50 bp pagano fino a 4 barre di ritardo a finestra 12 e 6 a finestra 24. Il
   vantaggio sull'RSI sta nella barra di svolta e nella successiva e sparisce a ritardo 3.
+- **Quel valore è la geometria del rumore** (`--null`). Su prezzi ricostruiti con il segno di ogni
+  rendimento estratto a caso le svolte valgono di più (+216-219 bp a finestra 12 contro +201) e la
+  quota rimasta a ogni ritardo è la stessa entro 0,01-0,03: segue 1 − √(d/w), la legge di un
+  percorso browniano dopo un estremo.
+- **Riconoscerle in tempo reale non rende** (`detect.py`). Zigzag e rivelatore di Shiryaev (a priori
+  dal livello della predizione, che alle svolte è 0,37 di mediana, e dall'età della gamba) trovano
+  l'80% delle svolte con 3 barre di ritardo mediano e 0,35 falsi allarmi per svolta, ma rendono
+  zero: le rilevazioni giuste fanno +31 bp, i falsi allarmi −80, come vuole il teorema d'arresto
+  opzionale. Con soglie alte, positivo sui fold 1-2 e negativo sui 3-4, come ogni altra regola.
+- **Combinarli riduce i falsi allarmi e non il risultato** (`--both`). Shiryaev 0,5 più un
+  ritracciamento di 0,4 porta i falsi allarmi da 0,35 a 0,07 per svolta, ma le rilevazioni scendono
+  da +31 a +16 bp e i falsi rimasti salgono da −80 a −138: sviluppo +2,8, hold-out −9,7. Sulle
+  dodici combinazioni provate, sviluppo da +0,6 a +6,5 e hold-out da −0,8 a −15,6.
 - Le altre prove (media breve, take profit, soglie alte, filtro di volatilità, momentum, inversa
   della peggiore) sono nella docstring di `strategy.py`, con i numeri.
 
@@ -935,9 +950,11 @@ Ogni regola nuova sui fold 3-4 sarebbe scelta su dati già visti.
 **Cosa è cambiato nel codice.**
 
 - `strategy.py`: il modulo dello studio, con `--candidates`, `--tp/--sl/--trail/--after`,
-  `--filter`, `--invert`, `--smooth`, `--path`, `--hindsight [--causal | --delay]` e un `_selfcheck`
+  `--filter`, `--invert`, `--smooth`, `--path`, `--hindsight [--causal | --delay [--null]]` e un `_selfcheck`
   registrato in `tests/test_selfchecks.py`. `play` esegue qualunque regola su qualunque
   predizione; `walked` è `stops.walk` su qualunque segnale, con filtro.
+- `detect.py`: zigzag (CUSUM) e rivelatore di Shiryaev sulle svolte, stimati sullo sviluppo, con
+  `match` (trovate, ritardo, falsi allarmi), `book` e `split`; self-check registrato.
 - `chart.py`: la sezione **Trading rule** passa da `strategy.play` invece che da `stops.run`.
   Regole: banda, rientro, momentum, svolte alla conferma, svolte col senno di poi (sotto un avviso).
   Poi soglia o finestra delle svolte, media della predizione, inversione, filtro BTC sui giornalieri
@@ -956,9 +973,10 @@ Ogni regola nuova sui fold 3-4 sarebbe scelta su dati già visti.
 1. **Il walk-forward della v2 dal 2023-01** (`--test-start 2023-01`): circa 3,7 anni fuori campione e
    due cicli, per provare regole nuove con selezione a rotazione sui fold precedenti. Non è stato
    cronometrato.
-2. **Una regola che riconosca la svolta prima della conferma.** È lì che sta il valore: la svolta a
-   finestra 12 vale ~165 bp col senno di poi e ~0 alla conferma, e ~60 se riconosciuta entro 4
-   barre; a finestra 24 ~100 entro 6. Sono tetti: un lettore precoce ha anche falsi allarmi.
+2. **Un'informazione che preveda la gamba successiva, non la posizione in quella corrente.**
+   Riconoscere prima la svolta è stato provato (`detect.py`) e rende zero: il valore delle svolte è
+   la geometria del rumore. Le colonne di esaurimento sono le uniche col segno giusto sul rendimento
+   futuro in tutti i fold. Una scala più lunga (gambe a 24-48 barre) richiede di riaddestrare la v2.
 3. Le CLI di `threshold`, `stops` e `swingrule` leggono ancora il formato di `gru` (§16, punto 1).
    `strategy` legge già quello di `swing`.
 
