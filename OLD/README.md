@@ -74,6 +74,57 @@ Queste parti vivevano dentro moduli che restano. Il codice com'era sta al tag.
   mostra le colonne di candela di `swing.REDUCED`, cioè quelle che i modelli swing leggono davvero.
 - `pyproject.toml`: `lightgbm` esce dal gruppo dev; `scipy` resta per il self-check di `metrics`.
 
+## La policy, archiviata il 2026-10-04
+
+Il secondo stadio di `swing`: dopo la Huber sull'etichetta, la *direct reinforcement* di Moody e
+Saffell sul P&L netto, con la commissione dentro la ricompensa. Il codice gira al tag
+`archive-policy`, che punta a `6f7753e`: l'ultimo commit con lo stadio dentro e con la commissione
+di allora, lo 0,25% di Alpaca, a cui sono presi tutti i numeri qui sotto.
+
+```bash
+git worktree add ../TradingVision-policy archive-policy
+cd ../TradingVision-policy && uv sync
+uv run python -m tradingvision.swing --timeframe 4h --stage both --baseline
+```
+
+**Perché è uscito.** Nessuna strategia lo leggeva. `strategy`, `detect` e le regole della pagina
+leggono l'uscita grezza della testa dell'etichetta (`raw`), mai il logit della policy. E dove è
+stato misurato non ha battuto niente:
+
+| Dove | Regola | Lordo | Netto | Trade/anno | Batte l'hold |
+|---|---|---|---|---|---|
+| 4h, 20 coppie, 2023-01 → 2026-09 | policy letta a zero | 0,192 | +0,063 | 25,7 | 12/20 |
+| | testa dell'etichetta, banda e segno su validazione | 0,095 | +0,060 | 6,8 | 11/20 |
+| | policy, banda e segno su validazione | −0,006 | −0,042 | 7,1 | 5/20 |
+| | **`rsi_centered` > 0,3, una colonna** | 0,172 | **+0,116** | 11,1 | 11/20 |
+| | buy and hold | — | +0,057 | — | — |
+| v2, 15m, 4 fold da 2025-06 | `--stage both` | — | **zero trade su 4 fold su 4** | — | — |
+
+Sul 4h la policy guadagna quanto la banda sulla sola etichetta, a quasi quattro volte il turnover,
+e perde contro una colonna. Su v2 la ricompensa trova che il trade migliore è non farne: la gamba
+mediana a 12 barre vale il 2,4% contro lo 0,5% di andata e ritorno.
+
+**Che cosa è uscito.**
+
+- `models/swing.pt` → `OLD/models/swing.pt`: il modello a 4h dello step 7, stadio `both`.
+- `swing.py`, senza spostare il file:
+  - `fit_policy`, la testa `Net.policy` e `Net.adopt`, `episodes`;
+  - `--stage` (ora si allena solo l'etichetta) e `--band`;
+  - la lettura a zero di `book` (`params=None`);
+  - le costanti `CHUNK`, `CHUNKS`, `SHARPNESS`, `ADOPT`, `POLICY_LR`, e `MIN_BARS`, che leggeva solo la
+    pagina per il modello a 4h;
+  - il self-check sul giocattolo costruito perché la ricompensa ribalti il prior supervisionato.
+
+  `restore` scarta la testa `policy.*` dai checkpoint scritti prima: v2 la porta con sé non
+  allenata. I file `pos-swing-*` tengono il suffisso `-label`, che `strategy.PRED` legge.
+- `app/chart.py`:
+  - l'interruttore del modello a 4h;
+  - le quattro metriche sulla sua posizione: rendimento netto, buy and hold, e la quota
+    dell'oracolo raggiungibile e di quello in hindsight;
+  - il suo libro con la tabella dei trade.
+
+  La pagina disegna solo v2. Spenta la casella, restano l'etichetta, le feature e l'oracolo.
+
 ## L'eccezione: il fattore non ha fallito
 
 `factor.py` è predittivo e **non** è archiviato perché fallito: è l'unico risultato netto positivo

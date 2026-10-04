@@ -7,10 +7,10 @@ only one the project works on. Three predictive labels used to share this page w
 cross-sectional factor with its heatmaps; each was measured against the price and archived, and
 `OLD/README.md` says why one by one.
 
-Over the label the page draws the swing models' prediction of it — the 4h model of step 7, or v2
-on 15m — and the always-in rule of `threshold` on that *prediction* and never on the label,
-because the label is built from a centred window and a rule trading it would be reading
-`EXTREMA_WINDOW` bars of future. Two shapes on the candles keep that distinction visible: hollow
+Over the label the page draws v2's prediction of it on 15m — the 4h model of step 7 left with the
+policy stage it was trained by, see `OLD/README.md` — and the rule on that *prediction* and never
+on the label, because the label is built from a centred window and a rule trading it would be
+reading `EXTREMA_WINDOW` bars of future. Two shapes on the candles keep that distinction visible: hollow
 squares are the oracle's pivots, which do read the future, and filled triangles are the rule's
 own fills.
 
@@ -93,10 +93,10 @@ swing = optional("swing")
 
 # Where a checkpoint is looked for besides `data/`. `data/` is the store a training run writes to
 # and is gitignored, so nothing under it reaches the image; `models/` is tracked, which is how a
-# deployed page gets a model at all — commit `swing.pt` and `swing-v2.pt` there and Render serves the
-# predictions. `data/` is read first on purpose: on a machine that has just run `swing --save` the
-# fresh checkpoint is the one to draw, and a committed file silently shadowing it is the failure
-# mode worth avoiding. `TRADINGVISION_MODELS` overrides the directory for a mounted disk.
+# deployed page gets a model at all — commit `swing-v2.pt` there and Render serves the predictions.
+# `data/` is read first on purpose: on a machine that has just run `swing --save` the fresh
+# checkpoint is the one to draw, and a committed file silently shadowing it is the failure mode
+# worth avoiding. `TRADINGVISION_MODELS` overrides the directory for a mounted disk.
 MODELS = Path(os.environ.get("TRADINGVISION_MODELS") or Path(__file__).resolve().parents[3] / "models")
 
 
@@ -231,7 +231,7 @@ def load_swing_model(path: str, _mtime: float):
 
 @st.cache_data(show_spinner="Running the swing model…")
 def load_swing(df, path: str, _mtime: float, symbol: str | None = None):
-    """`label`, `logit` and `position` at every bar on screen.
+    """`label`, `raw` and `position` at every bar on screen.
 
     The model needs no store: its inputs are computed from the candles on screen. `symbol` picks
     the training scaler the checkpoint ships for that pair, when it ships one; a pair the training
@@ -791,8 +791,7 @@ def main() -> None:
         "Timeframe",
         list(TIMEFRAMES),
         index=1,
-        help="the length of one candle. Each model draws only on the timeframe it was trained on: v2 on 15m, "
-        "the older swing model on 4h",
+        help="the length of one candle. Each model draws only on the timeframe it was trained on: v2 on 15m",
     )
     days = st.sidebar.slider(
         "Days of history",
@@ -820,10 +819,12 @@ def main() -> None:
             f"time weight {v2_card['smoothing']}, {len(v2_card['inputs'])} inputs x {v2_card['steps']} bars, "
             f"trained to {v2_card['test_start']}",
         )
-    elif swing is not None:
+    elif swing is None:
+        st.sidebar.caption("This install has no torch, so no swing model.")
+    else:
         st.sidebar.caption(
             f"No {V2} model. `python -m tradingvision.swing --timeframe 15m --window 12 --smoothing 0.5 "
-            f"--inputs reduced --steps 48 --stage label --test-start 2025-06 --save data/{V2_CHECKPOINT}`, "
+            f"--inputs reduced --steps 48 --test-start 2025-06 --save data/{V2_CHECKPOINT}`, "
             f"then copy it into `{MODELS.name}/`."
         )
     feature_window = v2_card["window"] if v2 else EXTREMA_WINDOW
@@ -884,29 +885,6 @@ def main() -> None:
         "reads on the same axis",
     )
 
-    # The swing model of step 7, `swing.pt`. Drawn only on the timeframe it was fitted on: its
-    # inputs are windows of that bar and nothing rescales them between one bar and another.
-    swing_at = saved(swing)
-    swing_card = load_swing_model(str(swing_at), swing_at.stat().st_mtime)[1] if swing_at else None
-    swinging = False
-    if swing is None:
-        st.sidebar.caption("This install has no torch, so no swing model.")
-    elif v2:
-        pass  # the step-7 model reads 24-bar pivots on another timeframe; under v2 it has no line
-    elif not swing_at:
-        st.sidebar.caption(
-            f"No swing model. `python -m tradingvision.swing --save`, then copy it into `{MODELS.name}/`."
-        )
-    elif timeframe != swing_card["timeframe"]:
-        st.sidebar.caption(f"The swing model reads **{swing_card['timeframe']}** candles.")
-    else:
-        swinging = st.sidebar.toggle(
-            "Draw the 4h swing model",
-            value=True,
-            help=f"the step-7 model and its trades. {swing_at.name}, stage {swing_card['stage']}, "
-            f"trained to {swing_card['test_start']}",
-        )
-
     # v2 draws on the timeframe it was fitted on and nowhere else, like every model here.
     v2_drawn = v2 and timeframe == v2_card["timeframe"]
     if v2 and not v2_drawn:
@@ -921,7 +899,7 @@ def main() -> None:
     ruling, rule, band, turn_window, mean, inverse, filtered = False, "band", THRESHOLD, 12, 1, False, False
     h, posterior, hindsight, level, level_close = 0.2, POSTERIORS[0], False, 0.0, True
     take, stop, after_stop, after_take, tie_stop, trail = None, None, stops.AFTER[0], stops.AFTER[0], True, False
-    if swinging or v2_drawn:
+    if v2_drawn:
         st.sidebar.subheader("Trading strategy")
         ruling = st.sidebar.toggle(
             "Trade the prediction",
@@ -930,9 +908,8 @@ def main() -> None:
             "its returns, with the same code the study priced (`strategy`, `detect`)",
         )
         if ruling:
-            offered = [r for r in RULES if r != "shiryaev" or v2_drawn]
             rule = st.sidebar.selectbox(
-                "Strategy", offered, index=offered.index(RULE), format_func=RULES.get, help=RULES_HELP
+                "Strategy", list(RULES), index=list(RULES).index(RULE), format_func=RULES.get, help=RULES_HELP
             )
             if rule in BANDED:
                 # A constant and not a quantile: a quantile would move with the model, and a
@@ -1111,7 +1088,7 @@ def main() -> None:
         f"**Feature window** &nbsp; {feature_window} bars — "
         + (f"{V2}'s, with its pivots" if v2 else "calibrated, see the spec")
         + "  \n"
-        f"**Fee** &nbsp; {FEE * 100:.2f}% per side, {FEE * 200:.2f}% round trip — Alpaca taker tier 1"
+        f"**Fee** &nbsp; {FEE * 100:.2f}% per side, {FEE * 200:.2f}% round trip — OKX spot taker, regular tier"
     )
 
     if "fetched" not in st.session_state:
@@ -1126,17 +1103,6 @@ def main() -> None:
     pivots = load_pivots(df.close, leg_window)
     target = load_target(df.close, leg_window, smoothing, significance)
     pair = store_name(fetched[0])
-    swung = load_swing(df, str(swing_at), swing_at.stat().st_mtime, pair) if swinging else None
-    if swung is not None and not swung.position.notna().any():
-        # Not an error and not an empty chart: the model reads 24 bars of history through features
-        # that need another hundred behind them, so a short window leaves nothing to score. Said
-        # here rather than drawn as a flat line, which would read as "the model does nothing".
-        st.info(
-            f"The swing model needs about {swing.MIN_BARS} scorable {fetched[1]} bars behind the "
-            f"window — this one has {len(df)} candles in total. Widen **History (days)**."
-        )
-        swung = None
-    swing_pos = swung.position.fillna(0.0) if swung is not None else None
     # v2's line, on the label's own range: the calibration fitted on train maps the head's shrunk
     # output back onto +-1, monotonically, so the always-in band reads it in the label's units.
     v2_line = load_swing(df, str(v2_at), v2_at.stat().st_mtime, pair) if v2_drawn else None
@@ -1153,15 +1119,12 @@ def main() -> None:
         )
     strength = load_significance(df.close, leg_window)
     feats = load_features(df, feature_window, tuple(COLUMNS))[picked]
-    # One model at a time: v2 when its box is ticked, the step-7 model otherwise. Both are
-    # calibrated back onto the label's own range on the way out, so the two lines in the second
-    # row share a unit as well as an axis. The map is fitted on the train period and stored in the
+    # Calibrated back onto the label's own range on the way out, so the two lines in the second row
+    # share a unit as well as an axis. The map is fitted on the train period and stored in the
     # checkpoint; it is monotone, so it moved no decision on the way here.
     pred, raw = None, None
     if v2_line is not None:
         pred, raw = v2_line.label.rename("prediction"), v2_line.raw
-    elif swung is not None:
-        pred, raw = swung.label.rename("prediction"), swung.raw
     # The rule, on one pair lifted into the one-symbol panel every `strategy` function reads. Same
     # signals, same state machine (`stops.walk`), same filter and same fill arithmetic as the study's
     # tables — there is no second implementation here to drift away from the one that was priced.
@@ -1229,39 +1192,6 @@ def main() -> None:
     columns = st.columns(2)
     columns[0].metric("Oracle net return", f"{stats['net_return'] * 100:,.1f}%", f"{stats['trades']} legs")
     columns[1].metric("Avg gross leg", f"{stats['gross_trade_pct']:.2f}%", f"{stats['win_rate'] * 100:.0f}% above fees")
-
-    if swung is not None:
-        # What the model made on the window on screen, against the two oracles. The first is the
-        # hindsight one the page has always shown; the second is the same oracle filling `W` bars
-        # later, which is the earliest a pivot of a centred window can be known to anybody and
-        # therefore the only one of the two a causal rule could reach. Measured over twenty pairs
-        # the second is 7% of the first, and quoting the model against the first alone would
-        # describe a 7x gap that no model can close.
-        span = float((df.index[-1] - df.index[0]) / swing.YEAR)
-        got = swing.price(swing_pos.to_numpy(), df.close.to_numpy(), span, FEE)
-        reachable = run(df.close, leg_window, FEE, pivots=pivots, lag=leg_window)
-        mine = got["log_per_year"] * span
-        best = stats["log_per_year"] * span
-        near = reachable["log_per_year"] * span
-        row = st.columns(4)
-        row[0].metric(
-            "Swing net return",
-            f"{np.expm1(mine) * 100:+.1f}%",
-            f"{got['trades']} trades"
-            + (f", {got['win_rate'] * 100:.0f}% win" if got["trades"] else "")
-            + f", {got['in_market'] * 100:.0f}% in market",
-        )
-        row[1].metric("Buy and hold", f"{(df.close.iloc[-1] / df.close.iloc[0] - 1) * 100:+.1f}%", "same window")
-        row[2].metric(
-            "Of the reachable oracle",
-            f"{mine / near * 100:+.0f}%" if near else "—",
-            f"{np.expm1(near) * 100:+.0f}% filling {leg_window} bars after each pivot",
-        )
-        row[3].metric(
-            "Of the hindsight oracle",
-            f"{mine / best * 100:+.1f}%" if best else "—",
-            f"{np.expm1(best) * 100:,.0f}% — it reads the future",
-        )
 
     if fills is not None:
         # Fees per side on every entry and every exit that happened; a hold still open at the right
@@ -1432,7 +1362,7 @@ def main() -> None:
             "-".join(map(str, fetched)),
             normalized,
             pred,
-            rule_pos if rule_pos is not None else swing_pos,
+            rule_pos,
             fills if fills is not None else None,
             panels,
         ),
@@ -1454,36 +1384,6 @@ def main() -> None:
             use_container_width=True,
             key="rule-book",
         )
-    if swung is not None:
-        # The book on the only benchmark a single pair has: holding it. Three curves and the two
-        # gaps between them — gross to net is the fee, net to hold is the whole of what timing the
-        # legs was worth.
-        ret = np.log(df.close.shift(-1) / df.close).fillna(0.0)
-        swing_per = pd.DataFrame(
-            {"gross": swing_pos * ret, "traded": swing_pos.diff().fillna(swing_pos).abs(), "basket": ret}
-        )
-        st.plotly_chart(
-            book(swing_per, swing_pos, fetched[0], "position", "buy and hold"),
-            use_container_width=True,
-            key="swing-book",
-        )
-        held = swing.trades(swing_pos.to_numpy(), df.close.to_numpy(), FEE)
-        st.caption(
-            f"Long or flat, one unit, entered and exited at the close of the bar the model decided "
-            f"on — the oracle's own shape, so the two are priced by the same arithmetic. "
-            f"{len(held)} round trips over this window"
-            + (
-                f", median {held.leg.median() * 100:+.2f}% and {held.bars.median():.0f} bars, "
-                f"{(held.leg > 0).mean() * 100:.0f}% of them positive"
-                if len(held)
-                else ""
-            )
-            + f". {FEE * 100:.2f}% per side is charged on both fills. Stage "
-            f"**{swing_card['stage']}**: the encoder is fitted on the leg label and, past that, "
-            f"the position itself is trained on the money — rewarded by what it earned, charged "
-            f"for every change of mind at the fee it would really pay."
-        )
-
     st.caption(
         f"{len(df)} candles — {df.index[0]:%Y-%m-%d %H:%M} to {df.index[-1]:%Y-%m-%d %H:%M} UTC · "
         f"{len(pivots)} pivots, median leg {pivots.amplitude.median() * 100:.2f}% · "

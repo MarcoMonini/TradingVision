@@ -1,7 +1,7 @@
 """A trading strategy on the v2 prediction, built one entry and exit rule at a time.
 
 The prediction is v2's (`swing --timeframe 15m --window 12 --smoothing 0.5 --inputs reduced
---steps 48 --stage label --test-start 2025-06`), out of sample on its four walk-forward folds. Each
+--steps 48 --test-start 2025-06`), out of sample on its four walk-forward folds. Each
 step adds one rule to the rule before it and has to beat it on the same rows.
 
 **The protocol, fixed before any rule was priced.**
@@ -21,7 +21,8 @@ step adds one rule to the rule before it and has to beat it on the same rows.
   calendars per asset would make SOL a bear market until June 2026. Development holds about 4 months of
   bull and 4 of bear, the hold-out 5 of bear and only 3 of bull.
 - *No fees* for now, so every number is gross. `bp_trade` is the one that decides whether a rule
-  survives the fee: the round trip is 50 bp at Alpaca's taker tier and about 20 bp as a maker.
+  survives the fee: the round trip is 20 bp at OKX's taker tier (`oracle.FEE`). It was 50 bp at
+  Alpaca's, the figure the numbers below were read against.
 
 **What step 1 found that shapes the rules.** In the bottom 10% of the prediction, where the band
 buys, the price falls about 3 bp over the next 12 bars on 13 of 15 pairs. In the top 10%, where it

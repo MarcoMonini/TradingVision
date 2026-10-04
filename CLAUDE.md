@@ -54,8 +54,8 @@ Pipeline modules, each a `python -m` entry point, in the order they depend on ea
 uv run python -m tradingvision.data.binance          # fill data/ first; everything reads it
 uv run python -m tradingvision.data.futures          # funding, open interest, taker flow, book depth (BTC/ETH/SOL)
 uv run python -m tradingvision.oracle                # step 0: fixes EXTREMA_WINDOW
-uv run python -m tradingvision.swing --timeframe 4h --baseline        # step 7: the tradable swing rule
-uv run python -m tradingvision.swing --timeframe 15m --window 12 --smoothing 0.5 --inputs reduced --steps 48 --stage label --test-start 2025-06 --save data/swing-v2.pt  # Swing Leg Position v2
+uv run python -m tradingvision.swing --timeframe 4h --baseline        # step 7: the swing label's band, against one-column rules
+uv run python -m tradingvision.swing --timeframe 15m --window 12 --smoothing 0.5 --inputs reduced --steps 48 --test-start 2025-06 --save data/swing-v2.pt  # Swing Leg Position v2
 # The three rules below read `pred-swing-*.parquet` in the format the archived `gru` wrote, which
 # nothing writes any more; reconnecting them to `swing`'s `pos-swing-*.parquet` is HANDOFF §16, item 1.
 uv run python -m tradingvision.swingrule --pred data/pred-swing-*.parquet  # the long-only rule on the swing label
@@ -65,17 +65,19 @@ uv run python -m tradingvision.strategy --candidates --at 0.40  # the rule study
 uv run python -m tradingvision.detect --shiryaev 0.5 0.9 0.99 --split  # recognising v2's turns causally: what it earns
 ```
 
-`swing --save` writes `data/swing.pt`, and v2 is `--save data/swing-v2.pt`; the page reads the store
-first and `models/` after, which is the only directory a checkpoint reaches the Render image in —
-`data/` is gitignored. Each model is drawn only on the timeframe it was fitted on, and the v2
-checkbox pins the label's smoothing and window to the ones in its checkpoint.
+`swing --save` writes `data/swing.pt`, and v2 is `--save data/swing-v2.pt`, the only checkpoint the
+page draws; the page reads the store first and `models/` after, which is the only directory a
+checkpoint reaches the Render image in — `data/` is gitignored. v2 is drawn only on the timeframe
+it was fitted on, and its checkbox pins the label's smoothing and window to the ones in its checkpoint.
 
 ## Architecture
 
 **The store** — `data/` holds one Parquet per (symbol, interval) from the Binance public dumps
-(`data.binance`, no API key, 2017+). Alpaca (`data.candles`) is the live feed the chart page uses
-and the venue whose fees every cost figure assumes; its history is too short for training. `data/`
-is gitignored; runs are reproduced by re-fetching.
+(`data.binance`, no API key, 2017+). Alpaca (`data.candles`) is the live feed the chart page uses;
+its history is too short for training. Every cost figure is OKX's spot taker fee, `oracle.FEE` =
+0.10% a side, the venue the rules would trade on; every number measured before 2026-10-04 was taken
+at Alpaca's 0.25%, so reproduce one with `--fee 0.0025`. `data/` is gitignored; runs are reproduced
+by re-fetching.
 
 **Three universes, in `data.binance`.** `SYMBOLS` is the training universe (15 pairs, chosen on
 liquidity and data quality, no meme coin) and every module's default. `TRADABLE` is its subset
@@ -118,9 +120,11 @@ it is the definition of knowing the label exactly.
 **Correlation with the label is not the objective.** A ridge on the features plus the causal leg
 state reaches 0.62 time-series correlation with `swing_leg_target` and still loses money, because
 its residual concentrates at the turns, which is where every trade is opened and closed. `swing`
-therefore trains twice: a Huber on the label to put leg structure in the encoder, then direct
-policy optimisation on the net P&L with the fee inside the reward (`swing.fit_policy`). The reward
-is paid on *detrended* returns — otherwise the best policy is buy and hold and the stage finds it.
+used to train twice for that reason — a Huber on the label, then direct policy optimisation on the
+net P&L with the fee inside the reward — and the second stage is archived (`OLD/README.md`, tag
+`archive-policy`): on 4h it lost to one column, on v2 it converged on no trade, and no rule of
+`strategy` or `detect` read it. `swing` now fits the label alone and picks a band on its output;
+the money is the rules' job, priced on the prediction they read.
 
 **Pivots have a causal twin.** `data.pivots.find_pivots` is centred and is the label's side of the
 problem; `legs.confirmed` is the timeline a live reader would have held, with each turn dated from
@@ -160,8 +164,8 @@ runtime and importing both aborts with `OMP: Error #15`. It left with `gbm` in t
 
 **A strategy that cannot beat one indicator is not a strategy.** `swing --baseline` prices four
 one-column rules on exactly the rows the walk-forward tested. `rsi_centered` above 0.3 nets +0.116
-log a year on 4h bars against +0.063 for the two-stage model at three times its turnover; keep that
-row in front of any claim about the model.
+log a year on 4h bars against +0.063 for the archived two-stage model at three times its
+turnover, at Alpaca's 0.25%; keep that row in front of any claim about the model.
 
 Self-checks live at the bottom of each module as asserts under `if __name__ == "__main__"` (or a
 `_selfcheck()` function when the `__main__` is the real run), not in a mirrored test file.

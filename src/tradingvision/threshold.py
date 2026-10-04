@@ -298,7 +298,7 @@ def by_move(
             long_share=("side", lambda x: float((x > 0).mean())),
             # Direction only, before the fee. It is the column that answers "was the rule on the
             # right side", and it is the one to read down the table: `win_rate` charges a constant
-            # 0.50% round trip against a bucket's own move, so the quiet buckets fail it for being
+            # round trip against a bucket's own move, so the quiet buckets fail it for being
             # quiet and the comparison between rows would be a comparison of move sizes.
             hit_rate=("hit", "mean"),
             win_rate=("win", "mean"),
@@ -475,7 +475,7 @@ def main() -> None:
         default=list(QUANTILES),
         help="quantiles of |prediction| to take the thresholds at",
     )
-    ap.add_argument("--fee", type=float, default=FEE, help="per side; the default is Alpaca taker tier 1")
+    ap.add_argument("--fee", type=float, default=FEE, help="per side; the default is OKX spot taker, regular tier")
     ap.add_argument(
         "--sign",
         type=int,

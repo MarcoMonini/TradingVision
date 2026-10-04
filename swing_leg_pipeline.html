@@ -169,6 +169,13 @@ footer{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);color:v
     e il purging leggeva il pivot successivo invece di <code>legs.label_reach</code>. Il <strong>modello B</strong>,
     <code>swing.py</code> (lo step 7 a 4h e la v2 a 15m), è quello vivo. Le sezioni II.8, II.12, II.14 e II.15 e le
     parti sul modello A restano come documento storico; <code>OLD/README.md</code> dice perché ogni pezzo è uscito.</p>
+    <h4>Aggiornamento 2026-10-04 — il secondo stadio esce, e la commissione è di OKX</h4>
+    <p>Lo stadio 2 del modello B (<code>fit_policy</code>, la testa di policy, <code>--stage</code>) e il modello a 4h
+    dello step 7 (<code>swing.pt</code>) sono in <code>OLD/</code>, al tag <code>archive-policy</code>: nessuna regola di
+    <code>strategy</code> o <code>detect</code> leggeva la policy, sul 4h perdeva contro una colonna e su v2 convergeva su
+    zero trade. <code>swing</code> allena solo l'etichetta e sceglie una banda sulla validazione; la pagina disegna solo
+    v2. Le parti sullo stadio 2 restano come documento storico. La commissione è ora quella spot taker di OKX, 0,10%
+    per lato (<code>oracle.FEE</code>); i numeri di questo documento sono presi allo 0,25% di Alpaca.</p>
   </div>
   <nav class="toc" aria-label="Indice">
     <div class="part">Parte I — La lezione</div>
@@ -196,7 +203,7 @@ footer{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);color:v
     <a href="#d10"><span class="n">II.10</span>Split, purging esatto e walk-forward</a>
     <a href="#d11"><span class="n">II.11</span>Normalizzazione robusta con clip</a>
     <a href="#d12"><span class="n">II.12</span>GRU a ramo singolo 15m sull'etichetta swing — archiviato</a>
-    <a href="#d13"><span class="n">II.13</span>Il modello swing a due stadi</a>
+    <a href="#d13"><span class="n">II.13</span>Il modello swing a due stadi — stadio 2 archiviato</a>
     <a href="#d14"><span class="n">II.14</span>La griglia <code>legsweep</code>: 9 smoothing × 13 finestre — archiviato</a>
     <a href="#d15"><span class="n">II.15</span>Come si misura il modello A — cross-sectional — archiviato</a>
     <a href="#d16"><span class="n">II.16</span>Cosa hanno prodotto questi modelli</a>
@@ -687,6 +694,7 @@ h_t = (1 − z) ⊙ h̃ + z ⊙ h_{t−1}               ⊙ = prodotto elemento 
     <p>I pesi iniziali e l'ordine dei batch sono casuali; il <strong>seed</strong> è il numero che fissa quella casualità, così la run è ripetibile. Ogni misura si ripete con 5 seed e si riporta media ± deviazione standard: se due modelli differiscono meno della variabilità fra seed, non si sa quale sia migliore.</p>
   </div>
   <h3>Il secondo addestramento del modello B: imparare a guadagnare</h3>
+  <div class="box open"><p><strong>Archiviato il 2026-10-04.</strong> Questo secondo addestramento è uscito dal progetto con la testa di policy: <code>OLD/README.md</code> ha i numeri, il tag git <code>archive-policy</code> il codice. Resta qui perché spiega come si ottimizza il denaro direttamente, e perché non è bastato.</p></div>
   <p>Il modello B ha una seconda testa, la <strong>policy</strong>, che decide la posizione: 1 = comprato, 0 = fuori mercato. Una decisione "sì/no" non ha gradiente, quindi la si rende morbida con una sigmoide: <code>p = σ(k · logit)</code>. Poi si ottimizza direttamente il guadagno netto di una sequenza di 256 candele: <code>Σ [p·rendimento − commissione·|variazione di p|]</code>. Il prezzo non dipende dal modello, quindi il gradiente di questo guadagno è esatto.</p>
   <figure>
     <p class="fighead">La sigmoide e la sua nitidezza k</p>
@@ -1455,6 +1463,7 @@ test  = df[open_time &gt;= cut]</pre>
 <section id="d13">
   <h2><span class="n">II.13</span> · Modello B</h2>
   <p class="h2sub">Il modello swing a due stadi</p>
+  <div class="box open"><p><strong>Archiviato il 2026-10-04.</strong> Lo stadio 2 (<code>fit_policy</code>, la testa <code>policy</code>, <code>adopt</code>, <code>--stage</code>, <code>--band</code>) e il checkpoint a 4h <code>swing.pt</code> sono in <code>OLD/</code>, e il codice gira al tag <code>archive-policy</code>. Oggi <code>swing.Net</code> ha una testa sola, <code>valid_score</code> è la sola correlazione con l'etichetta e la banda di <code>choose</code> si sceglie sempre sulla validazione. Lo stadio 1 qui sotto è quello vivo; il resto della sezione è documento storico.</p></div>
   <p class="back">Concetti di base: <a href="#l9">lezione 9 · L’addestramento</a> · <a href="#l11">lezione 11 · Dai numeri ai soldi</a></p>
   <p class="lead">Una ridge sulle 29 feature più lo stato della gamba arriva a 0,623 di correlazione con l'etichetta e perde 0,29 l'anno: i suoi errori si concentrano sulle svolte, dove ogni trade si apre e si chiude. Quindi si addestra due volte: prima sull'etichetta, per mettere la struttura della gamba nell'encoder; poi direttamente sul denaro.</p>
   <figure>
@@ -1676,6 +1685,7 @@ loss   = −mean_episodi(R) + 0,1 · Huber(ŷ, y)          anchor: l'encoder non
 <section id="d18">
   <h2><span class="n">II.18</span> · Inferenza</h2>
   <p class="h2sub">Dal checkpoint alla pagina Streamlit</p>
+  <div class="box open"><p><strong>Archiviato il 2026-10-04.</strong> Con lo stadio 2 escono il modello a 4h e la colonna <code>logit</code>: <code>swing.predict_frame</code> restituisce <code>label</code>, <code>raw</code> e <code>position</code> (la banda del checkpoint sulla testa di etichetta), e la pagina carica solo <code>swing-v2.pt</code>. <code>restore</code> scarta la testa <code>policy.*</code> che i checkpoint scritti prima si portano dietro.</p></div>
   <div class="tw"><table>
     <caption>le due funzioni di inferenza a confronto</caption>
     <thead><tr><th></th><th><code>gru.predict_frame</code></th><th><code>swing.predict_frame</code></th></tr></thead>

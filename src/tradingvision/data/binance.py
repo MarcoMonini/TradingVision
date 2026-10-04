@@ -49,9 +49,10 @@ SYMBOLS = [
     "LINK", "NEAR", "FIL", "DOT", "BCH", "AAVE", "UNI",
 ]  # fmt: skip
 
-# The pairs of SYMBOLS that Alpaca serves, checked against its feed on 2026-09-27: every cost
-# figure in the project is Alpaca's fee, so only these can be traded, and a metric that means money
-# is read on these alone. BNB and NEAR stay in training; Alpaca lists neither.
+# The pairs of SYMBOLS that Alpaca serves, checked against its feed on 2026-09-27: Alpaca is the
+# chart page's live feed, so these are the pairs it can draw, and a metric that means money is read
+# on these alone. The fee is OKX's (`oracle.FEE`), whose listing has not been checked against this.
+# BNB and NEAR stay in training; Alpaca lists neither.
 TRADABLE = [s for s in SYMBOLS if s not in ("BNB", "NEAR")]
 
 BASE = "https://data.binance.vision/data/spot"

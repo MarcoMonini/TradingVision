@@ -178,7 +178,7 @@ pre { margin: 0; background: var(--surface); border: 1px solid var(--rule); bord
     <div class="sechead"><div class="step">PROTOCOLLO</div><h2>Le regole fissate prima di prezzare qualunque strategia</h2></div>
     <div class="spec">
       <dl>
-        <dt>Modello</dt><dd>v2: <code>swing --timeframe 15m --window 12 --smoothing 0.5 --inputs reduced --steps 48 --stage label --test-start 2025-06</code>, predizioni fuori campione su 4 fold walk-forward.</dd>
+        <dt>Modello</dt><dd>v2: <code>swing --timeframe 15m --window 12 --smoothing 0.5 --inputs reduced --steps 48 --test-start 2025-06</code>, predizioni fuori campione su 4 fold walk-forward.</dd>
         <dt>Asset</dt><dd>I tre quotati su Alpaca con il Rank IC più alto contro l'etichetta sui fold 1-2: ETH, BTC, SOL.</dd>
         <dt>Sviluppo</dt><dd>Fold 1-2, 2025-06-01 → 2026-01-28. Qui si sceglie tutto: soglie, varianti, uscite, filtri.</dd>
         <dt>Hold-out</dt><dd>Fold 3-4, 2026-01-28 → 2026-09-26. Letto una volta sola, sulle regole fissate in anticipo. Ora è usato.</dd>

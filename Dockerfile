@@ -12,19 +12,19 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY src ./src
 RUN uv sync --frozen --no-dev
 
-# The checkpoints the page draws predictions from. `data/` is gitignored and never enters the
+# The checkpoint the page draws predictions from. `data/` is gitignored and never enters the
 # image, so `models/` is the only way a trained model reaches Render — see models/README.md.
 COPY models ./models
 
 # The build fails here rather than at the first request. It asserts the two things that were once
 # broken at the same moment and that CI cannot see, because the image job builds the container and
 # never starts it: that `--no-dev` really carries torch, which `swing` imports at module scope and
-# whose absence used to take the page down before Streamlit drew anything, and that both swing
-# checkpoints landed under the directory `chart.MODELS` resolves to. Spelled from the code's own
-# names so a rename cannot leave this checking a file nobody looks for.
-RUN python -c "from pathlib import Path; from tradingvision import swing; \
+# whose absence used to take the page down before Streamlit drew anything, and that v2's
+# checkpoint landed under the directory `chart.MODELS` resolves to. Spelled from the code's own
+# name so a rename cannot leave this checking a file nobody looks for.
+RUN python -c "from pathlib import Path; import tradingvision.swing; \
     from tradingvision.app.chart import V2_CHECKPOINT; \
-    assert all(Path('models', n).exists() for n in (swing.CHECKPOINT.name, V2_CHECKPOINT))"
+    assert Path('models', V2_CHECKPOINT).exists()"
 
 # Stateless: the page draws Alpaca downloads and the committed checkpoints only. The Parquet store
 # under data/ is read by the oracle sweep and the Binance fetcher, neither of which runs here, so

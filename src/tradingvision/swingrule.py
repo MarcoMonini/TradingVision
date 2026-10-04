@@ -380,7 +380,7 @@ def main() -> None:
     ap.add_argument("--quantiles", type=float, nargs="+", default=list(QUANTILES), help="band quantiles of |pred|")
     ap.add_argument("--window", type=int, default=0, help="rolling rows for the band; 0 is expanding")
     ap.add_argument("--fixed", nargs="*", type=float, help="price these raw thresholds too, e.g. --fixed 0.4 0.8")
-    ap.add_argument("--fee", type=float, default=FEE, help="per side; the default is Alpaca taker tier 1")
+    ap.add_argument("--fee", type=float, default=FEE, help="per side; the default is OKX spot taker, regular tier")
     ap.add_argument("--smooth", type=int, default=1, help="output low-pass over each symbol's own rows")
     ap.add_argument("--sign", type=int, default=-1, choices=[-1, 1], help="-1 for the swing label, +1 for excursion")
     ap.add_argument("--rotations", type=int, default=500, help="draws for the rotation null; 0 skips it")
