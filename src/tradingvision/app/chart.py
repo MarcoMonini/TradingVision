@@ -22,7 +22,7 @@ warning, as the diagnostic it is. Two more are `detect`'s turn detectors: the zi
 when the prediction comes back h from its extreme, and Shiryaev's, which flips when the probability
 that the leg has turned reaches p, on the parameters fitted on v2's development folds. Either trades
 only the turns from past a level (`detect.gate`, opening at 0.5 and 0.6, chosen on development);
-any other signal closes the position and is drawn grey. Each reads
+any other signal closes the position, or on request is ignored, and is drawn grey. Each reads
 the prediction or its mean over the last k bars, can take every trade on the other side, and can
 trade only while BTC is under its 200-day mean, read on Alpaca's daily closes fetched with the
 candles.
@@ -170,8 +170,8 @@ POSTERIORS = (0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.98, 0.99)  # the thresholds `dete
 # The level each detector opens on, with its own default (h 0.2, p 0.5), chosen on development alone: of
 # h 0.1-0.5 or p 0.5-0.99 by L 0.4/0.5/0.6, the best gross a trade with both folds 1-2 positive. Zigzag
 # +12.5 bp on 93 trades, Shiryaev +15.8 on 81, with the 6 ATR stop; on the hold-out +19.2 and +28.4, every
-# fold positive, and both under the 50 bp round trip. Holding the side through a dropped signal instead of closing was
-# removed: Shiryaev 0.5 with a 6 ATR stop made -25 / +52 / -91 bp on development at L 0.50 / 0.55 / 0.60.
+# fold positive, and both under the 50 bp round trip. Holding the side through a dropped signal is an option,
+# off: Shiryaev 0.5 with a 6 ATR stop made -25 / +52 / -91 bp on development at L 0.50 / 0.55 / 0.60.
 LEVEL = {"zigzag": 0.5, "shiryaev": 0.6}
 TURN_WINDOWS = (6, 12, 24, 48)  # the grid `strategy --hindsight` measured
 MEANS = (1, 2, 4, 8)  # the moving averages `strategy --smooth` measured
@@ -635,6 +635,7 @@ def rule_panels(
     h: float,
     dropped: pd.Series | None = None,
     level: float = 0.0,
+    closes: bool = True,
 ) -> list[dict]:
     """The rule's rows: what it reads, where it asked for a side, and what a detector decided on.
 
@@ -644,7 +645,8 @@ def rule_panels(
     what was asked. `turns` are the input's own centred turns, which read the future; with them
     each marker is judged, filled on the right side of the leg it was taken in and hollow when the
     leg it bet against was still running, as `detect.kinds` judges an alarm. `dropped` are the
-    detector's alarms the level gate (`detect.gate`) refused, drawn grey, and `level` its two lines.
+    detector's alarms the level gate (`detect.gate`) refused, drawn grey, and `level` its two lines;
+    `closes` is whether a refused alarm closed the position or was ignored.
     """
     asked = signal.replace(0.0, np.nan)
     asked = asked[asked.notna() & (asked != asked.ffill().shift())]
@@ -708,7 +710,9 @@ def rule_panels(
                 marker=dict(size=9, symbol="x-thin", color="#7f8c8d", line=dict(width=2, color="#7f8c8d")),
                 name="dropped",
                 showlegend=False,
-                hovertemplate="%{x}<br>a turn inside ±L: closes the position, opens nothing<extra></extra>",
+                hovertemplate="%{x}<br>a turn inside ±L: "
+                + ("closes the position, opens nothing" if closes else "ignored, the position is held")
+                + "<extra></extra>",
             )
         )
     lines = [band, -band] if rule in BANDED else [level, -level] if level else []
@@ -915,7 +919,7 @@ def main() -> None:
     # it is not. The one exception is the hindsight-turns rule, which reads the future on purpose
     # and is labelled as the diagnostic it is.
     ruling, rule, band, turn_window, mean, inverse, filtered = False, "band", THRESHOLD, 12, 1, False, False
-    h, posterior, hindsight, level = 0.2, POSTERIORS[0], False, 0.0
+    h, posterior, hindsight, level, level_close = 0.2, POSTERIORS[0], False, 0.0, True
     take, stop, after_stop, after_take, tie_stop, trail = None, None, stops.AFTER[0], stops.AFTER[0], True, False
     if swinging or v2_drawn:
         st.sidebar.subheader("Trading strategy")
@@ -975,8 +979,8 @@ def main() -> None:
                 )
             if rule in DETECTORS:
                 # Trade only the turns from an extreme: a long from at or under −L, a short from at or
-                # over +L. Every other signal still says the leg has ended, so it closes the position
-                # and the rule stands flat (`detect.gate`, close=True).
+                # over +L. Every other signal still says the leg has ended, so by default it closes the
+                # position and the rule stands flat (`detect.gate`, close=True); held through, it is ignored.
                 level = st.sidebar.slider(
                     "Enter only at turns beyond ±L",
                     0.0,
@@ -986,10 +990,21 @@ def main() -> None:
                     help="a long opens only at a turn up with the raw prediction at or below −L, a short only at a "
                     "turn down at or above +L. **Every turn the detector calls closes the open position**, "
                     "wherever it is: a turn inside ±L closes it and the strategy waits flat (a grey ✕ in the "
-                    "strategy's row). 0 enters at every turn. The defaults, 0.5 for the zigzag and 0.6 for the "
-                    "Bayesian, were chosen on the development folds and were positive on every fold, under the "
-                    "0.5% round trip",
+                    "strategy's row), unless the switch below holds through it. 0 enters at every turn. The "
+                    "defaults, 0.5 for the zigzag and 0.6 for the Bayesian, were chosen on the development folds "
+                    "and were positive on every fold, under the 0.5% round trip",
                 )
+                if level:
+                    level_close = not st.sidebar.toggle(
+                        "Hold through the turns inside ±L",
+                        value=False,
+                        help="off, a turn inside ±L closes the open position and the strategy waits flat. On, it is "
+                        "ignored: the position is held until a turn beyond ±L on the other side, or the stop. Held "
+                        "for days, the result becomes the market's direction in those days: over sixteen months, "
+                        "development / hold-out, the zigzag at 0.5 made +22.5 / −73.4 bp a trade and the Bayesian "
+                        "at 0.6 −90.8 / +86.1, against +12.5 / +19.2 and +15.8 / +28.4 closing; the Bayesian made "
+                        "−25 / +52 / −91 on development at L 0.50 / 0.55 / 0.60",
+                    )
             if rule not in DETECTORS:
                 # The detectors were fitted on the prediction bar by bar; a mean would change the very
                 # increments their evidence is measured on.
@@ -1175,7 +1190,7 @@ def main() -> None:
         if trace is not None:
             alarm = threshold.on_one(trace.alarm)
             if level:
-                kept, gated = detect.gate(alarm, threshold.on_one(live), level)
+                kept, gated = detect.gate(alarm, threshold.on_one(live), level, close=level_close)
                 dropped, alarm = alarm.where(kept == 0, 0.0).droplevel(1), kept
                 allowed = gated if allowed is None else allowed & gated
             sig = -alarm if inverse else alarm
@@ -1199,7 +1214,9 @@ def main() -> None:
             judged = detect.match(sig, turns, live.index[-1] + pd.Timedelta("1D"))
         if turns is not None:
             turns = turns.droplevel(1)
-        panels = rule_panels(live, sig.droplevel(1), turns, trace, rule, band, posterior, h, dropped, level)
+        panels = rule_panels(
+            live, sig.droplevel(1), turns, trace, rule, band, posterior, h, dropped, level, level_close
+        )
 
     if normalized and len(feats.columns):
         # Fitted on the window on screen, which is what a chart can do and not what the dataset
@@ -1331,7 +1348,13 @@ def main() -> None:
             "shiryaev": f"long or short when the probability that the leg has turned reaches **{posterior:.2f}**",
         }[rule] + (
             f"; it enters long only at a turn at or below **−{level:.2f}** and short only at one at or above "
-            f"**+{level:.2f}**, and every turn it calls closes the open position"
+            f"**+{level:.2f}**, and "
+            + (
+                "every turn it calls closes the open position"
+                if level_close
+                else "every turn inside that band is ignored, so a position is held until a turn beyond it on the "
+                "other side"
+            )
             if level and rule in DETECTORS
             else ""
         )

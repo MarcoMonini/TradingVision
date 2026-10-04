@@ -1007,7 +1007,9 @@ Ogni regola nuova sui fold 3-4 sarebbe scelta su dati già visti.
   probabilità a priori costante, il ritracciamento combinato, la lettura del livello all'estremo e
   il segnale scartato ignorato, nessuno dei quali ha mai guadagnato. Poi la barra laterale è stata
   divisa in sezioni (candele, modello ed etichetta, righe delle feature, strategia, uscite) e ogni
-  controllo rinominato per quello che fa, con un aiuto che lo spiega. **Con la v2 l'ATR degli stop è ora a 12 barre,
+  controllo rinominato per quello che fa, con un aiuto che lo spiega. Tenere la posizione sulle
+  svolte dentro ±L è tornata come interruttore spento (*Hold through the turns inside ±L*), con i
+  numeri di sopra nell'aiuto. **Con la v2 l'ATR degli stop è ora a 12 barre,
   la finestra del modello, invece di 24**: gli stessi multipli di ATR possono dare stop diversi
   da prima.
 - Un bug trovato e corretto durante lo studio: `--filter` veniva ignorato dalla CLI con `--tp`. Le
