@@ -966,7 +966,12 @@ del 2026-07-01.
   +L. Porta lo zigzag da 5.288 a 93 trade sullo sviluppo a L = 0,5, ma il lordo per trade resta
   intorno a zero (chiudendo sui segnali scartati: da −3,2 a +4,2 sullo sviluppo, da −9,2 a +0,9
   sull'hold-out, salvo L = 0,5 con +12,5 / +19,2 su 160 trade, che il rivelatore bayesiano non
-  conferma). Sulla pagina è un'opzione dei due rivelatori.
+  conferma). Scelti sul solo sviluppo (h 0,1-0,5 e p 0,5-0,99 per L 0,4 / 0,5 / 0,6, chiudendo,
+  il lordo per trade più alto con i fold 1 e 2 entrambi positivi): zigzag 0,2 a L = 0,5 e
+  Shiryaev 0,5 a L = 0,6, +15,8 su 81 trade e +28,4 su 40 nell'hold-out con lo stop 6 ATR, tutti i
+  fold positivi, tutto sotto i 50 bp della commissione. Tenere la posizione sui segnali scartati
+  invece di chiudere è una scommessa sul trend: Shiryaev 0,5 con lo stop fa −25 / +52 / −91 bp
+  sullo sviluppo a L 0,50 / 0,55 / 0,60. Sulla pagina è il default dei due rivelatori.
 - **Lo stop loss taglia falsi e veri insieme** (`--sl`). A 1 ATR i falsi allarmi passano da −80 a
   −42 bp, le rilevazioni giuste da +31 a +17; nessuno stop da 1 a 6 ATR esce da −1,4 / +1,6 bp.
 - Le altre prove (media breve, take profit, soglie alte, filtro di volatilità, momentum, inversa
@@ -994,10 +999,12 @@ Ogni regola nuova sui fold 3-4 sarebbe scelta su dati già visti.
   Regole: banda, rientro, momentum, svolte alla conferma, svolte col senno di poi (sotto un avviso).
   Poi soglia o finestra delle svolte, media della predizione, inversione, filtro BTC sui giornalieri
   di Alpaca (scaricati con le candele), uscite. Nuove metriche: bp per trade con la commissione di
-  pareggio, e la curva del capitale della regola. La pagina si apre sulla combinazione dello
-  sviluppo: v2, rientro a 0,40, filtro BTC, stop 6 ATR e poi solo segnale opposto (+37,2 bp sullo
-  sviluppo, −22,8 sull'hold-out). Con BTC sopra la media a 200 giorni il filtro è spento e la
-  regola resta flat. **Con la v2 l'ATR degli stop è ora a 12 barre,
+  pareggio, e la curva del capitale della regola. La pagina si apre su v2, rientro a 0,40, stop
+  6 ATR e poi solo segnale opposto (+26,1 bp sullo sviluppo, −26,5 sull'hold-out), con il filtro
+  BTC spento dal 2026-10-04: con BTC sopra la media a 200 giorni lasciava la regola flat. Lo
+  stesso giorno i rivelatori sono scesi a due controlli, h o p e il livello L: tolti la
+  probabilità a priori costante, il ritracciamento combinato, la lettura del livello all'estremo e
+  il segnale scartato ignorato, nessuno dei quali ha mai guadagnato. **Con la v2 l'ATR degli stop è ora a 12 barre,
   la finestra del modello, invece di 24**: gli stessi multipli di ATR possono dare stop diversi
   da prima.
 - Un bug trovato e corretto durante lo studio: `--filter` veniva ignorato dalla CLI con `--tp`. Le

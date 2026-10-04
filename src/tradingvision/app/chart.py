@@ -20,8 +20,9 @@ priced: the band (long under -t, short over +t), re-entry (long when the predict
 turns at confirmation. A fifth, the turns found in hindsight, reads the future and is drawn under a
 warning, as the diagnostic it is. Two more are `detect`'s turn detectors: the zigzag, which flips
 when the prediction comes back h from its extreme, and Shiryaev's, which flips when the probability
-that the leg has turned reaches p, on the parameters fitted on v2's development folds, and either
-can keep only the signals past a level (`detect.gate`), drawing the dropped ones grey. Each reads
+that the leg has turned reaches p, on the parameters fitted on v2's development folds. Either trades
+only the turns from past a level (`detect.gate`, opening at 0.5 and 0.6, chosen on development);
+any other signal closes the position and is drawn grey. Each reads
 the prediction or its mean over the last k bars, can take every trade on the other side, and can
 trade only while BTC is under its 200-day mean, read on Alpaca's daily closes fetched with the
 candles.
@@ -37,10 +38,10 @@ the leg it bet against was still running.
 The rule's exits are `stops`, and they are controls rather than settings: a take profit and a stop
 loss, each named in ATR or in round trips or in a flat percentage, each with its own answer to
 what the rule holds afterwards — reverse into the other side, stand flat until the opposite
-signal, or stand flat until any fresh crossing. The page opens on the configuration the study's
-development folds converged on — v2, re-entry at 0.40, the BTC filter, a 6 ATR stop and then flat
-until the opposite signal — which is the best the study found and still loses on its hold-out
-(`HANDOFF.md` §17). With both barriers off and no filter, the band is exactly `threshold`'s rule,
+signal, or stand flat until any fresh crossing. The page opens on v2, re-entry at 0.40, a 6 ATR
+stop and then flat until the opposite signal, with the BTC filter off: the filter makes the rule
+flat whenever BTC is over its 200-day mean, and it was chosen on development and lost on the
+hold-out (`HANDOFF.md` §17). With both barriers off and no filter, the band is exactly `threshold`'s rule,
 the one the spec priced. A stop fill is marked with an X on
 the candle and at the price it filled at, a take profit with a star; a gap through a level fills
 at the open, so the mark can sit well past the level it was aimed at, and that is the point of
@@ -115,9 +116,9 @@ def saved(module: ModuleType | None, name: str | None = None) -> Path | None:
 MAX_DAYS = 365
 # The rule the page opens on: the combination `strategy`'s development folds (1-2) converged on, on
 # v2's predictions for ETH, BTC and SOL. Re-entry peaked at 0.35-0.40 for every mean tried; the 6 ATR
-# stop with a flat wait for the opposite signal was the best exit; the BTC filter is switched on
-# below. Together +37.2 bp a trade on folds 1-2 and -22.8 on the hold-out, folds 3-4 — the default
-# is the best the study found, not a rule that earns (`HANDOFF.md` §17).
+# stop with a flat wait for the opposite signal was the best exit: +26.1 bp a trade on folds 1-2 and
+# -26.5 on the hold-out, folds 3-4 — a starting point, not a rule that earns (`HANDOFF.md` §17). The
+# BTC filter below, which development also picked, starts off: it leaves the page flat for months.
 RULE = "reentry"
 # In the head's raw units, `swing.predict_frame`'s `raw`, which is what the study read. Until
 # 2026-10-04 the page laid every threshold on the calibrated line instead, where 0.40 is 0.28 raw:
@@ -150,6 +151,12 @@ BANDED = ("band", "reentry", "momentum")
 # predictions, so it is offered only on v2; the zigzag has nothing fitted and runs on either model.
 DETECTORS = ("zigzag", "shiryaev")
 POSTERIORS = (0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.98, 0.99)  # the thresholds `detect --shiryaev` measured
+# The level each detector opens on, with its own default (h 0.2, p 0.5), chosen on development alone: of
+# h 0.1-0.5 or p 0.5-0.99 by L 0.4/0.5/0.6, the best gross a trade with both folds 1-2 positive. Zigzag
+# +12.5 bp on 93 trades, Shiryaev +15.8 on 81, with the 6 ATR stop; on the hold-out +19.2 and +28.4, every
+# fold positive, and both under the 50 bp round trip. Holding the side through a dropped signal instead of closing was
+# removed: Shiryaev 0.5 with a 6 ATR stop made -25 / +52 / -91 bp on development at L 0.50 / 0.55 / 0.60.
+LEVEL = {"zigzag": 0.5, "shiryaev": 0.6}
 TURN_WINDOWS = (6, 12, 24, 48)  # the grid `strategy --hindsight` measured
 MEANS = (1, 2, 4, 8)  # the moving averages `strategy --smooth` measured
 # Days of BTC daily closes the filter needs before the first bar on screen: the 200-day mean, and
@@ -680,7 +687,7 @@ def rule_panels(
                 marker=dict(size=9, symbol="x-thin", color="#7f8c8d", line=dict(width=2, color="#7f8c8d")),
                 name="dropped",
                 showlegend=False,
-                hovertemplate="%{x}<br>a signal the level filter dropped<extra></extra>",
+                hovertemplate="%{x}<br>a signal inside ±L: closes the position<extra></extra>",
             )
         )
     lines = [band, -band] if rule in BANDED else [level, -level] if level else []
@@ -719,7 +726,7 @@ def rule_panels(
                 "range": [0, 1.02],
             }
         )
-    if rule == "zigzag" or (rule == "shiryaev" and h > 0):
+    if rule == "zigzag":
         panels.append(
             {
                 "title": "How far the prediction has come back from the extreme of the leg",
@@ -847,8 +854,7 @@ def main() -> None:
     # it is not. The one exception is the hindsight-turns rule, which reads the future on purpose
     # and is labelled as the diagnostic it is.
     ruling, rule, band, turn_window, mean, inverse, filtered = False, "band", THRESHOLD, 12, 1, False, False
-    h, posterior, prior, hindsight = 0.2, POSTERIORS[0], True, False
-    level, level_at, level_close = 0.0, "alarm", True
+    h, posterior, hindsight, level = 0.2, POSTERIORS[0], False, 0.0
     take, stop, after_stop, after_take, tie_stop, trail = None, None, stops.AFTER[0], stops.AFTER[0], True, False
     if swinging or v2_drawn:
         ruling = st.sidebar.toggle(
@@ -873,31 +879,17 @@ def main() -> None:
                     0.2,
                     0.05,
                     help="a short when the raw prediction has fallen h from its highest since the last signal, a long "
-                    "when it has risen h from its lowest. The study measured 0.05 to 0.8; at 0.2 it finds 97% of the "
-                    "turns about 5 bars late, with 0.31 false signals a turn",
+                    "when it has risen h from its lowest. Smaller is earlier and wrong more often: at 0.2 it finds "
+                    "97% of the turns about 5 bars late, with 0.31 false signals a turn",
                 )
             elif rule == "shiryaev":
                 posterior = st.sidebar.select_slider(
                     "Signal when P(the leg has turned) reaches",
                     POSTERIORS,
                     value=POSTERIORS[0],
-                    help="the posterior is updated on every bar from the prior hazard and the bar's move. At 0.5 the "
-                    "study found 79% of the turns, 3 bars late at the median, with 0.35 false signals a turn",
-                )
-                prior = st.sidebar.toggle(
-                    "Prior from the level and the leg's age",
-                    value=True,
-                    help="the chance of a turn on the next bar rises with how far the prediction has gone and how old "
-                    "the leg is; off, every bar gets the same chance and the moves alone decide",
-                )
-                h = st.sidebar.slider(
-                    "…and only after a retracement of",
-                    0.0,
-                    0.5,
-                    0.0,
-                    0.05,
-                    help="0 is off. Above 0 the signal also waits for the zigzag's condition: fewer false signals, "
-                    "each one dearer, and every right one later",
+                    help="updated on every bar from the bar's move and from how far and how long the leg has run, on "
+                    "the parameters fitted on v2's development folds. Higher is later and wrong less often: at 0.5 "
+                    "it finds 79% of the turns 3 bars late at the median, with 0.35 false signals a turn",
                 )
             else:
                 turn_window = st.sidebar.select_slider(
@@ -909,29 +901,18 @@ def main() -> None:
                     "turn itself, which nobody can know at the time",
                 )
             if rule in DETECTORS:
-                # Fewer signals by where they happen: a long only from deep enough, a short only from
-                # high enough. `detect --gate` measured 0.1 to 0.5 both ways and found no gate that pays.
+                # Trade only the turns from an extreme: a long from at or under −L, a short from at or
+                # over +L. Every other signal still says the leg has ended, so it closes the position
+                # and the rule stands flat (`detect.gate`, close=True).
                 level = st.sidebar.slider(
-                    "Keep a signal only past ±L",
+                    "Trade only the turns past ±L",
                     0.0,
-                    0.6,
-                    0.0,
+                    0.8,
+                    LEVEL[rule],
                     0.05,
-                    help="0 is off. A long only where the raw prediction is at or under −L, a short only at or over "
-                    "+L. In the study it cut the trades by up to 50 times and left the gross per trade near zero",
+                    help="a long only where the raw prediction is at or under −L, a short only at or over +L; any "
+                    "other signal closes the position and the rule waits flat. 0 trades every signal",
                 )
-                if level:
-                    level_at = st.sidebar.selectbox(
-                        "…the level read at",
-                        ["alarm", "extreme"],
-                        format_func={"alarm": "the signal's bar", "extreme": "the extreme of the leg it closes"}.get,
-                    )
-                    level_close = st.sidebar.selectbox(
-                        "A dropped signal",
-                        [True, False],
-                        format_func={True: "closes the position, then flat", False: "is ignored"}.get,
-                        help="closing stands the rule flat until the next kept signal; ignoring holds the side it had",
-                    )
             if rule not in DETECTORS:
                 # The detectors were fitted on the prediction bar by bar; a mean would change the very
                 # increments their evidence is measured on.
@@ -952,7 +933,7 @@ def main() -> None:
             )
             filtered = st.sidebar.toggle(
                 "Only while BTC is under its 200-day mean",
-                value=True,
+                value=False,
                 help="read on yesterday's daily close, so it is causal. Flat while it is off; when it switches on, "
                 "the rule waits for a fresh signal",
             )
@@ -1085,7 +1066,7 @@ def main() -> None:
         if rule == "zigzag":
             trace = detect.zigzag(live.to_numpy(), h, trace=True).set_axis(live.index)
         elif rule == "shiryaev":
-            trace = detect.shiryaev(live.to_numpy(), detect.V2_FIT, posterior, not prior, h, trace=True)
+            trace = detect.shiryaev(live.to_numpy(), detect.V2_FIT, posterior, trace=True)
             trace = trace.set_axis(live.index)
         # What `walked` may trade on: the BTC filter, and the level gate's flat stretches. Kept apart
         # from `on`, which the caption reads as the BTC filter alone.
@@ -1093,7 +1074,7 @@ def main() -> None:
         if trace is not None:
             alarm = threshold.on_one(trace.alarm)
             if level:
-                kept, gated = detect.gate(alarm, threshold.on_one(live), level, level_at, level_close)
+                kept, gated = detect.gate(alarm, threshold.on_one(live), level)
                 dropped, alarm = alarm.where(kept == 0, 0.0).droplevel(1), kept
                 allowed = gated if allowed is None else allowed & gated
             sig = -alarm if inverse else alarm
@@ -1246,17 +1227,10 @@ def main() -> None:
             "on each side and acted on at the turn itself",
             "zigzag": f"short when the prediction has fallen **{h:.2f}** from its highest since the last signal, long "
             f"when it has risen **{h:.2f}** from its lowest",
-            "shiryaev": f"long or short when the probability that the leg has turned reaches **{posterior:.2f}**, "
-            + (
-                "with a prior from the prediction's level and the leg's age"
-                if prior
-                else "with the same prior on every bar"
-            )
-            + (f", and only once the prediction has come back **{h:.2f}** from its extreme" if h else ""),
+            "shiryaev": f"long or short when the probability that the leg has turned reaches **{posterior:.2f}**",
         }[rule] + (
             f"; a long kept only where the prediction is at or under **−{level:.2f}** and a short only at or over "
-            f"**+{level:.2f}**, read at {'the signal' if level_at == 'alarm' else 'the extreme of the leg it closes'}, "
-            + ("and a dropped signal closes the position" if level_close else "and a dropped signal is ignored")
+            f"**+{level:.2f}**, and any other signal closes the position"
             if level and rule in DETECTORS
             else ""
         )

@@ -111,7 +111,13 @@ signal, -3.2 to +4.2 bp on development and -9.2 to +0.9 on the hold-out for both
 every L from 0.1 to 0.5 but one; ignoring it, the always-in shape comes back, positive on folds 1-2 and down to -47 on
 the hold-out. The one row positive on all four folds, the zigzag at L = 0.5 read at the signal and
 closing, makes +12.5 +/- 14.7 and +19.2 +/- 16.6 on 160 trades, and Shiryaev's detector through the
-same gate makes -3.2 / -3.5. Fewer trades pay fewer fees; they do not pay more each.
+same gate makes -3.2 / -3.5. Fewer trades pay fewer fees; they do not pay more each. Chosen on
+development alone, for the page (`chart.LEVEL`): of h 0.1-0.5 and p 0.5-0.99 by L 0.4 / 0.5 / 0.6,
+closing, the best gross a trade with folds 1 and 2 both positive is that zigzag row and Shiryaev 0.5
+at L = 0.6, +15.8 on 81 trades and +28.4 on 40 on the hold-out with a 6 ATR stop, every fold
+positive and every number under the 50 bp round trip. Ignoring a dropped signal holds whatever side
+the last kept one took, for days, and the result is the trend of those days: Shiryaev 0.5 with the
+stop makes -25 / +52 / -91 bp on development at L 0.50 / 0.55 / 0.60.
 
 **Open interest as a confirmation does not confirm** (`--confirm`, `confirmation`). Each signal times
 open interest behind the last k bars' move, positive where the column says the next bars go the
