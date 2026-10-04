@@ -909,6 +909,7 @@ del 2026-07-01.
 | rientro + stop 6 ATR, poi solo segnale opposto | +26,1 (7,9) | −26,5 (8,9) controllo |
 | svolte della predizione col senno di poi, finestra 12 | +180,4 | +164,4 |
 | svolte della predizione alla conferma, finestra 12 | +4,8 | −3,3 |
+| svolte col senno di poi, finestra 12, eseguite 2 / 4 / 6 barre dopo | +99,4 / +68,0 / +41,3 | +88,9 / +54,9 / +34,5 |
 
 **Risultati.**
 
@@ -920,6 +921,10 @@ del 2026-07-01.
 - **Le svolte della predizione sono nel posto giusto e arrivano tardi.** Col senno di poi valgono il
   96% del lordo dell'oracolo e battono quelle di `rsi_centered` in ogni fold e a ogni finestra (6, 12,
   24, 48). Alla conferma valgono circa zero, come quelle del prezzo e dell'RSI.
+- **Il loro valore si consuma in poche barre** (`--hindsight ... --delay`). A finestra 12 resta il
+  70% dopo una barra di ritardo, il 55% dopo due, il 23% dopo sei; a metà finestra il 20-25% a ogni
+  finestra. Contro 50 bp pagano fino a 4 barre di ritardo a finestra 12 e 6 a finestra 24. Il
+  vantaggio sull'RSI sta nella barra di svolta e nella successiva e sparisce a ritardo 3.
 - Le altre prove (media breve, take profit, soglie alte, filtro di volatilità, momentum, inversa
   della peggiore) sono nella docstring di `strategy.py`, con i numeri.
 
@@ -930,7 +935,7 @@ Ogni regola nuova sui fold 3-4 sarebbe scelta su dati già visti.
 **Cosa è cambiato nel codice.**
 
 - `strategy.py`: il modulo dello studio, con `--candidates`, `--tp/--sl/--trail/--after`,
-  `--filter`, `--invert`, `--smooth`, `--path`, `--hindsight [--causal]` e un `_selfcheck`
+  `--filter`, `--invert`, `--smooth`, `--path`, `--hindsight [--causal | --delay]` e un `_selfcheck`
   registrato in `tests/test_selfchecks.py`. `play` esegue qualunque regola su qualunque
   predizione; `walked` è `stops.walk` su qualunque segnale, con filtro.
 - `chart.py`: la sezione **Trading rule** passa da `strategy.play` invece che da `stops.run`.
@@ -952,7 +957,8 @@ Ogni regola nuova sui fold 3-4 sarebbe scelta su dati già visti.
    due cicli, per provare regole nuove con selezione a rotazione sui fold precedenti. Non è stato
    cronometrato.
 2. **Una regola che riconosca la svolta prima della conferma.** È lì che sta il valore: la svolta a
-   finestra 12 vale ~165 bp col senno di poi e ~0 alla conferma.
+   finestra 12 vale ~165 bp col senno di poi e ~0 alla conferma, e ~60 se riconosciuta entro 4
+   barre; a finestra 24 ~100 entro 6. Sono tetti: un lettore precoce ha anche falsi allarmi.
 3. Le CLI di `threshold`, `stops` e `swingrule` leggono ancora il formato di `gru` (§16, punto 1).
    `strategy` legge già quello di `swing`.
 

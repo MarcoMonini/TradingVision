@@ -147,6 +147,22 @@ between -10 and +13. By the time a turn of the prediction is confirmed the price
 move, and the prediction confirms its turns no earlier than the price or an RSI does. Its turns
 are better placed than an RSI's, and they arrive just as late.
 
+**Between the two: the same turns, acted on 1 to 6 bars late** (`--hindsight ... --delay`,
+`delayed`; still the centred turns, so still a diagnostic). It measures the room a reader that
+recognises a turn before its confirmation would have. At 12 bars the prediction's turns make
++180.4 / +126.1 / +99.4 / +79.4 / +68.0 / +54.1 / +41.3 bp a trade in development at delay 0 to 6,
+and +164.4 / +115.6 / +88.9 / +70.4 / +54.9 / +44.9 / +34.5 in the hold-out, in every fold the same
+shape: 70% of the value is left after one bar, 55% after two, 23% after six, 4% after twelve. The
+first bar costs the most, because the turn bar's close is the best price the leg has. What is left
+depends on the delay as a share of the window: 20-25% at half the window (6 of 12, 12 of 24, 3 of
+6) and about 45% at a quarter of it (6 of 24, 12 of 48). Against a 50 bp round trip the turns at
+12 bars still pay at four bars late in both periods (+68.0 / +54.9), at 24 bars at six (+105.1 /
++92.1), at 6 bars only at one. The prediction's lead over the RSI's turns is in the turn bar and the
+next one or two: at 12 bars it is +10.7 / +6.9 bp at delay 0, gone by delay 3 (-1.4 / -1.4), and at
+delay 6 the RSI's turns pay more (+47.6 / +40.7 against +41.3 / +34.5). Only at 48 bars does the
+prediction keep it (+178.9 / +172.7 against +165.9 / +160.1). Every number here is an upper bound:
+an early reader would also act on turns that never come, and these rows have none.
+
 **On the chart page.** `play` runs any rule above on any prediction, and `chart.py` draws through
 it, so the page and these tables share one code path: rule, threshold or turn window, the mean of
 the prediction, inversion, the BTC filter (on Alpaca's daily closes there) and every exit.
@@ -155,6 +171,7 @@ the prediction, inversion, the BTC filter (on Alpaca's daily closes there) and e
     uv run python -m tradingvision.strategy --rules reentry --smooth 1 2 4 8
     uv run python -m tradingvision.strategy --at 0.35 0.4 --path 1 2 4 8 12 24 48 96 192
     uv run python -m tradingvision.strategy --at 0.35 0.4 --tp 0 3 6 10 15 --sl 0 3 6 10 15 [--trail]
+    uv run python -m tradingvision.strategy --hindsight 6 12 24 48 --delay 0 1 2 3 4 5 6 12
 """
 
 from __future__ import annotations
@@ -703,6 +720,35 @@ def hindsight(
     return table, folds
 
 
+def late(events: pd.Series, bars: int) -> pd.Series:
+    """`events` acted on `bars` bars after each one, on each asset."""
+    return events.groupby(level=1).shift(bars).fillna(0.0)
+
+
+def delayed(pred: pd.Series, close: pd.Series, cut: pd.Timestamp, windows, delays) -> pd.DataFrame:
+    """The hindsight turns of the prediction, an RSI and the price, each acted on `delay` bars late.
+
+    Between the turn itself (`turns`, delay 0) and its confirmation (`confirmed_turns`, delay =
+    window) lies every reader that knows a turn some bars after it and before the window closes.
+    The table says how fast the turn's value runs out with the delay, which is the room a rule that
+    recognises the turn early would have. It still looks ahead: the turns are the centred ones.
+    """
+    series = {"prediction": pred, "rsi 12": rsi(pred.index), "price": close}
+    rows = []
+    for name, x in series.items():
+        for w in windows:
+            events = turn_events(x, w)
+            for d in delays:
+                pos, pnl, held = plain(hold(late(events, d)), close)
+                row = {"signal": name, "window": w, "delay": d}
+                for period in ("dev", "holdout"):
+                    a = report(pos, pnl, held, close, cut, period).loc["all"]
+                    row |= {f"{period}_trades": a.trades, f"{period}_bp": a.bp_trade, f"{period}_se": a.se_bp}
+                fold = held.gross.groupby(fold_of(pd.DatetimeIndex(held.entry))).mean() * 1e4
+                rows.append(row | fold.rename(lambda k: f"fold {k}").to_dict())
+    return pd.DataFrame(rows).set_index(["signal", "window", "delay"]).astype(float)
+
+
 def _selfcheck() -> None:
     """Two symbols, a known position path, every number checked by hand; then the wiring to `stops`."""
     t = pd.date_range("2025-09-30", periods=8, freq="1D", tz="UTC")
@@ -780,8 +826,7 @@ def _selfcheck() -> None:
     assert (flipped[0] == -reentry(pred, 0.4)).all() and np.allclose(flipped[1], -play(pred, bars, "reentry", 0.4)[1])
     assert (play(pred, bars, "reentry", 0.4, smooth=3)[0] == reentry(threshold.smoothed(pred, 3), 0.4)).all()
     # The saw has no twins, so the live reader holds the same turns `window` bars later.
-    late = turns(pred, 5).groupby(level=1).shift(5).fillna(0.0)
-    assert (confirmed_turns(pred, 5) == late).all()
+    assert (confirmed_turns(pred, 5) == hold(late(turn_events(pred, 5), 5))).all()
 
 
 def main() -> None:
@@ -809,6 +854,7 @@ def main() -> None:
         help="trade the turns of the prediction, an RSI and the price",
     )
     ap.add_argument("--causal", action="store_true", help="with --hindsight: act on each turn when it is confirmed")
+    ap.add_argument("--delay", type=int, nargs="+", help="with --hindsight: act on each turn these many bars late")
     args = ap.parse_args()
 
     _selfcheck()
@@ -827,6 +873,10 @@ def main() -> None:
             print(rep.astype(float).round(3).to_string())
         share = below(pred.index)[label(when, cut).period.eq(period).to_numpy()].mean()
         print(f"\nBTC under its 200-day mean on {share:.0%} of the bars")
+    elif args.hindsight and args.delay:
+        table = delayed(pred, close, cut, args.hindsight, args.delay)
+        print("looks ahead: the centred turns, each acted on `delay` bars after it\n")
+        print(table.round(1).to_string())
     elif args.hindsight:
         table, folds = hindsight(pred, close, cut, args.hindsight, args.causal)
         print("causal: each turn at its confirmation\n" if args.causal else "looks ahead: not a strategy\n")
