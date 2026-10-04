@@ -950,6 +950,18 @@ del 2026-07-01.
   futuro due colonne hanno lo stesso segno nei quattro fold: l'open interest dietro al movimento
   contro il rendimento a 48 barre (+0,075 / +0,039) e lo squilibrio del book entro il 5% contro
   quello a 12 (+0,042 / +0,024). Piccole quanto l'IC della v2, e non ancora una strategia.
+- **Open interest dietro al movimento** (`--oi`). Il segno del movimento delle ultime k barre per la
+  variazione dell'open interest ha IC positivo col rendimento a 48 barre in tutti i fold (k = 24:
+  +0,057 / +0,125 / +0,057 / +0,045); il solo momentum no. Dopo un movimento a 24 barre con open
+  interest in salita le 48 barre dopo vanno nella sua direzione (+10 / +16 / +19 / +20 bp), con open
+  interest in calo tornano indietro (−22 / −13 / −2 / −6). Letto fra 64 varianti, hold-out incluso;
+  come regola (segui o contrasta oltre |z|, esci dopo 48 barre) fa da −6,9 a +0,7 bp sullo sviluppo
+  e il fold 2 è negativo in tutte e dodici le varianti.
+- **Filtro sul livello dei segnali** (`--gate`): tiene un long solo sotto −L e uno short solo sopra
+  +L. Porta lo zigzag da 5.288 a 93 trade sullo sviluppo a L = 0,5, ma il lordo per trade resta
+  intorno a zero (chiudendo sui segnali scartati: da −3,2 a +4,2 sullo sviluppo, da −9,2 a +0,9
+  sull'hold-out, salvo L = 0,5 con +12,5 / +19,2 su 160 trade, che il rivelatore bayesiano non
+  conferma). Sulla pagina è un'opzione dei due rivelatori.
 - **Lo stop loss taglia falsi e veri insieme** (`--sl`). A 1 ATR i falsi allarmi passano da −80 a
   −42 bp, le rilevazioni giuste da +31 a +17; nessuno stop da 1 a 6 ATR esce da −1,4 / +1,6 bp.
 - Le altre prove (media breve, take profit, soglie alte, filtro di volatilità, momentum, inversa

@@ -89,6 +89,30 @@ the book's imbalance within 5% over the last hour against the 12-bar return (+0.
 strategy: at an IC of 0.05 a trade on the 48-bar return is worth of the order of 10 bp, against a
 20-50 bp round trip.
 
+**Open interest behind the move, in depth** (`--oi`, `open_interest`). Signed by the direction of the
+last k bars' move, the open interest's k-bar change (in units of its month's dispersion) has a
+positive rank IC with the 48-bar forward return on every fold for k = 4, 12 and 24 (k = 24: +0.057 /
++0.125 / +0.057 / +0.045), and the move alone, momentum, has none (-0.048 / -0.010 / +0.016 /
+-0.006). Split by sign: after a 24-bar move made with open interest rising, the next 48 bars go its
+way by +10.4 / +16.4 / +18.7 / +19.8 bp; after one made with it falling, they come back by -22.0 /
+-13.0 / -2.4 / -6.1. New positions behind a move keep it going, a move made by closing positions
+reverses. It is the cleanest fold-by-fold sign of the study, and it was read among 64 variants
+that included the hold-out: the one development alone picks, k = 4, falls from +0.117 to +0.024
+there. As a rule it does not hold: following the move when open interest rose and fading it when
+it fell, entering when |z| reaches 0.5 to 2 and out after 48 bars, makes -6.9 to +0.7 bp a trade
+on development and +0.8 to +17.2 on the hold-out, with fold 2 negative in all twelve variants
+(-6.4 to -41.5). The effect lives in the bulk of the moves, not in the extremes a trigger picks.
+
+**Keeping only signals past a level** (`--gate`, `gate`). A long only where the prediction is at or
+under -L, a short only at or over +L, read at the signal's bar or at the extreme of the leg it
+closes; a dropped signal either closes the position or is ignored. It cuts the zigzag's 5,288
+development trades to 93 at L = 0.5, and the gross a trade stays near zero: closing on a dropped
+signal, -3.2 to +4.2 bp on development and -9.2 to +0.9 on the hold-out for both detectors and
+every L from 0.1 to 0.5 but one; ignoring it, the always-in shape comes back, positive on folds 1-2 and down to -47 on
+the hold-out. The one row positive on all four folds, the zigzag at L = 0.5 read at the signal and
+closing, makes +12.5 +/- 14.7 and +19.2 +/- 16.6 on 160 trades, and Shiryaev's detector through the
+same gate makes -3.2 / -3.5. Fewer trades pay fewer fees; they do not pay more each.
+
 **Why: optional stopping.** If the log price is a martingale, E[p_T - p_S | F_S] = 0 for any two
 stopping times S <= T, so a trade a causal detector opens and closes has zero expected gross
 whatever its delay and false alarms. The hindsight table does not contradict it because τ + d,
@@ -120,6 +144,8 @@ null standard deviations and changes sign between folds.
     uv run python -m tradingvision.detect --features 0.5
     uv run python -m tradingvision.detect --sl 1 2 3 4 6
     uv run python -m tradingvision.detect --futures   # needs `python -m tradingvision.data.futures` first
+    uv run python -m tradingvision.detect --oi
+    uv run python -m tradingvision.detect --gate 0.1 0.2 0.3 0.4 0.5
 """
 
 from __future__ import annotations
@@ -434,6 +460,39 @@ def separate(f: pd.DataFrame, cut: pd.Timestamp) -> tuple[pd.DataFrame, tuple[fl
     return one, both, by
 
 
+def gate(
+    found: pd.Series, x: pd.Series, level: float, where: str = "alarm", close: bool = True
+) -> tuple[pd.Series, pd.Series]:
+    """`(kept, on)`: a long alarm kept only where `x` is at or under -`level`, a short at or over +`level`.
+
+    `where` reads `x` at the alarm bar (`alarm`) or at the extreme of the leg the alarm closes
+    (`extreme`), the lowest since the last alarm for a long and the highest for a short. A rejected
+    alarm is dropped and the rule holds what it held (`close=False`), or it closes the position and
+    the rule stands flat until the next kept alarm (`close=True`): `on` is off from the bar after
+    it to that alarm, which is how `strategy.walked` stands a rule flat, closing at the rejected
+    alarm's own close.
+    """
+    kept, on = pd.Series(0.0, index=found.index), pd.Series(True, index=found.index)
+    for sym in found.index.get_level_values(1).unique():
+        i = np.flatnonzero(found.index.get_level_values(1) == sym)
+        a, v = found.to_numpy()[i], x.to_numpy()[i]
+        keep, live = np.zeros(len(i)), np.ones(len(i), dtype=bool)
+        off, last = False, 0
+        for t in range(len(i)):
+            rejected = False
+            if a[t] != 0:
+                lvl = v[t] if where == "alarm" else (v[last : t + 1].min() if a[t] > 0 else v[last : t + 1].max())
+                if (a[t] > 0 and lvl <= -level) or (a[t] < 0 and lvl >= level):
+                    keep[t], off = a[t], False
+                else:
+                    rejected = close
+                last = t
+            live[t] = not off
+            off = off or rejected
+        kept.iloc[i], on.iloc[i] = keep, live
+    return kept, on
+
+
 def _zscore(v: pd.Series, n: int = 96 * 30) -> pd.Series:
     """`v` against its own trailing month: the level of a ratio that drifts, made comparable over time."""
     return (v - v.rolling(n, min_periods=n // 3).mean()) / v.rolling(n, min_periods=n // 3).std()
@@ -499,6 +558,70 @@ def forward_ic(columns: dict, pred: pd.Series, close: pd.Series, horizons=(12, 4
     )
 
 
+def behind_the_move(symbol: str, close: pd.Series, k: int) -> pd.DataFrame:
+    """The last `k` bars' move and the open interest's change over them, at each 15m bar.
+
+    `move` is the sign of the price's `k`-bar change, `oi_z` the open interest's `k`-bar log change
+    against its trailing month's dispersion: positive when positions were opened behind the move.
+    """
+    f = futures.load(symbol)
+    c = np.log(close.reindex(f.index))
+    doi = np.log(f.oi.where(f.oi > 0)).diff(k)
+    return pd.DataFrame(
+        {"c": c, "move": np.sign(c.diff(k)), "oi_z": doi / doi.rolling(96 * 30, min_periods=96 * 10).std()}
+    )
+
+
+def open_interest(close: pd.Series, cut: pd.Timestamp, ks=(4, 12, 24), horizons=(12, 24, 48, 96), hold_bars=48):
+    """Open interest behind the move, three ways: `(ic, quadrants, rule)`.
+
+    `ic`: rank IC of `move * oi_z`, and of `move` alone (momentum, the control), with the h-bar
+    forward return, by fold. `quadrants`: the next `hold_bars` in the move's direction, bp, by
+    whether open interest rose or fell with it. `rule`: when flat and |oi_z| >= Z, follow the move if
+    open interest rose with it or fade it if it fell, out after `hold_bars`; one position at a time.
+    """
+    ic_rows, quad_rows, rule_rows = [], [], []
+    for k in ks:
+        for sym in strategy.ASSETS:
+            d = behind_the_move(sym, close.xs(sym, level=1), k)
+            d = d[d.index >= strategy.TEST_START]
+            fold = fold_of(d.index)
+            for h in horizons:
+                fwd, take = d.c.shift(-h) - d.c, np.arange(len(d)) % h == 0
+                for name, x in (("oi behind the move", d.move * d.oi_z), ("momentum", d.move)):
+                    for f in range(1, strategy.FOLDS + 1):
+                        m = take & (fold == f) & x.notna().to_numpy() & fwd.notna().to_numpy()
+                        ic = np.corrcoef(x[m].rank(), fwd[m].rank())[0, 1]
+                        ic_rows.append({"column": name, "k": k, "h": h, "fold": f, "ic": ic})
+                if h == hold_bars:
+                    m = take & fwd.notna().to_numpy() & d.oi_z.notna().to_numpy()
+                    q = pd.DataFrame({"bp": (d.move * fwd)[m] * 1e4, "oi": np.where(d.oi_z[m] > 0, "rose", "fell")})
+                    q["fold"] = fold[m]
+                    quad_rows += [
+                        {"k": k} | r for r in q.groupby(["oi", "fold"]).bp.mean().reset_index().to_dict("records")
+                    ]
+            cv, mv, zv = d.c.to_numpy(), d.move.to_numpy(), d.oi_z.to_numpy()
+            for Z in (0.5, 1.0, 1.5, 2.0):
+                i = 0
+                while i < len(cv) - hold_bars:
+                    if np.isfinite(zv[i]) and abs(zv[i]) >= Z and mv[i] != 0:
+                        bp = mv[i] * np.sign(zv[i]) * (cv[i + hold_bars] - cv[i]) * 1e4
+                        rule_rows.append({"k": k, "Z": Z, "when": d.index[i], "bp": bp})
+                        i += hold_bars
+                    else:
+                        i += 1
+    ic = pd.DataFrame(ic_rows).groupby(["column", "k", "h", "fold"]).ic.mean().unstack("fold")
+    ic = ic.assign(dev=ic[[1, 2]].mean(axis=1), holdout=ic[[3, 4]].mean(axis=1))
+    quads = pd.DataFrame(quad_rows).groupby(["k", "oi", "fold"]).bp.mean().unstack("fold")
+    r = pd.DataFrame(rule_rows)
+    r["period"] = np.where(r.when < cut, "dev", "holdout")
+    r["fold"] = fold_of(pd.DatetimeIndex(r.when))
+    rule = r.groupby(["k", "Z", "period"]).bp.agg(["size", "mean", "sem"]).unstack("period")
+    rule.columns = [f"{period}_{stat}" for stat, period in rule.columns]
+    rule = rule.join(r.groupby(["k", "Z", "fold"]).bp.mean().unstack("fold").add_prefix("fold "))
+    return ic, quads, rule
+
+
 def futures_at_alarm(f: pd.DataFrame, columns: dict) -> pd.DataFrame:
     """`at_alarm`'s rows with the futures columns at the alarm, signed into the leg it closes.
 
@@ -550,6 +673,12 @@ def _selfcheck() -> None:
     p = {"beta": np.zeros(5), "m0": 0.05, "s0": 0.01, "m1": -0.05, "s1": 0.01, "base": 0.05}
     m = match(alarms(x, shiryaev, p, 0.9, True), truth, cut)
     assert m["found"] == 1.0 and m["delay"] == 1.0 and m["false"] == 0.0, m
+    # The gate on the leg's extreme: tops at 0.6 keep every short at 0.5, bottoms at 0 reject every
+    # long, and a rejected long closes the short at its own close and stands flat to the next short.
+    kept, on = gate(z, x, 0.5, "extreme", True)
+    assert set(kept[kept != 0]) == {-1.0}
+    assert on.iloc[turns[1] + 3] and not on.iloc[turns[1] + 4] and on.iloc[turns[2] + 3]
+    assert gate(z, x, 0.5, "extreme", False)[1].all()
     # An alarm on the wrong side is false, a later one on the right side is a re-entry, not a detection.
     noisy = z.copy()
     noisy.iloc[turns[0] + 6] = 1.0
@@ -566,6 +695,8 @@ def main() -> None:
     ap.add_argument("--features", type=float, metavar="P", help="what tells Shiryaev P's true alarms from false ones")
     ap.add_argument("--sl", type=float, nargs="+", metavar="ATR", help="Shiryaev 0.5's trades with these stops")
     ap.add_argument("--futures", action="store_true", help="funding, open interest, flow and book depth (data.futures)")
+    ap.add_argument("--gate", type=float, nargs="+", metavar="L", help="zigzag 0.2 and Shiryaev 0.5 past these levels")
+    ap.add_argument("--oi", action="store_true", help="open interest behind the move: IC, quadrants, a 48-bar rule")
     args = ap.parse_args()
 
     _selfcheck()
@@ -573,6 +704,33 @@ def main() -> None:
     series = {"prediction": pred, "rsi 12": strategy.rsi(pred.index)}
     pd.set_option("display.width", 250)
     truth = turn_events(pred, strategy.WINDOW)
+    if args.oi:
+        ic, quads, rule = open_interest(close, cut)
+        print("rank IC with the h-bar forward return, mean of ETH/BTC/SOL\n")
+        print(ic.round(3).to_string())
+        print("\nthe next 48 bars in the direction of the last k-bar move, bp, by whether open interest rose with it\n")
+        print(quads.round(1).to_string())
+        print("\nfollow the move when open interest rose, fade it when it fell, out after 48 bars; bp a trade\n")
+        print(rule.round(1).to_string())
+        return
+    if args.gate:
+        p, rows, bars = fit(pred, cut), [], strategy.ohlc(pred.index)
+        for name, found in (
+            ("zigzag 0.2", alarms(pred, zigzag, 0.2)),
+            ("shiryaev 0.5", alarms(pred, shiryaev, p, 0.5)),
+        ):
+            rows.append({"detector": name, "gate": "none"} | book(found, close, cut))
+            for where in ("alarm", "extreme"):
+                for shut in (True, False):
+                    for level in args.gate:
+                        kept, on = gate(found, pred, level, where, shut)
+                        label = f"{where}, {'close' if shut else 'ignore'} {level:g}"
+                        held = strategy.walked(kept, bars, on=on)[2]
+                        rows.append({"detector": name, "gate": label} | _periods(held, cut))
+        t = pd.DataFrame(rows).set_index(["detector", "gate"]).filter(regex="^(?!.*stopped)")
+        print("signals kept only past a level; bp a trade, no fees; n is trades over the period\n")
+        print(t.round(1).to_string())
+        return
     if args.futures:
         columns = {sym: futures_columns(sym, close.xs(sym, level=1)) for sym in strategy.ASSETS}
         print("rank IC with the forward log return, mean of ETH/BTC/SOL, one sample every h bars\n")

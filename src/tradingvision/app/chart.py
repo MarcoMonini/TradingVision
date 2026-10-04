@@ -20,7 +20,8 @@ priced: the band (long under -t, short over +t), re-entry (long when the predict
 turns at confirmation. A fifth, the turns found in hindsight, reads the future and is drawn under a
 warning, as the diagnostic it is. Two more are `detect`'s turn detectors: the zigzag, which flips
 when the prediction comes back h from its extreme, and Shiryaev's, which flips when the probability
-that the leg has turned reaches p, on the parameters fitted on v2's development folds. Each reads
+that the leg has turned reaches p, on the parameters fitted on v2's development folds, and either
+can keep only the signals past a level (`detect.gate`), drawing the dropped ones grey. Each reads
 the prediction or its mean over the last k bars, can take every trade on the other side, and can
 trade only while BTC is under its 200-day mean, read on Alpaca's daily closes fetched with the
 candles.
@@ -604,6 +605,8 @@ def rule_panels(
     band: float,
     posterior: float,
     h: float,
+    dropped: pd.Series | None = None,
+    level: float = 0.0,
 ) -> list[dict]:
     """The rule's rows: what it reads, where it asked for a side, and what a detector decided on.
 
@@ -612,7 +615,8 @@ def rule_panels(
     filter left the position flat — the triangles on the candles are what was executed, these are
     what was asked. `turns` are the input's own centred turns, which read the future; with them
     each marker is judged, filled on the right side of the leg it was taken in and hollow when the
-    leg it bet against was still running, as `detect.kinds` judges an alarm.
+    leg it bet against was still running, as `detect.kinds` judges an alarm. `dropped` are the
+    detector's alarms the level gate (`detect.gate`) refused, drawn grey, and `level` its two lines.
     """
     asked = signal.replace(0.0, np.nan)
     asked = asked[asked.notna() & (asked != asked.ffill().shift())]
@@ -666,11 +670,25 @@ def rule_panels(
                     + "<extra></extra>",
                 )
             )
+    if dropped is not None and dropped.any():
+        at = dropped.index[dropped != 0]
+        traces.append(
+            go.Scatter(
+                x=at,
+                y=raw.reindex(at),
+                mode="markers",
+                marker=dict(size=9, symbol="x-thin", color="#7f8c8d", line=dict(width=2, color="#7f8c8d")),
+                name="dropped",
+                showlegend=False,
+                hovertemplate="%{x}<br>a signal the level filter dropped<extra></extra>",
+            )
+        )
+    lines = [band, -band] if rule in BANDED else [level, -level] if level else []
     panels = [
         {
             "title": "What the rule reads — the raw prediction — and where it asked for a side",
             "traces": traces,
-            "hlines": [(band, "#888"), (-band, "#888")] if rule in BANDED else [],
+            "hlines": [(y, "#888") for y in lines],
         }
     ]
     if rule == "shiryaev":
@@ -830,6 +848,7 @@ def main() -> None:
     # and is labelled as the diagnostic it is.
     ruling, rule, band, turn_window, mean, inverse, filtered = False, "band", THRESHOLD, 12, 1, False, False
     h, posterior, prior, hindsight = 0.2, POSTERIORS[0], True, False
+    level, level_at, level_close = 0.0, "alarm", True
     take, stop, after_stop, after_take, tie_stop, trail = None, None, stops.AFTER[0], stops.AFTER[0], True, False
     if swinging or v2_drawn:
         ruling = st.sidebar.toggle(
@@ -889,6 +908,30 @@ def main() -> None:
                     "At confirmation the rule acts that many bars after the turn; in hindsight it acts on the "
                     "turn itself, which nobody can know at the time",
                 )
+            if rule in DETECTORS:
+                # Fewer signals by where they happen: a long only from deep enough, a short only from
+                # high enough. `detect --gate` measured 0.1 to 0.5 both ways and found no gate that pays.
+                level = st.sidebar.slider(
+                    "Keep a signal only past ±L",
+                    0.0,
+                    0.6,
+                    0.0,
+                    0.05,
+                    help="0 is off. A long only where the raw prediction is at or under −L, a short only at or over "
+                    "+L. In the study it cut the trades by up to 50 times and left the gross per trade near zero",
+                )
+                if level:
+                    level_at = st.sidebar.selectbox(
+                        "…the level read at",
+                        ["alarm", "extreme"],
+                        format_func={"alarm": "the signal's bar", "extreme": "the extreme of the leg it closes"}.get,
+                    )
+                    level_close = st.sidebar.selectbox(
+                        "A dropped signal",
+                        [True, False],
+                        format_func={True: "closes the position, then flat", False: "is ignored"}.get,
+                        help="closing stands the rule flat until the next kept signal; ignoring holds the side it had",
+                    )
             if rule not in DETECTORS:
                 # The detectors were fitted on the prediction bar by bar; a mean would change the very
                 # increments their evidence is measured on.
@@ -1044,8 +1087,16 @@ def main() -> None:
         elif rule == "shiryaev":
             trace = detect.shiryaev(live.to_numpy(), detect.V2_FIT, posterior, not prior, h, trace=True)
             trace = trace.set_axis(live.index)
+        # What `walked` may trade on: the BTC filter, and the level gate's flat stretches. Kept apart
+        # from `on`, which the caption reads as the BTC filter alone.
+        dropped, allowed = None, on
         if trace is not None:
-            sig = threshold.on_one(-trace.alarm if inverse else trace.alarm)
+            alarm = threshold.on_one(trace.alarm)
+            if level:
+                kept, gated = detect.gate(alarm, threshold.on_one(live), level, level_at, level_close)
+                dropped, alarm = alarm.where(kept == 0, 0.0).droplevel(1), kept
+                allowed = gated if allowed is None else allowed & gated
+            sig = -alarm if inverse else alarm
         else:
             sig = strategy.signal(threshold.on_one(live), rule, band, turn_window, mean, inverse)
         got = strategy.walked(
@@ -1057,7 +1108,7 @@ def main() -> None:
             after_take=after_take,
             trail=trail,
             tie_stop=tie_stop,
-            on=on,
+            on=allowed,
             atr_window=feature_window,
         )
         rule_pos, rule_pnl, fills = got[0].droplevel(1), got[1].droplevel(1), got[2].reset_index(drop=True)
@@ -1066,7 +1117,7 @@ def main() -> None:
             judged = detect.match(sig, turns, live.index[-1] + pd.Timedelta("1D"))
         if turns is not None:
             turns = turns.droplevel(1)
-        panels = rule_panels(live, sig.droplevel(1), turns, trace, rule, band, posterior, h)
+        panels = rule_panels(live, sig.droplevel(1), turns, trace, rule, band, posterior, h, dropped, level)
 
     if normalized and len(feats.columns):
         # Fitted on the window on screen, which is what a chart can do and not what the dataset
@@ -1202,7 +1253,13 @@ def main() -> None:
                 else "with the same prior on every bar"
             )
             + (f", and only once the prediction has come back **{h:.2f}** from its extreme" if h else ""),
-        }[rule]
+        }[rule] + (
+            f"; a long kept only where the prediction is at or under **−{level:.2f}** and a short only at or over "
+            f"**+{level:.2f}**, read at {'the signal' if level_at == 'alarm' else 'the extreme of the leg it closes'}, "
+            + ("and a dropped signal closes the position" if level_close else "and a dropped signal is ignored")
+            if level and rule in DETECTORS
+            else ""
+        )
         st.caption(
             f"Rule: {entry}"
             + (f", read on the mean of the last **{mean}** predictions" if mean > 1 and rule not in DETECTORS else "")
