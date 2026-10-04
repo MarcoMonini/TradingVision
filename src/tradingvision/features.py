@@ -216,7 +216,8 @@ def features(df: pd.DataFrame, n: int = EXTREMA_WINDOW) -> pd.DataFrame:
         # is harmed: `normalize` applies the same affine map to every symbol, and a monotone map
         # leaves the ranking inside a timestamp — which is all the label reads — untouched.
         "log_dollar_volume": np.log((v * c).rolling(n).mean()),
-        "volume_trend": np.log(v.rolling(short).mean() / v.rolling(n).mean()),
+        # Masked before the log: a run of `short` empty bars is a zero mean, NaN here as it would be below.
+        "volume_trend": np.log((v.rolling(short).mean() / v.rolling(n).mean()).replace(0, np.nan)),
         # Rolling, not cumulated from the start of the series: a running total is not stationary.
         "on_balance_volume_zscore": (obv - obv.rolling(n).mean()) / obv.rolling(n).std(),
         "distance_from_vwap_pct": np.log(
