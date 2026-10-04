@@ -940,6 +940,12 @@ del 2026-07-01.
   ritracciamento di 0,4 porta i falsi allarmi da 0,35 a 0,07 per svolta, ma le rilevazioni scendono
   da +31 a +16 bp e i falsi rimasti salgono da −80 a −138: sviluppo +2,8, hold-out −9,7. Sulle
   dodici combinazioni provate, sviluppo da +0,6 a +6,5 e hold-out da −0,8 a −15,6.
+- **Separare gli allarmi veri dai falsi si può, e non rende** (`--features`). Sedici variabili note
+  all'allarme, logistica sullo sviluppo: AUC 0,637, hold-out 0,629, dal 53% al 83% di allarmi veri
+  fra il quintile peggiore e il migliore. Ma salendo di quintile gli allarmi veri guadagnano meno
+  (+49 → +25 bp) e i falsi perdono di più (−68 → −99): ogni quintile fa fra −6,6 e +6,5.
+- **Lo stop loss taglia falsi e veri insieme** (`--sl`). A 1 ATR i falsi allarmi passano da −80 a
+  −42 bp, le rilevazioni giuste da +31 a +17; nessuno stop da 1 a 6 ATR esce da −1,4 / +1,6 bp.
 - Le altre prove (media breve, take profit, soglie alte, filtro di volatilità, momentum, inversa
   della peggiore) sono nella docstring di `strategy.py`, con i numeri.
 

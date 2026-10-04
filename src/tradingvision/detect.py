@@ -55,6 +55,28 @@ move against the leg, so the leg's return to its course costs more. Over the twe
 -15.6. A filter on the same information is one more stopping time on it: telling a true turn from a
 false one at the alarm takes information about the next leg, which neither detector has.
 
+**Telling a true alarm from a false one is possible, and pays nothing** (`--features`, `at_alarm`,
+`separate`). At Shiryaev 0.5, sixteen columns known at the alarm, each signed into the leg the
+alarm closes: from the prediction, from the price, the six exhaustion columns at 12 bars, the BTC
+filter. The retracement from the leg's extreme separates best (AUC 0.592 on development, 0.600 on
+the hold-out), then the price's retracement in ATR (0.580 / 0.603), the leg's move in units of its
+noise (0.579 / 0.599) and `stretch` (0.573 / 0.582). A logistic on all of them reaches 0.637 /
+0.629, and the share of true alarms runs from 53% in its bottom quintile to 83% in its top on
+development, 60% to 86% on the hold-out. No column correlates with the gross of the trade beyond
+|0.06| in either period, and up the quintiles the true alarms make less as they become likelier
+(+49 to +25 bp on development, +40 to +9 on the hold-out) while the false ones lose more (-68 to
+-99, -65 to -102): every quintile makes between -6.6 and +6.5. What says a turn has happened is how
+far it has gone, which is how much of it is already spent.
+
+**A stop loss cuts the false alarms and the true ones alike** (`--sl`). At 1 ATR (at 12 bars) it
+closes 96% of the false-alarm trades and halves their loss, -79.8 to -41.6 bp, and closes 51% of the
+right detections, which fall from +31.0 to +17.4; at 2 ATR -68.3 and +27.0. The book makes +0.6 /
++1.1 bp a trade at 1 ATR and -0.5 / +1.3 at 2, and no stop from 1 to 6 ATR, fixed or trailing,
+leaves -1.4 to +1.6. The trailing stop at 1 ATR is positive in all four folds, +0.6 to +2.0, on
+trades of two to four bars: a thirtieth of a 50 bp round trip. Right after an alarm the price is as
+noisy around a true turn as around a false one, so a level that closes the false ones closes the
+true ones too.
+
 **Why: optional stopping.** If the log price is a martingale, E[p_T - p_S | F_S] = 0 for any two
 stopping times S <= T, so a trade a causal detector opens and closes has zero expected gross
 whatever its delay and false alarms. The hindsight table does not contradict it because τ + d,
@@ -83,6 +105,8 @@ null standard deviations and changes sign between folds.
     uv run python -m tradingvision.detect --shiryaev 0.5 0.7 0.8 0.9 0.95 0.98 0.99 [--flat]
     uv run python -m tradingvision.detect --shiryaev 0.5 0.9 --zigzag 0.2 --split
     uv run python -m tradingvision.detect --shiryaev 0.5 0.7 0.9 --both 0.1 0.2 0.3 0.4 --split
+    uv run python -m tradingvision.detect --features 0.5
+    uv run python -m tradingvision.detect --sl 1 2 3 4 6
 """
 
 from __future__ import annotations
@@ -93,7 +117,8 @@ import math
 import numpy as np
 import pandas as pd
 
-from tradingvision import strategy
+from tradingvision import legs, strategy
+from tradingvision.data.binance import load as candles
 from tradingvision.strategy import fold_of, hold, plain, turn_events
 
 POST = 6  # the first bars of a leg that make the post-turn increment distribution
@@ -227,19 +252,23 @@ def match(found: pd.Series, truth: pd.Series, cut: pd.Timestamp) -> dict:
 
 def book(found: pd.Series, close: pd.Series, cut: pd.Timestamp) -> dict:
     """bp a trade of the always-in rule that flips at each alarm, development and hold-out, and by fold."""
-    held = plain(hold(found), close)[2]
+    return _periods(plain(hold(found), close)[2], cut)
+
+
+def _periods(held: pd.DataFrame, cut: pd.Timestamp) -> dict:
+    """bp a trade with its error and count on development and on the hold-out, and by fold."""
     when = pd.DatetimeIndex(held.entry)
     row = {}
     for period, keep in (("dev", when < cut), ("holdout", when >= cut)):
         g = held.gross[keep]
         row |= {f"{period}_bp": g.mean() * 1e4, f"{period}_se": g.std() / np.sqrt(len(g)) * 1e4, f"{period}_n": len(g)}
+        if "why" in held:
+            row[f"{period}_stopped"] = (held.why[keep] == "stop").mean()
     return row | (held.gross.groupby(fold_of(when)).mean() * 1e4).rename(lambda k: f"fold {k}").to_dict()
 
 
-def split(found: pd.Series, truth: pd.Series, close: pd.Series, cut: pd.Timestamp) -> pd.DataFrame:
-    """Development's trades by what opened them: a detection, a false alarm, a re-entry after one."""
-    held = plain(hold(found), close)[2]
-    held = held[pd.DatetimeIndex(held.entry) < cut].copy()
+def kinds(held: pd.DataFrame, truth: pd.Series) -> list[str]:
+    """What opened each trade: a detection, a false alarm, or a re-entry after a false alarm."""
     kind, seen = [], set()
     for s, row in held.iterrows():
         t = truth.xs(s, level=1)
@@ -250,8 +279,120 @@ def split(found: pd.Series, truth: pd.Series, close: pd.Series, cut: pd.Timestam
         else:
             kind.append("re-entry" if (s, i) in seen else "detection")
             seen.add((s, i))
-    g = held.assign(kind=kind).groupby("kind")
-    return pd.DataFrame({"trades": g.size(), "bp": g.gross.mean() * 1e4, "bars": g.bars.mean()})
+    return kind
+
+
+def split(held: pd.DataFrame, truth: pd.Series, cut: pd.Timestamp) -> pd.DataFrame:
+    """Development's trades by what opened them, with the share a stop closed."""
+    held = held[pd.DatetimeIndex(held.entry) < cut]
+    g = held.assign(kind=kinds(held, truth), stopped=held.get("why", pd.Series("", index=held.index)) == "stop")
+    g = g.groupby("kind")
+    return pd.DataFrame(
+        {"trades": g.size(), "bp": g.gross.mean() * 1e4, "bars": g.bars.mean(), "stopped": g.stopped.mean()}
+    )
+
+
+def _auc(score: np.ndarray, y: np.ndarray) -> float:
+    """P(a true alarm scores above a false one), from the ranks (Mann-Whitney)."""
+    r = pd.Series(score).rank().to_numpy()
+    n1 = y.sum()
+    return (r[y == 1].sum() - n1 * (n1 + 1) / 2) / (n1 * (len(y) - n1))
+
+
+def at_alarm(found: pd.Series, x: pd.Series, close: pd.Series, truth: pd.Series, window: int = strategy.WINDOW):
+    """One row per alarm: whether it was true, the gross of the trade it opened, and what was known then.
+
+    Every column is signed into the leg the alarm says is over and reads nothing after the alarm
+    bar: from the prediction its level, the leg's extreme, the retracement from it, the last move,
+    the leg's age; from the price the leg's move in units of its noise, the retracement from the
+    extreme in ATR, the volatility, the volume against its day; the six exhaustion columns at the
+    model's window; and the BTC filter of `strategy`.
+    """
+    rows = []
+    for sym in x.index.get_level_values(1).unique():
+        xv, a, t = x.xs(sym, level=1), found.xs(sym, level=1), truth.xs(sym, level=1)
+        t = t[t != 0]
+        bars = candles(sym, "15m")
+        ex = legs.exhaustion(bars, window).reindex(xv.index)
+        sigma = np.log(bars.close).diff().rolling(4 * window).std().reindex(xv.index)
+        c = close.xs(sym, level=1)
+        high, low = bars.high.reindex(xv.index), bars.low.reindex(xv.index)
+        atr = (np.maximum(high, c.shift()) - np.minimum(low, c.shift())).rolling(window).mean() / c
+        volume = (bars.volume / bars.volume.rolling(96).mean()).reindex(xv.index)
+        below = strategy.below(pd.MultiIndex.from_arrays([xv.index, [sym] * len(xv)], names=x.index.names)).to_numpy()
+        v, lc = xv.to_numpy(), np.log(c.to_numpy())
+        at = np.flatnonzero(a.to_numpy() != 0)
+        for k, i in enumerate(at):
+            kind = a.iloc[i]
+            side, start = -kind, at[k - 1] if k else 0
+            leg_x, leg_c = side * v[start : i + 1], side * lc[start : i + 1]
+            j = t.index.searchsorted(xv.index[i], side="right") - 1
+            end = at[k + 1] if k + 1 < len(at) else len(v) - 1
+            rows.append(
+                {
+                    "symbol": sym,
+                    "when": xv.index[i],
+                    "true": int(j >= 0 and t.iloc[j] == kind),
+                    "gross": kind * (lc[end] - lc[i]),
+                    "level": side * v[i - 1],
+                    "extreme": leg_x.max(),
+                    "retrace": leg_x.max() - side * v[i],
+                    "move": side * (v[i] - v[i - 1]),
+                    "age": i - start,
+                    "leg_move": (leg_c[-1] - leg_c[0]) / (sigma.iloc[i] * np.sqrt(max(i - start, 1))),
+                    "price_retrace": (leg_c.max() - leg_c[-1]) / atr.iloc[i],
+                    "volatility": sigma.iloc[i],
+                    "volume": volume.iloc[i],
+                    "btc_below": float(below[i]),
+                }
+                | {f"ex_{col}": side * ex[col].iloc[i] for col in legs.EXHAUSTION}
+            )
+    return pd.DataFrame(rows).dropna()
+
+
+def separate(f: pd.DataFrame, cut: pd.Timestamp) -> tuple[pd.DataFrame, tuple[float, float], pd.DataFrame]:
+    """How well each column, and a logistic on all of them, tells true alarms from false ones.
+
+    Each column's direction and the logistic are fitted on development; the AUC is read on both
+    periods, and so is the rank correlation with the trade's gross, which is what pays. The
+    quintiles of the logistic's score, cut on development, give the share of true alarms and what
+    a true and a false alarm each make there.
+    """
+    dev = (f.when < cut).to_numpy()
+    cols = [c for c in f.columns if c not in ("symbol", "when", "true", "gross")]
+    y = f.true.to_numpy()
+    rows = []
+    for col in cols:
+        a = _auc(f[col].to_numpy()[dev], y[dev])
+        sign = 1 if a >= 0.5 else -1
+        rows.append(
+            {
+                "column": col,
+                "auc_dev": max(a, 1 - a),
+                "auc_holdout": _auc(sign * f[col].to_numpy()[~dev], y[~dev]),
+                "ic_gross_dev": np.corrcoef(f[col][dev].rank(), f.gross[dev])[0, 1],
+                "ic_gross_holdout": np.corrcoef(f[col][~dev].rank(), f.gross[~dev])[0, 1],
+            }
+        )
+    one = pd.DataFrame(rows).set_index("column").sort_values("auc_dev", ascending=False)
+    z = ((f[cols] - f[cols][dev].mean()) / f[cols][dev].std()).clip(-5, 5).to_numpy()
+    X = np.column_stack([np.ones(len(z)), z])
+    score = X @ _logit(X[dev], y[dev].astype(float))
+    both = (_auc(score[dev], y[dev]), _auc(score[~dev], y[~dev]))
+    q = np.searchsorted(np.quantile(score[dev], [0.2, 0.4, 0.6, 0.8]), score) + 1
+    frame = f.assign(period=np.where(dev, "dev", "holdout"), q=q)
+    keys = ["period", "q"]
+    g = frame.groupby(keys)
+    by = pd.DataFrame(
+        {
+            "alarms": g.size(),
+            "share_true": g.true.mean(),
+            "true_bp": frame[frame.true == 1].groupby(keys).gross.mean() * 1e4,
+            "false_bp": frame[frame.true == 0].groupby(keys).gross.mean() * 1e4,
+            "all_bp": g.gross.mean() * 1e4,
+        }
+    )
+    return one, both, by
 
 
 def _selfcheck() -> None:
@@ -285,12 +426,39 @@ def main() -> None:
     ap.add_argument("--flat", action="store_true", help="with --shiryaev: also the flat-hazard detector")
     ap.add_argument("--both", type=float, nargs="+", metavar="H", help="with --shiryaev: also wait for a retracement")
     ap.add_argument("--split", action="store_true", help="where each detector's P&L goes, on the prediction")
+    ap.add_argument("--features", type=float, metavar="P", help="what tells Shiryaev P's true alarms from false ones")
+    ap.add_argument("--sl", type=float, nargs="+", metavar="ATR", help="Shiryaev 0.5's trades with these stops")
     args = ap.parse_args()
 
     _selfcheck()
     pred, close, cut = strategy.load()
     series = {"prediction": pred, "rsi 12": strategy.rsi(pred.index)}
     pd.set_option("display.width", 250)
+    truth = turn_events(pred, strategy.WINDOW)
+    if args.features:
+        f = at_alarm(alarms(pred, shiryaev, fit(pred, cut), args.features), pred, close, truth)
+        one, (dev, holdout), by = separate(f, cut)
+        print(f"shiryaev {args.features}: {len(f)} alarms, {f.true.mean():.0%} true\n")
+        print(one.round(3).to_string())
+        print(f"\nlogistic on every column, fitted on development: AUC {dev:.3f}, hold-out {holdout:.3f}\n")
+        print(by.round(2).to_string())
+        return
+    if args.sl:
+        found, bars = alarms(pred, shiryaev, fit(pred, cut), 0.5), strategy.ohlc(pred.index)
+        rows, parts = [], {}
+        for k in [0.0, *args.sl]:
+            for trail in (False, True) if k else (False,):
+                label = f"stop {k:g} ATR" + (", trailing" if trail else "") if k else "no stop"
+                stop = ("atr", k) if k else None
+                held = strategy.walked(found, bars, stop=stop, after="opposite", trail=trail)[2]
+                rows.append({"rule": label} | _periods(held, cut))
+                parts[label] = split(held, truth, cut)
+        print("shiryaev 0.5 on the prediction; after a stop, flat until the next alarm\n")
+        print(pd.DataFrame(rows).set_index("rule").round(2).to_string())
+        for label, table in parts.items():
+            print(f"\n{label}, development, by what opened the trade\n")
+            print(table.round(2).to_string())
+        return
     rows, splits = [], {}
     for name, x in series.items():
         truth = turn_events(x, strategy.WINDOW)
@@ -311,7 +479,7 @@ def main() -> None:
         for label, found in runs:
             rows.append({"signal": name, "detector": label} | match(found, truth, cut) | book(found, close, cut))
             if args.split and name == "prediction":
-                splits[label] = split(found, truth, close, cut)
+                splits[label] = split(plain(hold(found), close)[2], truth, cut)
     print("\nagainst each series' own centred turns at 12 bars; found, delay and false alarms on development\n")
     print(pd.DataFrame(rows).set_index(["signal", "detector"]).round(2).to_string())
     for label, table in splits.items():
