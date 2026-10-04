@@ -957,6 +957,11 @@ del 2026-07-01.
   interest in calo tornano indietro (−22 / −13 / −2 / −6). Letto fra 64 varianti, hold-out incluso;
   come regola (segui o contrasta oltre |z|, esci dopo 48 barre) fa da −6,9 a +0,7 bp sullo sviluppo
   e il fold 2 è negativo in tutte e dodici le varianti.
+- **L'open interest come conferma non conferma** (`--confirm`). Lato del segnale per open interest
+  dietro al movimento: il lordo del trade non sale con la conferma (rivelatori fra −9 e +7 bp per
+  quintile); tenere solo i segnali confermati abbassa lo sviluppo e alza un poco l'hold-out
+  (Shiryaev 0,5, k = 12, conferma ≥ 1: −1,6 / +12,3), con il fold 2 negativo e il 4 positivo quasi
+  ovunque, lo schema della regola sull'open interest. Tenuti 48 barre, da −11 a +20 bp.
 - **Filtro sul livello dei segnali** (`--gate`): tiene un long solo sotto −L e uno short solo sopra
   +L. Porta lo zigzag da 5.288 a 93 trade sullo sviluppo a L = 0,5, ma il lordo per trade resta
   intorno a zero (chiudendo sui segnali scartati: da −3,2 a +4,2 sullo sviluppo, da −9,2 a +0,9

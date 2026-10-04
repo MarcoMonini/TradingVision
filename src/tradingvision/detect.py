@@ -113,6 +113,15 @@ the hold-out. The one row positive on all four folds, the zigzag at L = 0.5 read
 closing, makes +12.5 +/- 14.7 and +19.2 +/- 16.6 on 160 trades, and Shiryaev's detector through the
 same gate makes -3.2 / -3.5. Fewer trades pay fewer fees; they do not pay more each.
 
+**Open interest as a confirmation does not confirm** (`--confirm`, `confirmation`). Each signal times
+open interest behind the last k bars' move, positive where the column says the next bars go the
+signal's way. The gross of the trade a signal opens does not rise with it: across its quintiles
+the detectors stay between -9 and +7 bp. Keeping only confirmed signals (a rejected one closes)
+moves development down and the hold-out up by a few bp, Shiryaev 0.5 at k = 12 and a confirmation
+of 1 making -1.6 +/- 7.5 and +12.3 +/- 7.0, with fold 2 negative and fold 4 positive almost
+everywhere: the pattern of the open-interest rule itself, the period and not the signal. The
+column is too small and too unstable at these horizons to move a signal it is laid on.
+
 **Why: optional stopping.** If the log price is a martingale, E[p_T - p_S | F_S] = 0 for any two
 stopping times S <= T, so a trade a causal detector opens and closes has zero expected gross
 whatever its delay and false alarms. The hindsight table does not contradict it because τ + d,
@@ -146,6 +155,7 @@ null standard deviations and changes sign between folds.
     uv run python -m tradingvision.detect --futures   # needs `python -m tradingvision.data.futures` first
     uv run python -m tradingvision.detect --oi
     uv run python -m tradingvision.detect --gate 0.1 0.2 0.3 0.4 0.5
+    uv run python -m tradingvision.detect --confirm
 """
 
 from __future__ import annotations
@@ -622,6 +632,21 @@ def open_interest(close: pd.Series, cut: pd.Timestamp, ks=(4, 12, 24), horizons=
     return ic, quads, rule
 
 
+def confirmation(sig: pd.Series, close: pd.Series, k: int) -> pd.Series:
+    """At each signal, the signal's side times open interest behind the last `k` bars' move.
+
+    The column predicts the next bars' direction (a move continues when positions were opened
+    behind it, reverses when they were closed), so the product is positive where it agrees with
+    the signal: a long at the end of a fall is confirmed when the fall was made closing positions.
+    """
+    parts = []
+    for sym in strategy.ASSETS:
+        d = behind_the_move(sym, close.xs(sym, level=1), k)
+        col = (d.move * d.oi_z).reindex(close.xs(sym, level=1).index)
+        parts.append(pd.Series(col.to_numpy(), index=close.xs(sym, level=1, drop_level=False).index))
+    return (sig * pd.concat(parts).reindex(sig.index)).where(sig != 0)
+
+
 def futures_at_alarm(f: pd.DataFrame, columns: dict) -> pd.DataFrame:
     """`at_alarm`'s rows with the futures columns at the alarm, signed into the leg it closes.
 
@@ -697,6 +722,7 @@ def main() -> None:
     ap.add_argument("--futures", action="store_true", help="funding, open interest, flow and book depth (data.futures)")
     ap.add_argument("--gate", type=float, nargs="+", metavar="L", help="zigzag 0.2 and Shiryaev 0.5 past these levels")
     ap.add_argument("--oi", action="store_true", help="open interest behind the move: IC, quadrants, a 48-bar rule")
+    ap.add_argument("--confirm", action="store_true", help="open interest as a confirmation of the rules' signals")
     args = ap.parse_args()
 
     _selfcheck()
@@ -704,6 +730,26 @@ def main() -> None:
     series = {"prediction": pred, "rsi 12": strategy.rsi(pred.index)}
     pd.set_option("display.width", 250)
     truth = turn_events(pred, strategy.WINDOW)
+    if args.confirm:
+        p, bars, rows = fit(pred, cut), strategy.ohlc(pred.index), []
+        rules = {
+            "shiryaev 0.5": alarms(pred, shiryaev, p, 0.5),
+            "zigzag 0.2": alarms(pred, zigzag, 0.2),
+            "reentry 0.40": strategy.signal(pred, "reentry", 0.40),
+        }
+        for k in (4, 12, 24):
+            for name, sig in rules.items():
+                conf = confirmation(sig, close, k)
+                rows.append({"k": k, "signal": name, "keep": "all"} | _periods(plain(hold(sig), close)[2], cut))
+                for c in (0.0, 0.5, 1.0):
+                    # `gate` keeps a long where x <= -c and a short where x >= c: x = -side * conf.
+                    kept, on = gate(sig, (-sig * conf).fillna(0.0), c, "alarm", True)
+                    held = strategy.walked(kept, bars, on=on)[2]
+                    rows.append({"k": k, "signal": name, "keep": f"confirmed >= {c:g}"} | _periods(held, cut))
+        t = pd.DataFrame(rows).set_index(["k", "signal", "keep"]).filter(regex="^(?!.*stopped)")
+        print("signals kept only where open interest confirms them, a rejected one closes; bp a trade, no fees\n")
+        print(t.round(1).to_string())
+        return
     if args.oi:
         ic, quads, rule = open_interest(close, cut)
         print("rank IC with the h-bar forward return, mean of ETH/BTC/SOL\n")
