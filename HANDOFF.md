@@ -1042,3 +1042,32 @@ consumato. Il report dello studio, passo per passo e con i grafici, è `strategy
    futuro in tutti i fold, mai provate come ingresso di una regola su questa predizione.
 6. Le CLI di `threshold`, `stops` e `swingrule` leggono ancora il formato di `gru` (§16, punto 1).
    `strategy` legge già quello di `swing`.
+
+## 18. La commissione di OKX, e la policy in `OLD/` (2026-10-04, ramo `claude/okx-fee`)
+
+**La commissione.** Alpaca resta il feed della pagina ma non è la sede dei trade: non è
+specializzata in crypto e costa troppo. La sede è OKX: spot taker, livello base, **0,10% per lato,
+20 bp andata e ritorno**, contro i 25 / 50 di Alpaca. `oracle.FEE` passa da 0,0025 a 0,001 e ogni
+modulo la legge da lì, pagina compresa: non c'è una seconda costante. Tutti i numeri di questo file
+fino al §17 sono presi a 0,25%; per riprodurne uno si passa `--fee 0.0025`.
+
+Cambia la lettura di quanto sopra. Le due righe positive del §17 (zigzag e Shiryaev con il filtro
+sul livello, fra +12,5 e +28,4 bp lordi a trade) erano "sotto i 50 bp", e oggi stanno attorno ai
+20: il punto 2 dell'elenco (l'esecuzione maker) vale ora già in taker. Il punto 1 va misurato alla
+commissione nuova. Le soglie e le barriere di default della pagina restano quelle scelte a 0,25%.
+
+**La policy.** Il secondo stadio di `swing` (`fit_policy`, la testa `policy`, `--stage`, `--band`)
+e il modello a 4h dello step 7 (`models/swing.pt`) sono in `OLD/`, al tag `archive-policy`.
+Nessuna regola di `strategy` o `detect` leggeva il logit della policy: leggono tutte `raw`, la testa
+dell'etichetta. Sul 4h la policy perdeva contro `rsi_centered` (+0,063 contro +0,116), su v2
+convergeva su zero trade. `OLD/README.md` ha la tabella e l'elenco di cosa è uscito.
+
+- `swing` allena solo l'etichetta e sceglie una banda sulla validazione; `--stage label` non esiste
+  più (il comando di v2 lo perde). `restore` scarta la testa `policy.*` che v2 si porta dietro non
+  allenata; il checkpoint non va riscritto.
+- La pagina disegna solo v2. Escono l'interruttore del modello a 4h, le sue quattro metriche (fra
+  cui la quota dell'oracolo raggiungibile) e il suo libro.
+- Il Dockerfile controlla solo `swing-v2.pt`: con l'asserzione vecchia la build sarebbe fallita.
+
+**Verificato.** ruff, black, 52 test. La pagina gira su BTC/USD 15m con v2 (regola, libro, fee 0,10%
+in barra laterale) e senza v2, senza eccezioni.

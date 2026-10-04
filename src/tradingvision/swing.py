@@ -27,28 +27,28 @@ because its errors are not spread evenly: they concentrate at the turns, which i
 every trade is opened and closed. Fitting a Huber to the label spends its gradient on the middle of
 the legs, which is 80% of the rows and none of the decisions.
 
-So the model is trained twice. First on the label, which gives it the structure of a leg and
-costs nothing to reuse. Then **directly on the money**: the position is a differentiable function
-of the output, the reward is the log return it earns minus the fee on every unit of position
-changed, and the gradient of that reward is exact because the price is exogenous — nothing this
-model does moves the market it trades. That is Moody and Saffell's direct reinforcement, and it is
-the right tool here for a reason that is specific rather than fashionable: the objective and the
-metric become the same quantity, so a gradient step can no longer improve the label fit and hurt
-the P&L at once.
+So the model was trained twice: first on the label, which gives it the structure of a leg, then
+**directly on the money** — Moody and Saffell's direct reinforcement, the net P&L of a
+differentiable position with the fee inside the reward. The second stage left on 2026-10-04. On
+4h bars it netted +0.063 a year against +0.116 for `rsi_centered` alone, on v2 it settled on no
+trade in all four folds, and no rule the study trades reads it: `strategy` and `detect` read the
+label head. `OLD/README.md` has its numbers and the git tag `archive-policy` the code.
 
-    uv run python -m tradingvision.swing --stage both
+What is left is the first stage — a Huber on the label, stopped on the validation correlation —
+and a band on its output, chosen on the validation tail with the fee inside the criterion.
+
     uv run python -m tradingvision.swing --timeframe 1h --folds 4 --save
 
     uv run python -m tradingvision.swing --timeframe 15m --window 12 --smoothing 0.5 --inputs reduced \
-        --steps 48 --stage label --test-start 2025-06 --save data/swing-v2.pt
+        --steps 48 --test-start 2025-06 --save data/swing-v2.pt
 
 Swing Leg Position v2: the swing label back, with pivots *and* features at 12 and a time weight of
 0.5. It learns the label — rho 0.644 out of sample — and 0.596 of that is `rsi_centered` at 12 on
 the same rows; against the market-neutral forward return it reads -0.026 at 4, 12 and 48 bars. The
 long-only band nets -0.275 a year on the thirteen tradable pairs against -0.263 for holding, and
-the policy stage, paid in money, settles on no trade in all four folds. At 12 the median leg is
-2.4% against a 0.5% round trip and the oracle that fills 12 bars after each pivot nets +0.11:
-the fee decides before the model does.
+the archived policy stage, paid in money, settled on no trade in all four folds. At 12 the median
+leg is 2.4% against a 0.5% round trip (Alpaca's, the fee then) and the oracle that fills 12 bars
+after each pivot nets +0.11: the fee decides before the model does.
 
 The swing label is the only one this module trains. Two predictive targets ran on the same encoder
 and read nothing of the price — `move_balance` alone (Rank IC +0.0015, t 0.27) and beside the swing
@@ -168,19 +168,6 @@ WEIGHT_DECAY = 1e-4
 GRAD_CLIP = 1.0
 BATCH = 512
 VALID_FRACTION = 0.2
-# Reinforcement. A chunk is an episode: the fee couples neighbouring bars, so a position can only
-# be priced along a stretch of time and never over a shuffled batch.
-CHUNK = 256
-CHUNKS = 48  # episodes per gradient step
-# logit -> position. Measured on the toy of `_selfcheck`, which is built so the supervised prior
-# is wrong and only the reward can fix it: at 4 the sigmoid is saturated, the gradient vanishes and
-# the stage escapes into "always flat" at every learning rate tried; at 2 it recovers the right
-# policy at 1e-3 and above. The trap is real and it is not a toy artefact — a saturated policy on
-# real data looks like a model that has learned to hold, which is exactly what a tired reader
-# wants to believe.
-SHARPNESS = 2.0
-ADOPT = 1.0  # how hard the policy starts out agreeing with the supervised rule; see `Net.adopt`
-POLICY_LR = 1e-3  # the same sweep: 3e-4 never leaves the prior, 1e-3 and 3e-3 both land on it
 DEVICE = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 CHECKPOINT = STORE / "swing.pt"
 TENSOR = STORE / "swing"
@@ -294,10 +281,10 @@ def build(
     before it and never reaches into the symbol before; its first `steps - 1` rows have no window
     and get no `row`, which is what `sequences` expresses with NaN.
 
-    Rows are grouped by symbol and ordered in time inside each group, which is what lets the
-    reinforcement stage cut contiguous episodes out of a fold without re-sorting anything.
-    `before` is where the scaler stops reading, the first fold's cut. `stats` is returned so `save`
-    can ship it: the model was measured on inputs scaled by exactly these quartiles.
+    Rows are grouped by symbol and ordered in time inside each group, so a fold's rows of one
+    symbol are one contiguous stretch. `before` is where the scaler stops reading, the first fold's
+    cut. `stats` is returned so `save` can ship it: the model was measured on inputs scaled by
+    exactly these quartiles.
     """
     blocks, metas, stats, at = [], [], {}, 0
     for symbol in symbols:
@@ -359,7 +346,7 @@ def purge(meta: pd.DataFrame, cut: pd.Timestamp) -> tuple[pd.DataFrame, pd.DataF
     """`(train, test)` around `cut`, train purged of every bar whose leg closes past it.
 
     The archived `split.temporal` said the same thing on a (timestamp, symbol) index; this one
-    reads a plain time index with a `symbol` column, which is the shape the episodes need.
+    reads a plain time index with a `symbol` column, which is the shape the rows are kept in.
     """
     when = meta.index
     return meta[(when < cut) & (meta.next_pivot < cut)], meta[when >= cut]
@@ -377,53 +364,29 @@ def folds(meta: pd.DataFrame, start: str = TEST_START, n: int = FOLDS):
 
 
 class Net(nn.Module):
-    """One GRU, two heads: what the leg is doing, and what to do about it.
-
-    The label head is the supervised stage and the policy head is the reinforcement stage, and
-    they share the encoder on purpose — the structure of a leg is the expensive thing to learn and
-    the label teaches it for free. The policy head is initialised as the negated label head, so
-    the reinforcement stage starts from exactly the rule the supervised model implies: long when
-    the predicted label is low, which is to say when the bar sits near a pivot low.
-    """
+    """One GRU and one head: where the bar sits along its leg."""
 
     def __init__(self, width: int, hidden: int = H, dropout: float = DROPOUT):
         super().__init__()
         self.gru = nn.GRU(width, hidden, batch_first=True)
         self.drop = nn.Dropout(dropout)
         self.head = nn.Linear(hidden, 1)
-        self.policy = nn.Linear(hidden, 1)
         nn.init.zeros_(self.head.bias)
-        nn.init.zeros_(self.policy.bias)
 
-    def encode(self, x: torch.Tensor) -> torch.Tensor:
-        return self.drop(self.gru(x)[1][-1])
-
-    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        h = self.encode(x)
-        return self.head(h).squeeze(-1), self.policy(h).squeeze(-1)
-
-    def adopt(self, scale: float = ADOPT) -> None:
-        """Start the policy from the supervised rule: long when the predicted label is low.
-
-        `scale` is a prior and not a commitment, and it is deliberately not the sigmoid's
-        sharpness: a large one puts the initial logits where the sigmoid is flat, and a stage that
-        cannot move is a stage that agrees with whatever it inherited.
-        """
-        with torch.no_grad():
-            self.policy.weight.copy_(-scale * self.head.weight)
-            self.policy.bias.copy_(-scale * self.head.bias)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.head(self.drop(self.gru(x)[1][-1])).squeeze(-1)
 
 
-def outputs(model: Net, x, rows: np.ndarray, batch: int = 4096) -> tuple[np.ndarray, np.ndarray]:
-    """Both heads over `rows`, in evaluation mode."""
+def outputs(model: Net, x, rows: np.ndarray, batch: int = 4096) -> np.ndarray:
+    """The head over `rows`, in evaluation mode."""
     model.eval()
-    label, logit = [], []
     with torch.no_grad():
-        for at in np.array_split(rows, max(1, len(rows) // batch)):
-            a, b = model(torch.from_numpy(np.asarray(x[at])).to(DEVICE))
-            label.append(a.cpu().numpy())
-            logit.append(b.cpu().numpy())
-    return np.concatenate(label), np.concatenate(logit)
+        return np.concatenate(
+            [
+                model(torch.from_numpy(np.asarray(x[at])).to(DEVICE)).cpu().numpy()
+                for at in np.array_split(rows, max(1, len(rows) // batch))
+            ]
+        )
 
 
 # ---------------------------------------------------------------- the rule and its price
@@ -555,7 +518,7 @@ def choose(signal: np.ndarray, meta: pd.DataFrame, grid=None, fee: float = FEE) 
     """The band and the sign with the best excess over holding, on the rows given — validation only.
 
     Quantiles of the signal and not absolute levels, so the same grid means the same rule whatever
-    scale a stage puts its output on. Asymmetric, because the two ends are not the same decision:
+    scale a model puts its output on. Asymmetric, because the two ends are not the same decision:
     entering late costs the rest of one leg and leaving late costs the whole of the next.
 
     **The sign is searched too, and that is not a hedge.** The rule this label implies is "a low
@@ -566,8 +529,10 @@ def choose(signal: np.ndarray, meta: pd.DataFrame, grid=None, fee: float = FEE) 
     the market, so the direction is a parameter, picked on the same validation rows as the width
     and reported with the fold.
 
-    The criterion is net minus buy and hold, for the reason `valid_score` gives at more length: an
-    absolute one prefers whatever happened to be long in a rising validation tail.
+    The criterion is net minus buy and hold, and not the absolute return. Measured the other way,
+    the answer was "buy and hold": the validation tail of a crypto train period rises, a long-only
+    rule that never sells earns that rise, and nothing in an absolute criterion prefers a strategy
+    to a beta.
     """
     grid = grid if grid is not None else (0.02, 0.05, 0.1, 0.15, 0.2, 0.3)
     best, at = -np.inf, (float(np.quantile(signal, 0.2)), float(np.quantile(signal, 0.8)), 1.0)
@@ -590,7 +555,7 @@ def choose(signal: np.ndarray, meta: pd.DataFrame, grid=None, fee: float = FEE) 
     return at
 
 
-# ---------------------------------------------------------------- the two stages
+# ---------------------------------------------------------------- the fit
 
 
 def rows_of(meta: pd.DataFrame) -> np.ndarray:
@@ -603,51 +568,10 @@ def ordered(meta: pd.DataFrame) -> pd.DataFrame:
     return pd.concat([g.sort_index() for _, g in meta.groupby("symbol", sort=False)])
 
 
-def episodes(meta: pd.DataFrame, chunk: int, count: int, rng: np.random.Generator) -> np.ndarray:
-    """`(count, chunk)` of contiguous tensor rows — the stretches a position can be priced along.
-
-    Contiguous and inside one symbol, because the fee couples a bar to the one before it: a
-    shuffled batch has no `p[t-1]` to charge a change against, and a reward computed on one would
-    be the gross with the costs silently deleted.
-    """
-    blocks = [g.sort_index().row.to_numpy() for _, g in meta.groupby("symbol", sort=False)]
-    blocks = [b for b in blocks if len(b) > chunk + 1]
-    if not blocks:
-        raise ValueError(f"no symbol has {chunk + 1} consecutive rows in this fold")
-    which = rng.integers(0, len(blocks), count)
-    out = np.empty((count, chunk), dtype="int64")
-    for i, b in enumerate(which):
-        start = rng.integers(0, len(blocks[b]) - chunk)
-        out[i] = blocks[b][start : start + chunk]
-    return out
-
-
-def valid_score(model: Net, x, meta: pd.DataFrame, stage: str, fee: float = FEE) -> tuple[float, tuple]:
-    """What a fold's validation tail says about the model — the number early stopping reads.
-
-    For the supervised stage it is the correlation with the label, which is what that stage is
-    fitting. For the policy stage it is the money, priced exactly as the test slice will be: the
-    whole reason the stage exists is that those two are not the same ranking.
-    """
+def valid_score(model: Net, x, meta: pd.DataFrame) -> float:
+    """The correlation with the label on a fold's validation tail — the number early stopping reads."""
     order = ordered(meta)
-    label, logit = outputs(model, x, order.row.to_numpy())
-    if stage == "label":
-        return float(pd.Series(label).corr(pd.Series(order.target.to_numpy()))), ()
-    # Excess over holding the same symbol across the same bars, and not the absolute return.
-    # Measured the other way once, and the answer was "buy and hold": the validation tail of a
-    # crypto train period rises, a long-only policy that never sells earns that rise, and nothing
-    # in an absolute criterion prefers a strategy to a beta. The oracle this is judged against is
-    # long only *and* out of the market half the time; the criterion has to want the same thing.
-    total, n = 0.0, 0
-    for _, g in order.assign(logit=logit).groupby("symbol", sort=False):
-        span = float((g.index[-1] - g.index[0]) / YEAR)
-        if span <= 0:
-            continue
-        close = g.close.to_numpy()
-        got = price((g.logit.to_numpy() > 0).astype(float), close, span, fee)["log_per_year"]
-        total += got - float(np.log(close[-1] / close[0]) / span)
-        n += 1
-    return (total / n if n else -np.inf), ()
+    return float(pd.Series(outputs(model, x, order.row.to_numpy())).corr(pd.Series(order.target.to_numpy())))
 
 
 def fit_label(
@@ -660,13 +584,12 @@ def fit_label(
     batch_size: int = BATCH,
     quiet: bool = True,
 ) -> Net:
-    """Stage one: a Huber on `swing_leg_target`, stopped on the validation correlation.
+    """A Huber on `swing_leg_target`, stopped on the validation correlation.
 
-    This stage is not the strategy and is not judged as one. It exists to put the structure of a
-    leg into the encoder — where the turns are, how long they run, what a significant one looks
-    like — at a cost of one pass over a label that is already computed. The measurement that
-    justifies stopping here rather than continuing is in the module docstring: fitting this label
-    harder does not make the rule more profitable, because the residual concentrates at the turns.
+    This fit is not the strategy and is not judged as one. It puts the structure of a leg into the
+    encoder — where the turns are, how long they run, what a significant one looks like — and the
+    rules of `strategy` and `detect` read its output. Fitting this label harder does not make a rule
+    more profitable, because the residual concentrates at the turns: see the module docstring.
     """
     torch.manual_seed(seed)
     model = Net(x.shape[2]).to(DEVICE)
@@ -684,123 +607,14 @@ def fit_label(
         model.train()
         for batch in np.array_split(rng.permutation(len(at)), max(1, len(at) // batch_size)):
             opt.zero_grad()
-            label, _ = model(torch.from_numpy(np.asarray(x[at[batch]])).to(DEVICE))
+            label = model(torch.from_numpy(np.asarray(x[at[batch]])).to(DEVICE))
             loss = loss_fn(label, y[batch].to(DEVICE))
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP)
             opt.step()
-        score, _ = valid_score(model, x, valid, "label")
+        score = valid_score(model, x, valid)
         if not quiet:
             print(f"    label epoch {epoch + 1:3d}  valid corr {score:+.4f}{'  *' if score > best else ''}")
-        if score > best:
-            best, since = score, 0
-            state = {k: v.detach().clone() for k, v in model.state_dict().items()}
-        else:
-            since += 1
-            if since >= patience:
-                break
-    model.load_state_dict(state)
-    return model
-
-
-def fit_policy(
-    model: Net,
-    x,
-    train: pd.DataFrame,
-    valid: pd.DataFrame,
-    seed: int = 0,
-    epochs: int = 30,
-    patience: int = 6,
-    steps: int = 40,
-    chunk: int = CHUNK,
-    count: int = CHUNKS,
-    fee: float = FEE,
-    anchor: float = 0.1,
-    detrend: bool = True,
-    hard: bool = False,
-    sharpness: float = SHARPNESS,
-    lr: float = POLICY_LR,
-    quiet: bool = True,
-) -> Net:
-    """Stage two: gradient ascent on the money, with the fee inside the reward.
-
-        p_t = sigmoid(k * logit_t)          the position, in [0, 1]
-        R   = sum_t [ p_t * r_t - c * |p_t - p_{t-1}| ]
-
-    The gradient of `R` with respect to the weights is exact, and that is the property that makes
-    this worth doing rather than sampling actions and reweighting them: the price is exogenous, so
-    `r_t` does not depend on `p_t` and the reward is a plain differentiable function of the output.
-    A policy gradient with no sampling noise, which on a signal this weak is the difference between
-    learning and not.
-
-    What the model is actually being taught, in the user's terms: a position that was right is
-    reinforced in proportion to what it earned, one that was wrong is pushed down in proportion to
-    what it lost, and — the part a supervised loss cannot express at all — *changing its mind is
-    charged*, every time, at the fee it would really pay. It is the third term that turns a
-    correlation into a strategy.
-
-    Episodes start flat, so each one pays for opening. With 256-bar chunks that is a conservative
-    distortion of about one round trip per 256 bars and it pushes the model towards holding rather
-    than churning, which is the right direction to be wrong in.
-
-    `detrend` is what stops the answer from being "buy and hold" — see the line that applies it.
-
-    `anchor` keeps a little of the supervised loss alive. Without it the encoder is free to forget
-    the leg structure and chase whatever the reward's noise rewards; with it the stage stays a
-    refinement of a model that already knows what a leg is.
-    """
-    torch.manual_seed(seed + 1_000)
-    model.adopt()
-    opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=WEIGHT_DECAY)
-    rng = np.random.default_rng(seed)
-    ret = np.zeros(len(x), dtype="float32")
-    lab = np.zeros(len(x), dtype="float32")
-    # The reward is paid on the *detrended* return: each symbol's mean bar return over the train
-    # side removed, so a position that is simply always on earns nothing and only timing does.
-    # Without it the stage has an easier way to a high reward than learning the legs — hold — and
-    # it takes it. The same reason the cross-sectional label of `data.target` removes the market:
-    # a model cannot be allowed to be paid for a drift it did not predict. Prices at test are raw.
-    paid = train.ret - train.groupby("symbol").ret.transform("mean") if detrend else train.ret
-    ret[train.row.to_numpy()] = paid.to_numpy("float32")
-    lab[train.row.to_numpy()] = train.target.to_numpy("float32")
-    huber = nn.HuberLoss(delta=float(train.target.abs().median()))
-    best, state, since = -np.inf, {k: v.detach().clone() for k, v in model.state_dict().items()}, 0
-    for epoch in range(epochs):
-        model.train()
-        for _ in range(steps):
-            rows = episodes(train, chunk, count, rng)
-            flat = rows.reshape(-1)
-            opt.zero_grad()
-            label, logit = model(torch.from_numpy(np.asarray(x[flat])).to(DEVICE))
-            soft = torch.sigmoid(sharpness * logit).view(count, chunk)
-            # `hard` prices the reward on the position that would actually be traded — 0 or 1 —
-            # with the gradient flowing through the smooth one behind it. It looks like the
-            # obviously right thing: priced on the soft position the fee is charged on a sigmoid
-            # drifting from 0.48 to 0.52 and costs almost nothing, while execution pays a full
-            # round trip for the same crossing.
-            #
-            # Measured, it is worse, and off by default because of it: on the 4h walk-forward the
-            # soft reward returns +0.063 net at 94 trades a year and the straight-through one
-            # -0.042 at 111. The reason is the same saturation that fixes the sharpness at 2 — the
-            # estimator hands the fee term the sigmoid's derivative, which is smallest exactly
-            # where the position is most committed, so charging the real fee *weakens* the
-            # gradient that was supposed to discourage it. Kept as a flag because the argument for
-            # it is good and only the measurement is against it.
-            p = soft + ((soft > 0.5).float() - soft).detach() if hard else soft
-            r = torch.from_numpy(ret[flat].reshape(count, chunk)).to(DEVICE)
-            # The position carried into each bar. Zero in front of the episode, which charges the
-            # opening trade rather than letting a chunk inherit a free position.
-            before = torch.cat([torch.zeros(count, 1, device=DEVICE), p[:, :-1]], dim=1)
-            reward = p * r - fee * (p - before).abs()
-            loss = -reward.sum(dim=1).mean()
-            if anchor:
-                loss = loss + anchor * huber(label, torch.from_numpy(lab[flat]).to(DEVICE))
-            loss.backward()
-            nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP)
-            opt.step()
-        score, _ = valid_score(model, x, valid, "policy", fee)
-        if not quiet:
-            print(f"    policy epoch {epoch + 1:3d}  valid log/yr {score:+.4f}{'  *' if score > best else ''}")
         if score > best:
             best, since = score, 0
             state = {k: v.detach().clone() for k, v in model.state_dict().items()}
@@ -815,36 +629,8 @@ def fit_policy(
 # ---------------------------------------------------------------- walk forward
 
 
-def book(signal: np.ndarray, params: tuple[float, float, float] | None) -> np.ndarray:
-    """The position a score implies. `None` is the policy's own rule: long where the score is
-    positive, which is the threshold its reward was trained against.
-
-    Laying a band on the policy score instead looks obviously right — the policy's gross is the
-    highest of anything measured here, 0.192 a year, and it gives 0.129 of it straight back in
-    turnover, so buying patience should be worth a lot. It is not, and the flag is off because of
-    it. Four folds, 4h bars, twenty symbols, test 2023-01 to 2026-09:
-
-        stage    rule                                  gross     net    trades/yr   beats hold
-        policy   read at zero                          0.192   +0.063       25.7        12/20
-        label    band and sign on validation           0.095   +0.060        6.8        11/20
-        policy   band and sign on validation          -0.006   -0.042        7.1         5/20
-        policy   band and sign on train, 3 seeds       0.083   +0.034        9.8        12/20
-        --       rsi_centered > 0.3, one column        0.172   +0.116       11.1        11/20
-        --       buy and hold                              -   +0.057          -            -
-
-    Two things are in that table and only one of them is about bands. A band has three numbers and
-    the validation tail of the first fold is five months, so seventy-two combinations find the one
-    that fitted five months; moving the choice onto the whole train side fixes the overfitting and
-    still does not beat reading the score at zero. And the spread between the top four rows is
-    smaller than the spread between symbols, which is the honest way to read the column: on this
-    panel, over this period, the differences between these rules are not measurable.
-
-    The last two rows are the ones that matter. A one-column momentum rule beats every model here,
-    and buy and hold sits inside the same range. Both are in `BASELINES`, so the comparison lives
-    in the code rather than in somebody's memory of it.
-    """
-    if params is None:
-        return (signal > 0).astype(float)
+def book(signal: np.ndarray, params: tuple[float, float, float]) -> np.ndarray:
+    """The position a score implies through the band and the sign `choose` picked."""
     enter, exit, sign = params
     return positions(sign * signal, enter, exit)
 
@@ -854,12 +640,10 @@ def walk_forward(
     meta: pd.DataFrame,
     start: str = TEST_START,
     n: int = FOLDS,
-    stage: str = "both",
     seed: int = 0,
     fee: float = FEE,
     quiet: bool = True,
     seeds: int = 1,
-    band: bool = False,
     **kw,
 ) -> dict:
     """Fit and price every fold, and hand back the positions as one series over the test period.
@@ -879,30 +663,16 @@ def walk_forward(
         inner, valid = purge(train, train.index.min() + (train.index.max() - train.index.min()) * (1 - VALID_FRACTION))
         epochs = {k: v for k, v in kw.items() if k == "epochs"}
         models = [fit_label(x, inner, valid, seed + extra, quiet=quiet, **epochs) for extra in range(seeds)]
-        if stage in ("policy", "both"):
-            models = [fit_policy(m, x, inner, valid, seed + j, fee=fee, quiet=quiet) for j, m in enumerate(models)]
 
         def score(rows: np.ndarray) -> np.ndarray:
             """The seeds averaged. A single initialisation of a model this weak is mostly its own
             noise — the project reports mean +- std over five seeds for exactly that reason — and
             averaging the scores before the rule reads them is the cheapest variance there is."""
-            got = [outputs(m, x, rows) for m in models]
-            which = 1 if stage in ("policy", "both") else 0
-            return np.mean([g[which] for g in got], axis=0)
+            return np.mean([outputs(m, x, rows) for m in models], axis=0)
 
-        # The band is picked on the whole train side and not on the validation tail. It has three
-        # numbers in it and the tail is five months in the first fold: read there, a grid of
-        # seventy-two combinations picks the one that fitted five months, and the walk-forward said
-        # so — gross fell from +0.192 to -0.006 when the band was chosen on validation. Tuned on
-        # the rows the encoder was fitted on it is optimistic about its own level and honest about
-        # its shape, which for two thresholds and a sign is the better of the two errors.
-        policy = stage in ("policy", "both")
-        params = None
-        if band or not policy:
-            # The supervised head predicts the label and has no rule of its own, so it always
-            # needs one; the policy head has one, and measured it is the better of the two.
-            order = ordered(valid if not policy else train)
-            params = choose(score(order.row.to_numpy()), order, fee=fee)
+        # The band is picked on the validation tail, the rows early stopping did not train on.
+        order = ordered(valid)
+        params = choose(score(order.row.to_numpy()), order, fee=fee)
         order = ordered(test)
         use = score(order.row.to_numpy())
         pred[order.row.to_numpy()] = use
@@ -915,14 +685,13 @@ def walk_forward(
                 "train": len(inner),
                 "valid": len(valid),
                 "test": len(test),
-                "rule": "score > 0" if params is None else f"band {params[0]:+.2f}/{params[1]:+.2f} x{params[2]:+.0f}",
+                "rule": f"band {params[0]:+.2f}/{params[1]:+.2f} x{params[2]:+.0f}",
             }
         )
     test_meta = meta[seen[meta.row.to_numpy()]]
     return {
         "folds": pd.DataFrame(rows),
         "pos": pd.Series(pos[test_meta.row.to_numpy()], index=test_meta.index),
-        # What the rule read: the label head, or the policy logit when the policy stage ran.
         "pred": pd.Series(pred[test_meta.row.to_numpy()], index=test_meta.index),
         "meta": test_meta,
     }
@@ -1016,19 +785,6 @@ def _selfcheck() -> None:
     assert len(test) == 4 and len(train) == 4, (len(train), len(test))
     assert (train.next_pivot < pd.Timestamp("2024-01-01 06:00", tz="UTC")).all()
 
-    # Episodes are contiguous and inside one symbol — the property the fee term depends on.
-    two = pd.concat(
-        [
-            meta.assign(symbol="A", row=np.arange(10)),
-            meta.assign(symbol="B", row=np.arange(10, 20)),
-        ]
-    )
-    rng = np.random.default_rng(0)
-    ep = episodes(two, 4, 6, rng)
-    assert ep.shape == (6, 4)
-    assert (np.diff(ep, axis=1) == 1).all(), "an episode is consecutive bars"
-    assert ((ep < 10).all(axis=1) | (ep >= 10).all(axis=1)).all(), "and never spans two symbols"
-
     # The sequence builder: oldest step first, and strictly causal.
     f = pd.DataFrame({c: np.arange(20.0) for c in INPUTS}, index=pd.RangeIndex(20))
     stats = normalize.fit(f)
@@ -1044,18 +800,10 @@ def _selfcheck() -> None:
     view = windows(normalize.apply(f, stats).to_numpy("float32"), 3)
     assert view.shape == (18, 3, len(INPUTS)) and np.array_equal(view, seq[2:]), "the view is the tensor"
 
-    # And the learning, end to end, on a toy built so the two stages cannot both be right.
-    #
-    # One live feature, a saw from -1 to +1. The label *is* that feature, so stage one has an easy
-    # job and does it fast. The price, however, rises exactly where the feature is high — which is
-    # the opposite of what the label implies, since the swing rule reads a low label as a buy. So
-    # `adopt` starts the policy from a rule that loses money by construction, and the only way the
-    # second stage can end positive is by overriding the supervised prior on the strength of the
-    # reward alone. That is the claim this module rests on, stated as a test.
+    # And the learning, end to end, on a toy whose label is its one live feature, a saw.
     n, per = 4000, 40
     saw = (np.arange(n) % per) / per * 2 - 1
-    step = np.where(saw > 0, 0.002, -0.002)
-    path = np.exp(np.cumsum(step))
+    path = np.exp(np.cumsum(np.where(saw > 0, 0.002, -0.002)))
     x = np.zeros((n, 2, len(INPUTS)), dtype="float32")
     x[:, :, 0] = saw[:, None]
     when = pd.date_range("2024", periods=n, freq="h", tz="UTC")
@@ -1072,20 +820,14 @@ def _selfcheck() -> None:
     )
     inner, valid = toy.iloc[: int(n * 0.7)], toy.iloc[int(n * 0.7) :]
     model = fit_label(x, inner, valid, epochs=12, patience=12, batch_size=256)
-    corr, _ = valid_score(model, x, valid, "label")
+    corr = valid_score(model, x, valid)
     assert corr > 0.8, f"the label is the one live feature and was not learned: {corr}"
-    model.adopt(SHARPNESS)
-    before, _ = valid_score(model, x, valid, "policy", fee=0.0005)
-    assert before < 0, f"the supervised rule has to lose on this toy, or the test proves nothing: {before}"
-    model = fit_policy(model, x, inner, valid, epochs=12, patience=12, steps=10, chunk=64, count=16, fee=0.0005)
-    after, _ = valid_score(model, x, valid, "policy", fee=0.0005)
-    assert after > 0, f"the reward has to overturn the supervised prior: {before:+.3f} -> {after:+.3f}"
-    print(f"ok — label corr {corr:.3f}, policy {before:+.3f} -> {after:+.3f} log/yr on the saw")
+    print(f"ok — label corr {corr:.3f} on the saw")
 
 
 # One-column rules, priced on the same rows as the model. Not decoration: on the four folds below
-# `rsi_centered` above 0.3 nets +0.116 a year against +0.063 for the two-stage model, at a third of
-# the turnover, and a strategy that cannot beat one indicator is not a strategy. The entry and exit
+# `rsi_centered` above 0.3 nets +0.116 a year against +0.063 for the archived two-stage model, at a
+# third of its turnover, and a strategy that cannot beat one indicator is not a strategy. The entry and exit
 # levels are the ones a reader would try first and are not tuned per fold.
 BASELINES = (
     ("rsi_centered", 0.3, 0.0),
@@ -1137,7 +879,6 @@ def save(
     window,
     steps,
     params,
-    stage,
     keep=None,
     cal=None,
     test_start=TEST_START,
@@ -1163,10 +904,9 @@ def save(
             "timeframe": tf,
             "window": window,
             "steps": steps,
-            "enter": None if params is None else params[0],
-            "exit": None if params is None else params[1],
-            "sign": None if params is None else params[2],
-            "stage": stage,
+            "enter": params[0],
+            "exit": params[1],
+            "sign": params[2],
             # Always the swing label now. Written all the same: the checkpoints from before the
             # cleanup carry the name, and the page reads a card whatever wrote it.
             "label": "swing",
@@ -1188,15 +928,11 @@ def restore(path: Path = CHECKPOINT) -> tuple[Net, dict]:
     # files written before `save` went device-free still carry the device of every storage.
     checkpoint = torch.load(path, weights_only=False, map_location=DEVICE)
     model = Net(len(checkpoint["inputs"])).to(DEVICE)
-    model.load_state_dict(checkpoint["state"])
+    # The checkpoints written before the policy stage left carry its head, untrained under a label
+    # stage. Nothing reads it.
+    model.load_state_dict({k: v for k, v in checkpoint["state"].items() if not k.startswith("policy.")})
     model.eval()
     return model, checkpoint
-
-
-# Below this many bars a window is not worth scoring: the encoder reads 24 of them, the features
-# another 24 behind that, and the leg state's volatility window four times that again. Measured
-# from the columns rather than guessed — `state` is NaN until 4*W bars have passed.
-MIN_BARS = 6 * W + STEPS
 
 
 def live_scaler(f: pd.DataFrame) -> pd.DataFrame:
@@ -1210,14 +946,15 @@ def live_scaler(f: pd.DataFrame) -> pd.DataFrame:
 
     The rest of the scale is the pair's own history, which is what training does too: the model was
     fitted on per-symbol quartiles precisely so that it reads a state and not a price level. On a
-    short window those quartiles are estimated from little, which is the reason for `MIN_BARS`.
+    short window those quartiles are estimated from little, which is why `predict_frame` asks for
+    six windows of rows before it.
     """
     q = f.quantile([0.25, 0.5, 0.75])
     return pd.DataFrame({"center": q.loc[0.5], "scale": (q.loc[0.75] - q.loc[0.25]).replace(0, 1.0)})
 
 
 def predict_frame(model: Net, checkpoint: dict, bars: pd.DataFrame, symbol: str | None = None) -> pd.DataFrame:
-    """`label`, `raw`, `logit` and `position` at every bar of `bars`, which must be the model's timeframe.
+    """`label`, `raw` and `position` at every bar of `bars`, which must be the model's timeframe.
 
     `label` is the head's output mapped onto the label's +-1 by the calibration fitted on train;
     `raw` is the same output before it, the units every rule of `strategy` and `detect` was measured
@@ -1232,7 +969,7 @@ def predict_frame(model: Net, checkpoint: dict, bars: pd.DataFrame, symbol: str 
     keep = checkpoint["inputs"]
     steps = checkpoint["steps"]
     f = inputs(bars, checkpoint["window"], keep).dropna()
-    out = pd.DataFrame(np.nan, index=bars.index, columns=["label", "raw", "logit", "position"])
+    out = pd.DataFrame(np.nan, index=bars.index, columns=["label", "raw", "position"])
     trained = (checkpoint.get("scalers") or {}).get(symbol)
     # The live fallback estimates quartiles from the window itself, so it needs enough of one;
     # the shipped scaler needs nothing but a full window of steps.
@@ -1241,20 +978,17 @@ def predict_frame(model: Net, checkpoint: dict, bars: pd.DataFrame, symbol: str 
     z = normalize.apply(f[keep], trained if trained is not None else live_scaler(f[keep])).to_numpy("float32")
     # A view over the rows and not `sequences`: a year of 15m bars at 48 steps is 100 MB copied.
     x = windows(z, steps)
-    label, logit = outputs(model, x, np.arange(len(x)))
+    label = outputs(model, x, np.arange(len(x)))
     at = f.index[steps - 1 :]
     # The rule reads the head's raw output, before the calibration: `choose` picked its band on the
     # raw output, and a band in those units laid on the calibrated line — which spans the label's
-    # +-1 and not the head's +-0.4 — is another rule. Until 2026-09-28 a label-stage checkpoint
-    # was booked on the calibrated line.
-    signal = logit if checkpoint["stage"] in ("policy", "both") else label
-    read = None if checkpoint["enter"] is None else (checkpoint["enter"], checkpoint["exit"], checkpoint["sign"])
-    out.loc[at, "position"] = book(signal, read)
+    # +-1 and not the head's +-0.4 — is another rule. Until 2026-09-28 a checkpoint was booked on
+    # the calibrated line.
+    out.loc[at, "position"] = book(label, (checkpoint["enter"], checkpoint["exit"], checkpoint["sign"]))
     out.loc[at, "raw"] = label
     if checkpoint.get("calibration") is not None:
         label = calibrate(label, checkpoint["calibration"])
     out.loc[at, "label"] = label
-    out.loc[at, "logit"] = logit
     return out
 
 
@@ -1265,14 +999,12 @@ def main() -> None:
     ap.add_argument("--since", default=SINCE)
     ap.add_argument("--test-start", default=TEST_START)
     ap.add_argument("--folds", type=int, default=FOLDS)
-    ap.add_argument("--stage", choices=["label", "policy", "both"], default="both")
     ap.add_argument("--epochs", type=int, default=40)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--seeds", type=int, default=1, help="initialisations per fold, averaged before the rule")
     ap.add_argument("--fee", type=float, default=FEE)
     ap.add_argument("--verbose", action="store_true")
     ap.add_argument("--baseline", action="store_true", help="also price the one-column rules on the same rows")
-    ap.add_argument("--band", action="store_true", help="read the policy score through a band instead of at zero")
     ap.add_argument("--cache", type=Path, default=TENSOR)
     ap.add_argument(
         "--inputs",
@@ -1320,19 +1052,17 @@ def main() -> None:
         f"{len(meta):,} rows x {args.steps} steps x {len(keep)} inputs on {args.timeframe}, "
         f"{meta.symbol.nunique()} symbols, {meta.index.min():%Y-%m-%d} to {meta.index.max():%Y-%m-%d}, {DEVICE}"
     )
-    print(f"{args.folds} folds from {args.test_start}, stage {args.stage}, fee {args.fee * 100:.2f}% per side\n")
+    print(f"{args.folds} folds from {args.test_start}, fee {args.fee * 100:.2f}% per side\n")
 
     out = walk_forward(
         x,
         meta,
         args.test_start,
         args.folds,
-        args.stage,
         args.seed,
         args.fee,
         not args.verbose,
         args.seeds,
-        args.band,
         epochs=args.epochs,
     )
     table = by_symbol(out["pos"], out["meta"], args.fee, w)
@@ -1350,7 +1080,8 @@ def main() -> None:
         print("\nthe same rows, read by one column and a threshold\n")
         print(baselines(out["meta"], args.timeframe, args.fee, w).round(3).to_string(index=False))
 
-    written = STORE / f"pos-swing-{tag}-{args.stage}.parquet"
+    # `-label` kept from when a stage was chosen: `strategy.PRED` and the files on disk carry it.
+    written = STORE / f"pos-swing-{tag}-label.parquet"
     got = out["meta"].assign(pred=out["pred"].to_numpy(), position=out["pos"].to_numpy())
     got[["symbol", "close", "target", "pred", "position"]].to_parquet(written)
     print(f"\npredictions and positions written to {written}")
@@ -1359,15 +1090,9 @@ def main() -> None:
         train, _ = purge(meta, pd.Timestamp(args.test_start, tz="UTC"))
         inner, valid = purge(train, train.index.min() + (train.index.max() - train.index.min()) * (1 - VALID_FRACTION))
         model = fit_label(x, inner, valid, args.seed, epochs=args.epochs, quiet=not args.verbose)
-        fitted, _ = outputs(model, x, inner.row.to_numpy())
-        cal = calibration(fitted, inner.target.to_numpy())
-        if args.stage in ("policy", "both"):
-            model = fit_policy(model, x, inner, valid, args.seed, fee=args.fee, quiet=not args.verbose)
-        params = None
-        if args.band or args.stage == "label":
-            order = ordered(valid if args.stage == "label" else train)
-            label, logit = outputs(model, x, order.row.to_numpy())
-            params = choose(logit if args.stage != "label" else label, order, fee=args.fee)
+        cal = calibration(outputs(model, x, inner.row.to_numpy()), inner.target.to_numpy())
+        order = ordered(valid)
+        params = choose(outputs(model, x, order.row.to_numpy()), order, fee=args.fee)
         save(
             args.save,
             model,
@@ -1375,7 +1100,6 @@ def main() -> None:
             w,
             args.steps,
             params,
-            args.stage,
             keep,
             cal,
             args.test_start,

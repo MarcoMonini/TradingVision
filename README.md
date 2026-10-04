@@ -60,9 +60,9 @@ cost-aware backtesting → the tradable rule and its exits.
 ```bash
 uv run python -m tradingvision.data.binance        # ingestion: one Parquet per (symbol, interval)
 uv run python -m tradingvision.oracle              # step 0: calibrates EXTREMA_WINDOW = 24
-uv run python -m tradingvision.swing --timeframe 4h --baseline         # step 7: the tradable swing rule
+uv run python -m tradingvision.swing --timeframe 4h --baseline         # step 7: the label's band against one-column rules
 uv run python -m tradingvision.swing --timeframe 15m --window 12 --smoothing 0.5 --inputs reduced \
-    --steps 48 --stage label --test-start 2025-06 --save data/swing-v2.pt   # Swing Leg Position v2
+    --steps 48 --test-start 2025-06 --save data/swing-v2.pt   # Swing Leg Position v2
 uv run python -m tradingvision.threshold --pred data/pred-swing-*.parquet --at 0.5   # the always-in rule
 uv run python -m tradingvision.stops --pred data/pred-swing-*.parquet --at 0.5 --grid  # its exits
 ```
@@ -75,12 +75,12 @@ factor, the label grid — are in [`OLD/`](OLD/README.md), each with the number 
 
 | Layer | Modules | What it does |
 |---|---|---|
-| **Ingestion** | `data.binance` · `data.candles` | Bulk OHLCV from `data.binance.vision` (static S3 ZIPs, no API key, 2017+). Alpaca is the live feed and the venue whose fees every cost figure assumes. |
+| **Ingestion** | `data.binance` · `data.candles` | Bulk OHLCV from `data.binance.vision` (static S3 ZIPs, no API key, 2017+). Alpaca is the live feed; every cost figure is OKX's spot taker fee, 0.10% a side (`oracle.FEE`), and the numbers below were measured at Alpaca's 0.25%. |
 | **Labelling** | `data.pivots` · `data.target` · `legs` · `reference` | Local extrema on Close, the swing leg label, the *causal* twin of a pivot (`legs.confirmed`, dated from its own confirmation) and the label's true reach for purging (`legs.label_reach`), and the scale that makes a leg comparable across symbols and regimes. |
 | **Features** | `features` · `normalize` | 29 causal candidates — the original 28, plus `log_dollar_volume`, the only one whose *level* is the information; robust scaling with clip, fitted on train only. |
-| **Model** | `swing` | The two-stage swing model: Huber on the label, then direct policy optimisation on the net P&L, with its own purged walk-forward and the per-pair scalers it ships with the checkpoint. |
+| **Model** | `swing` | The swing model: Huber on the label and a band on its output, with its own purged walk-forward and the per-pair scalers it ships with the checkpoint. |
 | **Economics** | `oracle` · `threshold` · `stops` · `swingrule` · `metrics` | Hindsight ceiling and its causal twin, the always-in rule priced at a raw number, its exits (two barriers, three re-entry policies, a trailing option), the long-only rule with a rotation null, and the signal metrics. |
-| **App** | `app.chart` | Streamlit page: candles, pivots, the swing label, features, the step-7 model and v2, the rule with its fills and exits. Containerised, deployed from `models/`. |
+| **App** | `app.chart` | Streamlit page: candles, pivots, the swing label, features, v2's prediction, the rule with its fills and exits. Containerised, deployed from `models/`. |
 | **Tests** | `tests/*` (6) | Invariants, `test_selfchecks.py` which runs every module's own asserts, and `test_deploy.py` which walks the page's import graph with scipy made unimportable. |
 | **Archive** | `OLD/` | The predictive labels, the multi-branch dataset, OLS, LightGBM, selection, the GRUs, the label grid, the factor and its judges — frozen at the tag `archive-predictive`, outside lint and tests. |
 
@@ -154,7 +154,7 @@ twelve above were redone rather than trimmed.
 | **Baseline** | OLS on the last candle | 112 point-in-time columns | Not a model — a floor and a leakage alarm |
 | **Reference** | LightGBM | 560 flattened columns (value at t, t−1, t−4, window mean and std) | Beats nets on tabular finance more often than not, trains on CPU, and reports the per-column importance the GRU cannot |
 | **Model** | GRU per branch → concat → linear head | 4 × (B, 24, F) | H = 32, dropout 0.2, AdamW, Huber with δ measured on train, early stopping on **validation Rank IC, never on the loss** |
-| **Tradable** | One GRU, two heads: label and policy | (B, 24, 65) — features + leg state at three scales + exhaustion | Trained twice — Huber on the label to put leg structure in the encoder, then **direct policy optimisation on the net P&L with the fee inside the reward**. The gradient is exact because the price is exogenous. The reward is paid on *detrended* returns, or the best policy is buy and hold and the stage finds it |
+| **Tradable** (policy head archived 2026-10-04) | One GRU, two heads: label and policy | (B, 24, 65) — features + leg state at three scales + exhaustion | Trained twice — Huber on the label to put leg structure in the encoder, then **direct policy optimisation on the net P&L with the fee inside the reward**. The gradient is exact because the price is exogenous. The reward is paid on *detrended* returns, or the best policy is buy and hold and the stage finds it |
 | **What actually wins** | `−rank(volatility) + rank(dollar volume)` | 2 columns, 30-day window | **Zero parameters.** Beats every fitted thing in the project on the cross-sectional label |
 
 No output activation: `tanh` reached ±1 only asymptotically, so the gradient vanished exactly at
@@ -208,7 +208,7 @@ Numbers below are on `swing_leg_target` and do not convert to the ones above.
 
 | Rule | Gross | Net @25bp | Trades/yr | Beats hold |
 |---|---|---|---|---|
-| Two-stage swing model (Huber, then policy gradient on net P&L) | 0.192 | **+0.063** | 25.7 | 12/20 |
+| Two-stage swing model (Huber, then policy gradient on net P&L), archived | 0.192 | **+0.063** | 25.7 | 12/20 |
 | Supervised head, band and sign on validation | 0.095 | +0.060 | 6.8 | 11/20 |
 | **`rsi_centered > 0.3` — one column, no model** | 0.172 | **+0.116** | 11.1 | 11/20 |
 | Buy and hold | — | +0.057 | — | — |
@@ -276,7 +276,7 @@ Kept here because re-reading it costs less than re-measuring it.
 - **The always-in rule loses at every threshold, and its long leg loses at all of them.** Twenty pairs, fifteen months, 25 bp/side: at ±0.4 the net is −0.894 log a year, at ±0.5 it is −0.458 on a gross of +0.004 against 0.461 of commissions. The best point of the whole grid asks **3.52 bp per side**. All the gross is the short leg (+0.286) on a basket that fell 49% — and the Spearman between a pair's short-leg gross and its own buy-and-hold is **−0.734**. Exposure, not selection.
 - **A win rate three sigma over the coin is not an edge.** 0.545 ± 0.013 on 1,577 trades, median trade positive, mean trade −0.0096: many small wins, few large losses. `swingrule.rotation_null` — the same exposure, the positions rotated between symbols — is what says the gross does not beat its own null.
 - **Exhaustion features lead the price, and cost more to execute than they pay.** Four of the six hold their sign on all four folds and survive a full bar of delay, so the lead is real and is not the bid-ask bounce. The equal-weighted composite makes +0.0325 ± 0.0100 at 24 bars. Priced as a book, the best cadence asks **1.76 bp per side** against 25 taker and ~10 maker — **6× to 170× under**. Slowing the rebalance, the lever that saved the factor book, saves nothing here: the gross decays as fast as the fees.
-- **Fitting the label harder is not the way to the money.** A ridge on the 29 features plus the causal leg state reaches 0.623 time-series correlation with `swing_leg_target` and still loses 0.29 a year, because the residual concentrates at the turns — which is where every trade is opened and closed. Hence the two-stage fit, with the fee inside the reward.
+- **Fitting the label harder is not the way to the money.** A ridge on the 29 features plus the causal leg state reaches 0.623 time-series correlation with `swing_leg_target` and still loses 0.29 a year, because the residual concentrates at the turns — which is where every trade is opened and closed. Hence the two-stage fit, with the fee inside the reward — archived on 2026-10-04: it lost to one column, and no rule reads it.
 - **Seven extra factors, each with real univariate signal, all lose** when ridge-fitted on train alone (0.083–0.095 against 0.110). Even fitting the composite's two weights instead of adding them loses a fold out of four. With ~150 independent 72h blocks in three years, two parameters are already the ceiling.
 - Target z-scored per timestamp (0.1475), demeaned per timestamp (0.1464), low-pass on the prediction (0.1284 at k=2, monotone in the wrong direction), training restricted to h < 48 (0.1334) — all measured, all worse.
 

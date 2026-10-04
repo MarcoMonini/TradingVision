@@ -120,6 +120,6 @@ def test_v2_is_found_by_the_same_rule_as_the_default_checkpoint():
     assert chart.saved(module, v2) == store / v2
 
     # The default checkpoint is untouched by a named lookup, and a named one by the default.
-    (store / "swing.pt").write_bytes(b"the step-7 model")
+    (store / "swing.pt").write_bytes(b"the default checkpoint")
     assert chart.saved(module) == store / "swing.pt"
 """)

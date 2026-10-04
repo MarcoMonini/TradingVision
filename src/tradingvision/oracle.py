@@ -26,9 +26,11 @@ import pandas as pd
 from tradingvision.data.binance import SYMBOLS, load
 from tradingvision.data.pivots import EXTREMA_WINDOW, find_pivots
 
-# Alpaca crypto taker fee, tier 1 (30d volume under $100k). Maker is 0.15%, but the oracle enters
-# and exits at the close of a pivot bar, which is a taker fill. Round trip costs 2x.
-FEE = 0.0025
+# OKX spot taker fee, regular tier (Lv1), the venue the rules would trade on. Maker is 0.08%, but
+# the oracle enters and exits at the close of a pivot bar, which is a taker fill. Round trip costs
+# 2x. Every number measured before 2026-10-04 was taken at Alpaca's 0.25% taker tier 1 (50 bp round
+# trip, the figure older docstrings quote); pass `--fee 0.0025` to reproduce one.
+FEE = 0.001
 
 
 def run(
@@ -121,7 +123,7 @@ def main() -> None:
     ap.add_argument("--timeframe", default="15m", help="reference timeframe for the target")
     ap.add_argument("--start", help="ISO date, to restrict the panel to an aligned period")
     ap.add_argument("--windows", type=int, nargs="+", default=[16, 18, 20, 22, 24, 26, 28])
-    ap.add_argument("--fee", type=float, default=FEE, help="fee per side, e.g. 0.0025 = 25 bps")
+    ap.add_argument("--fee", type=float, default=FEE, help="fee per side, e.g. 0.001 = 10 bps")
     ap.add_argument("--lag", type=int, nargs="+", default=[0, 1, 2, 3], help="detection lag in bars")
     ap.add_argument("--csv", help="write the per-symbol results here")
     args = ap.parse_args()

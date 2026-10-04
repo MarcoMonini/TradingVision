@@ -19,7 +19,7 @@ at entry. Three ways to name the distance, and they answer different questions:
     atr:k   k times the Average True Range at the entry bar, as a fraction of price. The unit of
             what this market does anyway, so the same k is the same aggressiveness on a quiet pair
             and a loud one. `3xATR` is the textbook number and has nothing behind it here.
-    fee:k   k times the round trip, `2 * FEE` = 0.50%. The unit of what the trade costs, which is
+    fee:k   k times the round trip, `2 * FEE` = 0.20%. The unit of what the trade costs, which is
             the only distance with an arithmetic meaning: a take profit at `fee:1` nets exactly
             zero, so k <= 1 is a barrier that cannot pay for itself, and `fee:2` doubles the fee
             before it counts as a win.
@@ -802,7 +802,7 @@ def main() -> None:
         action="store_true",
         help="hang the stop off the hold's high-water mark instead of its entry price, same width",
     )
-    ap.add_argument("--fee", type=float, default=FEE, help="per side; the default is Alpaca taker tier 1")
+    ap.add_argument("--fee", type=float, default=FEE, help="per side; the default is OKX spot taker, regular tier")
     ap.add_argument("--sign", type=int, default=-1, choices=[-1, 1], help="-1 for the swing label")
     ap.add_argument("--window", type=int, default=EXTREMA_WINDOW, help="bars of ATR behind a barrier in atr units")
     ap.add_argument("--grid", action="store_true", help="sweep the default take/stop pairs in ATR against no barrier")
