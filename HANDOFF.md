@@ -15,6 +15,9 @@ deployata, tre cache che non invalidavano, e un'ottimizzazione da 61x su `featur
 etichette retrospettive. Tutto il lavoro predittivo e la prima pipeline (`dataset` → `gru` →
 `legsweep`) sono in `OLD/`, congelati al tag `archive-predictive`: sezione 16.
 
+**Aggiornamento 2026-10-03, più tardi** — ramo `claude/strategy-study`: lo studio delle regole di
+trading sulla predizione v2 (`strategy.py`) e tutte quelle regole sulla pagina chart: sezione 17.
+
 ---
 
 ## 1. Cosa è stato misurato, e su cosa
@@ -883,3 +886,159 @@ congiunte non servono più.
 3. **Il fattore, se si torna a una strategia di portafoglio**: va rimisurato su `SYMBOLS` (15),
    non su `STUDY`.
 
+---
+
+## 17. Lo studio delle regole sulla v2 (`strategy.py`, ramo `claude/strategy-study`, 2026-10-03)
+
+**Domanda.** Una regola di trading sulla predizione v2 di `swing_leg_target` che guadagni, costruita
+un passo alla volta: punto di ingresso, uscite, filtri, regimi. Senza commissioni, guardando il
+lordo per trade contro l'andata e ritorno (50 bp taker, ~20 maker).
+
+**Protocollo, fissato prima.** Predizioni fuori campione della v2
+(`pos-swing-15m-reduced-swing-s48-t2025-06-w12-m0.50-label.parquet`). Asset: i tre tradabili con il
+Rank IC più alto contro l'etichetta sui fold 1-2, ETH, BTC, SOL. Sviluppo sui fold 1-2, hold-out
+sui fold 3-4. Regimi sulle date del ciclo BTC: ribasso dal massimo del 2025-10-06, rialzo dal minimo
+del 2026-07-01.
+
+| soglia 0,40, bp per trade (errore) | sviluppo | hold-out |
+|---|---|---|
+| banda, sempre in posizione | +1,7 (9,8) | −25,2 (13,9) |
+| rientro nel range | +15,0 (10,1) | −42,9 (13,9) |
+| rientro + stop 6 ATR | +12,4 (6,7) | −23,0 (7,6) |
+| rientro + BTC sotto media 200 giorni | +41,0 (16,1) | −40,5 (14,9) |
+| rientro + stop 6 ATR, poi solo segnale opposto | +26,1 (7,9) | −26,5 (8,9) controllo |
+| svolte della predizione col senno di poi, finestra 12 | +180,4 | +164,4 |
+| svolte della predizione alla conferma, finestra 12 | +4,8 | −3,3 |
+| svolte col senno di poi, finestra 12, eseguite 2 / 4 / 6 barre dopo | +99,4 / +68,0 / +41,3 | +88,9 / +54,9 / +34,5 |
+| rivelatore bayesiano (Shiryaev) sulle svolte, soglia 0,5 / 0,9 | −1,0 / +6,7 | +0,1 / −13,3 |
+| zigzag (CUSUM) sulla predizione, h 0,2 | −0,3 | −1,5 |
+
+**Risultati.**
+
+- **Nessuna regola si ripete fra i fold.** Il guadagno dello sviluppo era il fold 2: il rientro fa
+  −1,8 / +32,8 / −44,8 / −40,9 bp per fold. Nello sviluppo il ribasso coincideva con il fold 2, e
+  l'hold-out ha detto che era il modello, non il regime.
+- **Lo stop a 6 ATR è l'unico effetto con lo stesso segno nei due periodi:** riduce perdite e
+  drawdown, non crea guadagno.
+- **Le svolte della predizione sono nel posto giusto e arrivano tardi.** Col senno di poi valgono il
+  96% del lordo dell'oracolo e battono quelle di `rsi_centered` in ogni fold e a ogni finestra (6, 12,
+  24, 48). Alla conferma valgono circa zero, come quelle del prezzo e dell'RSI.
+- **Il loro valore si consuma in poche barre** (`--hindsight ... --delay`). A finestra 12 resta il
+  70% dopo una barra di ritardo, il 55% dopo due, il 23% dopo sei; a metà finestra il 20-25% a ogni
+  finestra. Contro 50 bp pagano fino a 4 barre di ritardo a finestra 12 e 6 a finestra 24. Il
+  vantaggio sull'RSI sta nella barra di svolta e nella successiva e sparisce a ritardo 3.
+- **Quel valore è la geometria del rumore** (`--null`). Su prezzi ricostruiti con il segno di ogni
+  rendimento estratto a caso le svolte valgono di più (+216-219 bp a finestra 12 contro +201) e la
+  quota rimasta a ogni ritardo è la stessa entro 0,01-0,03: segue 1 − √(d/w), la legge di un
+  percorso browniano dopo un estremo.
+- **Riconoscerle in tempo reale non rende** (`detect.py`). Zigzag e rivelatore di Shiryaev (a priori
+  dal livello della predizione, che alle svolte è 0,37 di mediana, e dall'età della gamba) trovano
+  l'80% delle svolte con 3 barre di ritardo mediano e 0,35 falsi allarmi per svolta, ma rendono
+  zero: le rilevazioni giuste fanno +31 bp, i falsi allarmi −80, come vuole il teorema d'arresto
+  opzionale. Con soglie alte, positivo sui fold 1-2 e negativo sui 3-4, come ogni altra regola.
+- **Combinarli riduce i falsi allarmi e non il risultato** (`--both`). Shiryaev 0,5 più un
+  ritracciamento di 0,4 porta i falsi allarmi da 0,35 a 0,07 per svolta, ma le rilevazioni scendono
+  da +31 a +16 bp e i falsi rimasti salgono da −80 a −138: sviluppo +2,8, hold-out −9,7. Sulle
+  dodici combinazioni provate, sviluppo da +0,6 a +6,5 e hold-out da −0,8 a −15,6.
+- **Separare gli allarmi veri dai falsi si può, e non rende** (`--features`). Sedici variabili note
+  all'allarme, logistica sullo sviluppo: AUC 0,637, hold-out 0,629, dal 53% al 83% di allarmi veri
+  fra il quintile peggiore e il migliore. Ma salendo di quintile gli allarmi veri guadagnano meno
+  (+49 → +25 bp) e i falsi perdono di più (−68 → −99): ogni quintile fa fra −6,6 e +6,5.
+- **Funding, open interest, posizionamento, flusso dei taker e book non aggiungono niente
+  all'allarme** (`--futures`, `data/futures.py`, dump dei futures Binance). Da soli AUC 0,546 /
+  0,525, con le sedici di prima 0,639 / 0,624; ogni quintile fra −11 e +6 bp. Contro il rendimento
+  futuro due colonne hanno lo stesso segno nei quattro fold: l'open interest dietro al movimento
+  contro il rendimento a 48 barre (+0,075 / +0,039) e lo squilibrio del book entro il 5% contro
+  quello a 12 (+0,042 / +0,024). Piccole quanto l'IC della v2, e non ancora una strategia.
+- **Open interest dietro al movimento** (`--oi`). Il segno del movimento delle ultime k barre per la
+  variazione dell'open interest ha IC positivo col rendimento a 48 barre in tutti i fold (k = 24:
+  +0,057 / +0,125 / +0,057 / +0,045); il solo momentum no. Dopo un movimento a 24 barre con open
+  interest in salita le 48 barre dopo vanno nella sua direzione (+10 / +16 / +19 / +20 bp), con open
+  interest in calo tornano indietro (−22 / −13 / −2 / −6). Letto fra 64 varianti, hold-out incluso;
+  come regola (segui o contrasta oltre |z|, esci dopo 48 barre) fa da −6,9 a +0,7 bp sullo sviluppo
+  e il fold 2 è negativo in tutte e dodici le varianti.
+- **L'open interest come conferma non conferma** (`--confirm`). Lato del segnale per open interest
+  dietro al movimento: il lordo del trade non sale con la conferma (rivelatori fra −9 e +7 bp per
+  quintile); tenere solo i segnali confermati abbassa lo sviluppo e alza un poco l'hold-out
+  (Shiryaev 0,5, k = 12, conferma ≥ 1: −1,6 / +12,3), con il fold 2 negativo e il 4 positivo quasi
+  ovunque, lo schema della regola sull'open interest. Tenuti 48 barre, da −11 a +20 bp.
+- **Filtro sul livello dei segnali** (`--gate`): tiene un long solo sotto −L e uno short solo sopra
+  +L. Porta lo zigzag da 5.288 a 93 trade sullo sviluppo a L = 0,5, ma il lordo per trade resta
+  intorno a zero (chiudendo sui segnali scartati: da −3,2 a +4,2 sullo sviluppo, da −9,2 a +0,9
+  sull'hold-out, salvo L = 0,5 con +12,5 / +19,2 su 160 trade, che il rivelatore bayesiano non
+  conferma). Scelti sul solo sviluppo (h 0,1-0,5 e p 0,5-0,99 per L 0,4 / 0,5 / 0,6, chiudendo,
+  il lordo per trade più alto con i fold 1 e 2 entrambi positivi): zigzag 0,2 a L = 0,5 e
+  Shiryaev 0,5 a L = 0,6, +15,8 su 81 trade e +28,4 su 40 nell'hold-out con lo stop 6 ATR, tutti i
+  fold positivi, tutto sotto i 50 bp della commissione. Tenere la posizione sui segnali scartati
+  invece di chiudere è una scommessa sul trend: Shiryaev 0,5 con lo stop fa −25 / +52 / −91 bp
+  sullo sviluppo a L 0,50 / 0,55 / 0,60. Sulla pagina è il default dei due rivelatori.
+- **Lo stop loss taglia falsi e veri insieme** (`--sl`). A 1 ATR i falsi allarmi passano da −80 a
+  −42 bp, le rilevazioni giuste da +31 a +17; nessuno stop da 1 a 6 ATR esce da −1,4 / +1,6 bp.
+- Le altre prove (media breve, take profit, soglie alte, filtro di volatilità, momentum, inversa
+  della peggiore) sono nella docstring di `strategy.py`, con i numeri.
+
+**L'hold-out è usato.** Letto il 2026-10-03 sulle cinque `CANDIDATES` e poi, come controlli
+dichiarati, sulla regola "solo segnale opposto", sull'inversa della banda a 0,55 e sulle svolte.
+Ogni regola nuova sui fold 3-4 sarebbe scelta su dati già visti.
+
+**Cosa è cambiato nel codice.**
+
+- `strategy.py`: il modulo dello studio, con `--candidates`, `--tp/--sl/--trail/--after`,
+  `--filter`, `--invert`, `--smooth`, `--path`, `--hindsight [--causal | --delay [--null]]` e un `_selfcheck`
+  registrato in `tests/test_selfchecks.py`. `play` esegue qualunque regola su qualunque
+  predizione; `walked` è `stops.walk` su qualunque segnale, con filtro.
+- `detect.py`: zigzag (CUSUM) e rivelatore di Shiryaev sulle svolte, stimati sullo sviluppo, con
+  `match` (trovate, ritardo, falsi allarmi), `book` e `split`; self-check registrato.
+- `chart.py`, 2026-10-04: **le regole leggono l'uscita grezza della v2** (`swing.predict_frame`
+  espone `raw`), le unità dello studio. Prima la pagina metteva le soglie sulla linea calibrata,
+  dove 0,40 vale 0,28 grezzo: il "rientro a 0,40" della pagina non era quello dello studio. Nuove
+  regole: zigzag e rivelatore di Shiryaev (`detect.V2_FIT`), con le righe di ciò che la regola legge,
+  dei segnali chiesti (pieni se dalla parte giusta della gamba, vuoti se falsi, giudicati sulle
+  svolte col senno di poi) e della probabilità o del ritracciamento su cui il rivelatore decide.
+- `chart.py`: la sezione **Trading strategy** (fino al 2026-10-04 *Trading rule*) passa da `strategy.play`
+  invece che da `stops.run`.
+  Regole: banda, rientro, momentum, svolte alla conferma, svolte col senno di poi (sotto un avviso).
+  Poi soglia o finestra delle svolte, media della predizione, inversione, filtro BTC sui giornalieri
+  di Alpaca (scaricati con le candele), uscite. Nuove metriche: bp per trade con la commissione di
+  pareggio, e la curva del capitale della regola. La pagina si apre su v2, rientro a 0,40, stop
+  6 ATR e poi solo segnale opposto (+26,1 bp sullo sviluppo, −26,5 sull'hold-out), con il filtro
+  BTC spento dal 2026-10-04: con BTC sopra la media a 200 giorni lasciava la regola flat. Lo
+  stesso giorno i rivelatori sono scesi a due controlli, h o p e il livello L: tolti la
+  probabilità a priori costante, il ritracciamento combinato, la lettura del livello all'estremo e
+  il segnale scartato ignorato, nessuno dei quali ha mai guadagnato. Poi la barra laterale è stata
+  divisa in sezioni (candele, modello ed etichetta, righe delle feature, strategia, uscite) e ogni
+  controllo rinominato per quello che fa, con un aiuto che lo spiega. Tenere la posizione sulle
+  svolte dentro ±L è tornata come interruttore spento (*Hold through the turns inside ±L*), con i
+  numeri di sopra nell'aiuto. **Con la v2 l'ATR degli stop è ora a 12 barre,
+  la finestra del modello, invece di 24**: gli stessi multipli di ATR possono dare stop diversi
+  da prima.
+- Un bug trovato e corretto durante lo studio: `--filter` veniva ignorato dalla CLI con `--tp`. Le
+  misure con filtro passavano da `--candidates`, che lo applicava, e non ne sono toccate.
+
+**Dove si è arrivati, 2026-10-04.** Nessuna regola sulla predizione v2 guadagna in modo stabile fra
+i fold al netto della commissione. Le uniche righe positive in tutti e quattro i fold sono i due
+rivelatori con il filtro sul livello che chiudono sulle svolte dentro ±L: zigzag 0,2 oltre 0,5
+(+12,5 / +19,2 bp per trade) e Shiryaev 0,5 oltre 0,6 (+15,8 / +28,4), scelti sul solo sviluppo, con
+meno di cento trade per periodo e sotto i 50 bp di andata e ritorno. L'hold-out dei fold 3-4 è
+consumato. Il report dello studio, passo per passo e con i grafici, è `strategy_study.html`.
+
+**Aperto, in ordine.**
+
+1. **Il walk-forward della v2 dal 2023-01** (`swing --test-start 2023-01`): circa 3,7 anni fuori
+   campione e due cicli. Il primo uso è verificare le due righe sopra con i parametri congelati
+   (detector, h o p, L, chiusura sulle svolte dentro ±L, stop 6 ATR), senza riselezionarli; poi
+   provare regole nuove con selezione a rotazione sui fold precedenti. Non è stato cronometrato.
+2. **L'esecuzione maker.** A ~20 bp di andata e ritorno le due righe sarebbero vicine al pareggio,
+   a 50 no. Ordini limite con il riempimento simulato sul book sono un lavoro a sé.
+3. **Un modello sul rendimento futuro che unisca futures e v2.** Colonne: open interest dietro al
+   movimento a 4 / 12 / 24 barre, squilibrio del book entro il 5%, base, funding, flusso dei taker,
+   più la predizione v2 come input. Prima una ridge in walk-forward contro il rendimento a 48 barre;
+   una rete solo se l'IC regge sopra 0,1 in ogni fold (oggi le colonne singole stanno fra 0,03 e
+   0,09). Servono più dei sedici mesi di futures scaricati (`data.futures`), e riaprire un'etichetta
+   sul rendimento è una decisione: quelle predittive sono archiviate in `OLD/`.
+4. **Una scala più lunga**: la v2 riaddestrata su gambe di 24-48 barre. Il rumore cresce come
+   σ√w, una deriva come μ·w, la commissione resta fissa.
+5. **Le colonne di esaurimento** (`legs.exhaustion`), le uniche col segno giusto sul rendimento
+   futuro in tutti i fold, mai provate come ingresso di una regola su questa predizione.
+6. Le CLI di `threshold`, `stops` e `swingrule` leggono ancora il formato di `gru` (§16, punto 1).
+   `strategy` legge già quello di `swing`.

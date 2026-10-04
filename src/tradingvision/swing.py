@@ -1217,7 +1217,11 @@ def live_scaler(f: pd.DataFrame) -> pd.DataFrame:
 
 
 def predict_frame(model: Net, checkpoint: dict, bars: pd.DataFrame, symbol: str | None = None) -> pd.DataFrame:
-    """`label`, `logit` and `position` at every bar of `bars`, which must be the model's timeframe.
+    """`label`, `raw`, `logit` and `position` at every bar of `bars`, which must be the model's timeframe.
+
+    `label` is the head's output mapped onto the label's +-1 by the calibration fitted on train;
+    `raw` is the same output before it, the units every rule of `strategy` and `detect` was measured
+    in (the walk-forward writes it as `pred`). The map stretches it: 0.40 raw is 0.575 calibrated.
 
     `symbol` is the store's name for the pair (`BTC`). When the checkpoint carries that
     symbol's training scaler the inputs are scaled by it, exactly as the walk-forward scaled them;
@@ -1228,7 +1232,7 @@ def predict_frame(model: Net, checkpoint: dict, bars: pd.DataFrame, symbol: str 
     keep = checkpoint["inputs"]
     steps = checkpoint["steps"]
     f = inputs(bars, checkpoint["window"], keep).dropna()
-    out = pd.DataFrame(np.nan, index=bars.index, columns=["label", "logit", "position"])
+    out = pd.DataFrame(np.nan, index=bars.index, columns=["label", "raw", "logit", "position"])
     trained = (checkpoint.get("scalers") or {}).get(symbol)
     # The live fallback estimates quartiles from the window itself, so it needs enough of one;
     # the shipped scaler needs nothing but a full window of steps.
@@ -1246,6 +1250,7 @@ def predict_frame(model: Net, checkpoint: dict, bars: pd.DataFrame, symbol: str 
     signal = logit if checkpoint["stage"] in ("policy", "both") else label
     read = None if checkpoint["enter"] is None else (checkpoint["enter"], checkpoint["exit"], checkpoint["sign"])
     out.loc[at, "position"] = book(signal, read)
+    out.loc[at, "raw"] = label
     if checkpoint.get("calibration") is not None:
         label = calibrate(label, checkpoint["calibration"])
     out.loc[at, "label"] = label

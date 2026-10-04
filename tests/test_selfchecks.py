@@ -12,7 +12,7 @@ import sys
 
 import pytest
 
-from tradingvision import stops, swingrule, threshold
+from tradingvision import detect, stops, strategy, swingrule, threshold
 
 SELF_CHECKED = [
     "tradingvision.data.candles",
@@ -48,6 +48,11 @@ def test_stops_selfcheck():
     stops._selfcheck()
 
 
+def test_strategy_selfcheck():
+    """`strategy` keeps its checks in a function: its `__main__` reads the v2 prediction file."""
+    strategy._selfcheck()
+
+
 def test_swing_selfcheck():
     """In its own process: it imports torch, which the rest of this file does not need.
 
@@ -55,3 +60,15 @@ def test_swing_selfcheck():
     """
     code = "from tradingvision import swing; swing._selfcheck()"
     subprocess.run([sys.executable, "-c", code], check=True)
+
+
+def test_detect_selfcheck():
+    """`detect` keeps its checks in a function: its `__main__` runs the detectors on v2's predictions."""
+    detect._selfcheck()
+
+
+def test_futures_selfcheck():
+    """`data.futures` keeps its checks in a function: its `__main__` downloads the dumps."""
+    from tradingvision.data import futures
+
+    futures._selfcheck()

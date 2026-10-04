@@ -1,0 +1,1280 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Studio strategia Swing Leg v2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column of a lab notebook, tables and charts allowed to run wider inside it. */
+:root {
+  --bg: #f5f7f9;
+  --surface: #ffffff;
+  --fg: #141820;
+  --fg2: #475161;
+  --muted: #7a8393;
+  --rule: #e1e5eb;
+  --axis: #c3c8d0;
+  --accent: #1f5fae;
+  --accent-wash: #e8f0fb;
+  --s1: #2a78d6;
+  --s2: #eb6834;
+  --s3: #1baf7a;
+  --pos: #006300;
+  --neg: #b42828;
+  --good: #0ca30c;
+  --warn: #c98500;
+  --bad: #d03b3b;
+  --chip-good: #e6f4e6;
+  --chip-warn: #fbf1dc;
+  --chip-bad: #fbe7e7;
+  --chip-neutral: #eceef2;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1216; --surface: #171b21; --fg: #eef1f5; --fg2: #b9c0cb; --muted: #8a93a1;
+    --rule: #2a3038; --axis: #3a414b; --accent: #6ea8f0; --accent-wash: #1a2636;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --pos: #4cc04c; --neg: #f07272;
+    --good: #0ca30c; --warn: #e0a42a; --bad: #e66767;
+    --chip-good: #16301a; --chip-warn: #33290f; --chip-bad: #3a1a1a; --chip-neutral: #232830;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1216; --surface: #171b21; --fg: #eef1f5; --fg2: #b9c0cb; --muted: #8a93a1;
+  --rule: #2a3038; --axis: #3a414b; --accent: #6ea8f0; --accent-wash: #1a2636;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --pos: #4cc04c; --neg: #f07272;
+  --good: #0ca30c; --warn: #e0a42a; --bad: #e66767;
+  --chip-good: #16301a; --chip-warn: #33290f; --chip-bad: #3a1a1a; --chip-neutral: #232830;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 16px; line-height: 1.6; }
+.page { max-width: 960px; margin: 0 auto; padding-inline: 20px; padding-block: 40px 80px; display: grid; gap: 56px; }
+header { display: grid; gap: 14px; }
+.eyebrow { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+h1 { font-size: clamp(28px, 4.4vw, 40px); line-height: 1.15; margin: 0; font-weight: 700; text-wrap: balance; letter-spacing: -.01em; }
+h2 { font-size: 24px; line-height: 1.25; margin: 0; font-weight: 600; text-wrap: balance; }
+h3 { font-size: 17px; margin: 0; font-weight: 600; }
+p { margin: 0; max-width: 68ch; color: var(--fg); }
+.lede { font-size: 18px; color: var(--fg2); max-width: 64ch; }
+.meta { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+section { display: grid; gap: 18px; min-width: 0; }
+.sechead { display: grid; gap: 4px; border-top: 1px solid var(--rule); padding-top: 22px; }
+.step { font-family: var(--mono); font-size: 12px; color: var(--accent); letter-spacing: .04em; }
+ul.points { margin: 0; padding-left: 20px; display: grid; gap: 8px; max-width: 70ch; }
+ul.points li::marker { color: var(--muted); }
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 14px; }
+nav.toc a { color: var(--accent); text-decoration: none; }
+nav.toc a:hover, nav.toc a:focus-visible { text-decoration: underline; }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+code, .code { font-family: var(--mono); font-size: 13.5px; }
+p code, li code, td code { background: var(--accent-wash); padding: 1px 5px; border-radius: 4px; }
+
+/* verdict tiles */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.tile { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 16px 18px; display: grid; gap: 4px; align-content: start; }
+.tile .label { font-size: 13px; color: var(--fg2); }
+.tile .value { font-size: 34px; font-weight: 600; line-height: 1.1; }
+.tile .note { font-size: 13px; color: var(--muted); }
+.up { color: var(--pos); } .down { color: var(--neg); }
+
+/* tables */
+.tablewrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { padding: 8px 12px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--rule); }
+th { font-weight: 600; color: var(--fg2); font-size: 12.5px; background: var(--surface); vertical-align: bottom; }
+td { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 13.5px; }
+th:first-child, td:first-child { text-align: left; font-family: var(--sans); font-size: 14px; }
+td.text { text-align: left; font-family: var(--sans); white-space: normal; min-width: 220px; font-size: 14px; }
+tr:last-child td { border-bottom: 0; }
+tr.hl td { background: var(--accent-wash); }
+tr.sep td { border-top: 2px solid var(--axis); }
+.caption { font-size: 13px; color: var(--muted); max-width: 80ch; }
+
+/* chips */
+.chip { display: inline-flex; align-items: center; gap: 6px; font-family: var(--sans); font-size: 12.5px; font-weight: 600; padding: 2px 9px; border-radius: 999px; white-space: nowrap; color: var(--fg); }
+.chip i { font-style: normal; font-weight: 700; }
+.chip.good { background: var(--chip-good); } .chip.good i { color: var(--good); }
+.chip.warn { background: var(--chip-warn); } .chip.warn i { color: var(--warn); }
+.chip.bad { background: var(--chip-bad); } .chip.bad i { color: var(--bad); }
+.chip.neutral { background: var(--chip-neutral); } .chip.neutral i { color: var(--muted); }
+
+/* spec card */
+.spec { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 18px 20px; display: grid; gap: 10px; }
+.spec dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; }
+.spec dt { color: var(--fg2); font-size: 14px; }
+.spec dd { margin: 0; min-width: 0; }
+@media (max-width: 560px) { .spec dl { grid-template-columns: 1fr; } .spec dd { margin-bottom: 8px; } }
+
+/* charts */
+.chart { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 14px 14px 8px; display: grid; gap: 8px; position: relative; min-width: 0; }
+.chart h3 { font-size: 15px; }
+.chart .sub { font-size: 13px; color: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--fg2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend b { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+.legend b.sq { width: 10px; height: 10px; border-radius: 3px; }
+.plot { overflow-x: auto; }
+.plot svg { display: block; width: 100%; min-width: 520px; height: auto; }
+.plot svg text { font-family: var(--sans); font-size: 12px; fill: var(--muted); }
+.plot svg text.lab { fill: var(--fg2); font-size: 12.5px; }
+.tip { position: absolute; pointer-events: none; background: var(--surface); color: var(--fg); border: 1px solid var(--rule); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; box-shadow: 0 4px 16px rgba(0,0,0,.12); display: grid; gap: 2px; min-width: 140px; }
+.tip .t { color: var(--muted); font-size: 12px; }
+.tip .r { display: flex; justify-content: space-between; gap: 12px; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.tip .r span:first-child { font-family: var(--sans); display: inline-flex; align-items: center; gap: 6px; }
+.tip .r b { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+pre { margin: 0; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--fg); }
+.timeline-wrap { overflow-x: auto; }
+.timeline { display: grid; grid-template-columns: 1.3fr repeat(4, 1fr); gap: 3px; min-width: 560px; }
+.timeline .seg { padding: 8px 10px; border-radius: 6px; font-size: 13px; font-weight: 600; line-height: 1.35; }
+.timeline .seg span { display: block; font-weight: 400; color: var(--fg2); font-size: 12px; }
+.timeline .train { background: var(--chip-neutral); }
+.timeline .dev { background: var(--accent-wash); }
+.timeline .ho { background: var(--chip-warn); }
+.timeline .band { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--fg2); font-weight: 600; padding: 4px 10px 0; border-top: 2px solid var(--axis); }
+.timeline .b-dev { grid-column: 2 / 4; } .timeline .b-ho { grid-column: 4 / 6; }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.two > * { min-width: 0; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <div class="eyebrow">TradingVision · ramo claude/strategy-study · 3 ottobre 2026, aggiornato con le regole dopo uno stop, la peggiore invertita, le svolte della predizione, il loro ritardo, il controllo sul rumore, il rivelatore bayesiano, la separazione degli allarmi, lo stop loss, i dati dei futures, l'open interest e il filtro sul livello</div>
+    <h1>Studio strategia Swing Leg v2</h1>
+    <p class="lede">Una regola di trading costruita un passo alla volta sulle predizioni della v2 di <code>swing_leg_target</code>, tarata su otto mesi e verificata su otto mesi mai guardati prima. Senza commissioni, su ETH, BTC e SOL.</p>
+    <div class="meta">barre da 15m · predizioni walk-forward fuori campione · 2025-06-01 → 2026-09-26 · rendimenti in log · bp = 0,01%</div>
+    <nav class="toc" aria-label="Sezioni">
+      <a href="#verdetto">Verdetto</a><a href="#protocollo">Protocollo</a><a href="#holdout">Cos'è l'hold-out</a><a href="#passo1">1 · Asset</a><a href="#passo2">2 · Riferimento</a><a href="#passo3">3 · Rientro</a><a href="#passo4">4 · Media breve</a><a href="#passo5">5 · Uscite</a><a href="#deriva">Tempismo e deriva</a><a href="#passo6">6 · Filtro e hold-out</a><a href="#dopo-stop">Dopo uno stop</a><a href="#inversa">La peggiore, invertita</a><a href="#svolte">Le svolte della predizione</a><a href="#ritardo">Svolte in ritardo</a><a href="#rumore">Perché non si anticipano</a><a href="#bayes">Il rivelatore bayesiano</a><a href="#separare">Separare e fermare</a><a href="#futures">Funding, open interest, book</a><a href="#oi">L'open interest</a><a href="#livello">Filtro sul livello</a><a href="#bilancio">Cosa ha funzionato</a><a href="#migliori">Parametri e combinazioni</a><a href="#limiti">Limiti e prossimi passi</a><a href="#riproduci">Riprodurre</a>
+    </nav>
+  </header>
+
+  <section id="verdetto">
+    <div class="sechead"><div class="step">VERDETTO</div><h2>La regola migliore dello sviluppo perde sull'hold-out</h2></div>
+    <div class="tiles">
+      <div class="tile"><div class="label">Rientro 0,40 + filtro BTC, sviluppo</div><div class="value up">+41,0 bp</div><div class="note">per trade, ±16,1 · 315 trade · profit factor 1,52</div></div>
+      <div class="tile"><div class="label">Stessa regola, hold-out</div><div class="value down">−40,5 bp</div><div class="note">per trade, ±14,9 · 530 trade · profit factor 0,68</div></div>
+      <div class="tile"><div class="label">Fold con il rientro in guadagno</div><div class="value">1 su 4</div><div class="note">fold 1 −1,8 · fold 2 +32,8 · fold 3 −44,8 · fold 4 −40,9 bp</div></div>
+    </div>
+    <ul class="points">
+      <li>Sul periodo di sviluppo due cose hanno funzionato: <strong>entrare al rientro nel range</strong> invece che alla rottura della soglia, e <strong>operare solo con BTC sotto la sua media a 200 giorni</strong>. Insieme portavano la regola da +1,7 a +41 bp per trade.</li>
+      <li>L'hold-out, letto una volta sola su cinque regole fissate prima di guardarlo, le boccia tutte, sia nel rialzo sia nel ribasso, su tutti e tre gli asset: da −21 a −43 bp per trade.</li>
+      <li>Il guadagno dello sviluppo veniva tutto dal fold 2. Nello sviluppo il ribasso coincideva con il fold 2, quindi "funziona nel ribasso" e "il secondo modello era migliore" davano la stessa tabella. L'hold-out, quasi tutto in ribasso, ha dato ragione alla seconda lettura.</li>
+      <li>L'unico effetto con lo stesso segno nei due periodi è lo <strong>stop a 6 ATR</strong>: riduce le perdite e il drawdown, ma non crea guadagno.</li>
+      <li><strong>Il segnale c'è, ma solo col senno di poi.</strong> Tradando le svolte della predizione individuate guardando avanti si guadagnano da +122 a +306 bp per trade, a seconda della finestra, in tutti e quattro i fold, e le svolte della predizione sono meglio piazzate di quelle di un RSI in ogni fold. Eseguite quando sono confermate, l'unico modo tradabile, valgono circa zero: arrivano tardi quanto quelle del prezzo. In mezzo il valore scende rapidamente: a finestra 12 ne resta il 70% con una barra di ritardo, il 55% con due, il 23% con sei.</li>
+      <li><strong>Riconoscere le svolte in tempo reale non basta.</strong> Il valore delle svolte e la sua discesa col ritardo sono gli stessi su prezzi con il segno di ogni rendimento estratto a caso: sono la geometria degli estremi del rumore. Un rivelatore bayesiano trova l'80% delle svolte con 3 barre di ritardo mediano, ma i trade aperti dai falsi allarmi perdono quanto guadagnano quelli aperti dalle rilevazioni giuste (+31 contro −80 bp): il rendimento è zero, come prevede il teorema d'arresto opzionale. Ridurre i falsi allarmi non cambia la somma: né combinando i rivelatori, né separando gli allarmi con sedici variabili note in quel momento, né con uno stop loss, né aggiungendo funding, open interest, flusso dei taker e profondità del book.</li>
+      <li><strong>Nessun risultato si ripete.</strong> Quasi ogni regola cambia segno da un fold all'altro, e anche invertire la regola peggiore dello sviluppo dà sull'hold-out un risultato indistinguibile da zero (+11,6 ± 38,6 bp per trade).</li>
+      <li>Dopo l'hold-out ho provato lo stop con <strong>rientro solo al segnale opposto</strong>: è la regola migliore sullo sviluppo senza filtro (+26,1 bp per trade, positiva sia nel rialzo sia nel ribasso), ma il controllo sull'hold-out dà −26,5 bp.</li>
+    </ul>
+  </section>
+
+  <section id="protocollo">
+    <div class="sechead"><div class="step">PROTOCOLLO</div><h2>Le regole fissate prima di prezzare qualunque strategia</h2></div>
+    <div class="spec">
+      <dl>
+        <dt>Modello</dt><dd>v2: <code>swing --timeframe 15m --window 12 --smoothing 0.5 --inputs reduced --steps 48 --stage label --test-start 2025-06</code>, predizioni fuori campione su 4 fold walk-forward.</dd>
+        <dt>Asset</dt><dd>I tre quotati su Alpaca con il Rank IC più alto contro l'etichetta sui fold 1-2: ETH, BTC, SOL.</dd>
+        <dt>Sviluppo</dt><dd>Fold 1-2, 2025-06-01 → 2026-01-28. Qui si sceglie tutto: soglie, varianti, uscite, filtri.</dd>
+        <dt>Hold-out</dt><dd>Fold 3-4, 2026-01-28 → 2026-09-26. Letto una volta sola, sulle regole fissate in anticipo. Ora è usato.</dd>
+        <dt>Regimi</dt><dd>Ciclo di BTC per tutti gli asset: ribasso dal massimo del 2025-10-06 (126.200), rialzo dal minimo del 2026-07-01 (57.800). Lo sviluppo ha circa 4 mesi di rialzo e 4 di ribasso, l'hold-out 5 di ribasso e 3 di rialzo.</dd>
+        <dt>Costi</dt><dd>Nessuno. Il bp per trade è la misura da confrontare con l'andata e ritorno: 50 bp con ordini taker su Alpaca, circa 20 bp con ordini maker.</dd>
+        <dt>Metriche</dt><dd>Numero di trade, lordo totale (log, media dei tre asset), bp per trade con errore standard, tempismo (<code>excess_bp</code>, il lordo meno la deriva), win rate, vincita e perdita media, profit factor, max drawdown, durata media, long e short separati, buy &amp; hold dello stesso periodo.</dd>
+        <dt>Esecuzione</dt><dd>Decisione e riempimento alla chiusura della barra del segnale. Stop e take profit controllati dalla barra successiva, riempiti al livello o all'apertura se il prezzo ci salta oltre. Se una candela tocca entrambi, vale lo stop.</dd>
+      </dl>
+    </div>
+    <p class="caption">L'errore standard del bp per trade tratta i trade come indipendenti. Le posizioni dello stesso asset non si sovrappongono, ma i tre asset si muovono insieme, quindi l'errore vero è più largo.</p>
+    <div class="spec" id="holdout">
+      <h3>Cos'è l'hold-out</h3>
+      <div class="timeline-wrap"><div class="timeline">
+        <div class="seg train">Addestramento del modello<span>2021 → 2025-06</span></div>
+        <div class="seg dev">Fold 1<span>giu – set 2025</span></div>
+        <div class="seg dev">Fold 2<span>set 2025 – gen 2026</span></div>
+        <div class="seg ho">Fold 3<span>gen – mag 2026</span></div>
+        <div class="seg ho">Fold 4<span>mag – set 2026</span></div>
+        <div></div><div class="band b-dev">Sviluppo: qui si sceglie tutto</div><div class="band b-ho">Hold-out: qui si misura e basta</div>
+      </div></div>
+      <p>L'hold-out è la parte dei dati tenuta da parte e mai guardata mentre si costruiva la strategia. Si legge una volta sola, alla fine, per vedere se quello che si è trovato funziona su dati che non hanno influenzato nessuna scelta.</p>
+      <p>Sullo sviluppo sono state provate circa 180 configurazioni tra soglie, medie, stop, take profit e filtri. Su tanti tentativi qualcuno sembra buono anche per caso, quindi il risultato migliore dello sviluppo è ottimistico per costruzione. L'hold-out non ha partecipato a nessuna scelta: è la stima più vicina a come sarebbe andata la regola usata dal vivo da gennaio 2026.</p>
+      <p>I livelli di verifica sono due. Le predizioni sono già fuori campione per il modello: ogni fold è predetto da un modello addestrato solo sui mesi precedenti. I parametri della regola invece (soglia, stop, filtro) sono stati scelti guardando i risultati, e per verificarli serve un secondo taglio: l'hold-out.</p>
+      <p>Una volta letto, l'hold-out è usato. Una regola nuova provata sui fold 3-4 sarebbe scelta sapendo già cosa è successo lì. Per questo le regole della sezione "Dopo uno stop" hanno solo un controllo, non una prova pulita.</p>
+    </div>
+  </section>
+
+  <section id="passo1">
+    <div class="sechead"><div class="step">PASSO 1</div><h2>Dove il modello prevede meglio l'etichetta</h2></div>
+    <p>Rank IC (Spearman nel tempo, asset per asset) della predizione contro <code>swing_leg_target</code> e contro il rendimento delle 12 barre successive, cioè 3 ore. Contro il prezzo il segno utile è negativo: predizione alta, prezzo che poi scende. Le ultime due colonne mostrano dove la regola opera: il 10% più basso della predizione, dove compra, e il 10% più alto, dove va short.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Asset</th><th>Rank IC etichetta</th><th>Fold min – max</th><th>Rank IC prezzo 12 barre</th><th>t</th><th>10% basso, prezzo a 12 barre</th><th>10% alto, prezzo a 12 barre</th></tr></thead>
+      <tbody>
+        <tr class="hl"><td>ETH</td><td>0,696</td><td>0,690 – 0,704</td><td>−0,041</td><td>−2,5</td><td class="down">−3,7 bp</td><td class="down">+5,5 bp</td></tr>
+        <tr class="hl"><td>BTC</td><td>0,684</td><td>0,671 – 0,693</td><td>−0,042</td><td>−2,6</td><td class="down">−3,0 bp</td><td class="down">+1,7 bp</td></tr>
+        <tr><td>BNB (non su Alpaca)</td><td>0,680</td><td>0,665 – 0,691</td><td>−0,014</td><td>−0,9</td><td>−0,3 bp</td><td>+3,0 bp</td></tr>
+        <tr class="hl"><td>SOL</td><td>0,672</td><td>0,658 – 0,698</td><td>−0,023</td><td>−1,4</td><td>−5,2 bp</td><td>−0,9 bp</td></tr>
+        <tr><td>UNI</td><td>0,666</td><td>0,655 – 0,682</td><td>−0,020</td><td>−1,2</td><td>−3,9 bp</td><td>+12,2 bp</td></tr>
+        <tr><td>AAVE</td><td>0,664</td><td>0,642 – 0,684</td><td>−0,022</td><td>−1,3</td><td>−3,2 bp</td><td>+3,4 bp</td></tr>
+        <tr><td>XRP</td><td>0,658</td><td>0,631 – 0,675</td><td>0,000</td><td>0,0</td><td>−4,0 bp</td><td>+12,6 bp</td></tr>
+        <tr><td>LTC</td><td>0,651</td><td>0,619 – 0,695</td><td>−0,042</td><td>−2,6</td><td>+1,6 bp</td><td>−5,3 bp</td></tr>
+        <tr><td>ADA</td><td>0,645</td><td>0,604 – 0,678</td><td>−0,013</td><td>−0,8</td><td>−3,9 bp</td><td>+10,7 bp</td></tr>
+        <tr><td>BCH</td><td>0,634</td><td>0,617 – 0,660</td><td>−0,039</td><td>−2,4</td><td>−2,8 bp</td><td>+3,6 bp</td></tr>
+        <tr><td>LINK</td><td>0,614</td><td>0,549 – 0,662</td><td>−0,022</td><td>−1,3</td><td>+0,1 bp</td><td>+0,1 bp</td></tr>
+        <tr><td>NEAR</td><td>0,612</td><td>0,567 – 0,637</td><td>−0,016</td><td>−1,0</td><td>−6,5 bp</td><td>+11,8 bp</td></tr>
+        <tr><td>AVAX</td><td>0,607</td><td>0,553 – 0,665</td><td>−0,033</td><td>−2,0</td><td>−1,8 bp</td><td>−3,8 bp</td></tr>
+        <tr><td>FIL</td><td>0,596</td><td>0,529 – 0,621</td><td>−0,014</td><td>−0,9</td><td>−4,1 bp</td><td>+14,7 bp</td></tr>
+        <tr><td>DOT</td><td>0,585</td><td>0,532 – 0,630</td><td>−0,014</td><td>−0,9</td><td>−1,2 bp</td><td>+6,2 bp</td></tr>
+      </tbody>
+    </table></div>
+    <p class="caption">Tutti i 16 mesi fuori campione. t calcolato su righe non sovrapposte (una ogni 12 barre). Sui soli fold 1-2, usati per la scelta: ETH 0,703, BTC 0,688, SOL 0,683, BNB 0,678, AAVE 0,675, LTC 0,675, UNI 0,674.</p>
+    <ul class="points">
+      <li>La classifica sull'etichetta è stabile: 0,90 di correlazione tra la prima e la seconda metà. Quella sul prezzo no: 0,34.</li>
+      <li>Agli estremi il prezzo continua invece di invertire. Dove la regola compra, il prezzo scende in media su 13 asset su 15; dove va short, sale su 12 su 15. Il ritorno verso la media sta nella fascia centrale.</li>
+      <li>SOL batte AAVE, LTC e UNI per meno di 0,01: meno di quanto lo stesso asset varia tra un fold e l'altro.</li>
+    </ul>
+  </section>
+
+  <section id="passo2">
+    <div class="sechead"><div class="step">PASSO 2</div><h2>La regola di riferimento: sempre in posizione</h2></div>
+    <p>Long quando la predizione scende sotto −a, short quando sale sopra +a, e la posizione si gira solo al segnale opposto (<code>threshold.positions</code>). Periodo di sviluppo.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Soglia a</th><th>Trade</th><th>Lordo per asset</th><th>bp per trade</th><th>Win rate</th><th>Vincita media</th><th>Perdita media</th><th>Profit factor</th><th>Max DD</th></tr></thead>
+      <tbody>
+        <tr><td>0,30</td><td>1.336</td><td class="down">−0,492</td><td>−11,0</td><td>62%</td><td>+110 bp</td><td>−207 bp</td><td>0,86</td><td>51%</td></tr>
+        <tr class="hl"><td>0,40</td><td>856</td><td class="up">+0,045</td><td>+1,7 ± 9,8</td><td>65%</td><td>+153 bp</td><td>−279 bp</td><td>1,02</td><td>33%</td></tr>
+        <tr><td>0,50</td><td>429</td><td class="down">−0,323</td><td>−21,9</td><td>61%</td><td>+222 bp</td><td>−397 bp</td><td>0,86</td><td>49%</td></tr>
+        <tr><td>0,60</td><td>200</td><td class="down">−0,107</td><td>−30,7</td><td>55%</td><td>+347 bp</td><td>−483 bp</td><td>0,86</td><td>44%</td></tr>
+        <tr><td>0,70</td><td>59</td><td class="down">−0,135</td><td>−250,0</td><td>58%</td><td>+449 bp</td><td>−1.201 bp</td><td>0,51</td><td>41%</td></tr>
+      </tbody>
+    </table></div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>A 0,40, per regime</th><th>Long, bp per trade</th><th>Short, bp per trade</th><th>Buy &amp; hold del periodo</th></tr></thead>
+      <tbody>
+        <tr><td>Rialzo (giu – ott 2025)</td><td class="up">+21,8</td><td class="down">−30,5</td><td>+0,38</td></tr>
+        <tr><td>Ribasso (ott 2025 – gen 2026)</td><td class="down">−26,6</td><td class="up">+43,3</td><td>−0,44</td></tr>
+      </tbody>
+    </table></div>
+    <ul class="points">
+      <li>Nessuna soglia guadagna in modo apprezzabile. La migliore fa +1,7 bp per trade.</li>
+      <li>Il segno lo decide il mercato: i long guadagnano nel rialzo e gli short nel ribasso, a ogni soglia. La regola è long metà del tempo e short l'altra metà.</li>
+      <li>Il win rate del 60-65% inganna: la perdita media è circa il doppio della vincita media.</li>
+    </ul>
+  </section>
+
+  <section id="passo3">
+    <div class="sechead"><div class="step">PASSO 3</div><h2>Entrare al rientro nel range</h2></div>
+    <p>Long nella barra in cui la predizione, dopo essere scesa sotto −a, risale sopra −a; short quando, dopo essere salita sopra +a, riscende sotto +a. Si resta in posizione fino al rientro opposto (<code>strategy.reentry</code>). Le due regole fanno esattamente lo stesso numero di trade: il rientro è il riferimento ritardato del tempo che la predizione passa fuori dalla banda.</p>
+    <div class="chart" id="c-threshold">
+      <h3>bp per trade per soglia, periodo di sviluppo</h3>
+      <div class="sub">Il rientro sta sopra il riferimento a tutte e nove le soglie da 0,20 a 0,60</div>
+      <div class="legend"><span><b style="background:var(--s1)"></b>Rientro</span><span><b style="background:var(--s2)"></b>Riferimento (sempre in posizione)</span></div>
+      <div class="plot"></div>
+    </div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Soglia a</th><th>Trade</th><th>Lordo riferimento</th><th>Lordo rientro</th><th>bp riferimento</th><th>bp rientro</th><th>Rientro: long / short</th><th>Rientro: rialzo / ribasso</th></tr></thead>
+      <tbody>
+        <tr><td>0,30</td><td>1.336</td><td>−0,492</td><td>+0,082</td><td>−11,0</td><td>+1,8 ± 6,4</td><td>+0,4 / +3,3</td><td>−0,23 / +0,31</td></tr>
+        <tr class="hl"><td>0,35</td><td>1.112</td><td>−0,040</td><td>+0,479</td><td>−1,0</td><td>+12,9 ± 7,6</td><td>+11,3 / +14,6</td><td>−0,12 / +0,60</td></tr>
+        <tr class="hl"><td>0,40</td><td>856</td><td>+0,045</td><td>+0,418</td><td>+1,7</td><td>+15,0 ± 10,1</td><td>+12,7 / +17,3</td><td>−0,03 / +0,45</td></tr>
+        <tr><td>0,45</td><td>612</td><td>−0,084</td><td>+0,098</td><td>−3,6</td><td>+5,3 ± 13,9</td><td>+2,2 / +8,4</td><td>−0,32 / +0,41</td></tr>
+        <tr><td>0,50</td><td>429</td><td>−0,323</td><td>−0,144</td><td>−21,9</td><td>−9,4 ± 19,5</td><td>−14,1 / −4,8</td><td>−0,48 / +0,34</td></tr>
+      </tbody>
+    </table></div>
+    <ul class="points">
+      <li>Sullo sviluppo è stato il passo che ha spostato di più: circa +13 bp per trade rispetto al riferimento, su entrambi i lati.</li>
+      <li>Il rialzo restava a zero o sotto; il guadagno veniva dal ribasso.</li>
+      <li>Sull'hold-out il vantaggio si è rovesciato: −42,9 bp per trade contro −25,2 del riferimento (passo 6).</li>
+    </ul>
+    <p class="caption">Il controllo "momentum" (comprare la rottura in alto) è lo specchio esatto del riferimento quando si resta sempre in posizione: stesso numero di trade, lordo cambiato di segno. Sullo sviluppo è irregolare da una soglia all'altra (−1,7 bp a 0,40), sull'hold-out sarebbe +25 bp. Non è stabile.</p>
+  </section>
+
+  <section id="passo4">
+    <div class="sechead"><div class="step">PASSO 4</div><h2>Rientro su una media breve della predizione</h2></div>
+    <p>La regola legge la media delle ultime k barre della predizione invece del valore grezzo (<code>threshold.smoothed</code>, causale). Periodo di sviluppo.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Media (barre)</th><th>a</th><th>Trade</th><th>Lordo</th><th>bp per trade</th><th>a</th><th>Trade</th><th>Lordo</th><th>bp per trade</th></tr></thead>
+      <tbody>
+        <tr><td>1 (grezza)</td><td>0,35</td><td>1.112</td><td>+0,479</td><td>+12,9 ± 7,6</td><td>0,40</td><td>856</td><td>+0,418</td><td>+15,0 ± 10,1</td></tr>
+        <tr class="hl"><td>2 (30 minuti)</td><td>0,35</td><td>1.040</td><td>+0,442</td><td>+13,1 ± 8,1</td><td>0,40</td><td>794</td><td>+0,426</td><td>+16,6 ± 10,9</td></tr>
+        <tr><td>4 (1 ora)</td><td>0,35</td><td>928</td><td>+0,360</td><td>+12,1 ± 9,3</td><td>0,40</td><td>694</td><td>+0,352</td><td>+15,8 ± 12,3</td></tr>
+        <tr><td>8 (2 ore)</td><td>0,35</td><td>754</td><td>+0,242</td><td>+10,2 ± 11,2</td><td>0,40</td><td>524</td><td>+0,107</td><td>+7,0 ± 15,9</td></tr>
+      </tbody>
+    </table></div>
+    <ul class="points">
+      <li>Fino a 4 barre la differenza è di 1-2 bp, contro un errore di circa 10: un pareggio. A 8 barre il ritardo costa più del rumore che toglie.</li>
+      <li>Le soglie da 0,35 a 0,95 richieste non aiutano. Sopra 0,5 ogni riga perde o è rumore. Da 0,70 i trade sono meno di 60 in 8 mesi, da 0,85 quasi nessuno: a 0,90 grezza ci sono 3 trade, a 0,80 con media da 8 barre nessuno.</li>
+      <li>Con la regola sempre in posizione la soglia decide anche la durata: a 0,70 il trade medio dura 324 ore, a 0,80 oltre 1.100. Il risultato lo fa allora la direzione del mercato.</li>
+    </ul>
+  </section>
+
+  <section id="passo5">
+    <div class="sechead"><div class="step">PASSO 5</div><h2>Uscite: stop loss, take profit, trailing, tempo</h2></div>
+    <p>Rientro a 0,40 con barriere in multipli di ATR a 12 barre, fissate al momento dell'ingresso (<code>strategy.exits</code> sopra <code>stops.walk</code>, barre OHLC da 15m). 1 ATR vale circa 25 bp su BTC, 39 su ETH, 46 su SOL. Dopo una barriera la regola aspetta il rientro successivo, su qualunque lato; le alternative sono nella sezione <a href="#dopo-stop">Dopo uno stop</a>. Periodo di sviluppo.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Uscita</th><th>Trade</th><th>Lordo</th><th>bp per trade</th><th>Chiusi dalla barriera</th><th>Durata media</th><th>Max DD</th></tr></thead>
+      <tbody>
+        <tr><td>Nessuna (solo segnale opposto)</td><td>856</td><td>+0,418</td><td>+15,0 ± 10,1</td><td>0%</td><td>20,3 h</td><td>29%</td></tr>
+        <tr><td>Take profit 3 ATR</td><td>940</td><td>+0,113</td><td>+4,0 ± 7,8</td><td>59%</td><td>15,8 h</td><td>29%</td></tr>
+        <tr><td>Take profit 6 ATR</td><td>865</td><td>+0,256</td><td>+9,2 ± 9,4</td><td>26%</td><td>19,4 h</td><td>32%</td></tr>
+        <tr><td>Stop 3 ATR</td><td>1.656</td><td>+0,434</td><td>+7,9 ± 4,6</td><td>51%</td><td>8,9 h</td><td>29%</td></tr>
+        <tr class="hl"><td>Stop 6 ATR</td><td>1.202</td><td>+0,485</td><td>+12,4 ± 6,7</td><td>30%</td><td>13,7 h</td><td>29%</td></tr>
+        <tr><td>Stop 10 ATR</td><td>1.028</td><td>+0,402</td><td>+12,0 ± 7,9</td><td>17%</td><td>16,4 h</td><td>30%</td></tr>
+        <tr><td>Stop trailing 6 ATR</td><td>1.364</td><td>+0,380</td><td>+8,6 ± 5,7</td><td>41%</td><td>11,5 h</td><td>31%</td></tr>
+        <tr class="hl"><td>Stop trailing 10 ATR</td><td>1.082</td><td>+0,482</td><td>+13,6 ± 7,5</td><td>21%</td><td>15,4 h</td><td>28%</td></tr>
+        <tr><td>Take 3 + stop 3 ATR</td><td>1.703</td><td>+0,051</td><td>+0,9 ± 3,5</td><td>87%</td><td>6,9 h</td><td>26%</td></tr>
+      </tbody>
+    </table></div>
+    <ul class="points">
+      <li>Il take profit fa danni a ogni misura che scatta davvero: taglia la coda destra delle vincite, che è quella che paga il resto.</li>
+      <li>Uno stop largo, fisso a 6 ATR o trailing a 10, è neutro: alza un po' il lordo e abbassa il bp per trade, perché dopo lo stop la regola rientra e fa più trade. Tutte le differenze stanno dentro l'errore.</li>
+    </ul>
+    <div class="chart" id="c-path">
+      <h3>Il trade medio del rientro, h ore dopo l'ingresso</h3>
+      <div class="sub">Soglia 0,40, sviluppo. Rendimento con il segno del lato: sopra zero il trade va nella direzione giusta. Asse orizzontale in scala logaritmica.</div>
+      <div class="legend"><span><b style="background:var(--s1)"></b>Tutti i trade</span><span><b style="background:var(--s2)"></b>Rialzo</span><span><b style="background:var(--s3)"></b>Ribasso</span></div>
+      <div class="plot"></div>
+    </div>
+    <ul class="points">
+      <li>Per 2-3 ore il trade medio è fermo, poi raggiunge il massimo verso 6 ore (+5,2 bp ± 3,1) e dopo 24 ore è negativo (−13,2 ± 6,0).</li>
+      <li>Tenere fino al rientro opposto rende +15,0 bp: nessuna uscita a tempo fissa batte il segnale.</li>
+    </ul>
+  </section>
+
+  <section id="deriva">
+    <div class="sechead"><div class="step">SCOMPOSIZIONE</div><h2>Quanto del lordo è tempismo e quanto è deriva del mercato</h2></div>
+    <p><code>excess_bp</code> toglie dal lordo di ogni trade la deriva media dell'asset in quel periodo, sullo stesso lato e per la stessa durata. Uno short in un mercato che scende guadagna la discesa anche senza tempismo: questa colonna misura solo il tempismo. Rientro a 0,40, sviluppo.</p>
+    <div class="two">
+      <div class="tablewrap"><table>
+        <thead><tr><th>Tempismo, bp per trade</th><th>Long</th><th>Short</th><th>Tutti</th><th>Trade</th></tr></thead>
+        <tbody>
+          <tr><td>Rialzo</td><td>−0,6</td><td>−3,0</td><td>−1,8</td><td>461</td></tr>
+          <tr class="hl"><td>Ribasso</td><td class="up">+30,7</td><td class="up">+32,5</td><td class="up">+31,6</td><td>395</td></tr>
+          <tr class="sep"><td>Riferimento, rialzo</td><td></td><td></td><td>−3,7</td><td>461</td></tr>
+          <tr><td>Riferimento, ribasso</td><td></td><td></td><td>+5,6</td><td>395</td></tr>
+        </tbody>
+      </table></div>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Filtro causale all'ingresso</th><th>Tempismo</th><th>Trade</th></tr></thead>
+        <tbody>
+          <tr><td>Volatilità bassa</td><td>+14,2 ± 16,3</td><td>278</td></tr>
+          <tr><td>Volatilità media</td><td>+16,0 ± 19,6</td><td>278</td></tr>
+          <tr><td>Volatilità alta</td><td>+11,6 ± 16,8</td><td>279</td></tr>
+          <tr class="sep hl"><td>BTC sotto media 200 giorni</td><td class="up">+43,4 ± 16,3</td><td>310</td></tr>
+          <tr><td>BTC sopra media 200 giorni</td><td>−3,4 ± 12,6</td><td>546</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+    <ul class="points">
+      <li>Nel ribasso dello sviluppo il rientro aveva circa +32 bp di tempismo, uguale su long e short. Nel rialzo zero.</li>
+      <li>La volatilità all'ingresso non separa i trade. BTC sotto la sua media a 200 giorni sì: è la stessa divisione delle date del ciclo, con circa un mese di ritardo.</li>
+      <li>Il dubbio lasciato aperto: nello sviluppo il rialzo è il fold 1 e il ribasso è il fold 2. Solo 20 degli 856 trade cadono nel rialzo del fold 2.</li>
+    </ul>
+  </section>
+
+  <section id="passo6">
+    <div class="sechead"><div class="step">PASSO 6</div><h2>Il filtro, le candidate e l'hold-out</h2></div>
+    <p>Il filtro (<code>strategy.below</code>) lascia operare solo mentre l'ultima chiusura giornaliera di BTC è sotto la sua media a 200 giorni. Quando si spegne la posizione si chiude; quando si riaccende la regola aspetta un nuovo rientro. Le cinque candidate sono state fissate a 0,40 e scritte nel codice prima di leggere l'hold-out.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Candidata, soglia 0,40</th><th>Trade sviluppo</th><th>bp sviluppo</th><th>DD sviluppo</th><th>Trade hold-out</th><th>bp hold-out</th><th>PF hold-out</th><th>DD hold-out</th><th>Hold-out rialzo / ribasso</th></tr></thead>
+      <tbody>
+        <tr><td>Riferimento</td><td>856</td><td>+1,7 ± 9,8</td><td>33%</td><td>622</td><td class="down">−25,2 ± 13,9</td><td>0,79</td><td>43%</td><td>−23,7 / −26,0</td></tr>
+        <tr><td>Rientro</td><td>856</td><td>+15,0 ± 10,1</td><td>29%</td><td>622</td><td class="down">−42,9 ± 13,9</td><td>0,66</td><td>61%</td><td>−37,1 / −45,9</td></tr>
+        <tr><td>Rientro + stop 6 ATR</td><td>1.202</td><td>+12,4 ± 6,7</td><td>29%</td><td>969</td><td class="down">−23,0 ± 7,6</td><td>0,78</td><td>54%</td><td>−18,3 / −25,4</td></tr>
+        <tr class="hl"><td>Rientro + BTC sotto 200 giorni</td><td>315</td><td class="up">+41,0 ± 16,1</td><td>15%</td><td>530</td><td class="down">−40,5 ± 14,9</td><td>0,68</td><td>52%</td><td>−22,1 / −45,9</td></tr>
+        <tr><td>Rientro + BTC sotto 200 giorni + stop 6 ATR</td><td>431</td><td class="up">+28,2 ± 11,4</td><td>14%</td><td>815</td><td class="down">−21,4 ± 8,4</td><td>0,80</td><td>47%</td><td>−7,3 / −25,4</td></tr>
+      </tbody>
+    </table></div>
+    <p class="caption">Lordo per asset sull'hold-out: riferimento −0,52, rientro −0,88, rientro + stop −0,73, rientro + filtro −0,71, rientro + filtro + stop −0,57. Buy &amp; hold dello stesso periodo: +0,47 nel rialzo, −0,53 nel ribasso. BTC era sotto la media a 200 giorni sull'84% dell'hold-out, quindi il filtro è rimasto acceso quasi sempre.</p>
+    <div class="chart" id="c-folds">
+      <h3>bp per trade fold per fold, soglia 0,40</h3>
+      <div class="sub">Fold 1-2 = sviluppo, fold 3-4 = hold-out. Le barre sottili indicano ±1 errore standard. La terza regola è stata provata dopo l'hold-out (sezione "Dopo uno stop").</div>
+      <div class="legend"><span><b class="sq" style="background:var(--s1)"></b>Rientro</span><span><b class="sq" style="background:var(--s2)"></b>Riferimento</span><span><b class="sq" style="background:var(--s3)"></b>Stop 6 ATR + solo segnale opposto</span></div>
+      <div class="plot"></div>
+    </div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>bp per trade, soglia 0,40</th><th>Fold 1</th><th>Fold 2</th><th>Fold 3</th><th>Fold 4</th></tr></thead>
+      <tbody>
+        <tr><td>Riferimento</td><td>−6,0 ± 13,0</td><td>+9,9 ± 14,7</td><td>−31,3 ± 19,6</td><td>−18,7 ± 19,8</td></tr>
+        <tr><td>Rientro</td><td>−1,8 ± 13,2</td><td>+32,8 ± 15,3</td><td>−44,8 ± 20,0</td><td>−40,9 ± 19,3</td></tr>
+        <tr><td>Stop 6 ATR + solo segnale opposto</td><td>+14,6 ± 10,1</td><td>+38,3 ± 12,1</td><td>−32,6 ± 13,9</td><td>−20,1 ± 11,0</td></tr>
+        <tr class="sep"><td>Trade per fold</td><td>441</td><td>415</td><td>320</td><td>302</td></tr>
+      </tbody>
+    </table></div>
+    <ul class="points">
+      <li>Il fold 2 è l'eccezione: +32,8 bp per il rientro, contro −1,8, −44,8 e −40,9 negli altri tre.</li>
+      <li>Sull'hold-out il rientro perde su tutti e tre gli asset: BTC −32,0, ETH −40,9, SOL −58,7 bp per trade. Il riferimento: −20,9, −26,6, −28,8.</li>
+      <li>Nel ribasso dell'hold-out il tempismo vale −39 bp per trade, dove nello sviluppo valeva +32.</li>
+    </ul>
+  </section>
+
+  <section id="dopo-stop">
+    <div class="sechead"><div class="step">DOPO L'HOLD-OUT</div><h2>Cosa fare dopo uno stop</h2></div>
+    <p>In tutte le prove dei passi 5 e 6, dopo uno stop la regola rientrava al primo segnale su qualsiasi lato, anche quello appena stoppato. Dopo aver letto l'hold-out ho provato le altre due possibilità: aspettare solo il segnale opposto, oppure girarsi subito dall'altra parte al prezzo dello stop (<code>--after opposite</code> e <code>--after reverse</code>). Soglia 0,40, periodo di sviluppo.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Dopo lo stop</th><th>Stop</th><th>Trade</th><th>Lordo</th><th>bp per trade</th><th>Profit factor</th><th>Max DD</th><th>Rialzo / ribasso, bp</th></tr></thead>
+      <tbody>
+        <tr><td>Nessuno stop</td><td>–</td><td>856</td><td>+0,418</td><td>+15,0 ± 10,1</td><td>1,16</td><td>29%</td><td>−1,6 / +34,3</td></tr>
+        <tr><td>Primo segnale, qualsiasi lato</td><td>6 ATR</td><td>1.202</td><td>+0,485</td><td>+12,4 ± 6,7</td><td>1,15</td><td>29%</td><td>+1,8 / +25,0</td></tr>
+        <tr><td>Solo segnale opposto</td><td>3 ATR</td><td>856</td><td>+0,483</td><td>+16,8 ± 6,5</td><td>1,25</td><td>16%</td><td>+3,8 / +31,9</td></tr>
+        <tr class="hl"><td>Solo segnale opposto</td><td>6 ATR</td><td>856</td><td>+0,742</td><td>+26,1 ± 7,9</td><td>1,34</td><td>13%</td><td>+16,0 / +37,9</td></tr>
+        <tr><td>Solo segnale opposto</td><td>10 ATR</td><td>856</td><td>+0,688</td><td>+24,5 ± 8,7</td><td>1,30</td><td>22%</td><td>+10,0 / +41,3</td></tr>
+        <tr><td>Solo segnale opposto</td><td>trailing 10 ATR</td><td>856</td><td>+0,710</td><td>+25,2 ± 8,3</td><td>1,32</td><td>18%</td><td>+15,2 / +36,9</td></tr>
+        <tr><td>Solo segnale opposto, con filtro BTC</td><td>6 ATR</td><td>315</td><td>+0,388</td><td>+37,2 ± 13,3</td><td>1,50</td><td>10%</td><td>– / +37,2</td></tr>
+        <tr><td>Girarsi subito</td><td>6 ATR</td><td>1.560</td><td>+0,460</td><td>+9,0 ± 5,5</td><td>1,12</td><td>30%</td><td>+1,7 / +17,9</td></tr>
+      </tbody>
+    </table></div>
+    <ul class="points">
+      <li>Aspettare il segnale opposto non aggiunge trade: restano 856 come senza stop, e il bp per trade sale da +15 a +26. I trade che perdevano erano i rientri sul lato appena stoppato.</li>
+      <li>È la prima regola positiva in entrambi i regimi dello sviluppo: +16,0 bp nel rialzo, con +14,7 di tempismo al netto della deriva. Il drawdown scende dal 29% al 13%.</li>
+      <li>A soglia 0,35 il guadagno è più piccolo: +14,4 bp con stop 6 ATR e +15,2 con 10 ATR, contro +12,9 senza stop.</li>
+      <li>Girarsi subito al prezzo dello stop peggiora: dopo uno stop il prezzo non prosegue abbastanza da pagare il trade in più.</li>
+    </ul>
+    <h3>Controllo sull'hold-out già usato</h3>
+    <p>La regola è stata fissata prima di leggere (0,40, stop fisso 6 ATR, poi solo segnale opposto, con e senza filtro BTC). Il numero è un controllo e non una prova pulita, perché la variante è stata scelta dopo aver visto come andavano le altre sull'hold-out.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Regola, soglia 0,40</th><th>bp sviluppo</th><th>Trade hold-out</th><th>Lordo hold-out</th><th>bp hold-out</th><th>Profit factor</th><th>Max DD</th><th>Rialzo / ribasso, bp</th></tr></thead>
+      <tbody>
+        <tr class="hl"><td>Stop 6 ATR + solo segnale opposto</td><td class="up">+26,1</td><td>622</td><td>−0,548</td><td class="down">−26,5 ± 8,9</td><td>0,75</td><td>43%</td><td>−24,6 / −27,5</td></tr>
+        <tr><td>Stesso, con filtro BTC</td><td class="up">+37,2</td><td>530</td><td>−0,400</td><td class="down">−22,8 ± 9,8</td><td>0,78</td><td>37%</td><td>−6,6 / −27,5</td></tr>
+        <tr class="sep"><td>Per confronto: stop 6 ATR + primo segnale</td><td>+12,4</td><td>969</td><td>−0,731</td><td>−23,0 ± 7,6</td><td>0,78</td><td>54%</td><td>−18,3 / −25,4</td></tr>
+        <tr><td>Per confronto: rientro senza stop</td><td>+15,0</td><td>622</td><td>−0,880</td><td>−42,9 ± 13,9</td><td>0,66</td><td>61%</td><td>−37,1 / −45,9</td></tr>
+      </tbody>
+    </table></div>
+    <ul class="points">
+      <li>Non supera il controllo. Fold per fold fa +14,6, +38,3, −32,6 e −20,1 bp per trade: porta il fold 1 da −1,8 a +14,6, ma i fold 3 e 4 restano negativi.</li>
+      <li>Perde su tutti e tre gli asset: BTC −21,7, ETH −31,4, SOL −26,7 bp per trade.</li>
+      <li>Rispetto allo stop già testato non migliora (−26,5 contro −23,0). Come ogni stop, riduce le perdite e il drawdown rispetto a nessuno stop (61% → 43%).</li>
+    </ul>
+  </section>
+
+  <section id="inversa">
+    <div class="sechead"><div class="step">CONTROPROVA</div><h2>La strategia peggiore, con i trade invertiti</h2></div>
+    <p>Senza commissioni, prendere ogni trade dal lato opposto cambia il segno di ogni numero. Se una regola fa −43 bp per trade su un periodo, la sua inversa fa +43 bp esatti sullo stesso periodo, per costruzione. Invertire la peggiore di un periodo e misurarla sullo stesso periodo vince sempre e non prova niente. La domanda vera è se la peggiore resta la peggiore anche dopo: per questo la scelgo sullo sviluppo e misuro l'inversa sull'hold-out.</p>
+    <div class="two">
+      <div class="tablewrap"><table>
+        <thead><tr><th>Le peggiori sullo sviluppo, almeno 200 trade</th><th>Trade</th><th>Lordo</th><th>bp per trade</th></tr></thead>
+        <tbody>
+          <tr class="hl"><td>Riferimento, 0,55</td><td>285</td><td>−0,566</td><td>−70,6</td></tr>
+          <tr><td>Riferimento, 0,30</td><td>1.336</td><td>−0,492</td><td>−11,0</td></tr>
+          <tr><td>Riferimento, 0,50</td><td>429</td><td>−0,323</td><td>−21,9</td></tr>
+          <tr><td>Rientro, 0,55</td><td>285</td><td>−0,316</td><td>−44,3</td></tr>
+          <tr><td>Rientro su media 4 barre, 0,50</td><td>296</td><td>−0,281</td><td>−31,3</td></tr>
+          <tr><td>Rientro su media 2 barre, 0,50</td><td>373</td><td>−0,275</td><td>−21,0</td></tr>
+        </tbody>
+      </table></div>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Inversa del riferimento a 0,55</th><th>Sviluppo</th><th>Hold-out</th></tr></thead>
+        <tbody>
+          <tr><td>Trade</td><td>285</td><td>221</td></tr>
+          <tr><td>Lordo per asset</td><td>+0,566</td><td>+0,190</td></tr>
+          <tr class="hl"><td>bp per trade</td><td>+70,6 ± 28,4</td><td>+11,6 ± 38,6</td></tr>
+          <tr><td>Profit factor</td><td>1,49</td><td>1,07</td></tr>
+          <tr><td>Max DD</td><td>29%</td><td>31%</td></tr>
+          <tr><td>Rialzo / ribasso, bp</td><td>+119,7 / +22,4</td><td>−56,8 / +47,4</td></tr>
+          <tr><td>Durata media</td><td>62 h</td><td>77 h</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+    <p class="caption">L'inversa del riferimento a 0,55 compra quando la predizione supera +0,55 e va short quando scende sotto −0,55: segue gli estremi invece di contrastarli, come il passo 1 suggeriva (agli estremi il prezzo continua). È la regola "momentum" a 0,55.</p>
+    <ul class="points">
+      <li>Sull'hold-out resta positiva, ma +11,6 bp con un errore di 38,6 non si distingue da zero. Per fold: +123,6, +20,0, +58,5, −45,1 bp, con errori tra 40 e 56.</li>
+      <li>Per asset sull'hold-out: BTC +5,4, ETH +10,1, SOL +22,3 bp. Tutti positivi, tutti piccoli.</li>
+      <li>Con le commissioni perde: anche l'inversa paga ogni trade, circa −8 bp per trade con 20 bp di andata e ritorno e −38 con 50.</li>
+      <li>Dipende ancora dal regime (perde nel rialzo, guadagna nel ribasso) e tiene le posizioni 60-77 ore: buona parte è esposizione alla direzione del mercato.</li>
+      <li>La peggiore sull'hold-out, il rientro a 0,40, invertita fa +42,9 lì solo perché è lo specchio; sullo sviluppo fa −15,0. Fold per fold: +1,8, −32,8, +44,8, +40,9.</li>
+    </ul>
+    <p class="caption">Lettura nuova dell'hold-out già usato. La regola è stata scelta in modo meccanico sullo sviluppo, quindi il numero vale come controllo e non come prova pulita.</p>
+  </section>
+
+  <section id="svolte">
+    <div class="sechead"><div class="step">PROVA DIAGNOSTICA</div><h2>Le svolte della predizione: col senno di poi e confermate</h2></div>
+    <p>La domanda è se nelle predizioni ci sia segnale utile, a prescindere dalle regole a soglia. Si individuano i massimi e i minimi della predizione con una finestra centrata di 6, 12, 24 o 48 barre per lato: un massimo è il valore più alto delle w barre prima e delle w dopo. Poi long a ogni minimo fino al massimo successivo e short a ogni massimo fino al minimo dopo, sempre in posizione, senza stop né commissioni (<code>strategy.turns</code>). Guardare le w barre successive è guardare il futuro: questa versione non è tradabile.</p>
+    <p>Due controlli. Lo stesso test sulle svolte dell'<strong>RSI a 12 barre</strong>, perché la predizione è per il 92,5% un RSI e col senno di poi le svolte di un qualunque oscillatore calcolato sul prezzo stanno vicino a quelle del prezzo. E sulle svolte del <strong>prezzo</strong>, cioè l'oracolo: il massimo raggiungibile con la stessa finestra.</p>
+    <div class="chart" id="c-turns">
+      <h3>bp per trade per finestra, tutti i 16 mesi</h3>
+      <div class="sub">Media pesata per numero di trade su sviluppo e hold-out. Asse orizzontale in scala logaritmica.</div>
+      <div class="legend"><span><b style="background:var(--s1)"></b>Svolte della predizione, col senno di poi</span><span><b style="background:var(--s2)"></b>Svolte dell'RSI, col senno di poi</span><span><b style="background:var(--s3)"></b>Svolte della predizione, confermate (causale)</span></div>
+      <div class="plot"></div>
+    </div>
+    <h3>Col senno di poi</h3>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Svolte di</th><th>Finestra</th><th>Trade sviluppo / hold-out</th><th>bp sviluppo</th><th>bp hold-out</th></tr></thead>
+      <tbody>
+        <tr><td>Predizione</td><td>6</td><td>5.646 / 5.821</td><td>+135,0 ± 1,7</td><td>+122,3 ± 1,5</td></tr>
+        <tr class="hl"><td>Predizione</td><td>12</td><td>3.512 / 3.548</td><td>+180,4 ± 2,8</td><td>+164,4 ± 2,6</td></tr>
+        <tr><td>Predizione</td><td>24</td><td>2.070 / 2.073</td><td>+239,6 ± 4,4</td><td>+220,1 ± 4,4</td></tr>
+        <tr><td>Predizione</td><td>48</td><td>1.164 / 1.078</td><td>+306,4 ± 7,4</td><td>+289,6 ± 8,2</td></tr>
+        <tr class="sep"><td>RSI a 12</td><td>6</td><td>6.854 / 6.801</td><td>+124,6 ± 1,4</td><td>+116,5 ± 1,3</td></tr>
+        <tr><td>RSI a 12</td><td>12</td><td>3.714 / 3.806</td><td>+169,7 ± 2,5</td><td>+157,5 ± 2,3</td></tr>
+        <tr><td>RSI a 12</td><td>24</td><td>2.045 / 2.101</td><td>+224,9 ± 4,2</td><td>+201,2 ± 4,2</td></tr>
+        <tr><td>RSI a 12</td><td>48</td><td>1.172 / 1.077</td><td>+272,7 ± 7,1</td><td>+269,3 ± 7,9</td></tr>
+        <tr class="sep"><td>Prezzo (oracolo)</td><td>6</td><td>6.184 / 6.109</td><td>+140,6 ± 1,8</td><td>+130,2 ± 1,6</td></tr>
+        <tr><td>Prezzo (oracolo)</td><td>12</td><td>3.161 / 3.198</td><td>+209,6 ± 3,3</td><td>+193,3 ± 3,2</td></tr>
+        <tr><td>Prezzo (oracolo)</td><td>24</td><td>1.551 / 1.513</td><td>+318,6 ± 6,6</td><td>+296,8 ± 7,0</td></tr>
+        <tr><td>Prezzo (oracolo)</td><td>48</td><td>777 / 730</td><td>+475,0 ± 13,4</td><td>+464,4 ± 14,6</td></tr>
+        <tr class="sep"><td>Riferimento a 0,40</td><td>–</td><td>856 / 622</td><td>+1,7 ± 9,8</td><td>−25,2 ± 13,9</td></tr>
+        <tr><td>Rientro a 0,40</td><td>–</td><td>856 / 622</td><td>+15,0 ± 10,1</td><td>−42,9 ± 13,9</td></tr>
+      </tbody>
+    </table></div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Vantaggio delle svolte della predizione su quelle dell'RSI, bp per trade</th><th>Fold 1</th><th>Fold 2</th><th>Fold 3</th><th>Fold 4</th></tr></thead>
+      <tbody>
+        <tr><td>Finestra 6</td><td>+8,0</td><td>+12,6</td><td>+4,0</td><td>+7,1</td></tr>
+        <tr><td>Finestra 12</td><td>+7,1</td><td>+14,4</td><td>+8,4</td><td>+5,8</td></tr>
+        <tr class="hl"><td>Finestra 24</td><td>+7,5</td><td>+22,4</td><td>+17,3</td><td>+20,3</td></tr>
+        <tr class="hl"><td>Finestra 48</td><td>+27,9</td><td>+40,0</td><td>+15,7</td><td>+26,1</td></tr>
+      </tbody>
+    </table></div>
+    <ul class="points">
+      <li>Col senno di poi le svolte della predizione cadono sulle svolte del prezzo. A finestra 12 il lordo totale è il 96% di quello dell'oracolo (21,1 contro 22,1 per asset sullo sviluppo): fanno più trade del prezzo, ciascuno un po' più piccolo. Il risultato è stabile in tutti i fold, sviluppo e hold-out, rialzo e ribasso. Il win rate del 99% è solo l'effetto di guardare avanti.</li>
+      <li>Un RSI fa quasi lo stesso, ma un trade sulle svolte della predizione rende più di uno sulle svolte dell'RSI in ogni fold e a ogni finestra. A 24 e 48 barre le due serie fanno lo stesso numero di trade, quindi lì il confronto è alla pari. È il primo risultato dello studio che non cambia segno da un fold all'altro: il modello sa dove sono le svolte un po' meglio di un indicatore.</li>
+      <li>Una svolta vale circa 165 bp a finestra 12; le regole a soglia ne catturano tra −25 e +15.</li>
+    </ul>
+    <h3>Confermate: la versione causale</h3>
+    <p>Ogni svolta viene eseguita alla chiusura della barra che la conferma, w barre dopo, quando nessuna delle barre successive l'ha superata (<code>strategy.confirmed_turns</code>, sopra <code>legs.raw_extrema</code>). Una seconda svolta dello stesso tipo non cambia niente, perché la posizione è già da quel lato. Nessun dato futuro: questa versione si potrebbe usare dal vivo.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Svolte confermate di</th><th>Finestra</th><th>bp sviluppo</th><th>bp hold-out</th><th>Win rate sviluppo / hold-out</th></tr></thead>
+      <tbody>
+        <tr><td>Predizione</td><td>6</td><td>+1,8 ± 1,6</td><td>−2,4 ± 1,3</td><td>41% / 40%</td></tr>
+        <tr class="hl"><td>Predizione</td><td>12</td><td>+4,8 ± 2,4</td><td>−3,3 ± 2,3</td><td>45% / 41%</td></tr>
+        <tr><td>Predizione</td><td>24</td><td>−6,7 ± 4,0</td><td>+0,8 ± 3,8</td><td>44% / 45%</td></tr>
+        <tr><td>Predizione</td><td>48</td><td>−10,3 ± 7,7</td><td>+16,1 ± 7,3</td><td>45% / 47%</td></tr>
+        <tr class="sep"><td>RSI a 12</td><td>6</td><td>−0,5 ± 1,2</td><td>+0,3 ± 1,2</td><td>43% / 44%</td></tr>
+        <tr><td>RSI a 12</td><td>12</td><td>+5,6 ± 2,3</td><td>+1,4 ± 2,1</td><td>46% / 44%</td></tr>
+        <tr><td>RSI a 12</td><td>24</td><td>+1,9 ± 4,1</td><td>−0,5 ± 3,8</td><td>47% / 45%</td></tr>
+        <tr><td>RSI a 12</td><td>48</td><td>−9,6 ± 7,5</td><td>+12,5 ± 7,4</td><td>45% / 47%</td></tr>
+        <tr class="sep"><td>Prezzo (oracolo con ritardo)</td><td>6</td><td>+0,9 ± 1,4</td><td>+0,1 ± 1,3</td><td>42% / 42%</td></tr>
+        <tr><td>Prezzo (oracolo con ritardo)</td><td>12</td><td>+5,1 ± 2,7</td><td>−3,1 ± 2,5</td><td>44% / 41%</td></tr>
+        <tr><td>Prezzo (oracolo con ritardo)</td><td>24</td><td>+1,1 ± 5,3</td><td>−4,6 ± 5,3</td><td>45% / 41%</td></tr>
+        <tr><td>Prezzo (oracolo con ritardo)</td><td>48</td><td>−1,9 ± 11,1</td><td>+13,3 ± 11,0</td><td>43% / 48%</td></tr>
+      </tbody>
+    </table></div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Predizione, svolte confermate, bp per trade</th><th>Fold 1</th><th>Fold 2</th><th>Fold 3</th><th>Fold 4</th></tr></thead>
+      <tbody>
+        <tr><td>Finestra 6</td><td>+0,6</td><td>+2,9</td><td>−3,7</td><td>−1,0</td></tr>
+        <tr><td>Finestra 12</td><td>−1,8</td><td>+11,5</td><td>+0,3</td><td>−6,8</td></tr>
+        <tr><td>Finestra 24</td><td>+5,4</td><td>−18,8</td><td>+3,6</td><td>−2,0</td></tr>
+        <tr><td>Finestra 48</td><td>+6,4</td><td>−26,8</td><td>+24,8</td><td>+7,8</td></tr>
+      </tbody>
+    </table></div>
+    <ul class="points">
+      <li>Aspettando la conferma il segnale sparisce: da +164-306 bp per trade a valori tra −10 e +16, con segni che cambiano da un fold all'altro e win rate tra il 40% e il 47%.</li>
+      <li>L'RSI e il prezzo stesso fanno uguale. Quando una svolta è confermata, il prezzo ha già fatto il movimento, e la predizione non conferma le sue svolte prima del prezzo o di un RSI.</li>
+      <li>Le svolte della predizione sono piazzate meglio di quelle di un RSI, ma arrivano altrettanto tardi. Il valore sta tutto nelle w barre di futuro che servono a riconoscerle, come per l'etichetta.</li>
+    </ul>
+  </section>
+
+  <section id="ritardo">
+    <div class="sechead"><div class="step">PROVA DIAGNOSTICA</div><h2>Le stesse svolte, eseguite in ritardo</h2></div>
+    <p>Tra la svolta col senno di poi (ritardo 0) e la svolta confermata (ritardo uguale alla finestra) c'è ogni lettore che riconosce la svolta qualche barra dopo, prima che la finestra si chiuda. Qui le svolte centrate della predizione vengono eseguite con 1-6 barre di ritardo, e con 12 come confronto: si entra alla chiusura della barra <em>t + d</em> invece che della barra della svolta (<code>strategy.delayed</code>). Le svolte sono le stesse a ogni ritardo, quindi il numero di trade non cambia e i bp per trade si confrontano direttamente. Guarda ancora avanti: misura lo spazio che avrebbe una regola capace di riconoscere la svolta presto.</p>
+    <div class="chart" id="c-delay">
+      <h3>bp per trade per ritardo, svolte della predizione</h3>
+      <div class="sub">Media pesata per numero di trade su sviluppo e hold-out, senza commissioni. Un'andata e ritorno taker costa 50 bp, una maker circa 20.</div>
+      <div class="legend"><span><b style="background:var(--s1)"></b>Finestra 12</span><span><b style="background:var(--s2)"></b>Finestra 24</span><span><b style="background:var(--s3)"></b>Finestra 48</span></div>
+      <div class="plot"></div>
+    </div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Ritardo, barre</th><th>Finestra 6</th><th>Finestra 12</th><th>Finestra 24</th><th>Finestra 48</th></tr></thead>
+      <tbody>
+        <tr><td>0</td><td>+135,0 / +122,3</td><td>+180,4 / +164,4</td><td>+239,6 / +220,1</td><td>+306,4 / +289,6</td></tr>
+        <tr><td>1</td><td>+80,7 / +73,4</td><td>+126,1 / +115,6</td><td>+187,9 / +173,3</td><td>+256,7 / +248,1</td></tr>
+        <tr><td>2</td><td>+53,2 / +47,6</td><td>+99,4 / +88,9</td><td>+163,1 / +145,9</td><td>+233,9 / +220,1</td></tr>
+        <tr><td>3</td><td>+33,3 / +29,6</td><td>+79,4 / +70,4</td><td>+143,7 / +128,0</td><td>+214,2 / +206,0</td></tr>
+        <tr class="hl"><td>4</td><td>+22,6 / +14,6</td><td>+68,0 / +54,9</td><td>+132,0 / +112,1</td><td>+204,9 / +190,8</td></tr>
+        <tr><td>5</td><td>+11,8 / +6,6</td><td>+54,1 / +44,9</td><td>+118,3 / +102,4</td><td>+190,6 / +181,9</td></tr>
+        <tr class="hl"><td>6</td><td>+2,9 / +0,2</td><td>+41,3 / +34,5</td><td>+105,1 / +92,1</td><td>+178,9 / +172,7</td></tr>
+        <tr class="sep"><td>12</td><td>+2,1 / −2,2</td><td>+8,0 / −3,3</td><td>+60,2 / +44,7</td><td>+142,9 / +140,3</td></tr>
+        <tr><td>Trade sviluppo / hold-out</td><td>5.646 / 5.821</td><td>3.512 / 3.548</td><td>2.070 / 2.073</td><td>1.164 / 1.078</td></tr>
+      </tbody>
+    </table></div>
+    <p class="caption">bp per trade, sviluppo / hold-out. Errori standard tra 1,4 e 8,2 bp. Lo stesso andamento si ripete in tutti e quattro i fold.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Finestra 12, bp per trade (sviluppo / hold-out)</th><th>Ritardo 0</th><th>1</th><th>3</th><th>6</th><th>12</th></tr></thead>
+      <tbody>
+        <tr><td>Predizione</td><td>+180,4 / +164,4</td><td>+126,1 / +115,6</td><td>+79,4 / +70,4</td><td>+41,3 / +34,5</td><td>+8,0 / −3,3</td></tr>
+        <tr><td>RSI a 12</td><td>+169,7 / +157,5</td><td>+115,6 / +106,6</td><td>+80,8 / +71,8</td><td>+47,6 / +40,7</td><td>+9,4 / +4,2</td></tr>
+        <tr><td>Prezzo (oracolo)</td><td>+209,6 / +193,3</td><td>+152,8 / +141,4</td><td>+102,7 / +90,5</td><td>+56,3 / +50,8</td><td>+9,1 / +5,1</td></tr>
+        <tr class="hl"><td>Predizione meno RSI</td><td>+10,7 / +6,9</td><td>+10,5 / +9,0</td><td>−1,4 / −1,4</td><td>−6,3 / −6,2</td><td>−1,4 / −7,5</td></tr>
+      </tbody>
+    </table></div>
+    <ul class="points">
+      <li><strong>La prima barra costa più di tutte.</strong> A finestra 12 resta il 70% del valore dopo 1 barra, il 55% dopo 2, il 44% dopo 3, il 23% dopo 6, il 4% dopo 12. La chiusura della barra di svolta è il prezzo migliore della gamba: una barra dopo, il prezzo si è già mosso.</li>
+      <li><strong>Quanto resta dipende dal ritardo diviso per la finestra.</strong> A metà finestra ne resta il 20-25% (6 su 12, 12 su 24, 3 su 6); a un quarto circa il 45% (6 su 24, 12 su 48). Le svolte lunghe tollerano più ritardo perché la gamba dura di più.</li>
+      <li><strong>Contro 50 bp di andata e ritorno.</strong> In entrambi i periodi le svolte rendono ancora a finestra 12 fino a 4 barre di ritardo (+68,0 / +54,9), a finestra 24 fino a 6 (+105,1 / +92,1), a finestra 48 anche a 12, a finestra 6 solo con 1 barra.</li>
+      <li><strong>Il vantaggio della predizione sull'RSI sta nella barra della svolta e nella successiva.</strong> A finestra 12 vale circa +10 bp a ritardo 0 e 1, sparisce a ritardo 3, e a ritardo 6 le svolte dell'RSI rendono di più. Solo a finestra 48 la predizione resta davanti (+178,9 / +172,7 contro +165,9 / +160,1 a ritardo 6). Le svolte del prezzo calano allo stesso modo: a finestra 12, ritardo 6, ne resta il 27%.</li>
+      <li><strong>Sono tetti massimi.</strong> Un lettore che riconosce la svolta prima della conferma agirebbe anche su svolte che non arrivano, e queste righe non ne contengono. Lo spazio c'è: riconoscere la svolta di una gamba a finestra 24 entro 4-6 barre lascerebbe più di 100 bp per trade, a patto di avere pochi falsi allarmi.</li>
+    </ul>
+    <p class="caption">Lettura diagnostica, non una regola: nessun parametro è stato scelto sull'hold-out.</p>
+  </section>
+
+  <section id="rumore">
+    <div class="sechead"><div class="step">ANALISI</div><h2>Perché le svolte non si anticipano: la geometria del rumore</h2></div>
+    <p>Riconoscere una svolta mentre accade è un problema di <em>quickest change detection</em>. Un rivelatore è un istante T in cui scatta l'allarme usando solo i dati fino a T (un tempo d'arresto). La svolta vera τ, il massimo o il minimo di ±w barre, non lo è: per saperla servono w barre di futuro. Il ritardo è T − τ; un falso allarme è un allarme scattato nella gamba sbagliata. La teoria classica (Page, Lorden, Moustakides, Shiryaev) dice che, con un falso allarme in media ogni ARL barre, il ritardo minimo vale circa <strong>log(ARL) / I</strong>, dove I è l'informazione per barra sul cambio di regime (Kullback-Leibler). Per un passaggio da deriva +μ a −μ con rumore σ vale I = (2μ)² / 2σ², e il rivelatore ottimo è il CUSUM: senza margine di deriva è lo zigzag, che dà l'allarme quando la serie torna indietro di h dal suo estremo.</p>
+    <p>La finestra delle gambe della v2 è 12 barre, ed è anche il ritardo massimo: dopo 12 barre la svolta è confermata e chiunque la vede. Tutta la domanda sta in quelle 12 barre.</p>
+    <div class="two">
+      <div class="tablewrap"><table>
+        <thead><tr><th>Informazione apparente, gambe a 12 barre, sviluppo</th><th>Predizione</th><th>Prezzo</th></tr></thead>
+        <tbody>
+          <tr><td>Deriva per barra, salita / discesa</td><td>+0,035 / −0,036</td><td>+9,2 / −9,9 bp</td></tr>
+          <tr><td>Rumore σ per barra</td><td>0,078</td><td>31 bp</td></tr>
+          <tr class="hl"><td>I, nats per barra</td><td>0,42</td><td>0,19</td></tr>
+        </tbody>
+      </table></div>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Zigzag sulla predizione, h</th><th>Trovate</th><th>Ritardo medio</th><th>Falsi per svolta</th><th>bp sviluppo / hold-out</th></tr></thead>
+        <tbody>
+          <tr><td>0,1</td><td>100%</td><td>3,0</td><td>0,88</td><td>−0,1 / −1,0</td></tr>
+          <tr class="hl"><td>0,2</td><td>97%</td><td>5,1</td><td>0,31</td><td>−0,3 / −1,5</td></tr>
+          <tr><td>0,3</td><td>87%</td><td>7,1</td><td>0,14</td><td>−0,2 / −4,9</td></tr>
+          <tr><td>0,5</td><td>61%</td><td>11,2</td><td>0,06</td><td>+7,2 / −8,2</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+    <p class="caption">Con quell'informazione la teoria promette svolte riconoscibili in poche barre, e lo zigzag lo fa. Ma guadagna zero a ogni h, mentre le svolte ritardate di 5 barre valevano +54 bp. Le due cose sotto spiegano perché.</p>
+    <h3>Il teorema d'arresto opzionale</h3>
+    <p>Se il log del prezzo è una martingala, cioè non ha una deriva prevedibile, per due tempi d'arresto qualsiasi S ≤ T vale <strong>E[p<sub>T</sub> − p<sub>S</sub> | dati fino a S] = 0</strong>. Un trade aperto e chiuso da un rivelatore causale è proprio questo: il suo lordo atteso è zero, qualunque siano il ritardo e i falsi allarmi. La tabella dei ritardi non lo contraddice, perché τ + d con d &lt; w non è un tempo d'arresto: servono ancora w − d barre di futuro per sapere che τ era la svolta. L'unico tempo d'arresto è τ + w, la conferma, e lì infatti le svolte valgono circa zero.</p>
+    <h3>Il controllo: prezzi con i segni a caso</h3>
+    <p>Ho ricostruito ogni prezzo dai suoi rendimenti a 15 minuti, estraendo a caso il segno di ognuno (<code>strategy.signflip</code>). Le ampiezze restano, e con loro la volatilità a grappoli e le code grasse; ogni direzione, trend o ritorno verso la media sparisce. Nessuno può prevedere quel percorso. Poi ho rifatto la prova dei ritardi sulle sue svolte.</p>
+    <div class="chart" id="c-null">
+      <h3>bp per trade per ritardo, svolte del prezzo a finestra 12</h3>
+      <div class="sub">Tutti i 16 mesi, senza commissioni. Segni a caso: media di 3 estrazioni. La formula è 1 − √(d/12) per il valore del prezzo reale a ritardo 0.</div>
+      <div class="legend"><span><b style="background:var(--s1)"></b>Prezzo reale</span><span><b style="background:var(--s2)"></b>Prezzo con segni a caso</span><span><b style="background:var(--s3)"></b>Formula 1 − √(d/w)</span></div>
+      <div class="plot"></div>
+    </div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Quota del valore a ritardo 0 rimasta</th><th>d = 1</th><th>2</th><th>4</th><th>6</th><th>12</th><th>bp a ritardo 0</th></tr></thead>
+      <tbody>
+        <tr><td>Prezzo reale, finestra 12</td><td>0,73</td><td>0,59</td><td>0,40</td><td>0,27</td><td>0,04</td><td>+201</td></tr>
+        <tr><td>Prezzo con segni a caso, finestra 12</td><td>0,73-0,74</td><td>0,58-0,59</td><td>0,39</td><td>0,25-0,26</td><td>0,01-0,03</td><td>+216 / +219</td></tr>
+        <tr class="sep"><td>RSI a 12 reale, finestra 12</td><td>0,68</td><td>0,56</td><td>0,40</td><td>0,27</td><td>0,04</td><td>+164</td></tr>
+        <tr><td>RSI a 12 sui segni a caso, finestra 12</td><td>0,68</td><td>0,55-0,56</td><td>0,38-0,39</td><td>0,26-0,27</td><td>0,02-0,04</td><td>+169 / +172</td></tr>
+        <tr class="sep"><td>Prezzo reale, finestra 24</td><td>0,80</td><td>0,70</td><td>0,58</td><td>0,48</td><td>0,28</td><td>+308</td></tr>
+        <tr><td>Prezzo con segni a caso, finestra 24</td><td>0,81</td><td>0,69-0,70</td><td>0,55</td><td>0,45</td><td>0,24</td><td>+325 / +328</td></tr>
+        <tr class="hl"><td>Formula 1 − √(d/w), finestra 12</td><td>0,71</td><td>0,59</td><td>0,42</td><td>0,29</td><td>0,00</td><td>–</td></tr>
+        <tr class="hl"><td>Formula 1 − √(d/w), finestra 24</td><td>0,80</td><td>0,71</td><td>0,59</td><td>0,50</td><td>0,29</td><td>–</td></tr>
+      </tbody>
+    </table></div>
+    <ul class="points">
+      <li><strong>Il valore delle svolte è lo stesso sul rumore.</strong> Le svolte di un prezzo a testa o croce valgono +216-219 bp per trade, più dei +201 del prezzo reale, che a 15 minuti ha un leggero ritorno verso la media. La quota rimasta a ogni ritardo coincide con quella reale entro 0,01-0,03.</li>
+      <li><strong>La discesa segue 1 − √(d/w).</strong> Dopo un estremo il percorso si allontana come σ√d (un "meander" browniano). Quella distanza si perde una volta all'ingresso e una all'uscita, e a d = w è persa tutta. Anche il prezzo attorno alle svolte della predizione segue la scala √d: si muove di 27 bp dopo 1 barra, 56 dopo 4, 82 dopo 9.</li>
+      <li><strong>Anche l'informazione apparente viene dalla selezione.</strong> Le gambe del rumore mostrano la stessa deriva. L'informazione che conta è la correlazione della predizione con il rendimento futuro: con ρ ≈ 0,03 vale I ≈ ρ²/2, nell'ordine di 10⁻⁴-10⁻³ nats, centinaia di volte meno di 0,2-0,4. Con quella I il limite di Lorden dà ritardi di migliaia di barre.</li>
+      <li><strong>Lo zigzag del prezzo con ritracciamenti del 3-8%</strong> è l'unica riga positiva (+11 / +17 / +61 / +63 bp per trade a 3 / 4 / 6 / 8%), ma sta entro 0,7-1,6 deviazioni standard dello stesso zigzag su 20 percorsi con segni a caso e cambia segno da un fold all'altro.</li>
+    </ul>
+    <p class="caption">Lettura diagnostica: nessun parametro scelto. Le svolte della predizione stanno comunque un po' meglio di quelle dell'RSI col senno di poi (+9 bp a ritardo 0), ma quel vantaggio sparisce a ritardo 3.</p>
+  </section>
+
+  <section id="bayes">
+    <div class="sechead"><div class="step">PROVA</div><h2>Il rivelatore bayesiano delle svolte</h2></div>
+    <p>Il rivelatore di Shiryaev aggiorna a ogni barra la probabilità che la gamba sia già girata. La probabilità a priori di una svolta dipende dal livello della predizione e dall'età della gamba; l'evidenza è il movimento della barra. L'allarme scatta quando la probabilità supera una soglia, poi il lato si inverte e la gamba riparte da età 0 (<code>detect.shiryaev</code>). Tutto è stimato sullo sviluppo, sulle svolte centrate a 12 barre della predizione (<code>detect.fit</code>). L'hold-out è letto come controllo.</p>
+    <p>La predizione è attenuata verso lo zero e raramente arriva a ±1: è per questo che la probabilità a priori va presa dal livello a cui le svolte succedono davvero, non da ±1.</p>
+    <div class="two">
+      <div class="tablewrap"><table>
+        <thead><tr><th>Livello della predizione alle sue svolte, sviluppo</th><th></th></tr></thead>
+        <tbody>
+          <tr><td>Mediana</td><td>0,37</td></tr>
+          <tr><td>Quartili</td><td>0,22 / 0,51</td></tr>
+          <tr><td>Sopra 0,5</td><td>27%</td></tr>
+          <tr><td>Sopra 0,75</td><td>2,4%</td></tr>
+          <tr><td>Dalla parte sbagliata dello zero</td><td>8%</td></tr>
+        </tbody>
+      </table></div>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Probabilità di svolta per barra</th><th>Per livello</th><th></th><th>Per età della gamba</th></tr></thead>
+        <tbody>
+          <tr><td>0 – 0,25</td><td>4,2%</td><td>0-3 barre</td><td>0,3%</td></tr>
+          <tr><td>0,25 – 0,4</td><td>7,3%</td><td>4-6</td><td>2,4%</td></tr>
+          <tr><td>0,4 – 0,5</td><td>10,4%</td><td>7-12</td><td>5,1-6,6%</td></tr>
+          <tr><td>0,5 – 0,6</td><td>14,2%</td><td>13-24</td><td>6,5-7,7%</td></tr>
+          <tr><td>0,6 – 0,7</td><td>25,3%</td><td>25-36</td><td>9,0%</td></tr>
+          <tr><td>0,7 – 0,8</td><td>47,3%</td><td>oltre 36</td><td>11,0%</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+    <p class="caption">Livello misurato nella direzione della gamba che finisce. La probabilità a priori del rivelatore è una regressione logistica su livello, livello², log dell'età e "prime 3 barre". L'evidenza è il movimento della barra: prima della svolta in media +0,027 (σ 0,077), nelle prime 6 barre dopo la svolta −0,049 (σ 0,076).</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Rivelatore, contro le svolte a 12 barre</th><th>Trovate</th><th>Ritardo medio (mediano)</th><th>Falsi per svolta</th><th>bp sviluppo</th><th>bp hold-out</th><th>Fold 1 / 2 / 3 / 4</th></tr></thead>
+      <tbody>
+        <tr><td>Zigzag h = 0,2</td><td>97%</td><td>5,1 (5)</td><td>0,31</td><td>−0,3 ± 1,6</td><td>−1,5 ± 1,6</td><td>−2,1 / +1,7 / −0,4 / −2,7</td></tr>
+        <tr class="sep hl"><td>Shiryaev 0,5</td><td>79%</td><td>4,7 (3)</td><td>0,35</td><td>−1,0 ± 2,0</td><td>+0,1 ± 2,0</td><td>−2,4 / +0,5 / −2,3 / +2,6</td></tr>
+        <tr><td>Shiryaev 0,7</td><td>75%</td><td>5,5 (4)</td><td>0,21</td><td>+3,1 ± 2,4</td><td>−2,7 ± 2,4</td><td>−0,5 / +6,8 / −0,3 / −5,1</td></tr>
+        <tr><td>Shiryaev 0,9</td><td>65%</td><td>7,1 (6)</td><td>0,10</td><td>+6,7 ± 3,2</td><td>−13,3 ± 3,5</td><td>+2,5 / +11,1 / −13,9 / −12,7</td></tr>
+        <tr><td>Shiryaev 0,99</td><td>43%</td><td>10,2 (9)</td><td>0,04</td><td>+17,7 ± 5,0</td><td>−23,5 ± 6,0</td><td>+8,4 / +28,0 / −16,1 / −31,6</td></tr>
+        <tr class="sep"><td>Shiryaev 0,9, a priori costante</td><td>79%</td><td>8,0 (7)</td><td>0,10</td><td>+0,2 ± 2,6</td><td>−5,6 ± 2,5</td><td>−2,5 / +3,0 / −2,4 / −8,9</td></tr>
+        <tr><td>Shiryaev 0,9 sull'RSI a 12</td><td>37%</td><td>6,4 (5)</td><td>0,08</td><td>+9,4 ± 5,0</td><td>−15,0 ± 4,7</td><td>−0,2 / +19,0 / −16,8 / −13,4</td></tr>
+      </tbody>
+    </table></div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Dove va il rendimento, sviluppo</th><th>Trade</th><th>bp per trade</th><th>Barre tenute</th></tr></thead>
+      <tbody>
+        <tr><td>Shiryaev 0,5: aperti da una rilevazione giusta</td><td>2.765</td><td>+30,9</td><td>15,6</td></tr>
+        <tr><td>Shiryaev 0,5: aperti da un falso allarme</td><td>1.234</td><td>−79,8</td><td>19,7</td></tr>
+        <tr><td>Shiryaev 0,5: rientri dopo un falso allarme</td><td>233</td><td>+36,9</td><td>9,2</td></tr>
+        <tr class="sep"><td>Shiryaev 0,9: rilevazioni / falsi allarmi</td><td>2.284 / 359</td><td>+21,9 / −89,0</td><td>25,0 / 34,1</td></tr>
+        <tr><td>Zigzag 0,2: rilevazioni / falsi allarmi</td><td>3.403 / 1.081</td><td>+19,8 / −79,5</td><td>15,9 / 4,8</td></tr>
+      </tbody>
+    </table></div>
+    <ul class="points">
+      <li><strong>Come rivelatore funziona.</strong> Con soglia 0,5 trova il 79% delle svolte con 3 barre di ritardo mediano e 0,35 falsi allarmi per svolta.</li>
+      <li><strong>La probabilità a priori dal livello non sposta la frontiera.</strong> A soglia 0,9 trova meno svolte di quella costante (65% contro 79%) in cambio di un ritardo un po' più corto (7,1 contro 8,0 barre), con gli stessi falsi allarmi.</li>
+      <li><strong>Il rendimento è zero.</strong> Con soglie basse è intorno a zero in tutti i fold. Con soglie alte prende la forma di tutte le regole dello studio: positivo sui fold 1-2, negativo sui fold 3-4. L'RSI fa lo stesso.</li>
+      <li><strong>Il teorema d'arresto opzionale, in numeri.</strong> I trade aperti da una rilevazione giusta guadagnano +31 bp, quelli aperti da un falso allarme perdono −80 bp e restano 20 barre contro la gamba: la somma fa zero. Una rilevazione giusta vale meno della metà dei +79 bp che la tabella dei ritardi prometteva a 3 barre, perché circa 4 trade su 10 finiscono su un falso allarme invece che alla svolta successiva. E al momento dell'allarme una svolta vera e un falso allarme si presentano allo stesso modo.</li>
+    </ul>
+    <h3>Combinare i due rivelatori</h3>
+    <p>L'allarme scatta solo quando la probabilità di Shiryaev supera la soglia <strong>e</strong> la predizione è anche tornata indietro di h dal suo estremo dall'ultimo allarme, come nello zigzag (<code>detect.shiryaev</code> con <code>h</code>, opzione <code>--both</code>).</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Shiryaev 0,5 più ritracciamento h</th><th>Trovate</th><th>Ritardo medio</th><th>Falsi per svolta</th><th>bp rilevazioni giuste</th><th>bp falsi allarmi</th><th>bp sviluppo / hold-out</th></tr></thead>
+      <tbody>
+        <tr><td>Nessun ritracciamento</td><td>79%</td><td>4,7</td><td>0,35</td><td>+30,9</td><td>−79,8</td><td>−1,0 / +0,1</td></tr>
+        <tr><td>h = 0,1</td><td>82%</td><td>4,8</td><td>0,30</td><td>+30,5</td><td>−87,0</td><td>+0,7 / −0,8</td></tr>
+        <tr class="hl"><td>h = 0,2</td><td>86%</td><td>5,8</td><td>0,20</td><td>+22,6</td><td>−100,4</td><td>+0,7 / −2,0</td></tr>
+        <tr><td>h = 0,3</td><td>82%</td><td>7,3</td><td>0,12</td><td>+16,7</td><td>−114,5</td><td>+0,6 / −7,0</td></tr>
+        <tr class="hl"><td>h = 0,4</td><td>73%</td><td>9,1</td><td>0,07</td><td>+16,4</td><td>−138,2</td><td>+2,8 / −9,7</td></tr>
+        <tr class="sep"><td>Shiryaev 0,9, h = 0,4</td><td>65%</td><td>9,3</td><td>0,06</td><td>+18,2</td><td>−130,4</td><td>+5,8 / −13,2</td></tr>
+      </tbody>
+    </table></div>
+    <ul class="points">
+      <li><strong>I falsi allarmi scendono davvero.</strong> Da 0,35 a 0,20 per svolta con h = 0,2, che trova anzi più svolte (86%), e a 0,07 con h = 0,4.</li>
+      <li><strong>Il risultato no.</strong> Ogni filtro in più rende le rilevazioni giuste più tardive e meno redditizie (+31 → +23 → +16 bp) e i falsi allarmi che sopravvivono più costosi (−80 → −100 → −138 bp). Un falso allarme che supera un ritracciamento più profondo è entrato dopo un movimento più ampio contro la gamba, quindi quando la gamba riprende costa di più. Sulle dodici combinazioni provate (soglie 0,5 / 0,7 / 0,9, h da 0,1 a 0,4) lo sviluppo fa da +0,6 a +6,5 bp per trade e l'hold-out da −0,8 a −15,6.</li>
+      <li><strong>Perché.</strong> Un filtro costruito sulla stessa informazione è solo un altro tempo d'arresto su quella informazione, e il teorema d'arresto opzionale vale per tutti. Per separare una svolta vera da una falsa al momento dell'allarme serve un'informazione sulla gamba successiva, che nessuno dei due rivelatori ha.</li>
+    </ul>
+    <p class="caption">Rivelatori stimati sullo sviluppo. L'hold-out è già stato usato per altre regole: qui vale come controllo, e nessuna soglia è stata scelta su di esso.</p>
+  </section>
+
+  <section id="separare">
+    <div class="sechead"><div class="step">PROVA</div><h2>Separare gli allarmi veri dai falsi, e fermare i falsi</h2></div>
+    <p>Due modi di ridurre il danno dei falsi allarmi, sugli allarmi del rivelatore di Shiryaev a 0,5. Il primo: riconoscerli al momento dell'allarme, con le variabili note in quel momento. Il secondo: chiuderli presto con uno stop loss.</p>
+    <h3>Al momento dell'allarme</h3>
+    <p>Per ogni allarme ho misurato sedici variabili, tutte orientate nella direzione della gamba che l'allarme dichiara finita e senza leggere niente dopo l'allarme (<code>detect.at_alarm</code>). Dalla predizione: livello, estremo della gamba, ritracciamento dall'estremo, ultimo movimento, età della gamba. Dal prezzo: movimento della gamba in unità del suo rumore, ritracciamento dall'estremo in ATR, volatilità, volume rispetto alla sua giornata. Poi le sei colonne di esaurimento a 12 barre e il filtro BTC. La direzione di ogni variabile e la regressione logistica su tutte sono stimate sullo sviluppo.</p>
+    <div class="two">
+      <div class="tablewrap"><table>
+        <thead><tr><th>Variabile</th><th>AUC sviluppo</th><th>AUC hold-out</th><th>Correlazione col lordo, sviluppo / hold-out</th></tr></thead>
+        <tbody>
+          <tr><td>Ritracciamento della predizione</td><td>0,592</td><td>0,600</td><td>+0,01 / +0,03</td></tr>
+          <tr><td>Ritracciamento del prezzo, in ATR</td><td>0,580</td><td>0,603</td><td>+0,01 / +0,06</td></tr>
+          <tr><td>Movimento della gamba, in unità di rumore</td><td>0,579</td><td>0,599</td><td>−0,02 / −0,02</td></tr>
+          <tr><td>Ultimo movimento della predizione</td><td>0,575</td><td>0,560</td><td>−0,02 / 0,00</td></tr>
+          <tr><td>Esaurimento: stretch</td><td>0,573</td><td>0,582</td><td>−0,01 / −0,04</td></tr>
+          <tr><td>Esaurimento: rejection</td><td>0,556</td><td>0,559</td><td>0,00 / +0,02</td></tr>
+          <tr><td>Volume climax, deceleration, filtro BTC</td><td>0,50-0,51</td><td>0,49-0,50</td><td>0,00 / −0,03</td></tr>
+          <tr class="hl"><td>Logistica su tutte</td><td>0,637</td><td>0,629</td><td>–</td></tr>
+        </tbody>
+      </table></div>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Quintile del punteggio (tagli sullo sviluppo)</th><th>Allarmi veri</th><th>bp allarmi veri</th><th>bp allarmi falsi</th><th>bp tutti</th></tr></thead>
+        <tbody>
+          <tr><td>Sviluppo, 1 (peggiore)</td><td>53%</td><td>+49,0</td><td>−67,8</td><td>−5,9</td></tr>
+          <tr><td>Sviluppo, 3</td><td>74%</td><td>+24,3</td><td>−72,8</td><td>−1,3</td></tr>
+          <tr><td>Sviluppo, 5 (migliore)</td><td>83%</td><td>+24,7</td><td>−99,2</td><td>+3,0</td></tr>
+          <tr class="sep"><td>Hold-out, 1</td><td>60%</td><td>+40,4</td><td>−65,1</td><td>−1,9</td></tr>
+          <tr><td>Hold-out, 3</td><td>74%</td><td>+29,9</td><td>−86,9</td><td>−0,7</td></tr>
+          <tr><td>Hold-out, 5</td><td>86%</td><td>+9,1</td><td>−102,0</td><td>−6,6</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+    <ul class="points">
+      <li><strong>Separare si può, e regge fuori campione.</strong> La logistica ha AUC 0,637 sullo sviluppo e 0,629 sull'hold-out; gli allarmi veri passano dal 53-60% del quintile peggiore all'83-86% del migliore.</li>
+      <li><strong>Non rende.</strong> Nessuna variabile è correlata con il lordo del trade oltre |0,06|. Salendo di quintile gli allarmi veri guadagnano meno (+49 → +25 bp sullo sviluppo, +40 → +9 sull'hold-out) e i falsi perdono di più (−68 → −99, −65 → −102). Ogni quintile fa fra −6,6 e +6,5 bp.</li>
+      <li><strong>Perché.</strong> Le variabili che dicono "la svolta è avvenuta" misurano quanto è già andata: ritracciamento, movimento della gamba, stretch. Più è certa, più è consumata. È di nuovo la legge 1 − √(d/w) vista dall'altro lato.</li>
+    </ul>
+    <h3>Lo stop loss</h3>
+    <p>Stop in multipli di ATR a 12 barre, fissato all'ingresso o trailing; dopo uno stop si resta flat fino all'allarme successivo (<code>strategy.walked</code>, opzione <code>--sl</code>).</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Shiryaev 0,5 con stop</th><th>bp sviluppo</th><th>bp hold-out</th><th>Fold 1 / 2 / 3 / 4</th><th>Rilevazioni giuste: bp (chiuse dallo stop)</th><th>Falsi allarmi: bp (chiusi dallo stop)</th></tr></thead>
+      <tbody>
+        <tr><td>Nessuno stop</td><td>−1,0 ± 2,0</td><td>+0,1 ± 2,0</td><td>−2,4 / +0,5 / −2,3 / +2,6</td><td>+31,0 (0%)</td><td>−79,8 (0%)</td></tr>
+        <tr><td>1 ATR</td><td>+0,6 ± 1,4</td><td>+1,1 ± 1,3</td><td>+0,9 / +0,3 / +0,6 / +1,6</td><td>+17,4 (51%)</td><td>−41,6 (96%)</td></tr>
+        <tr class="hl"><td>1 ATR, trailing</td><td>+1,0 ± 0,9</td><td>+1,6 ± 0,9</td><td>+0,6 / +1,5 / +1,3 / +2,0</td><td>+12,1 (99%)</td><td>−27,3 (100%)</td></tr>
+        <tr><td>2 ATR</td><td>−0,5 ± 1,7</td><td>+1,3 ± 1,6</td><td>−0,8 / −0,2 / −0,4 / +3,2</td><td>+27,0 (18%)</td><td>−68,3 (76%)</td></tr>
+        <tr><td>2 ATR, trailing</td><td>+0,1 ± 1,4</td><td>+1,4 ± 1,4</td><td>+0,8 / −0,6 / +0,1 / +2,9</td><td>+23,2 (71%)</td><td>−57,9 (92%)</td></tr>
+        <tr><td>4 ATR</td><td>−1,3 ± 1,9</td><td>+1,0 ± 1,8</td><td>−2,5 / +0,1 / −0,2 / +2,4</td><td>+30,4 (3%)</td><td>−79,4 (29%)</td></tr>
+        <tr><td>6 ATR</td><td>−1,4 ± 2,0</td><td>+0,5 ± 1,9</td><td>−2,3 / −0,4 / −1,7 / +2,8</td><td>+30,9 (0%)</td><td>−80,8 (12%)</td></tr>
+      </tbody>
+    </table></div>
+    <ul class="points">
+      <li><strong>Lo stop taglia i falsi allarmi.</strong> A 1 ATR ne chiude il 96% e ne dimezza la perdita (−80 → −42 bp); a 2 ATR la porta a −68.</li>
+      <li><strong>E taglia le rilevazioni giuste nella stessa misura.</strong> A 1 ATR ne chiude il 51% e il loro guadagno scende da +31 a +17 bp. Subito dopo l'allarme il prezzo è rumoroso attorno a una svolta vera quanto attorno a una falsa, quindi un livello che chiude le seconde chiude anche le prime.</li>
+      <li><strong>Il risultato resta intorno a zero.</strong> Nessuno stop da 1 a 6 ATR, fisso o trailing, esce da −1,4 / +1,6 bp per trade. Il trailing a 1 ATR è positivo in tutti e quattro i fold (+0,6 / +2,0), ma su trade di 2-4 barre e con un trentesimo di un'andata e ritorno taker: non sopravvive a nessuna commissione.</li>
+    </ul>
+    <p class="caption">Allarmi del rivelatore stimato sullo sviluppo; hold-out letto come controllo, nessun parametro scelto su di esso. Lo stop riempie al livello o all'apertura della barra che lo salta, e con 1 ATR su barre da 15 minuti l'ipotesi sul percorso dentro la barra pesa.</p>
+  </section>
+
+  <section id="futures">
+    <div class="sechead"><div class="step">PROVA</div><h2>Funding, open interest, flusso dei taker e order book</h2></div>
+    <p>Un'informazione nuova sulla gamba successiva dovrebbe venire da chi è posizionato e da quanto spinge, e il mercato dei futures è dove si forma gran parte del prezzo crypto. Dai dump pubblici dei futures Binance (<code>data.futures</code>), per ETH, BTC e SOL da maggio 2025 a settembre 2026, sulla griglia da 15 minuti e usando solo dati con timestamp prima della chiusura della barra:</p>
+    <ul class="points">
+      <li><strong>Funding</strong>, saldato ogni 8 ore: quanto pagano i long agli short.</li>
+      <li><strong>Open interest</strong> e <strong>rapporti long/short</strong> (top trader e tutti i conti), ogni 5 minuti.</li>
+      <li><strong>Flusso dei taker</strong>: acquisti aggressivi contro vendite aggressive, dalle candele dei futures e dalle metriche.</li>
+      <li><strong>Base</strong> futures-spot.</li>
+      <li><strong>Profondità del book</strong> (<code>bookDepth</code>): la liquidità cumulata entro 1-5% dal prezzo, offerte e richieste separate, circa ogni 30 secondi. È un order book aggregato, non il book completo.</li>
+    </ul>
+    <p>Non sono pubblicati per questo periodo il miglior bid/ask e le liquidazioni.</p>
+    <h3>Contro il rendimento futuro</h3>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Rank IC col rendimento futuro, media dei tre asset</th><th>Orizzonte</th><th>Fold 1 / 2 / 3 / 4</th><th>Sviluppo / hold-out</th></tr></thead>
+      <tbody>
+        <tr class="hl"><td>Open interest dietro al movimento (variazione a 12 barre × segno del prezzo a 12 barre)</td><td>48 barre</td><td>+0,111 / +0,039 / +0,077 / +0,001</td><td>+0,075 / +0,039</td></tr>
+        <tr class="hl"><td>Squilibrio del book entro 5%, media dell'ultima ora</td><td>12 barre</td><td>+0,025 / +0,059 / +0,006 / +0,042</td><td>+0,042 / +0,024</td></tr>
+        <tr><td>Squilibrio del book entro 2%, media dell'ultima ora</td><td>12 barre</td><td>+0,029 / +0,050 / 0,000 / +0,028</td><td>+0,039 / +0,014</td></tr>
+        <tr><td>Variazione della base a 12 barre</td><td>48 barre</td><td>+0,058 / +0,007 / +0,020 / +0,005</td><td>+0,032 / +0,013</td></tr>
+        <tr><td>Flusso dei taker, 12 barre</td><td>12 barre</td><td>−0,008 / +0,061 / −0,037 / −0,027</td><td>+0,026 / −0,032</td></tr>
+        <tr><td>Funding</td><td>12 barre</td><td>−0,009 / −0,023 / −0,030 / +0,022</td><td>−0,016 / −0,004</td></tr>
+        <tr class="sep"><td>Predizione v2 (riferimento)</td><td>12 barre</td><td>−0,014 / −0,047 / −0,020 / −0,057</td><td>−0,031 / −0,039</td></tr>
+        <tr><td>RSI a 12 (riferimento)</td><td>12 barre</td><td>−0,006 / −0,040 / −0,020 / −0,068</td><td>−0,023 / −0,044</td></tr>
+      </tbody>
+    </table></div>
+    <h3>All'allarme del rivelatore</h3>
+    <p>Quindici colonne dei futures, orientate nella direzione della gamba che l'allarme dichiara finita: open interest e rapporto dei top trader lungo la gamba, flusso dei taker lungo la gamba e nell'ultima ora, funding, rapporti, base e book all'allarme.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Shiryaev 0,5</th><th>AUC sviluppo</th><th>AUC hold-out</th><th>bp per quintile, sviluppo</th><th>bp per quintile, hold-out</th></tr></thead>
+      <tbody>
+        <tr><td>Le sedici variabili di prima</td><td>0,637</td><td>0,629</td><td>da −5,9 a +3,0</td><td>da −6,6 a +6,5</td></tr>
+        <tr><td>Solo le quindici dei futures</td><td>0,546</td><td>0,525</td><td>da −10,6 a +6,1</td><td>da −3,1 a +3,9</td></tr>
+        <tr class="hl"><td>Tutte e trentuno</td><td>0,639</td><td>0,624</td><td>da −9,9 a +3,6</td><td>da −2,1 a +2,0</td></tr>
+      </tbody>
+    </table></div>
+    <ul class="points">
+      <li><strong>All'allarme non aggiungono niente.</strong> Da sole separano appena gli allarmi veri dai falsi (AUC 0,55 / 0,53), insieme alle sedici di prima portano l'AUC da 0,637 a 0,639, e nessun quintile guadagna. La più utile, il flusso dei taker lungo la gamba, ha AUC 0,53-0,54 e correlazione col lordo del trade sotto 0,02.</li>
+      <li><strong>Contro il rendimento futuro, due colonne tengono il segno in tutti i fold.</strong> L'open interest dietro al movimento: un movimento fatto aprendo posizioni nuove tende a proseguire per le 12 ore successive. E lo squilibrio del book entro il 5%: più liquidità in acquisto che in vendita, prezzo un po' più alto nelle 3 ore dopo.</li>
+      <li><strong>Sono piccole.</strong> Hanno la stessa grandezza dell'IC della v2, e il fold 4 dell'open interest è a zero. Con un IC di 0,05 sul rendimento a 48 barre un trade vale dell'ordine di 10 bp, contro un'andata e ritorno di 20-50: non sono ancora una strategia.</li>
+    </ul>
+    <p class="caption">Campioni non sovrapposti, uno ogni h barre per asset. L'hold-out è letto come controllo; nessuna colonna è stata scelta su di esso.</p>
+  </section>
+
+  <section id="oi">
+    <div class="sechead"><div class="step">APPROFONDIMENTO</div><h2>L'open interest dietro al movimento</h2></div>
+    <p>La colonna: il segno del movimento del prezzo nelle ultime k barre, per la variazione dell'open interest nelle stesse barre, in unità della sua dispersione nel mese precedente (<code>detect.open_interest</code>). È positiva quando il movimento è stato fatto aprendo posizioni nuove, negativa quando è stato fatto chiudendole. Il controllo è il solo momentum, il segno del movimento.</p>
+    <div class="two">
+      <div class="tablewrap"><table>
+        <thead><tr><th>Rank IC col rendimento a 48 barre</th><th>Fold 1 / 2 / 3 / 4</th><th>Sviluppo / hold-out</th></tr></thead>
+        <tbody>
+          <tr><td>Open interest dietro al movimento, k = 4</td><td>+0,090 / +0,145 / +0,008 / +0,041</td><td>+0,117 / +0,024</td></tr>
+          <tr><td>Open interest dietro al movimento, k = 12</td><td>+0,112 / +0,044 / +0,069 / +0,008</td><td>+0,078 / +0,038</td></tr>
+          <tr class="hl"><td>Open interest dietro al movimento, k = 24</td><td>+0,057 / +0,125 / +0,057 / +0,045</td><td>+0,091 / +0,051</td></tr>
+          <tr class="sep"><td>Solo momentum, k = 24</td><td>−0,048 / −0,010 / +0,016 / −0,006</td><td>−0,029 / +0,005</td></tr>
+        </tbody>
+      </table></div>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Le 48 barre dopo un movimento di 24, nella sua direzione</th><th>Fold 1</th><th>Fold 2</th><th>Fold 3</th><th>Fold 4</th></tr></thead>
+        <tbody>
+          <tr class="hl"><td>Open interest salito con il movimento</td><td>+10,4</td><td>+16,4</td><td>+18,7</td><td>+19,8</td></tr>
+          <tr><td>Open interest sceso con il movimento</td><td>−22,0</td><td>−13,0</td><td>−2,4</td><td>−6,1</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+    <ul class="points">
+      <li><strong>Il segno più pulito dello studio.</strong> Un movimento fatto aprendo posizioni nuove prosegue per le 12 ore successive; uno fatto chiudendole ritraccia. Vale in tutti e quattro i fold, e il solo momentum non lo spiega.</li>
+      <li><strong>Con una cautela di protocollo.</strong> È stato letto fra 64 varianti (finestre e orizzonti) guardando anche l'hold-out. La variante che lo sviluppo da solo sceglie, k = 4, scende da +0,117 a +0,024 sull'hold-out.</li>
+    </ul>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Regola: segui il movimento se l'open interest è salito, contrastalo se è sceso; ingresso oltre |z|, uscita dopo 48 barre</th><th>bp sviluppo</th><th>bp hold-out</th><th>Fold 1 / 2 / 3 / 4</th></tr></thead>
+      <tbody>
+        <tr><td>k = 24, |z| ≥ 0,5</td><td>−0,3 ± 6,9</td><td>+0,8 ± 6,2</td><td>+5,5 / −6,4 / −4,9 / +6,1</td></tr>
+        <tr><td>k = 24, |z| ≥ 1,0</td><td>−6,9 ± 8,6</td><td>+4,0 ± 8,2</td><td>+7,8 / −22,9 / −7,4 / +13,9</td></tr>
+        <tr><td>k = 24, |z| ≥ 2,0</td><td>−6,1 ± 14,7</td><td>+17,2 ± 15,7</td><td>+23,9 / −36,8 / −9,4 / +39,9</td></tr>
+        <tr><td>k = 4, |z| ≥ 2,0</td><td>+0,7 ± 10,6</td><td>+9,2 ± 9,4</td><td>+27,8 / −27,3 / −7,0 / +24,9</td></tr>
+      </tbody>
+    </table></div>
+    <ul class="points">
+      <li><strong>Come regola non regge.</strong> Sulle dodici varianti (k 4 / 12 / 24, soglia 0,5-2) lo sviluppo fa da −6,9 a +0,7 bp per trade, l'hold-out da +0,8 a +17,2, e il fold 2 è negativo in tutte (da −6,4 a −41,5).</li>
+      <li><strong>Perché.</strong> L'effetto sta nella massa dei movimenti, non negli estremi che una soglia di ingresso seleziona. Resta una colonna da usare insieme ad altre, non una strategia da sola, e comunque sotto le commissioni.</li>
+    </ul>
+    <h3>Come conferma dei segnali</h3>
+    <p>Per ogni segnale: lato del segnale × open interest dietro al movimento delle ultime k barre (<code>detect.confirmation</code>). È positiva quando la colonna dice che le barre successive andranno dalla parte del segnale: un long alla fine di una discesa è confermato se la discesa è stata fatta chiudendo posizioni.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Solo segnali confermati, un segnale scartato chiude</th><th>bp sviluppo</th><th>bp hold-out</th><th>Fold 1 / 2 / 3 / 4</th></tr></thead>
+      <tbody>
+        <tr><td>Shiryaev 0,5, tutti i segnali</td><td>−1,0 ± 2,0</td><td>+0,1 ± 2,0</td><td>−2,4 / +0,5 / −2,3 / +2,6</td></tr>
+        <tr><td>Shiryaev 0,5, k = 12, conferma ≥ 0,5</td><td>−2,1 ± 4,6</td><td>+5,1 ± 4,6</td><td>−4,0 / +0,1 / +2,1 / +8,4</td></tr>
+        <tr class="hl"><td>Shiryaev 0,5, k = 12, conferma ≥ 1</td><td>−1,6 ± 7,5</td><td>+12,3 ± 7,0</td><td>−1,9 / −1,3 / +6,0 / +19,1</td></tr>
+        <tr><td>Zigzag 0,2, k = 4, conferma ≥ 0</td><td>+1,3 ± 2,3</td><td>+2,3 ± 2,3</td><td>+1,4 / +1,2 / +0,1 / +4,6</td></tr>
+        <tr><td>Zigzag 0,2, k = 12, conferma ≥ 1</td><td>−9,8 ± 6,7</td><td>+5,6 ± 7,4</td><td>−6,3 / −13,9 / +10,8 / +0,9</td></tr>
+        <tr class="sep"><td>Rientro 0,40, tutti i segnali</td><td>+15,0 ± 10,1</td><td>−42,9 ± 13,9</td><td>−1,8 / +32,8 / −44,8 / −40,9</td></tr>
+        <tr><td>Rientro 0,40, k = 4, conferma ≥ 0,5</td><td>+6,5 ± 9,3</td><td>−8,2 ± 9,9</td><td>+0,2 / +14,2 / −24,9 / +10,7</td></tr>
+      </tbody>
+    </table></div>
+    <ul class="points">
+      <li><strong>Non conferma.</strong> Il lordo del trade non sale con la conferma: nei suoi quintili i rivelatori restano fra −9 e +7 bp.</li>
+      <li><strong>Sposta i periodi, non il segnale.</strong> Tenere solo i segnali confermati abbassa lo sviluppo e alza un poco l'hold-out, con il fold 2 negativo e il fold 4 positivo quasi ovunque: lo stesso schema della regola sull'open interest. Tenuti per le 48 barre dell'effetto, i segnali confermati fanno da −11 a +20 bp con errori di 7-18 (verifica esplorativa, non nel modulo).</li>
+      <li><strong>Perché.</strong> I trade dei rivelatori durano circa 16 barre, l'effetto dell'open interest si vede a 48; e anche lì vale una correlazione di 0,05-0,09, troppo poco per spostare un segnale su cui viene appoggiata.</li>
+    </ul>
+  </section>
+
+  <section id="livello">
+    <div class="sechead"><div class="step">PROVA</div><h2>Tenere solo i segnali oltre un livello</h2></div>
+    <p>Entrambi i rivelatori fanno moltissimi trade. Il filtro tiene un segnale long solo dove la predizione è sotto −L e uno short solo sopra +L (<code>detect.gate</code>). Il livello si legge alla barra del segnale oppure all'estremo della gamba che il segnale chiude. Un segnale scartato o chiude la posizione e resta flat fino al prossimo segnale tenuto, o viene ignorato e la regola tiene il lato che aveva.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Zigzag 0,2</th><th>Trade sviluppo / hold-out</th><th>bp sviluppo</th><th>bp hold-out</th><th>Fold 1 / 2 / 3 / 4</th></tr></thead>
+      <tbody>
+        <tr><td>Nessun filtro</td><td>5.288 / 4.984</td><td>−0,3 ± 1,6</td><td>−1,5 ± 1,6</td><td>−2,1 / +1,7 / −0,4 / −2,7</td></tr>
+        <tr><td>Al segnale, chiude, L = 0,2</td><td>1.380 / 1.100</td><td>−0,6 ± 3,4</td><td>−3,7 ± 3,1</td><td>−8,4 / +8,6 / −2,9 / −4,8</td></tr>
+        <tr><td>Al segnale, chiude, L = 0,3</td><td>715 / 528</td><td>+0,9 ± 5,2</td><td>−0,8 ± 4,7</td><td>−11,1 / +14,4 / −2,4 / +1,1</td></tr>
+        <tr class="hl"><td>Al segnale, chiude, L = 0,5</td><td>93 / 67</td><td>+12,5 ± 14,7</td><td>+19,2 ± 16,6</td><td>+15,8 / +8,2 / +11,9 / +30,2</td></tr>
+        <tr><td>All'estremo, chiude, L = 0,5</td><td>1.138 / 824</td><td>+1,8 ± 4,0</td><td>−8,4 ± 3,6</td><td>−11,0 / +15,9 / −9,1 / −7,5</td></tr>
+        <tr class="sep"><td>Al segnale, ignora, L = 0,2</td><td>568 / 438</td><td>+15,2 ± 15,2</td><td>−47,1 ± 20,4</td><td>−35,9 / +68,8 / −42,1 / −52,5</td></tr>
+        <tr><td>All'estremo, ignora, L = 0,3</td><td>1.336 / 1.106</td><td>+9,0 ± 6,5</td><td>−31,7 ± 7,3</td><td>+2,2 / +16,3 / −29,5 / −33,9</td></tr>
+        <tr class="sep"><td>Shiryaev 0,5, al segnale, chiude, L = 0,5</td><td>312 / 213</td><td>−3,2 ± 8,8</td><td>−3,5 ± 12,2</td><td>−6,0 / −0,4 / −0,5 / −7,1</td></tr>
+      </tbody>
+    </table></div>
+    <ul class="points">
+      <li><strong>Riduce molto i trade.</strong> Lo zigzag passa da 5.288 a 93 trade sullo sviluppo a L = 0,5; meno trade vuol dire meno commissioni pagate.</li>
+      <li><strong>Non migliora il lordo per trade.</strong> Chiudendo sui segnali scartati resta fra −3,2 e +4,2 bp sullo sviluppo e fra −9,2 e +0,9 sull'hold-out, per entrambi i rivelatori e ogni L da 0,1 a 0,5 tranne uno. Ignorandoli torna la forma della regola sempre in posizione: positiva sui fold 1-2, fino a −47 bp sull'hold-out.</li>
+      <li><strong>L'unica riga positiva in tutti i fold</strong> (zigzag, al segnale, chiude, L = 0,5) fa +12,5 ± 14,7 e +19,2 ± 16,6 su 160 trade in tutto: dentro il rumore, e il rivelatore bayesiano con lo stesso filtro fa −3,2 / −3,5. Meno trade pagano meno commissioni, ma non rendono di più ciascuno.</li>
+    </ul>
+    <h3>I livelli più alti, scelti sul solo sviluppo</h3>
+    <p>Per dare alla pagina default ragionevoli: h 0,1-0,5 e p 0,5-0,99 per L 0,4 / 0,5 / 0,6. Si sceglie il lordo per trade più alto con i fold 1 e 2 entrambi positivi; l'hold-out si guarda dopo.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Configurazione, stop 6 ATR</th><th>Trade sviluppo / hold-out</th><th>bp sviluppo</th><th>bp hold-out</th><th>Fold 1 / 2 / 3 / 4</th></tr></thead>
+      <tbody>
+        <tr class="hl"><td>Zigzag 0,2, chiude, L = 0,5</td><td>93 / 67</td><td>+12,5 ± 14,7</td><td>+19,2 ± 16,6</td><td>+15,8 / +8,2 / +11,9 / +30,2</td></tr>
+        <tr class="hl"><td>Shiryaev 0,5, chiude, L = 0,6</td><td>81 / 40</td><td>+15,8 ± 17,6</td><td>+28,4 ± 31,9</td><td>+20,8 / +9,2 / +35,6 / +20,4</td></tr>
+        <tr><td>Shiryaev 0,9, chiude, L = 0,6 (lordo più alto, fold 1 negativo)</td><td>38 / 9</td><td>+38,0 ± 34,0</td><td>−131,9 ± 87,3</td><td>−56,7 / +81,8 / −55,1 / −193,4</td></tr>
+        <tr class="sep"><td>Shiryaev 0,5, ignora, L = 0,50</td><td>139 / 82</td><td>−25,3 ± 37,9</td><td>+31,6 ± 48,3</td><td>−43,8 / −9,0 / −71,1 / +134,3</td></tr>
+        <tr><td>Shiryaev 0,5, ignora, L = 0,55 (la configurazione provata sulla pagina)</td><td>73 / 41</td><td>+52,1 ± 76,1</td><td>+34,0 ± 80,0</td><td>−106,2 / +169,0 / −102,9 / +177,7</td></tr>
+        <tr><td>Shiryaev 0,5, ignora, L = 0,60</td><td>38 / 13</td><td>−90,8 ± 125,1</td><td>+86,1 ± 207,8</td><td>−171,5 / +47,6 / −106,6 / +251,4</td></tr>
+      </tbody>
+    </table></div>
+    <ul class="points">
+      <li><strong>Chiudendo sui segnali scartati, lo sviluppo sceglie due righe che reggono.</strong> Zigzag 0,2 oltre 0,5 e Shiryaev 0,5 oltre 0,6 restano positivi in tutti e quattro i fold. Sono comunque sotto i 50 bp della commissione, con meno di cento trade per periodo: una pista da verificare su dati nuovi, non un risultato.</li>
+      <li><strong>Ignorando i segnali scartati il risultato è il trend del periodo.</strong> La posizione resta aperta per giorni, e da L 0,50 a 0,55 a 0,60 lo sviluppo passa da −25 a +52 a −91 bp. La configurazione a 0,55 è un picco isolato.</li>
+    </ul>
+    <p class="caption">Sulla pagina i rivelatori hanno ora due soli controlli, h o p e il livello L, che parte da 0,5 per lo zigzag e da 0,6 per Shiryaev; un segnale fuori da ±L chiude sempre la posizione. Tolti la probabilità a priori costante, il ritracciamento combinato, la lettura del livello all'estremo della gamba e il segnale scartato ignorato: nessuno ha mai guadagnato. I segnali scartati sono X grigie nella riga di ciò che la regola legge, con le linee ±L.</p>
+  </section>
+
+  <section id="bilancio">
+    <div class="sechead"><div class="step">BILANCIO</div><h2>Cosa ha funzionato e cosa no</h2></div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Idea</th><th>Esito</th><th>Sviluppo</th><th>Hold-out</th><th>Lettura</th></tr></thead>
+      <tbody>
+        <tr><td>Svolte della predizione, col senno di poi</td><td><span class="chip good"><i>✓</i>Segnale reale, non tradabile</span></td><td>+135-306 bp</td><td>+122-290 bp</td><td class="text">Stabile in tutti i fold; meglio delle svolte di un RSI in ogni fold.</td></tr>
+        <tr><td>Svolte della predizione, confermate</td><td><span class="chip bad"><i>✕</i>Non funziona</span></td><td>da −10,3 a +4,8 bp</td><td>da −3,3 a +16,1 bp</td><td class="text">Arrivano tardi quanto le svolte del prezzo e dell'RSI.</td></tr>
+        <tr><td>Stop fisso 6 ATR</td><td><span class="chip good"><i>✓</i>Controllo del rischio</span></td><td>15,0 → 12,4 bp, DD uguale</td><td>−42,9 → −23,0 bp, DD 61% → 54%</td><td class="text">L'unico effetto con lo stesso segno nei due periodi, in ogni versione provata. Riduce perdite e varianza, non crea guadagno.</td></tr>
+        <tr><td>Rientro nel range</td><td><span class="chip warn"><i>!</i>Solo sviluppo</span></td><td>+13 bp sul riferimento, a ogni soglia</td><td>−18 bp sul riferimento</td><td class="text">Cosa fa il prezzo mentre la predizione è fuori banda cambia da un fold all'altro.</td></tr>
+        <tr><td>Filtro BTC sotto media 200 giorni</td><td><span class="chip warn"><i>!</i>Solo sviluppo</span></td><td>+41,0 bp, DD 15%</td><td>−40,5 bp</td><td class="text">Scelto sui dati dello sviluppo. Il ribasso dello sviluppo era il fold 2.</td></tr>
+        <tr><td>Dopo lo stop, solo segnale opposto</td><td><span class="chip warn"><i>!</i>Solo sviluppo</span></td><td>+15,0 → +26,1 bp, DD 13%</td><td>−26,5 bp (controllo)</td><td class="text">La migliore senza filtro sullo sviluppo. Migliora il fold 1, non i fold 3-4.</td></tr>
+        <tr><td>Stop trailing 10 ATR</td><td><span class="chip neutral"><i>=</i>Neutro</span></td><td>+13,6 bp, lordo +0,48</td><td>non letto</td><td class="text">Come lo stop fisso, dentro l'errore.</td></tr>
+        <tr><td>Media breve 2-4 barre</td><td><span class="chip neutral"><i>=</i>Neutro</span></td><td>±1-2 bp</td><td>non letto</td><td class="text">Toglie rumore ma ritarda l'ingresso: i due effetti si annullano.</td></tr>
+        <tr><td>Selezione degli asset per IC sull'etichetta</td><td><span class="chip neutral"><i>=</i>Non decisivo</span></td><td>classifica stabile (0,90)</td><td>perdono tutti e tre</td><td class="text">Prevedere bene l'etichetta non dice niente sul prezzo.</td></tr>
+        <tr><td>Momentum (comprare la rottura)</td><td><span class="chip warn"><i>!</i>Instabile</span></td><td>−1,7 bp, irregolare</td><td>+25 bp (specchio del riferimento)</td><td class="text">Cambia segno tra i periodi come tutto il resto.</td></tr>
+        <tr><td>Dopo lo stop, girarsi subito</td><td><span class="chip bad"><i>✕</i>Non funziona</span></td><td>+9,0 bp su 1.560 trade</td><td>non letto</td><td class="text">Il prezzo dopo uno stop non prosegue abbastanza da pagare il trade in più.</td></tr>
+        <tr><td>Invertire la regola peggiore dello sviluppo</td><td><span class="chip warn"><i>!</i>Instabile</span></td><td>+70,6 bp (per costruzione)</td><td>+11,6 ± 38,6 bp (controllo)</td><td class="text">Positiva ma indistinguibile da zero; con le commissioni perde.</td></tr>
+        <tr><td>Take profit (3-6 ATR)</td><td><span class="chip bad"><i>✕</i>Non funziona</span></td><td>15,0 → 4,0 bp</td><td>non letto</td><td class="text">Taglia la coda destra delle vincite.</td></tr>
+        <tr><td>Media 8 barre</td><td><span class="chip bad"><i>✕</i>Non funziona</span></td><td>15,0 → 7,0 bp</td><td>non letto</td><td class="text">Il ritardo costa più del rumore tolto.</td></tr>
+        <tr><td>Soglie sopra 0,5</td><td><span class="chip bad"><i>✕</i>Non funziona</span></td><td>da −9 a −5.000 bp, pochi trade</td><td>non letto</td><td class="text">Con la regola sempre in posizione diventano posizioni di settimane.</td></tr>
+        <tr><td>Uscita a tempo fisso</td><td><span class="chip bad"><i>✕</i>Non funziona</span></td><td>massimo +5 bp a 6 ore</td><td>non letto</td><td class="text">Il segnale opposto rende di più di qualsiasi orologio.</td></tr>
+        <tr><td>Filtro di volatilità</td><td><span class="chip bad"><i>✕</i>Non funziona</span></td><td>+12 / +16 / +14 bp per terzile</td><td>non letto</td><td class="text">Non separa i trade.</td></tr>
+        <tr><td>Regola di riferimento</td><td><span class="chip bad"><i>✕</i>Non funziona</span></td><td>+1,7 bp</td><td>−25,2 bp</td><td class="text">Il segno lo decide il mercato, non il segnale.</td></tr>
+        <tr><td>Zigzag (CUSUM) sulla predizione</td><td><span class="chip bad"><i>✕</i>Non funziona</span></td><td>da −1,0 a +7,2 bp</td><td>da −8,2 a +1,1 bp</td><td class="text">Trova le svolte presto; i falsi allarmi restituiscono tutto.</td></tr>
+        <tr><td>Rivelatore bayesiano (Shiryaev)</td><td><span class="chip bad"><i>✕</i>Non funziona</span></td><td>da −1,0 a +17,7 bp</td><td>da +0,1 a −23,5 bp</td><td class="text">Rilevazioni +31, falsi allarmi −80 bp: somma zero.</td></tr>
+        <tr><td>Shiryaev e zigzag insieme</td><td><span class="chip bad"><i>✕</i>Non funziona</span></td><td>da +0,6 a +6,5 bp</td><td>da −0,8 a −15,6 bp</td><td class="text">Falsi allarmi da 0,35 a 0,07 per svolta; ognuno costa di più, le rilevazioni valgono di meno.</td></tr>
+        <tr><td>Separare allarmi veri e falsi (16 variabili)</td><td><span class="chip bad"><i>✕</i>Non funziona</span></td><td>AUC 0,637; quintili da −5,9 a +3,0 bp</td><td>AUC 0,629; quintili da −6,6 a +6,5 bp</td><td class="text">Gli allarmi più probabilmente veri sono quelli già consumati.</td></tr>
+        <tr><td>Stop loss sugli allarmi (1-6 ATR)</td><td><span class="chip bad"><i>✕</i>Non funziona</span></td><td>da −1,4 a +1,0 bp</td><td>da +0,5 a +1,6 bp</td><td class="text">Dimezza i falsi allarmi e insieme le rilevazioni giuste.</td></tr>
+        <tr><td>Funding, open interest, flusso, book all'allarme</td><td><span class="chip bad"><i>✕</i>Non funziona</span></td><td>AUC 0,639 con tutte; quintili da −9,9 a +3,6 bp</td><td>AUC 0,624; quintili da −2,1 a +2,0 bp</td><td class="text">Separano appena; nessun quintile guadagna.</td></tr>
+        <tr><td>Open interest dietro al movimento, contro il rendimento a 48 barre</td><td><span class="chip warn"><i>!</i>Da approfondire</span></td><td>IC +0,075</td><td>IC +0,039</td><td class="text">Il segno più pulito dello studio; come regola il fold 2 perde in tutte le varianti.</td></tr>
+        <tr><td>Open interest come conferma dei segnali</td><td><span class="chip bad"><i>✕</i>Non funziona</span></td><td>da −11,0 a +1,3 bp (rivelatori)</td><td>da −1,3 a +12,3 bp (rivelatori)</td><td class="text">Sposta i periodi, non il segnale: fold 2 negativo, fold 4 positivo.</td></tr>
+        <tr><td>Filtro sul livello dei segnali dei rivelatori</td><td><span class="chip bad"><i>✕</i>Non funziona</span></td><td>da −3,2 a +4,2 bp (chiude)</td><td>da −9,2 a +0,9 bp (chiude)</td><td class="text">Fino a 50 volte meno trade, stesso lordo per trade.</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section id="migliori">
+    <div class="sechead"><div class="step">PARAMETRI E COMBINAZIONI</div><h2>La configurazione migliore emersa, e cosa vale</h2></div>
+    <p>Nessuna configurazione è promossa: la migliore dello sviluppo perde sull'hold-out. Questa è la combinazione che lo sviluppo indicava, con i parametri che vi convergevano a ogni passo, da usare come punto di partenza se si riprende con dati nuovi.</p>
+    <div class="spec">
+      <dl>
+        <dt>Ingresso</dt><dd>Rientro nel range, a = 0,35 – 0,40, sulla predizione grezza o sulla media di 2 barre. La zona 0,35 – 0,40 è il massimo per ogni media provata.</dd>
+        <dt>Uscita</dt><dd>Il rientro opposto. Nessun take profit. Stop fisso a 6 ATR(12), o trailing a 10 ATR; dopo lo stop si resta flat fino al segnale opposto.</dd>
+        <dt>Filtro</dt><dd>Solo con BTC sotto la media a 200 giorni. Scelto sullo sviluppo; sulla pagina è spento dal 2026-10-04, perché l'hold-out lo ha bocciato.</dd>
+        <dt>Lati</dt><dd>Long e short insieme: il tempismo dello sviluppo era simmetrico.</dd>
+        <dt>Sviluppo</dt><dd>Con il filtro: +41,0 bp per trade senza stop, +37,2 con lo stop e il solo segnale opposto, drawdown 10-15%. Senza filtro: +26,1 con lo stop e il solo segnale opposto.</dd>
+        <dt>Hold-out</dt><dd>Con il filtro: −40,5 senza stop, −22,8 con lo stop e il solo segnale opposto. Senza filtro: −26,5. Drawdown 37-52%.</dd>
+      </dl>
+    </div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Combinazione, soglia 0,40</th><th>bp sviluppo</th><th>bp hold-out</th><th>Differenza</th></tr></thead>
+      <tbody>
+        <tr><td>Rientro</td><td>+15,0</td><td>−42,9</td><td>−57,9</td></tr>
+        <tr><td>Rientro + stop 6 ATR</td><td>+12,4</td><td>−23,0</td><td>−35,4</td></tr>
+        <tr><td>Rientro + filtro</td><td>+41,0</td><td>−40,5</td><td>−81,5</td></tr>
+        <tr><td>Rientro + filtro + stop 6 ATR</td><td>+28,2</td><td>−21,4</td><td>−49,6</td></tr>
+        <tr class="hl"><td>Rientro + stop 6 ATR, poi solo segnale opposto</td><td>+26,1</td><td>−26,5</td><td>−52,6</td></tr>
+        <tr><td>Rientro + filtro + stop 6 ATR, poi solo segnale opposto</td><td>+37,2</td><td>−22,8</td><td>−60,0</td></tr>
+      </tbody>
+    </table></div>
+    <ul class="points">
+      <li>Più parametri sono stati scelti sullo sviluppo, più grande è la caduta sull'hold-out: il filtro aggiungeva 26 bp sullo sviluppo e ne toglie 24 in più all'uscita.</li>
+      <li>Lo stop è l'unico componente che rende la caduta più piccola. Con lo stop le combinazioni sono le meno peggiori sull'hold-out (da −21 a −27 bp), non combinazioni che guadagnano.</li>
+    </ul>
+    <h3>Le funzioni del modulo</h3>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Funzione</th><th>Cosa fa</th></tr></thead>
+      <tbody>
+        <tr><td><code>strategy.load</code></td><td class="text">Predizioni v2, prezzi e il confine tra sviluppo e hold-out, ricalcolato come in <code>swing.folds</code>.</td></tr>
+        <tr><td><code>strategy.crossings</code></td><td class="text">Gli eventi di rientro: +1 quando la predizione risale sopra −a, −1 quando riscende sotto +a.</td></tr>
+        <tr><td><code>strategy.reentry</code></td><td class="text">La regola del rientro sempre in posizione.</td></tr>
+        <tr><td><code>strategy.exits</code></td><td class="text">Il rientro con take profit, stop fisso o trailing, la regola dopo lo stop (<code>rearm</code>, <code>opposite</code>, <code>reverse</code>) e un filtro opzionale, sopra <code>stops.walk</code>. Senza barriere coincide barra per barra con <code>reentry</code>.</td></tr>
+        <tr><td><code>strategy.below</code></td><td class="text">Il filtro causale: BTC sotto la sua media a 200 giorni, letto sulla chiusura del giorno prima.</td></tr>
+        <tr><td><code>strategy.report</code>, <code>stats</code></td><td class="text">Tutte le metriche per periodo e regime, compresi errore standard e tempismo al netto della deriva.</td></tr>
+        <tr><td><code>strategy.path</code></td><td class="text">Il trade medio h barre dopo l'ingresso, per scegliere dove uscire.</td></tr>
+        <tr><td><code>strategy.candidates</code></td><td class="text">Le cinque regole fissate per l'hold-out.</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section id="limiti">
+    <div class="sechead"><div class="step">LIMITI E PROSSIMI PASSI</div><h2>Cosa questi numeri non possono dire</h2></div>
+    <ul class="points">
+      <li><strong>Campione corto.</strong> 16 mesi fuori campione, 4 fold da 4 mesi, 3 asset che si muovono insieme. Un segnale da pochi bp per trade non si distingue dalla differenza tra un modello e l'altro.</li>
+      <li><strong>Commissioni escluse.</strong> Con 20 bp di andata e ritorno (maker) la riga migliore dello sviluppo scenderebbe a circa +21 bp e quella dell'hold-out a circa −60. Con 50 bp (taker) a −9 e −90.</li>
+      <li><strong>L'hold-out è usato.</strong> Ogni nuova regola provata sui fold 3-4 verrebbe scelta su dati già visti.</li>
+      <li><strong>Esecuzione ottimistica.</strong> Il riempimento alla chiusura della stessa barra del segnale non ha latenza né slippage.</li>
+      <li><strong>Coerente con il resto del progetto.</strong> La v2 prevede l'etichetta a 0,644, ma il 92,5% di quella correlazione è un RSI e contro il rendimento futuro vale −0,026 (HANDOFF §14). Questo studio arriva alla stessa conclusione dal lato delle regole.</li>
+    </ul>
+    <h3>Dove si è arrivati e cosa resta</h3>
+    <p>Nessuna regola sulla predizione v2 guadagna in modo stabile fra i fold al netto della commissione. Le uniche due righe positive in tutti e quattro i fold sono i rivelatori con il filtro sul livello che chiudono sulle svolte dentro ±L: zigzag 0,2 oltre 0,5 (+12,5 / +19,2 bp per trade) e bayesiano 0,5 oltre 0,6 (+15,8 / +28,4), scelti sul solo sviluppo, con meno di cento trade per periodo e sotto i 50 bp di andata e ritorno. Sono i default dei rivelatori sulla pagina.</p>
+    <ul class="points">
+      <li><strong>1. Walk-forward dal 2023.</strong> Riaddestrare la v2 con <code>--test-start 2023-01</code> per avere circa 3,7 anni fuori campione e due cicli. Il primo uso: verificare le due righe con i parametri congelati, senza riselezionarli. Poi provare regole nuove scegliendole sui fold precedenti, a rotazione.</li>
+      <li><strong>2. Esecuzione maker.</strong> A circa 20 bp di andata e ritorno le due righe sarebbero vicine al pareggio, a 50 no.</li>
+      <li><strong>3. Un modello che unisca futures e v2.</strong> Open interest dietro al movimento, squilibrio del book, base, funding e flusso dei taker, più la predizione v2 come input, contro il rendimento a 48 barre. Prima una ridge in walk-forward, una rete solo se l'IC regge sopra 0,1. Servono più dei sedici mesi di futures scaricati, e un'etichetta sul rendimento riapre una linea archiviata.</li>
+      <li><strong>4. Una scala più lunga.</strong> Il rumore cresce come σ√w, una deriva vera come μ·w, e la commissione resta fissa: gambe di giorni hanno più margine di gambe di ore. Richiede di riaddestrare la v2 con una finestra di 24 o 48 barre.</li>
+      <li><strong>5. Le colonne di esaurimento</strong> (stretch, divergence, rejection), le uniche del progetto con il segno giusto sul rendimento futuro in tutti e quattro i fold.</li>
+      <li><strong>Come standard.</strong> Qualunque regola futura su questa predizione dovrebbe partire con lo stop a 6 ATR: è l'unico componente che si è comportato allo stesso modo nei due periodi.</li>
+    </ul>
+  </section>
+
+  <section id="riproduci">
+    <div class="sechead"><div class="step">RIPRODURRE</div><h2>I comandi di ogni passo</h2></div>
+    <pre>uv run python -m tradingvision.strategy --rules band reentry --at 0.2 0.25 0.3 0.35 0.4 0.45 0.5 0.55 0.6
+uv run python -m tradingvision.strategy --rules reentry --smooth 1 2 4 8
+uv run python -m tradingvision.strategy --at 0.35 0.4 --path 1 2 4 8 12 24 48 96 192
+uv run python -m tradingvision.strategy --at 0.35 0.4 --tp 0 3 6 10 15 --sl 0 3 6 10 15
+uv run python -m tradingvision.strategy --at 0.35 0.4 --tp 0 3 6 10 15 --sl 3 6 10 15 --trail
+uv run python -m tradingvision.strategy --candidates --at 0.40
+uv run python -m tradingvision.strategy --candidates --at 0.40 --holdout   # già letto il 2026-10-03
+uv run python -m tradingvision.strategy --at 0.35 0.4 --tp 0 --sl 0 3 6 10 --after opposite   # anche rearm, reverse
+uv run python -m tradingvision.strategy --at 0.4 --tp 0 --sl 6 --after opposite --filter
+uv run python -m tradingvision.strategy --at 0.4 --tp 0 --sl 6 --after opposite --holdout   # controllo, hold-out già usato
+uv run python -m tradingvision.strategy --rules band --at 0.55 --invert [--holdout]   # la peggiore, invertita
+uv run python -m tradingvision.strategy --hindsight 6 12 24 48            # svolte col senno di poi, non tradabile
+uv run python -m tradingvision.strategy --hindsight 6 12 24 48 --causal   # svolte confermate
+uv run python -m tradingvision.strategy --hindsight 6 12 24 48 --delay 0 1 2 3 4 5 6 12   # svolte in ritardo
+uv run python -m tradingvision.strategy --hindsight 12 24 --delay 0 1 2 3 4 6 12 --null 3   # contro i segni a caso
+uv run python -m tradingvision.detect --zigzag 0.05 0.1 0.15 0.2 0.3 0.5 0.8 --shiryaev 0.5 0.7 0.8 0.9 0.95 0.98 0.99 --flat
+uv run python -m tradingvision.detect --shiryaev 0.5 0.9 --zigzag 0.2 --split   # dove va il rendimento dei rivelatori
+uv run python -m tradingvision.detect --shiryaev 0.5 0.7 0.9 --both 0.1 0.2 0.3 0.4 --split   # i due rivelatori insieme
+uv run python -m tradingvision.detect --features 0.5   # cosa separa gli allarmi veri dai falsi
+uv run python -m tradingvision.detect --sl 1 2 3 4 6   # gli allarmi con lo stop loss
+uv run python -m tradingvision.data.futures   # scarica funding, open interest, flusso e book (BTC, ETH, SOL)
+uv run python -m tradingvision.detect --futures   # cosa valgono, contro il rendimento e all'allarme
+uv run python -m tradingvision.detect --oi   # l'open interest dietro al movimento
+uv run python -m tradingvision.detect --confirm   # l'open interest come conferma dei segnali
+uv run python -m tradingvision.detect --gate 0.1 0.2 0.3 0.4 0.5   # i segnali oltre un livello</pre>
+    <p>Tutte le regole si possono anche provare e vedere sulle candele nella pagina <code>chart.py</code>: spunta <strong>Swing Leg Position v2</strong>, timeframe 15m, poi nella sezione <strong>Trading rule</strong> scegli la regola (riferimento, rientro, momentum, svolte confermate, svolte col senno di poi, zigzag, rivelatore bayesiano), la soglia, la finestra delle svolte o i parametri del rivelatore, la media della predizione, l'inversione, il filtro BTC e le uscite. La pagina usa lo stesso codice dello studio (<code>strategy.signal</code> e <code>strategy.walked</code>, <code>detect</code> per i rivelatori) e legge l'uscita grezza del modello, le unità dello studio. Sotto l'etichetta disegna ciò che la regola legge, con un segno dove ha chiesto un lato (pieno se dalla parte giusta della gamba, vuoto se falso, giudicato sulle svolte col senno di poi) e, per un rivelatore, la probabilità di svolta o il ritracciamento su cui decide. Oltre a rendimento e trade mostra il bp per trade con la commissione di pareggio.</p>
+    <pre>uv run streamlit run src/tradingvision/app/chart.py</pre>
+    <p class="caption">Codice in <code>src/tradingvision/strategy.py</code> sul ramo <code>claude/strategy-study</code>; i numeri di ogni passo sono anche nella docstring del modulo. Self-check registrato in <code>tests/test_selfchecks.py</code>; 48 test passano.</p>
+  </section>
+</div>
+
+<script>
+(function () {
+  const NS = "http://www.w3.org/2000/svg";
+  const fmt = (v, d = 1) => (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(d).replace(".", ",");
+  function ticks(lo, hi, n) {
+    const span = hi - lo, raw = span / n, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+    const step = [1, 2, 2.5, 5, 10].map(s => s * mag).find(s => span / s <= n) || 10 * mag;
+    const out = [];
+    for (let v = Math.floor(lo / step) * step; v <= Math.ceil(hi / step) * step + 1e-9; v += step) out.push(+v.toFixed(6));
+    return out;
+  }
+  function el(tag, attrs, parent) {
+    const e = document.createElementNS(NS, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function tooltip(box) {
+    const t = document.createElement("div");
+    t.className = "tip"; t.hidden = true; box.appendChild(t);
+    return {
+      show(html, x, y) {
+        t.innerHTML = html; t.hidden = false;
+        const bw = box.clientWidth, tw = t.offsetWidth;
+        t.style.left = Math.min(Math.max(8, x + 14), bw - tw - 8) + "px";
+        t.style.top = Math.max(8, y - t.offsetHeight - 10) + "px";
+      },
+      hide() { t.hidden = true; }
+    };
+  }
+  function row(color, name, value) {
+    return `<div class="r"><span><b style="background:${color}"></b>${name}</span><span>${value}</span></div>`;
+  }
+
+  // Line chart: x positions given, one shared y scale, crosshair + tooltip.
+  function lineChart(box, cfg) {
+    const plot = box.querySelector(".plot");
+    const W = 720, H = 300, m = { l: 52, r: 110, t: 14, b: 42 };
+    const all = cfg.series.flatMap(s => s.v);
+    const yt = ticks(Math.min(0, ...all), Math.max(0, ...all), 5);
+    const y0 = yt[0], y1 = yt[yt.length - 1];
+    const px = cfg.xpos, xa = px[0], xb = px[px.length - 1];
+    const X = i => m.l + (W - m.l - m.r) * (px[i] - xa) / (xb - xa);
+    const Y = v => m.t + (H - m.t - m.b) * (1 - (v - y0) / (y1 - y0));
+    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": cfg.aria });
+    yt.forEach(v => {
+      el("line", { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), stroke: v === 0 ? "var(--axis)" : "var(--rule)", "stroke-width": 1 }, svg);
+      el("text", { x: m.l - 8, y: Y(v) + 4, "text-anchor": "end" }, svg).textContent = fmt(v, 0).replace("+", "");
+    });
+    cfg.xlab.forEach((lab, i) => { el("text", { x: X(i), y: H - m.b + 18, "text-anchor": "middle" }, svg).textContent = lab; });
+    el("text", { x: m.l + (W - m.l - m.r) / 2, y: H - 6, "text-anchor": "middle" }, svg).textContent = cfg.xtitle;
+    el("text", { x: 12, y: m.t + 4, "text-anchor": "start" }, svg).textContent = "bp";
+    const ends = [];
+    cfg.series.forEach(s => {
+      el("path", { d: s.v.map((v, i) => `${i ? "L" : "M"}${X(i)},${Y(v)}`).join(""), fill: "none", stroke: s.color, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }, svg);
+      s.v.forEach((v, i) => el("circle", { cx: X(i), cy: Y(v), r: 4, fill: s.color, stroke: "var(--surface)", "stroke-width": 2 }, svg));
+      ends.push({ y: Y(s.v[s.v.length - 1]), s });
+    });
+    // End labels with leader-free spacing: keep 16px apart, in text ink.
+    ends.sort((a, b) => a.y - b.y);
+    for (let i = 1; i < ends.length; i++) ends[i].y = Math.max(ends[i].y, ends[i - 1].y + 16);
+    ends.forEach(e => {
+      const last = e.s.v[e.s.v.length - 1];
+      el("text", { x: W - m.r + 10, y: e.y + 4, class: "lab" }, svg).textContent = `${e.s.short} ${fmt(last)}`;
+    });
+    const cross = el("line", { y1: m.t, y2: H - m.b, stroke: "var(--axis)", "stroke-width": 1, visibility: "hidden" }, svg);
+    const hit = el("rect", { x: m.l - 10, y: m.t, width: W - m.l - m.r + 20, height: H - m.t - m.b, fill: "transparent" }, svg);
+    plot.appendChild(svg);
+    const tip = tooltip(box);
+    function at(evt) {
+      const r = svg.getBoundingClientRect(), sx = (evt.clientX - r.left) * W / r.width;
+      let best = 0;
+      px.forEach((_, i) => { if (Math.abs(X(i) - sx) < Math.abs(X(best) - sx)) best = i; });
+      cross.setAttribute("x1", X(best)); cross.setAttribute("x2", X(best)); cross.setAttribute("visibility", "visible");
+      const b = box.getBoundingClientRect();
+      tip.show(`<div class="t">${cfg.xname(best)}</div>` + cfg.series.map(s => row(s.color, s.name, fmt(s.v[best]) + " bp" + (s.se ? ` ± ${s.se[best].toFixed(1).replace(".", ",")}` : ""))).join(""),
+        evt.clientX - b.left, evt.clientY - b.top);
+    }
+    hit.addEventListener("pointermove", at);
+    hit.addEventListener("pointerleave", () => { tip.hide(); cross.setAttribute("visibility", "hidden"); });
+  }
+
+  // Grouped columns with ±1 se whiskers; rounded data end, square at the zero baseline.
+  function columns(box, cfg) {
+    const plot = box.querySelector(".plot");
+    const W = 720, H = 300, m = { l: 52, r: 16, t: 26, b: 42 };
+    const all = cfg.series.flatMap(s => s.v.flatMap((v, i) => [v + s.se[i], v - s.se[i]]));
+    const yt = ticks(Math.min(0, ...all), Math.max(0, ...all), 6);
+    const y0 = yt[0], y1 = yt[yt.length - 1];
+    const Y = v => m.t + (H - m.t - m.b) * (1 - (v - y0) / (y1 - y0));
+    const n = cfg.groups.length, band = (W - m.l - m.r) / n, bw = 24, gap = 2;
+    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": cfg.aria });
+    yt.forEach(v => {
+      el("line", { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), stroke: v === 0 ? "var(--axis)" : "var(--rule)", "stroke-width": 1 }, svg);
+      el("text", { x: m.l - 8, y: Y(v) + 4, "text-anchor": "end" }, svg).textContent = fmt(v, 0).replace("+", "");
+    });
+    el("text", { x: 12, y: m.t - 10, "text-anchor": "start" }, svg).textContent = "bp per trade";
+    // Divider between development and hold-out.
+    const mid = m.l + band * 2;
+    el("line", { x1: mid, x2: mid, y1: m.t - 14, y2: H - m.b, stroke: "var(--axis)", "stroke-width": 1 }, svg);
+    el("text", { x: mid - 8, y: m.t - 4, "text-anchor": "end" }, svg).textContent = "sviluppo";
+    el("text", { x: mid + 8, y: m.t - 4, "text-anchor": "start" }, svg).textContent = "hold-out";
+    const tip = tooltip(box);
+    cfg.groups.forEach((g, gi) => {
+      const cx = m.l + band * gi + band / 2;
+      el("text", { x: cx, y: H - m.b + 20, "text-anchor": "middle" }, svg).textContent = g;
+      const k = cfg.series.length, total = k * bw + (k - 1) * gap;
+      cfg.series.forEach((s, si) => {
+        const v = s.v[gi], se = s.se[gi];
+        const x = cx - total / 2 + si * (bw + gap), yz = Y(0), yv = Y(v), r = Math.min(4, Math.abs(yv - yz));
+        const d = v >= 0
+          ? `M${x},${yz} V${yv + r} Q${x},${yv} ${x + r},${yv} H${x + bw - r} Q${x + bw},${yv} ${x + bw},${yv + r} V${yz} Z`
+          : `M${x},${yz} V${yv - r} Q${x},${yv} ${x + r},${yv} H${x + bw - r} Q${x + bw},${yv} ${x + bw},${yv - r} V${yz} Z`;
+        el("path", { d, fill: s.color }, svg);
+        el("line", { x1: x + bw / 2, x2: x + bw / 2, y1: Y(v + se), y2: Y(v - se), stroke: "var(--fg2)", "stroke-width": 1.25 }, svg);
+        [v + se, v - se].forEach(w => el("line", { x1: x + bw / 2 - 4, x2: x + bw / 2 + 4, y1: Y(w), y2: Y(w), stroke: "var(--fg2)", "stroke-width": 1.25 }, svg));
+        if (s.label) {
+          const ly = v >= 0 ? Y(v + se) - 6 : Y(v - se) + 15;
+          el("text", { x: x + bw / 2, y: ly, "text-anchor": "middle", class: "lab" }, svg).textContent = fmt(v);
+        }
+        const hit = el("rect", { x: x - 2, y: Math.min(Y(v + se), yz) - 6, width: bw + 4, height: Math.abs(Y(v - se) - Y(v + se)) + Math.abs(yv - yz) + 12, fill: "transparent" }, svg);
+        hit.addEventListener("pointermove", evt => {
+          const b = box.getBoundingClientRect();
+          tip.show(`<div class="t">${g}</div>` + row(s.color, s.name, `${fmt(v)} ± ${se.toFixed(1).replace(".", ",")}`) + `<div class="r"><span>trade</span><span>${s.n[gi]}</span></div>`, evt.clientX - b.left, evt.clientY - b.top);
+        });
+        hit.addEventListener("pointerleave", () => tip.hide());
+      });
+    });
+    plot.appendChild(svg);
+  }
+
+  const th = [0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60];
+  lineChart(document.getElementById("c-threshold"), {
+    aria: "bp per trade per soglia: rientro contro riferimento, periodo di sviluppo",
+    xpos: th, xlab: th.map(v => v.toFixed(2).replace(".", ",")), xtitle: "soglia a",
+    xname: i => "soglia " + th[i].toFixed(2).replace(".", ","),
+    series: [
+      { name: "Rientro", short: "Rientro", color: "var(--s1)", v: [8.2, 5.2, 1.8, 12.9, 15.0, 5.3, -9.4, -44.3, -27.1] },
+      { name: "Riferimento", short: "Riferimento", color: "var(--s2)", v: [-3.2, -4.9, -11.0, -1.0, 1.7, -3.6, -21.9, -70.6, -30.7] }
+    ]
+  });
+  const hrs = [0.25, 0.5, 1, 2, 3, 6, 12, 24, 48];
+  lineChart(document.getElementById("c-path"), {
+    aria: "trade medio del rientro a 0,40 per ore dopo l'ingresso, tutti, rialzo e ribasso",
+    xpos: hrs.map(Math.log2), xlab: ["15m", "30m", "1h", "2h", "3h", "6h", "12h", "24h", "48h"], xtitle: "ore dopo l'ingresso",
+    xname: i => ["15 minuti", "30 minuti", "1 ora", "2 ore", "3 ore", "6 ore", "12 ore", "24 ore", "48 ore"][i] + " dopo l'ingresso",
+    series: [
+      { name: "Tutti i trade", short: "Tutti", color: "var(--s1)", v: [-1.4, -1.9, -0.8, -0.3, 0.2, 5.2, 3.9, -13.2, -2.1], se: [0.6, 0.9, 1.5, 1.8, 2.2, 3.1, 4.2, 6.0, 8.4] },
+      { name: "Rialzo", short: "Rialzo", color: "var(--s2)", v: [-1.1, -1.8, -0.7, -3.2, -3.8, -3.6, -9.3, -25.4, -14.4] },
+      { name: "Ribasso", short: "Ribasso", color: "var(--s3)", v: [-1.8, -2.0, -1.0, 3.5, 5.4, 16.8, 21.3, 2.6, 14.1] }
+    ]
+  });
+  const wins = [6, 12, 24, 48];
+  lineChart(document.getElementById("c-turns"), {
+    aria: "bp per trade per finestra: svolte della predizione e dell'RSI col senno di poi, svolte della predizione confermate",
+    xpos: wins.map(Math.log2), xlab: wins.map(String), xtitle: "finestra (barre per lato)",
+    xname: i => "finestra " + wins[i] + " barre",
+    series: [
+      { name: "Predizione, senno di poi", short: "Predizione", color: "var(--s1)", v: [128.5, 172.4, 229.9, 298.3] },
+      { name: "RSI, senno di poi", short: "RSI", color: "var(--s2)", v: [120.6, 163.5, 212.9, 271.0] },
+      { name: "Predizione, confermate", short: "Confermate", color: "var(--s3)", v: [-0.4, 0.7, -3.0, 2.4] }
+    ]
+  });
+  const lag = [0, 1, 2, 3, 4, 5, 6];
+  lineChart(document.getElementById("c-delay"), {
+    aria: "bp per trade per ritardo in barre: svolte della predizione a finestra 12, 24 e 48",
+    xpos: lag, xlab: lag.map(String), xtitle: "ritardo (barre da 15 minuti)",
+    xname: i => "ritardo " + lag[i] + (lag[i] === 1 ? " barra" : " barre"),
+    series: [
+      { name: "Finestra 12", short: "Fin. 12", color: "var(--s1)", v: [172.4, 120.8, 94.1, 74.9, 61.4, 49.5, 37.8] },
+      { name: "Finestra 24", short: "Fin. 24", color: "var(--s2)", v: [229.9, 180.6, 154.5, 135.8, 122.0, 110.4, 98.6] },
+      { name: "Finestra 48", short: "Fin. 48", color: "var(--s3)", v: [298.3, 252.6, 227.3, 210.2, 198.1, 186.4, 175.9] }
+    ]
+  });
+  const lagN = [0, 1, 2, 3, 4, 6, 12];
+  lineChart(document.getElementById("c-null"), {
+    aria: "bp per trade per ritardo: svolte del prezzo reale, del prezzo con segni a caso e la formula 1 meno radice di d su w",
+    xpos: lagN, xlab: lagN.map(String), xtitle: "ritardo (barre da 15 minuti)",
+    xname: i => "ritardo " + lagN[i] + (lagN[i] === 1 ? " barra" : " barre"),
+    series: [
+      { name: "Prezzo reale", short: "Reale", color: "var(--s1)", v: [201.4, 147.1, 118.1, 96.5, 81.5, 53.5, 7.1] },
+      { name: "Prezzo con segni a caso", short: "Casuale", color: "var(--s2)", v: [218.1, 160.2, 127.6, 104.3, 85.5, 55.8, 4.2] },
+      { name: "Formula 1 − √(d/12)", short: "Formula", color: "var(--s3)", v: [201.4, 143.3, 119.2, 100.7, 85.1, 59.0, 0.0] }
+    ]
+  });
+  columns(document.getElementById("c-folds"), {
+    aria: "bp per trade per fold: rientro, riferimento e stop con solo segnale opposto, con errore standard",
+    groups: ["Fold 1 · giu–set 2025", "Fold 2 · set 2025–gen 2026", "Fold 3 · gen–mag 2026", "Fold 4 · mag–set 2026"],
+    series: [
+      { name: "Rientro", color: "var(--s1)", v: [-1.8, 32.8, -44.8, -40.9], se: [13.2, 15.3, 20.0, 19.3], n: [441, 415, 320, 302], label: true },
+      { name: "Riferimento", color: "var(--s2)", v: [-6.0, 9.9, -31.3, -18.7], se: [13.0, 14.7, 19.6, 19.8], n: [441, 415, 320, 302], label: false },
+      { name: "Stop 6 ATR + solo segnale opposto", color: "var(--s3)", v: [14.6, 38.3, -32.6, -20.1], se: [10.1, 12.1, 13.9, 11.0], n: [441, 415, 320, 302], label: false }
+    ]
+  });
+})();
+</script>
+
+</body>
+</html>
