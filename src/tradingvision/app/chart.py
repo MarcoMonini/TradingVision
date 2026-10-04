@@ -18,9 +18,20 @@ The rule is any of `strategy`'s, through `strategy.play`, so the page draws exac
 priced: the band (long under -t, short over +t), re-entry (long when the prediction comes back above
 -t, short when it comes back below +t), momentum (the band's sides swapped), and the prediction's own
 turns at confirmation. A fifth, the turns found in hindsight, reads the future and is drawn under a
-warning, as the diagnostic it is. Each reads the prediction or its mean over the last k bars, can
-take every trade on the other side, and can trade only while BTC is under its 200-day mean, read on
-Alpaca's daily closes fetched with the candles.
+warning, as the diagnostic it is. Two more are `detect`'s turn detectors: the zigzag, which flips
+when the prediction comes back h from its extreme, and Shiryaev's, which flips when the probability
+that the leg has turned reaches p, on the parameters fitted on v2's development folds. Each reads
+the prediction or its mean over the last k bars, can take every trade on the other side, and can
+trade only while BTC is under its 200-day mean, read on Alpaca's daily closes fetched with the
+candles.
+
+Every rule reads the model's raw output (`swing.predict_frame`'s `raw`), the units the study
+measured its thresholds and detectors in; the line drawn against the label is the same output
+calibrated onto the label's +-1, where 0.40 raw is 0.575. Under the label the page draws what the
+rule reads, with a mark wherever the rule asked for a side, and for a detector the quantity it
+decides on: the posterior and the prior hazard, or the retracement. With the prediction's own turns
+switched on, each mark is judged against them, filled on the right side of the leg and hollow when
+the leg it bet against was still running.
 
 The rule's exits are `stops`, and they are controls rather than settings: a take profit and a stop
 loss, each named in ATR or in round trips or in a flat percentage, each with its own answer to
@@ -48,7 +59,7 @@ import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 
-from tradingvision import metrics, stops, strategy, threshold
+from tradingvision import detect, metrics, stops, strategy, threshold
 from tradingvision.data.candles import SYMBOLS, TIMEFRAMES, get_candles
 from tradingvision.data.pivots import EXTREMA_WINDOW, find_pivots
 from tradingvision.data.target import SMOOTHING, leg_significance, swing_leg_target
@@ -107,6 +118,9 @@ MAX_DAYS = 365
 # below. Together +37.2 bp a trade on folds 1-2 and -22.8 on the hold-out, folds 3-4 — the default
 # is the best the study found, not a rule that earns (`HANDOFF.md` §17).
 RULE = "reentry"
+# In the head's raw units, `swing.predict_frame`'s `raw`, which is what the study read. Until
+# 2026-10-04 the page laid every threshold on the calibrated line instead, where 0.40 is 0.28 raw:
+# the calibration stretches the head's output onto the label's +-1 (0.40 raw is 0.575 calibrated).
 THRESHOLD = 0.40
 STOP = ("atr", 6.0)
 # How a barrier width is spelled in the sidebar. The identifiers are `stops.KINDS` and the labels
@@ -127,8 +141,14 @@ RULES = {
     "momentum": "Momentum: long over +t, short under −t",
     "confirmed": "Turns of the prediction, at confirmation",
     "turns": "Turns of the prediction, in hindsight (reads the future)",
+    "zigzag": "Zigzag: flip when the prediction comes back h from its extreme",
+    "shiryaev": "Bayesian detector: flip when P(the leg has turned) ≥ p",
 }
 BANDED = ("band", "reentry", "momentum")
+# The two turn detectors of `detect`. Shiryaev's runs on `detect.V2_FIT`, fitted on v2's own
+# predictions, so it is offered only on v2; the zigzag has nothing fitted and runs on either model.
+DETECTORS = ("zigzag", "shiryaev")
+POSTERIORS = (0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.98, 0.99)  # the thresholds `detect --shiryaev` measured
 TURN_WINDOWS = (6, 12, 24, 48)  # the grid `strategy --hindsight` measured
 MEANS = (1, 2, 4, 8)  # the moving averages `strategy --smooth` measured
 # Days of BTC daily closes the filter needs before the first bar on screen: the 200-day mean, and
@@ -360,6 +380,7 @@ def chart(
     pred=None,
     trades=None,
     exits=None,
+    panels=None,
 ) -> go.Figure:
     # Price, then the label under it on the same x: the target is only readable against the leg it
     # describes. Volume next, it is context rather than subject, and the features under everything.
@@ -367,15 +388,19 @@ def chart(
     # log_return around 1e-3, so sharing an axis would flatten the second into the zero line.
     groups = [(fam, [c for c in cols if c in feats.columns]) for fam, cols in FAMILIES.items()]
     groups = [g for g in groups if g[1]]
+    # `panels` are the rule's own rows, under the label: what the rule reads and, for a detector,
+    # the quantities it decides on. Each is a dict of `title`, `traces`, `hlines` and `range`.
+    panels = panels or []
+    n = len(panels)
     fig = make_subplots(
-        rows=3 + len(groups),
+        rows=3 + n + len(groups),
         cols=1,
         shared_xaxes=True,
         # Weights, normalised by Plotly: with all seven families open a fixed share for the candles
         # would squeeze every feature row into a line.
-        row_heights=[3, 1.5, 1] + [1.5] * len(groups),
+        row_heights=[3, 1.5] + [1.4] * n + [1] + [1.5] * len(groups),
         vertical_spacing=0.02,
-        subplot_titles=["", "", ""] + [f.title() for f, _ in groups],
+        subplot_titles=["", ""] + [panel["title"] for panel in panels] + [""] + [f.title() for f, _ in groups],
     )
     fig.add_trace(
         go.Candlestick(
@@ -486,7 +511,9 @@ def chart(
                     # Forward filled: a pair that did not trade in a bar has no candle there,
                     # and the decision still happened at the last price the panel carried.
                     y=df.close.reindex(at, method="ffill"),
-                    mode="markers+text",
+                    # The words only while they can be read: past a few dozen marks they pile into
+                    # a smear over the candles, and the colour and the shape already say it.
+                    mode="markers+text" if len(moved) <= 40 else "markers",
                     # Big, filled, and outlined in the page's own background: a bright triangle
                     # sitting on a green candle needs the halo to read as a separate mark.
                     marker=dict(size=16, color=color, symbol=shape, line=dict(width=1.5, color="#0e1117")),
@@ -521,8 +548,16 @@ def chart(
                 row=1,
                 col=1,
             )
-    fig.add_trace(go.Bar(x=df.index, y=df.volume, name="volume", marker_color="#888", showlegend=False), row=3, col=1)
-    for row, (_, cols) in enumerate(groups, start=4):
+    for row, panel in enumerate(panels, start=3):
+        for trace in panel["traces"]:
+            fig.add_trace(trace, row=row, col=1)
+        for y, color in panel.get("hlines", []):
+            fig.add_hline(y=y, line=dict(width=1, dash="dash", color=color), row=row, col=1)
+        fig.update_yaxes(range=panel.get("range"), zeroline=True, zerolinecolor="#555", row=row, col=1)
+    fig.add_trace(
+        go.Bar(x=df.index, y=df.volume, name="volume", marker_color="#888", showlegend=False), row=3 + n, col=1
+    )
+    for row, (_, cols) in enumerate(groups, start=4 + n):
         for col in cols:
             fig.add_trace(
                 go.Scatter(x=feats.index, y=feats[col], mode="lines", name=LABELS[col], line=dict(width=1)),
@@ -547,7 +582,7 @@ def chart(
     for y in (-1, 1):
         fig.add_hline(y=y, line=dict(width=1, dash="dot", color="#bbb"), row=2, col=1)
     fig.update_layout(
-        height=800 + 150 * len(groups),
+        height=800 + 150 * len(groups) + 170 * n,
         legend=dict(orientation="h", y=-0.05, font=dict(size=10)),
         showlegend=bool(groups),
         xaxis_rangeslider_visible=False,
@@ -558,6 +593,134 @@ def chart(
         uirevision=uirevision,
     )
     return fig
+
+
+def rule_panels(
+    raw: pd.Series,
+    signal: pd.Series,
+    turns: pd.Series | None,
+    trace: pd.DataFrame | None,
+    rule: str,
+    band: float,
+    posterior: float,
+    h: float,
+) -> list[dict]:
+    """The rule's rows: what it reads, where it asked for a side, and what a detector decided on.
+
+    `signal` is what the rule handed `stops.walk`, +1 long and -1 short. A marker goes where it asks
+    for the other side from the last one it asked for, which is a decision even when a stop or the
+    filter left the position flat — the triangles on the candles are what was executed, these are
+    what was asked. `turns` are the input's own centred turns, which read the future; with them
+    each marker is judged, filled on the right side of the leg it was taken in and hollow when the
+    leg it bet against was still running, as `detect.kinds` judges an alarm.
+    """
+    asked = signal.replace(0.0, np.nan)
+    asked = asked[asked.notna() & (asked != asked.ffill().shift())]
+    known = turns[turns != 0] if turns is not None else None
+    traces = [
+        go.Scatter(
+            x=raw.index,
+            y=raw,
+            mode="lines",
+            line=dict(width=1.5, color="#e67e22"),
+            name="rule input",
+            showlegend=False,
+            hovertemplate="%{x}<br>raw prediction %{y:.3f}<extra></extra>",
+        )
+    ]
+    if known is not None:
+        traces.append(
+            go.Scatter(
+                x=known.index,
+                y=raw.reindex(known.index),
+                mode="markers",
+                # Mid grey: it has to read on the light theme and on the dark one alike.
+                marker=dict(size=11, symbol="circle-open", color="#7f8c8d", line=dict(width=2)),
+                name="turn in hindsight",
+                showlegend=False,
+                hovertemplate="%{x}<br>a turn of the prediction, known only bars later<extra></extra>",
+            )
+        )
+    for side, color, shape, word in (
+        (1.0, "#2ecc71", "triangle-up", "long"),
+        (-1.0, "#e74c3c", "triangle-down", "short"),
+    ):
+        at = asked.index[asked == side]
+        right = np.ones(len(at), dtype=bool)
+        if known is not None:
+            j = known.index.searchsorted(at, side="right") - 1
+            right = (j >= 0) & (known.to_numpy()[np.maximum(j, 0)] == side)
+        for ok in (True, False):
+            pick = at[right == ok]
+            traces.append(
+                go.Scatter(
+                    x=pick,
+                    y=raw.reindex(pick),
+                    mode="markers",
+                    marker=dict(size=11, symbol=shape if ok else f"{shape}-open", color=color, line=dict(width=1.5)),
+                    name=word,
+                    showlegend=False,
+                    hovertemplate="%{x}<br>asks for "
+                    + word
+                    + ("" if ok else ", against a leg still running")
+                    + "<extra></extra>",
+                )
+            )
+    panels = [
+        {
+            "title": "What the rule reads — the raw prediction — and where it asked for a side",
+            "traces": traces,
+            "hlines": [(band, "#888"), (-band, "#888")] if rule in BANDED else [],
+        }
+    ]
+    if rule == "shiryaev":
+        panels.append(
+            {
+                "title": "P(the leg has turned), and the prior hazard of a turn on each bar",
+                "traces": [
+                    go.Scatter(
+                        x=trace.index,
+                        y=trace.posterior,
+                        mode="lines",
+                        line=dict(width=1.5, color="#9b59b6"),
+                        name="P(turned)",
+                        showlegend=False,
+                        hovertemplate="%{x}<br>P(turned) %{y:.2f}<extra></extra>",
+                    ),
+                    go.Scatter(
+                        x=trace.index,
+                        y=trace.hazard,
+                        mode="lines",
+                        line=dict(width=1, color="#95a5a6"),
+                        name="hazard",
+                        showlegend=False,
+                        hovertemplate="%{x}<br>prior hazard %{y:.3f}<extra></extra>",
+                    ),
+                ],
+                "hlines": [(posterior, "#9b59b6")],
+                "range": [0, 1.02],
+            }
+        )
+    if rule == "zigzag" or (rule == "shiryaev" and h > 0):
+        panels.append(
+            {
+                "title": "How far the prediction has come back from the extreme of the leg",
+                "traces": [
+                    go.Scatter(
+                        x=trace.index,
+                        y=trace.retrace,
+                        mode="lines",
+                        line=dict(width=1.5, color="#3498db"),
+                        name="retracement",
+                        showlegend=False,
+                        hovertemplate="%{x}<br>back %{y:.3f} from the extreme<extra></extra>",
+                    )
+                ],
+                "hlines": [(h, "#3498db")],
+                "range": [0, max(float(trace.retrace.max()), h) * 1.1],
+            }
+        )
+    return panels
 
 
 def main() -> None:
@@ -666,6 +829,7 @@ def main() -> None:
     # it is not. The one exception is the hindsight-turns rule, which reads the future on purpose
     # and is labelled as the diagnostic it is.
     ruling, rule, band, turn_window, mean, inverse, filtered = False, "band", THRESHOLD, 12, 1, False, False
+    h, posterior, prior, hindsight = 0.2, POSTERIORS[0], True, False
     take, stop, after_stop, after_take, tie_stop, trail = None, None, stops.AFTER[0], stops.AFTER[0], True, False
     if swinging or v2_drawn:
         ruling = st.sidebar.toggle(
@@ -674,11 +838,48 @@ def main() -> None:
             help="the rules of `strategy`, on the prediction: one code path for the page and for the study",
         )
         if ruling:
-            rule = st.sidebar.selectbox("Rule", list(RULES), index=list(RULES).index(RULE), format_func=RULES.get)
+            offered = [r for r in RULES if r != "shiryaev" or v2_drawn]
+            rule = st.sidebar.selectbox("Rule", offered, index=offered.index(RULE), format_func=RULES.get)
             if rule in BANDED:
                 # A constant and not a quantile: a quantile would move with the model, and a
                 # constant is what a live system has to commit to.
-                band = st.sidebar.slider("Threshold ±t", 0.05, 1.0, THRESHOLD, 0.05)
+                band = st.sidebar.slider(
+                    "Threshold ±t", 0.05, 1.0, THRESHOLD, 0.05, help="on the raw prediction, the study's units"
+                )
+            elif rule == "zigzag":
+                h = st.sidebar.slider(
+                    "Retracement h",
+                    0.05,
+                    0.8,
+                    0.2,
+                    0.05,
+                    help="a short when the raw prediction has fallen h from its highest since the last signal, a long "
+                    "when it has risen h from its lowest. The study measured 0.05 to 0.8; at 0.2 it finds 97% of the "
+                    "turns about 5 bars late, with 0.31 false signals a turn",
+                )
+            elif rule == "shiryaev":
+                posterior = st.sidebar.select_slider(
+                    "Signal when P(the leg has turned) reaches",
+                    POSTERIORS,
+                    value=POSTERIORS[0],
+                    help="the posterior is updated on every bar from the prior hazard and the bar's move. At 0.5 the "
+                    "study found 79% of the turns, 3 bars late at the median, with 0.35 false signals a turn",
+                )
+                prior = st.sidebar.toggle(
+                    "Prior from the level and the leg's age",
+                    value=True,
+                    help="the chance of a turn on the next bar rises with how far the prediction has gone and how old "
+                    "the leg is; off, every bar gets the same chance and the moves alone decide",
+                )
+                h = st.sidebar.slider(
+                    "…and only after a retracement of",
+                    0.0,
+                    0.5,
+                    0.0,
+                    0.05,
+                    help="0 is off. Above 0 the signal also waits for the zigzag's condition: fewer false signals, "
+                    "each one dearer, and every right one later",
+                )
             else:
                 turn_window = st.sidebar.select_slider(
                     "Turn window (bars each side)",
@@ -688,11 +889,20 @@ def main() -> None:
                     "At confirmation the rule acts that many bars after the turn; in hindsight it acts on the "
                     "turn itself, which nobody can know at the time",
                 )
-            mean = st.sidebar.select_slider(
-                "Mean of the prediction (bars)",
-                MEANS,
-                value=1,
-                help="the rule reads the mean of the last k predictions; 1 is the raw prediction",
+            if rule not in DETECTORS:
+                # The detectors were fitted on the prediction bar by bar; a mean would change the very
+                # increments their evidence is measured on.
+                mean = st.sidebar.select_slider(
+                    "Mean of the prediction (bars)",
+                    MEANS,
+                    value=1,
+                    help="the rule reads the mean of the last k predictions; 1 is the raw prediction",
+                )
+            hindsight = st.sidebar.toggle(
+                "Judge the signals against the prediction's turns",
+                value=rule in DETECTORS,
+                help="marks the prediction's own turns at 12 bars, which are known only 12 bars after them, and "
+                "draws every signal filled when it was on the right side of the leg and hollow when it was not",
             )
             inverse = st.sidebar.toggle(
                 "Invert every trade", value=False, help="every long becomes a short and every short a long"
@@ -807,32 +1017,40 @@ def main() -> None:
     # calibrated back onto the label's own range on the way out, so the two lines in the second
     # row share a unit as well as an axis. The map is fitted on the train period and stored in the
     # checkpoint; it is monotone, so it moved no decision on the way here.
-    pred = None
+    pred, raw = None, None
     if v2_line is not None:
-        pred = v2_line.label.rename("prediction")
+        pred, raw = v2_line.label.rename("prediction"), v2_line.raw
     elif swung is not None:
-        pred = swung.label.rename("prediction")
+        pred, raw = swung.label.rename("prediction"), swung.raw
     # The rule, on one pair lifted into the one-symbol panel every `strategy` function reads. Same
     # signals, same state machine (`stops.walk`), same filter and same fill arithmetic as the study's
     # tables — there is no second implementation here to drift away from the one that was priced.
-    rule_pos, rule_pnl, fills, on = None, None, None, None
+    rule_pos, rule_pnl, fills, on, panels, judged = None, None, None, None, None, None
     if ruling and filtered:
         daily = st.session_state.get("btc_daily")
         if daily is None or daily.empty:
             st.info("The BTC filter needs BTC's daily closes: press **Fetch candles** again.")
             filtered = False
-    if ruling and pred is not None and pred.notna().any():
-        bars = threshold.on_one(df[list(stops.OHLC)].reindex(pred.index))
+    # The rule reads the head's raw output and not the calibrated line drawn against the label: the
+    # raw output is what the study measured every threshold and every detector on.
+    if ruling and raw is not None and raw.notna().any():
+        live = raw.dropna()
+        bars = threshold.on_one(df[list(stops.OHLC)].reindex(live.index))
         if filtered:
             on = strategy.below(bars.index, daily=st.session_state.btc_daily.close)
-        got = strategy.play(
-            threshold.on_one(pred),
+        trace = None
+        if rule == "zigzag":
+            trace = detect.zigzag(live.to_numpy(), h, trace=True).set_axis(live.index)
+        elif rule == "shiryaev":
+            trace = detect.shiryaev(live.to_numpy(), detect.V2_FIT, posterior, not prior, h, trace=True)
+            trace = trace.set_axis(live.index)
+        if trace is not None:
+            sig = threshold.on_one(-trace.alarm if inverse else trace.alarm)
+        else:
+            sig = strategy.signal(threshold.on_one(live), rule, band, turn_window, mean, inverse)
+        got = strategy.walked(
+            sig,
             bars,
-            rule,
-            band,
-            turn_window,
-            mean,
-            inverse,
             take=take,
             stop=stop,
             after=after_stop,
@@ -843,6 +1061,12 @@ def main() -> None:
             atr_window=feature_window,
         )
         rule_pos, rule_pnl, fills = got[0].droplevel(1), got[1].droplevel(1), got[2].reset_index(drop=True)
+        turns = strategy.turn_events(threshold.on_one(live), strategy.WINDOW) if hindsight else None
+        if turns is not None and (turns != 0).any():
+            judged = detect.match(sig, turns, live.index[-1] + pd.Timedelta("1D"))
+        if turns is not None:
+            turns = turns.droplevel(1)
+        panels = rule_panels(live, sig.droplevel(1), turns, trace, rule, band, posterior, h)
 
     if normalized and len(feats.columns):
         # Fitted on the window on screen, which is what a chart can do and not what the dataset
@@ -969,10 +1193,19 @@ def main() -> None:
             "after the turn, when it is confirmed",
             "turns": f"long at each low of the prediction and short at each high, found with **{turn_window} bars** "
             "on each side and acted on at the turn itself",
+            "zigzag": f"short when the prediction has fallen **{h:.2f}** from its highest since the last signal, long "
+            f"when it has risen **{h:.2f}** from its lowest",
+            "shiryaev": f"long or short when the probability that the leg has turned reaches **{posterior:.2f}**, "
+            + (
+                "with a prior from the prediction's level and the leg's age"
+                if prior
+                else "with the same prior on every bar"
+            )
+            + (f", and only once the prediction has come back **{h:.2f}** from its extreme" if h else ""),
         }[rule]
         st.caption(
             f"Rule: {entry}"
-            + (f", read on the mean of the last **{mean}** predictions" if mean > 1 else "")
+            + (f", read on the mean of the last **{mean}** predictions" if mean > 1 and rule not in DETECTORS else "")
             + (", **every trade inverted**" if inverse else "")
             + (
                 f", only while BTC's last daily close is under its 200-day mean — it was on "
@@ -1000,11 +1233,38 @@ def main() -> None:
                 if take or stop
                 else ""
             )
+            + "Every rule reads the model's raw output, drawn in the row under the label with the signals it "
+            "produced; the line against the label is the same output calibrated onto the label's ±1. "
             + f"Fee {FEE * 100:.2f}% per side on every entry and exit. Filled triangles on the candles are the "
             f"rule's fills; hollow squares are the oracle's pivots, which read {leg_window} bars of future. One "
             f"pair over one window is one path: `strategy` prices the same rules over ETH, BTC and SOL and "
             f"sixteen months, where no rule earned in both halves."
         )
+        if judged is not None:
+            st.caption(
+                f"**The signals against the prediction's own turns**, centred at {strategy.WINDOW} bars, so each is "
+                f"known {strategy.WINDOW} bars after it and the last {strategy.WINDOW} bars have none yet: "
+                + (
+                    f"{judged['found'] * 100:.0f}% of the turns on screen got a signal on their side, a median "
+                    f"{judged['delay_med']:.0f} bars late, "
+                    if judged["found"]
+                    else "no turn on screen got a signal on its side, "
+                )
+                + f"and there were {judged['false']:.2f} signals a turn against a leg still running — the hollow "
+                "triangles. "
+                + (
+                    "Shiryaev's detector runs on the parameters fitted on v2's development folds for ETH, BTC and "
+                    "SOL; over sixteen months at 0.5 the study found 79% of the turns and earned nothing: right "
+                    "signals +31 bp a trade, false ones −80."
+                    if rule == "shiryaev"
+                    else ""
+                )
+                + (
+                    "Over sixteen months the study's zigzag at 0.2 found 97% of the turns and earned −0.3 bp a trade."
+                    if rule == "zigzag"
+                    else ""
+                )
+            )
 
     st.plotly_chart(
         chart(
@@ -1019,6 +1279,7 @@ def main() -> None:
             pred,
             rule_pos if rule_pos is not None else swing_pos,
             fills if fills is not None else None,
+            panels,
         ),
         use_container_width=True,
         key="chart",

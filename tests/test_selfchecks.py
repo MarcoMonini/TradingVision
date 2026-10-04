@@ -65,3 +65,10 @@ def test_swing_selfcheck():
 def test_detect_selfcheck():
     """`detect` keeps its checks in a function: its `__main__` runs the detectors on v2's predictions."""
     detect._selfcheck()
+
+
+def test_futures_selfcheck():
+    """`data.futures` keeps its checks in a function: its `__main__` downloads the dumps."""
+    from tradingvision.data import futures
+
+    futures._selfcheck()

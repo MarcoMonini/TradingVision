@@ -679,13 +679,20 @@ def play(
 ) -> tuple[pd.Series, pd.Series, pd.DataFrame]:
     """Any rule of the study on any prediction: `(pos, pnl, trades)`.
 
-    The one entry point the chart page calls, so the rule it draws is the rule priced here: the
-    rule's signal on the prediction's `smooth`-bar mean (`threshold.smoothed`), flipped side for
-    side when `inverse`, through `walked` with whatever barriers, policy and filter `kw` carries.
+    The rule's `signal` through `walked` with whatever barriers, policy and filter `kw` carries.
     `turns` reads the future and is a diagnostic, never a strategy.
     """
+    return walked(signal(pred, rule, a, window, smooth, inverse), bars, **kw)
+
+
+def signal(
+    pred: pd.Series, rule: str = "band", a: float = 0.40, window: int = WINDOW, smooth: int = 1, inverse: bool = False
+) -> pd.Series:
+    """What `play` hands `walked`: the rule's signal on the prediction's `smooth`-bar mean
+    (`threshold.smoothed`), flipped side for side when `inverse`. The chart page calls it and then
+    `walked`, so the rule it draws, and the signals it marks, are the rule priced here."""
     sig = SIGNALS[rule](threshold.smoothed(pred, smooth), a, window)
-    return walked(-sig if inverse else sig, bars, **kw)
+    return -sig if inverse else sig
 
 
 def hindsight(

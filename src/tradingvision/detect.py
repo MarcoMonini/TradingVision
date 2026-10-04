@@ -77,6 +77,18 @@ trades of two to four bars: a thirtieth of a 50 bp round trip. Right after an al
 noisy around a true turn as around a false one, so a level that closes the false ones closes the
 true ones too.
 
+**Funding, open interest, positioning, taker flow and the book add nothing at the alarm**
+(`--futures`, `data.futures`). Fifteen futures columns at Shiryaev 0.5's alarms, signed into the
+leg: on their own a logistic reaches AUC 0.546 on development and 0.525 on the hold-out, with the
+sixteen columns above 0.639 / 0.624 against their 0.637 / 0.629 alone, and every quintile still
+makes -11 to +6 bp a trade. Against the forward return, unconditionally, two keep their sign on all
+four folds: the open interest's 12-bar change signed by the price's 12-bar move, against the 48-bar
+return (+0.111 / +0.039 / +0.077 / +0.001 by fold: a move made with new positions keeps going), and
+the book's imbalance within 5% over the last hour against the 12-bar return (+0.025 / +0.059 /
++0.006 / +0.042). Both are the size of v2's own IC (-0.031 / -0.039 at 12 bars) and neither is a
+strategy: at an IC of 0.05 a trade on the 48-bar return is worth of the order of 10 bp, against a
+20-50 bp round trip.
+
 **Why: optional stopping.** If the log price is a martingale, E[p_T - p_S | F_S] = 0 for any two
 stopping times S <= T, so a trade a causal detector opens and closes has zero expected gross
 whatever its delay and false alarms. The hindsight table does not contradict it because τ + d,
@@ -107,6 +119,7 @@ null standard deviations and changes sign between folds.
     uv run python -m tradingvision.detect --shiryaev 0.5 0.7 0.9 --both 0.1 0.2 0.3 0.4 --split
     uv run python -m tradingvision.detect --features 0.5
     uv run python -m tradingvision.detect --sl 1 2 3 4 6
+    uv run python -m tradingvision.detect --futures   # needs `python -m tradingvision.data.futures` first
 """
 
 from __future__ import annotations
@@ -118,23 +131,40 @@ import numpy as np
 import pandas as pd
 
 from tradingvision import legs, strategy
+from tradingvision.data import futures
 from tradingvision.data.binance import load as candles
 from tradingvision.strategy import fold_of, hold, plain, turn_events
 
 POST = 6  # the first bars of a leg that make the post-turn increment distribution
+# `fit` on v2's walk-forward predictions, development folds only (ETH, BTC, SOL, 2025-06-01 to
+# 2026-01-28), in the head's raw units. Fixed here so the chart page, which has no store, runs the
+# detector the study measured; `main` refits it and refuses to run if the two have drifted apart.
+V2_FIT = {
+    "beta": np.array([-3.3566, 3.2917, 0.9579, -0.106, -2.131]),
+    "m0": 0.0265,
+    "s0": 0.0773,
+    "m1": -0.0489,
+    "s1": 0.0758,
+    "base": 0.0505,
+}
 
 
-def zigzag(v: np.ndarray, h: float) -> np.ndarray:
-    """+1 when `v` has risen `h` above its low since the last alarm, -1 when it fell `h` below its high."""
-    out = np.zeros(len(v))
+def zigzag(v: np.ndarray, h: float, trace: bool = False) -> np.ndarray | pd.DataFrame:
+    """+1 when `v` has risen `h` above its low since the last alarm, -1 when it fell `h` below its high.
+
+    `trace` returns, bar by bar, the alarm, the leg the detector believed it was in before the bar
+    (+1 up, -1 down, 0 not yet known) and how far `v` had come back from that leg's extreme.
+    """
+    out, leg, back = np.zeros(len(v)), np.zeros(len(v)), np.zeros(len(v))
     side, hi, lo = 0, v[0], v[0]
     for t in range(len(v)):
         hi, lo = max(hi, v[t]), min(lo, v[t])
+        leg[t], back[t] = side, (hi - v[t]) if side > 0 else (v[t] - lo) if side < 0 else max(hi - v[t], v[t] - lo)
         if side >= 0 and hi - v[t] >= h:
             out[t], side, lo = -1, -1, v[t]
         elif side <= 0 and v[t] - lo >= h:
             out[t], side, hi = 1, 1, v[t]
-    return out
+    return pd.DataFrame({"alarm": out, "leg": leg, "retrace": back}) if trace else out
 
 
 def _design(z: np.ndarray, age: np.ndarray) -> np.ndarray:
@@ -186,7 +216,9 @@ def fit(x: pd.Series, cut: pd.Timestamp, window: int = strategy.WINDOW) -> dict:
     }
 
 
-def shiryaev(v: np.ndarray, p: dict, threshold: float, flat: bool = False, h: float = 0.0) -> np.ndarray:
+def shiryaev(
+    v: np.ndarray, p: dict, threshold: float, flat: bool = False, h: float = 0.0, trace: bool = False
+) -> np.ndarray | pd.DataFrame:
     """+1 / -1 alarms on one asset: alarm when P(the leg has turned | the bars so far) >= `threshold`.
 
     Shiryaev's recursion with a hazard that moves: the prior is last bar's posterior plus the
@@ -194,8 +226,11 @@ def shiryaev(v: np.ndarray, p: dict, threshold: float, flat: bool = False, h: fl
     After an alarm the side flips and the leg starts again at age 0. `flat` holds the hazard at its
     mean, which leaves the evidence alone to decide. `h` asks the zigzag's question as well: the
     alarm also waits for the series to have come back `h` from its extreme since the last alarm.
+    `trace` returns, bar by bar, the alarm, the leg the detector believed it was in, the posterior,
+    the prior hazard and the retracement from the leg's extreme.
     """
     out = np.zeros(len(v))
+    rows = np.full((len(v), 4), np.nan)
     side, pi, age, ext = 1.0, 0.0, 0.0, v[0]
     b, m0, s0, m1, s1 = p["beta"], p["m0"], p["s0"], p["m1"], p["s1"]
     for t in range(1, len(v)):
@@ -211,9 +246,12 @@ def shiryaev(v: np.ndarray, p: dict, threshold: float, flat: bool = False, h: fl
         pi = prior * l1 / (prior * l1 + (1 - prior) * l0)
         age += 1
         ext = max(ext, side * v[t])
+        rows[t] = side, pi, rho, ext - side * v[t]
         if pi >= threshold and ext - side * v[t] >= h:
             out[t], side, pi, age = -side, -side, 0.0, 0.0
             ext = side * v[t]
+    if trace:
+        return pd.DataFrame(rows, columns=["leg", "posterior", "hazard", "retrace"]).assign(alarm=out)
     return out
 
 
@@ -332,6 +370,7 @@ def at_alarm(found: pd.Series, x: pd.Series, close: pd.Series, truth: pd.Series,
                 {
                     "symbol": sym,
                     "when": xv.index[i],
+                    "side": side,
                     "true": int(j >= 0 and t.iloc[j] == kind),
                     "gross": kind * (lc[end] - lc[i]),
                     "level": side * v[i - 1],
@@ -359,7 +398,7 @@ def separate(f: pd.DataFrame, cut: pd.Timestamp) -> tuple[pd.DataFrame, tuple[fl
     a true and a false alarm each make there.
     """
     dev = (f.when < cut).to_numpy()
-    cols = [c for c in f.columns if c not in ("symbol", "when", "true", "gross")]
+    cols = [c for c in f.columns if c not in ("symbol", "when", "side", "true", "gross")]
     y = f.true.to_numpy()
     rows = []
     for col in cols:
@@ -395,6 +434,104 @@ def separate(f: pd.DataFrame, cut: pd.Timestamp) -> tuple[pd.DataFrame, tuple[fl
     return one, both, by
 
 
+def _zscore(v: pd.Series, n: int = 96 * 30) -> pd.Series:
+    """`v` against its own trailing month: the level of a ratio that drifts, made comparable over time."""
+    return (v - v.rolling(n, min_periods=n // 3).mean()) / v.rolling(n, min_periods=n // 3).std()
+
+
+def futures_columns(symbol: str, close: pd.Series) -> pd.DataFrame:
+    """`data.futures`' columns as signals at each 15m bar of one symbol, every one causal.
+
+    Funding and the two long/short ratios as levels against their month, the open interest as its
+    change over 12 and 48 bars and signed by the price's 12-bar move (open interest rising with the
+    move is new positions behind it), the taker flow over 12 bars, the futures-spot basis, the book's
+    imbalance within 1, 2 and 5% and its 4-bar mean, the liquidity within 1%.
+    """
+    f = futures.load(symbol)
+    c = close.reindex(f.index)
+    oi, basis = np.log(f.oi.where(f.oi > 0)), np.log(f.fut_close / c)
+    out = pd.DataFrame(
+        {
+            "funding": f.funding,
+            "funding_z": _zscore(f.funding),
+            "oi_12": oi.diff(12),
+            "oi_48": oi.diff(48),
+            "oi_with_price_12": np.sign(np.log(c).diff(12)) * oi.diff(12),
+            "top_ls_z": _zscore(np.log(f.top_ls)),
+            "top_ls_12": np.log(f.top_ls).diff(12),
+            "ls_z": _zscore(np.log(f.ls)),
+            "taker_ls_12": f.taker_ls.rolling(12).mean(),
+            "taker_buy_12": f.taker_buy.rolling(12).mean() - 0.5,
+            "basis_z": _zscore(basis),
+            "basis_12": basis.diff(12),
+            "depth1_z": _zscore(f.depth1),
+        },
+        index=f.index,
+    )
+    for k in futures.LEVELS:
+        out[f"book{k}"] = f[f"book{k}"]
+        out[f"book{k}_4"] = f[f"book{k}"].rolling(4).mean()
+    return out
+
+
+def forward_ic(columns: dict, pred: pd.Series, close: pd.Series, horizons=(12, 48)) -> pd.DataFrame:
+    """Rank IC of every column with the forward log return, by fold, mean over the assets.
+
+    Sampled every `h` bars so no two returns overlap; v2's prediction and an RSI at 12 are rows too,
+    the yardstick a new column has to clear.
+    """
+    rows = []
+    rsi = strategy.rsi(pred.index)
+    for sym, cols in columns.items():
+        c = np.log(close.xs(sym, level=1))
+        x = cols.reindex(c.index).assign(**{"v2 prediction": pred.xs(sym, level=1), "rsi 12": rsi.xs(sym, level=1)})
+        fold = fold_of(c.index)
+        for h in horizons:
+            fwd = c.shift(-h) - c
+            for col in x.columns:
+                for k in range(1, strategy.FOLDS + 1):
+                    m = (np.arange(len(c)) % h == 0) & (fold == k) & x[col].notna().to_numpy() & fwd.notna().to_numpy()
+                    ic = np.corrcoef(x[col][m].rank(), fwd[m].rank())[0, 1]
+                    rows.append({"column": col, "h": h, "fold": k, "ic": ic})
+    ic = pd.DataFrame(rows).groupby(["column", "h", "fold"]).ic.mean().unstack("fold")
+    return ic.assign(
+        dev=ic[[1, 2]].mean(axis=1), holdout=ic[[3, 4]].mean(axis=1), same_sign=np.sign(ic).nunique(axis=1) == 1
+    )
+
+
+def futures_at_alarm(f: pd.DataFrame, columns: dict) -> pd.DataFrame:
+    """`at_alarm`'s rows with the futures columns at the alarm, signed into the leg it closes.
+
+    Over the leg (from the alarm before to this one): the change in open interest and in the top
+    traders' ratio, the mean taker flow; at the alarm: funding, the ratios, the basis, the book.
+    """
+    rows = []
+    for r in f.itertuples():
+        F, C = futures.load(r.symbol), columns[r.symbol]
+        t, start = r.when, r.when - pd.Timedelta(minutes=15 * int(r.age))
+        leg = F.loc[start:t]
+        rows.append(
+            {
+                "oi_leg": np.log(F.oi.get(t, np.nan) / F.oi.get(start, np.nan)),
+                "oi_4": np.log(F.oi.get(t, np.nan) / F.oi.shift(4).get(t, np.nan)),
+                "funding_s": r.side * F.funding.get(t, np.nan),
+                "funding_z_s": r.side * C.funding_z.get(t, np.nan),
+                "top_ls_s": r.side * C.top_ls_z.get(t, np.nan),
+                "top_ls_leg": r.side * np.log(F.top_ls.get(t, np.nan) / F.top_ls.get(start, np.nan)),
+                "ls_s": r.side * C.ls_z.get(t, np.nan),
+                "taker_leg": r.side * leg.taker_ls.mean(),
+                "taker_4": r.side * F.taker_ls.rolling(4).mean().get(t, np.nan),
+                "takerbuy_leg": r.side * (leg.taker_buy.mean() - 0.5),
+                "basis_s": r.side * C.basis_z.get(t, np.nan),
+                "book1_s": r.side * F.book1.get(t, np.nan),
+                "book2_s": r.side * F.book2.get(t, np.nan),
+                "book5_s": r.side * F.book5.get(t, np.nan),
+                "depth1_leg": F.depth1.get(t, np.nan) - leg.depth1.mean(),
+            }
+        )
+    return pd.concat([f.reset_index(drop=True), pd.DataFrame(rows)], axis=1).dropna()
+
+
 def _selfcheck() -> None:
     """A noiseless saw with known turns: each detector finds every one, at the delay its rule implies."""
     i = np.arange(24 * 6 + 1)
@@ -428,6 +565,7 @@ def main() -> None:
     ap.add_argument("--split", action="store_true", help="where each detector's P&L goes, on the prediction")
     ap.add_argument("--features", type=float, metavar="P", help="what tells Shiryaev P's true alarms from false ones")
     ap.add_argument("--sl", type=float, nargs="+", metavar="ATR", help="Shiryaev 0.5's trades with these stops")
+    ap.add_argument("--futures", action="store_true", help="funding, open interest, flow and book depth (data.futures)")
     args = ap.parse_args()
 
     _selfcheck()
@@ -435,6 +573,20 @@ def main() -> None:
     series = {"prediction": pred, "rsi 12": strategy.rsi(pred.index)}
     pd.set_option("display.width", 250)
     truth = turn_events(pred, strategy.WINDOW)
+    if args.futures:
+        columns = {sym: futures_columns(sym, close.xs(sym, level=1)) for sym in strategy.ASSETS}
+        print("rank IC with the forward log return, mean of ETH/BTC/SOL, one sample every h bars\n")
+        print(forward_ic(columns, pred, close).round(3).sort_values(["h", "dev"]).to_string())
+        f = at_alarm(alarms(pred, shiryaev, fit(pred, cut), 0.5), pred, close, truth)
+        g = futures_at_alarm(f, columns)
+        new = [c for c in g.columns if c not in f.columns]
+        for label, table in (("the futures columns", g[["symbol", "when", "side", "true", "gross"] + new]), ("all", g)):
+            one, (dev, holdout), by = separate(table, cut)
+            print(f"\nshiryaev 0.5's alarms, {label}: logistic AUC {dev:.3f}, hold-out {holdout:.3f}\n")
+            if label != "all":
+                print(one.round(3).to_string() + "\n")
+            print(by.round(2).to_string())
+        return
     if args.features:
         f = at_alarm(alarms(pred, shiryaev, fit(pred, cut), args.features), pred, close, truth)
         one, (dev, holdout), by = separate(f, cut)
@@ -465,6 +617,9 @@ def main() -> None:
         runs = [(f"zigzag {h}", alarms(x, zigzag, h)) for h in args.zigzag or []]
         if args.shiryaev:
             p = fit(x, cut)
+            if name == "prediction":
+                # The page runs `V2_FIT`; if the predictions moved under it, the page and this table differ.
+                assert all(np.allclose(p[k], V2_FIT[k], atol=1e-3) for k in V2_FIT), "refit V2_FIT"
             print(name, {k: np.round(v, 4) for k, v in p.items()})
             for flat in (False, True) if args.flat else (False,):
                 runs += [

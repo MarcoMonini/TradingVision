@@ -944,6 +944,12 @@ del 2026-07-01.
   all'allarme, logistica sullo sviluppo: AUC 0,637, hold-out 0,629, dal 53% al 83% di allarmi veri
   fra il quintile peggiore e il migliore. Ma salendo di quintile gli allarmi veri guadagnano meno
   (+49 → +25 bp) e i falsi perdono di più (−68 → −99): ogni quintile fa fra −6,6 e +6,5.
+- **Funding, open interest, posizionamento, flusso dei taker e book non aggiungono niente
+  all'allarme** (`--futures`, `data/futures.py`, dump dei futures Binance). Da soli AUC 0,546 /
+  0,525, con le sedici di prima 0,639 / 0,624; ogni quintile fra −11 e +6 bp. Contro il rendimento
+  futuro due colonne hanno lo stesso segno nei quattro fold: l'open interest dietro al movimento
+  contro il rendimento a 48 barre (+0,075 / +0,039) e lo squilibrio del book entro il 5% contro
+  quello a 12 (+0,042 / +0,024). Piccole quanto l'IC della v2, e non ancora una strategia.
 - **Lo stop loss taglia falsi e veri insieme** (`--sl`). A 1 ATR i falsi allarmi passano da −80 a
   −42 bp, le rilevazioni giuste da +31 a +17; nessuno stop da 1 a 6 ATR esce da −1,4 / +1,6 bp.
 - Le altre prove (media breve, take profit, soglie alte, filtro di volatilità, momentum, inversa
@@ -961,6 +967,12 @@ Ogni regola nuova sui fold 3-4 sarebbe scelta su dati già visti.
   predizione; `walked` è `stops.walk` su qualunque segnale, con filtro.
 - `detect.py`: zigzag (CUSUM) e rivelatore di Shiryaev sulle svolte, stimati sullo sviluppo, con
   `match` (trovate, ritardo, falsi allarmi), `book` e `split`; self-check registrato.
+- `chart.py`, 2026-10-04: **le regole leggono l'uscita grezza della v2** (`swing.predict_frame`
+  espone `raw`), le unità dello studio. Prima la pagina metteva le soglie sulla linea calibrata,
+  dove 0,40 vale 0,28 grezzo: il "rientro a 0,40" della pagina non era quello dello studio. Nuove
+  regole: zigzag e rivelatore di Shiryaev (`detect.V2_FIT`), con le righe di ciò che la regola legge,
+  dei segnali chiesti (pieni se dalla parte giusta della gamba, vuoti se falsi, giudicati sulle
+  svolte col senno di poi) e della probabilità o del ritracciamento su cui il rivelatore decide.
 - `chart.py`: la sezione **Trading rule** passa da `strategy.play` invece che da `stops.run`.
   Regole: banda, rientro, momentum, svolte alla conferma, svolte col senno di poi (sotto un avviso).
   Poi soglia o finestra delle svolte, media della predizione, inversione, filtro BTC sui giornalieri
@@ -982,7 +994,8 @@ Ogni regola nuova sui fold 3-4 sarebbe scelta su dati già visti.
 2. **Un'informazione che preveda la gamba successiva, non la posizione in quella corrente.**
    Riconoscere prima la svolta è stato provato (`detect.py`) e rende zero: il valore delle svolte è
    la geometria del rumore. Le colonne di esaurimento sono le uniche col segno giusto sul rendimento
-   futuro in tutti i fold. Una scala più lunga (gambe a 24-48 barre) richiede di riaddestrare la v2.
+   futuro in tutti i fold. Funding, open interest e book sono stati provati e non bastano. Una
+   scala più lunga (gambe a 24-48 barre) richiede di riaddestrare la v2.
 3. Le CLI di `threshold`, `stops` e `swingrule` leggono ancora il formato di `gru` (§16, punto 1).
    `strategy` legge già quello di `swing`.
 

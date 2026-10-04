@@ -48,6 +48,7 @@ Pipeline modules, each a `python -m` entry point, in the order they depend on ea
 
 ```bash
 uv run python -m tradingvision.data.binance          # fill data/ first; everything reads it
+uv run python -m tradingvision.data.futures          # funding, open interest, taker flow, book depth (BTC/ETH/SOL)
 uv run python -m tradingvision.oracle                # step 0: fixes EXTREMA_WINDOW
 uv run python -m tradingvision.swing --timeframe 4h --baseline        # step 7: the tradable swing rule
 uv run python -m tradingvision.swing --timeframe 15m --window 12 --smoothing 0.5 --inputs reduced --steps 48 --stage label --test-start 2025-06 --save data/swing-v2.pt  # Swing Leg Position v2
