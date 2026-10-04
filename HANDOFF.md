@@ -1015,16 +1015,30 @@ Ogni regola nuova sui fold 3-4 sarebbe scelta su dati già visti.
 - Un bug trovato e corretto durante lo studio: `--filter` veniva ignorato dalla CLI con `--tp`. Le
   misure con filtro passavano da `--candidates`, che lo applicava, e non ne sono toccate.
 
-**Aperto.**
+**Dove si è arrivati, 2026-10-04.** Nessuna regola sulla predizione v2 guadagna in modo stabile fra
+i fold al netto della commissione. Le uniche righe positive in tutti e quattro i fold sono i due
+rivelatori con il filtro sul livello che chiudono sulle svolte dentro ±L: zigzag 0,2 oltre 0,5
+(+12,5 / +19,2 bp per trade) e Shiryaev 0,5 oltre 0,6 (+15,8 / +28,4), scelti sul solo sviluppo, con
+meno di cento trade per periodo e sotto i 50 bp di andata e ritorno. L'hold-out dei fold 3-4 è
+consumato. Il report dello studio, passo per passo e con i grafici, è `strategy_study.html`.
 
-1. **Il walk-forward della v2 dal 2023-01** (`--test-start 2023-01`): circa 3,7 anni fuori campione e
-   due cicli, per provare regole nuove con selezione a rotazione sui fold precedenti. Non è stato
-   cronometrato.
-2. **Un'informazione che preveda la gamba successiva, non la posizione in quella corrente.**
-   Riconoscere prima la svolta è stato provato (`detect.py`) e rende zero: il valore delle svolte è
-   la geometria del rumore. Le colonne di esaurimento sono le uniche col segno giusto sul rendimento
-   futuro in tutti i fold. Funding, open interest e book sono stati provati e non bastano. Una
-   scala più lunga (gambe a 24-48 barre) richiede di riaddestrare la v2.
-3. Le CLI di `threshold`, `stops` e `swingrule` leggono ancora il formato di `gru` (§16, punto 1).
+**Aperto, in ordine.**
+
+1. **Il walk-forward della v2 dal 2023-01** (`swing --test-start 2023-01`): circa 3,7 anni fuori
+   campione e due cicli. Il primo uso è verificare le due righe sopra con i parametri congelati
+   (detector, h o p, L, chiusura sulle svolte dentro ±L, stop 6 ATR), senza riselezionarli; poi
+   provare regole nuove con selezione a rotazione sui fold precedenti. Non è stato cronometrato.
+2. **L'esecuzione maker.** A ~20 bp di andata e ritorno le due righe sarebbero vicine al pareggio,
+   a 50 no. Ordini limite con il riempimento simulato sul book sono un lavoro a sé.
+3. **Un modello sul rendimento futuro che unisca futures e v2.** Colonne: open interest dietro al
+   movimento a 4 / 12 / 24 barre, squilibrio del book entro il 5%, base, funding, flusso dei taker,
+   più la predizione v2 come input. Prima una ridge in walk-forward contro il rendimento a 48 barre;
+   una rete solo se l'IC regge sopra 0,1 in ogni fold (oggi le colonne singole stanno fra 0,03 e
+   0,09). Servono più dei sedici mesi di futures scaricati (`data.futures`), e riaprire un'etichetta
+   sul rendimento è una decisione: quelle predittive sono archiviate in `OLD/`.
+4. **Una scala più lunga**: la v2 riaddestrata su gambe di 24-48 barre. Il rumore cresce come
+   σ√w, una deriva come μ·w, la commissione resta fissa.
+5. **Le colonne di esaurimento** (`legs.exhaustion`), le uniche col segno giusto sul rendimento
+   futuro in tutti i fold, mai provate come ingresso di una regola su questa predizione.
+6. Le CLI di `threshold`, `stops` e `swingrule` leggono ancora il formato di `gru` (§16, punto 1).
    `strategy` legge già quello di `swing`.
-

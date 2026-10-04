@@ -24,6 +24,10 @@ anything about the label, the windows, or the protocol** — most "obvious" idea
 number that killed them. Keep it current when a step lands; the git history reads as a sequence of
 measurements, and commit subjects are written that way ("Four branches lose to one, on every fold").
 
+`strategy_study.html` (Italian) is the report of the trading-rule study on v2's predictions
+(`strategy`, `detect`, HANDOFF §17), step by step with its tables and charts, ending on what is
+still open. A copy of a page that was published while the study ran; edit it here now.
+
 `swing_leg_pipeline.html` (Italian) explains the training pipeline of the `swing_leg_target` models.
 Part I is a lesson for a reader new to the subject, one concept per chapter with charts on real
 candles; Part II walks the pipeline stage by stage with the schema of every frame, tensor and
