@@ -132,20 +132,36 @@ STOP = ("atr", 6.0)
 WIDTHS = {"off": "off", "atr": "× ATR at entry", "fee": f"× round trip ({FEE * 200:.2f}%)", "pct": "% of price"}
 # What each policy does after a barrier fires, spelled as the sentence rather than the identifier.
 POLICIES = {
-    "opposite": "wait for the opposite signal",
-    "reverse": "reverse into the other side",
-    "rearm": "wait for any fresh signal",
+    "opposite": "wait for the other side",
+    "reverse": "reverse at once",
+    "rearm": "wait for any signal",
 }
-# The rules of `strategy`, spelled as what each does. The identifiers are `strategy.SIGNALS`.
+# The rules of `strategy` by name, short enough for the sidebar; `RULES_HELP` says what each does.
 RULES = {
-    "band": "Band: long under −t, short over +t",
-    "reentry": "Re-entry: long back above −t, short back below +t",
-    "momentum": "Momentum: long over +t, short under −t",
-    "confirmed": "Turns of the prediction, at confirmation",
-    "turns": "Turns of the prediction, in hindsight (reads the future)",
-    "zigzag": "Zigzag: flip when the prediction comes back h from its extreme",
-    "shiryaev": "Bayesian detector: flip when P(the leg has turned) ≥ p",
+    "band": "Band",
+    "reentry": "Re-entry",
+    "momentum": "Momentum",
+    "confirmed": "Turns, once confirmed",
+    "turns": "Turns, at the turn (future)",
+    "zigzag": "Zigzag turn detector",
+    "shiryaev": "Bayesian turn detector",
 }
+# The strategy picker's help: one line each, in the order of `RULES`.
+RULES_HELP = """Every strategy reads the model's raw prediction, about −1 at a low of the leg and +1 at a high,
+and holds each side until its next signal.
+
+- **Band**: long while the prediction is below −t, short while it is above +t: it bets that an
+  extreme reverts.
+- **Re-entry**: waits for the prediction to come back inside: long when it rises back above −t,
+  short when it falls back below +t.
+- **Momentum**: the band reversed, it follows the extreme.
+- **Turns, once confirmed**: long at each low of the prediction and short at each high, acted on
+  when the turn is certain, some bars later.
+- **Turns, at the turn**: the same turns acted on where they happen. Impossible live: it shows
+  the ceiling, not a strategy.
+- **Zigzag detector**: calls a turn when the prediction pulls back h from its extreme.
+- **Bayesian detector**: calls a turn when the probability that the leg has ended reaches p.
+  v2 only, the model it was fitted on."""
 BANDED = ("band", "reentry", "momentum")
 # The two turn detectors of `detect`. Shiryaev's runs on `detect.V2_FIT`, fitted on v2's own
 # predictions, so it is offered only on v2; the zigzag has nothing fitted and runs on either model.
@@ -330,7 +346,7 @@ def book(
     return fig
 
 
-def barrier(name: str, key: str, start: tuple[str, float] | None = None) -> tuple[str, float] | None:
+def barrier(name: str, key: str, start: tuple[str, float] | None = None, help: str = "") -> tuple[str, float] | None:
     """One sidebar barrier — its unit and its multiple — as the spec `stops` takes, or `None`.
 
     Two widgets and not one, because the unit is the question and the number is only the answer to
@@ -346,7 +362,12 @@ def barrier(name: str, key: str, start: tuple[str, float] | None = None) -> tupl
     """
     kinds = list(WIDTHS)
     kind = st.sidebar.selectbox(
-        name, kinds, index=kinds.index(start[0]) if start else 0, format_func=WIDTHS.get, key=f"{key}-kind"
+        name,
+        kinds,
+        index=kinds.index(start[0]) if start else 0,
+        format_func=WIDTHS.get,
+        key=f"{key}-kind",
+        help=help,
     )
     if kind == "off":
         return None
@@ -354,7 +375,7 @@ def barrier(name: str, key: str, start: tuple[str, float] | None = None) -> tupl
     # carry the number across a change of unit, and 3 is a textbook stop in ATR and a very
     # different barrier in percent — the kind of silent reinterpretation a reader cannot see.
     size = st.sidebar.number_input(
-        f"{name}, {WIDTHS[kind]}",
+        f"{name} distance, {WIDTHS[kind]}",
         min_value=0.1,
         max_value=20.0,
         value=start[1] if start and start[0] == kind else SIZE[kind],
@@ -687,13 +708,13 @@ def rule_panels(
                 marker=dict(size=9, symbol="x-thin", color="#7f8c8d", line=dict(width=2, color="#7f8c8d")),
                 name="dropped",
                 showlegend=False,
-                hovertemplate="%{x}<br>a signal inside ±L: closes the position<extra></extra>",
+                hovertemplate="%{x}<br>a turn inside ±L: closes the position, opens nothing<extra></extra>",
             )
         )
     lines = [band, -band] if rule in BANDED else [level, -level] if level else []
     panels = [
         {
-            "title": "What the rule reads — the raw prediction — and where it asked for a side",
+            "title": "What the strategy reads — the raw prediction — and where it asked for a side",
             "traces": traces,
             "hlines": [(y, "#888") for y in lines],
         }
@@ -754,6 +775,7 @@ def main() -> None:
 
     # The tradable pairs of the training universe, and a typed one as well. Alpaca's coverage
     # moves, so a pair it stops serving draws the warning below and nothing else breaks.
+    st.sidebar.subheader("Candles")
     symbol = st.sidebar.selectbox(
         "Pair",
         SYMBOLS,
@@ -761,8 +783,21 @@ def main() -> None:
         help="the pairs of the training universe that Alpaca lists, quoted in USD. Type any other Alpaca pair "
         "(`BASE/USD`) to draw it — the page says so if the venue serves nothing for it.",
     )
-    timeframe = st.sidebar.selectbox("Timeframe", list(TIMEFRAMES), index=1)
-    days = st.sidebar.slider("History (days)", 1, MAX_DAYS, 30)
+    timeframe = st.sidebar.selectbox(
+        "Timeframe",
+        list(TIMEFRAMES),
+        index=1,
+        help="the length of one candle. Each model draws only on the timeframe it was trained on: v2 on 15m, "
+        "the older swing model on 4h",
+    )
+    days = st.sidebar.slider(
+        "Days of history",
+        1,
+        MAX_DAYS,
+        30,
+        help="how far back to download from Alpaca. A model needs some bars before its first prediction, so a "
+        "short window can come back without one",
+    )
     # The v2 swing model, and the checkbox that selects it. Ticked, it pins the label to the two
     # numbers the checkpoint was trained on — the sliders below show them and cannot move them —
     # and it moves the features' window with the pivots', because v2 moved both together. Offered
@@ -770,11 +805,14 @@ def main() -> None:
     v2_at = saved(swing, V2_CHECKPOINT)
     v2_card = load_swing_model(str(v2_at), v2_at.stat().st_mtime)[1] if v2_at else None
     v2 = False
+    st.sidebar.subheader("Model and label")
     if v2_card:
         v2 = st.sidebar.checkbox(
             V2,
             value=True,
-            help=f"{v2_at.name}: {v2_card['timeframe']} candles, pivots and features at {v2_card['window']} bars, "
+            help="the model the strategy study traded. On, it also fixes the two label settings below to the ones "
+            f"it was trained on. {v2_at.name}: {v2_card['timeframe']} candles, "
+            f"pivots and features at {v2_card['window']} bars, "
             f"time weight {v2_card['smoothing']}, {len(v2_card['inputs'])} inputs x {v2_card['steps']} bars, "
             f"trained to {v2_card['test_start']}",
         )
@@ -788,13 +826,19 @@ def main() -> None:
     # The label's two knobs. 0.7 is a starting value for the time weight: 1.0 is a pure time ramp
     # between pivots, 0.0 follows price alone.
     smoothing = st.sidebar.slider(
-        "Target smoothing (time weight)", 0.0, 1.0, v2_card["smoothing"] if v2 else SMOOTHING, 0.1, disabled=v2
+        "Label: time weight",
+        0.0,
+        1.0,
+        v2_card["smoothing"] if v2 else SMOOTHING,
+        0.1,
+        disabled=v2,
+        help="how the label travels from one pivot to the next: 0 follows the price, 1 is a straight line in time",
     )
     # The pivots the label ramps between. `EXTREMA_WINDOW = 24` is calibrated in `oracle` on the
     # hindsight P&L of the legs; v2 moved it to 12. The features stay on 24 whatever this says
     # unless v2 is ticked: moving the label's pivots does not rebuild the columns a model reads.
     leg_window = st.sidebar.slider(
-        "Leg window (label pivots)",
+        "Label: pivot window (bars)",
         4,
         96,
         v2_card["window"] if v2 else EXTREMA_WINDOW,
@@ -803,22 +847,38 @@ def main() -> None:
         help=(
             f"fixed by {V2}: the pivots and the features both at its window"
             if v2
-            else "bars the pivot detector needs clear on both sides"
+            else "a pivot is the highest or lowest close within this many bars on each side"
         ),
     )
     # Off shows the flat +/-1 labelling, which the weighting is meant to be read against. v2 was
     # trained on the weighted one, so under it the switch is not offered.
-    significance = True if v2 else st.sidebar.toggle("Weight pivots by leg significance", value=True)
+    significance = (
+        True
+        if v2
+        else st.sidebar.toggle(
+            "Label: shrink the small legs",
+            value=True,
+            help="on, each pivot is scaled by how far its leg moved against what the volatility alone would have "
+            "moved in the same time: a real leg keeps about ±0.9, a leg of noise drops to about ±0.4. Off, every "
+            "pivot is ±1",
+        )
+    )
     # A toggle and not a 29-item checklist. Off: the candle features the swing models read — the
     # columns of `swing.REDUCED` that `features` computes; its leg-state and exhaustion columns come
     # from `legs` and are not drawn here.
+    st.sidebar.subheader("Feature rows")
     full = st.sidebar.toggle(
-        f"All {len(COLUMNS)} candidates",
+        f"Show all {len(COLUMNS)} feature columns",
         value=swing is None,
-        help="off: the candle features of `REDUCED`, the cut the swing models read",
+        help="off, only the candle features the swing models read (`REDUCED`)",
     )
     picked = COLUMNS if full or swing is None else [c for c in COLUMNS if c in swing.REDUCED]
-    normalized = st.sidebar.toggle("Normalized", value=True, help="clip((x - median) / IQR, ±5) × 0.1")
+    normalized = st.sidebar.toggle(
+        "Put the features on one scale",
+        value=True,
+        help="each column as clip((x − median) / IQR, ±5) × 0.1, measured on the window on screen, so every row "
+        "reads on the same axis",
+    )
 
     # The swing model of step 7, `swing.pt`. Drawn only on the timeframe it was fitted on: its
     # inputs are windows of that bar and nothing rescales them between one bar and another.
@@ -837,9 +897,10 @@ def main() -> None:
         st.sidebar.caption(f"The swing model reads **{swing_card['timeframe']}** candles.")
     else:
         swinging = st.sidebar.toggle(
-            "Swing trades",
+            "Draw the 4h swing model",
             value=True,
-            help=f"{swing_at.name}, stage {swing_card['stage']}, trained to {swing_card['test_start']}",
+            help=f"the step-7 model and its trades. {swing_at.name}, stage {swing_card['stage']}, "
+            f"trained to {swing_card['test_start']}",
         )
 
     # v2 draws on the timeframe it was fitted on and nowhere else, like every model here.
@@ -857,111 +918,151 @@ def main() -> None:
     h, posterior, hindsight, level = 0.2, POSTERIORS[0], False, 0.0
     take, stop, after_stop, after_take, tie_stop, trail = None, None, stops.AFTER[0], stops.AFTER[0], True, False
     if swinging or v2_drawn:
+        st.sidebar.subheader("Trading strategy")
         ruling = st.sidebar.toggle(
-            "Trading rule",
+            "Trade the prediction",
             value=True,
-            help="the rules of `strategy`, on the prediction: one code path for the page and for the study",
+            help="runs a strategy on the model's prediction and draws its signals, its trades on the candles and "
+            "its returns, with the same code the study priced (`strategy`, `detect`)",
         )
         if ruling:
             offered = [r for r in RULES if r != "shiryaev" or v2_drawn]
-            rule = st.sidebar.selectbox("Rule", offered, index=offered.index(RULE), format_func=RULES.get)
+            rule = st.sidebar.selectbox(
+                "Strategy", offered, index=offered.index(RULE), format_func=RULES.get, help=RULES_HELP
+            )
             if rule in BANDED:
                 # A constant and not a quantile: a quantile would move with the model, and a
                 # constant is what a live system has to commit to.
                 band = st.sidebar.slider(
-                    "Threshold ±t", 0.05, 1.0, THRESHOLD, 0.05, help="on the raw prediction, the study's units"
+                    "Level ±t",
+                    0.05,
+                    1.0,
+                    THRESHOLD,
+                    0.05,
+                    help="how far from zero the raw prediction has to go before the strategy acts. Legs often turn "
+                    "near ±0.5 rather than at ±1. Re-entry did best at 0.35-0.40 in the study",
                 )
             elif rule == "zigzag":
                 h = st.sidebar.slider(
-                    "Retracement h",
+                    "Pullback that calls a turn (h)",
                     0.05,
                     0.8,
                     0.2,
                     0.05,
-                    help="a short when the raw prediction has fallen h from its highest since the last signal, a long "
-                    "when it has risen h from its lowest. Smaller is earlier and wrong more often: at 0.2 it finds "
-                    "97% of the turns about 5 bars late, with 0.31 false signals a turn",
+                    help="a turn down when the raw prediction has fallen h below its highest point since the last "
+                    "signal, a turn up when it has risen h above its lowest. Smaller is earlier and wrong more "
+                    "often: at 0.2 it finds 97% of the real turns about 5 bars late, with 0.31 false turns for "
+                    "each real one",
                 )
             elif rule == "shiryaev":
                 posterior = st.sidebar.select_slider(
-                    "Signal when P(the leg has turned) reaches",
+                    "Confidence that calls a turn (p)",
                     POSTERIORS,
                     value=POSTERIORS[0],
-                    help="updated on every bar from the bar's move and from how far and how long the leg has run, on "
-                    "the parameters fitted on v2's development folds. Higher is later and wrong less often: at 0.5 "
-                    "it finds 79% of the turns 3 bars late at the median, with 0.35 false signals a turn",
+                    help="on every bar the detector updates the probability that the current leg has ended, from the "
+                    "bar's move and from how far and how long the leg has run (fitted on v2's development folds). "
+                    "A turn is called when it reaches p. Higher is later and wrong less often: at 0.5 it finds "
+                    "79% of the real turns 3 bars late, with 0.35 false turns for each real one",
                 )
             else:
                 turn_window = st.sidebar.select_slider(
-                    "Turn window (bars each side)",
+                    "Bars on each side of a turn",
                     TURN_WINDOWS,
                     value=12,
-                    help="a turn is the highest or lowest prediction of this many bars before and after it. "
-                    "At confirmation the rule acts that many bars after the turn; in hindsight it acts on the "
-                    "turn itself, which nobody can know at the time",
+                    help="a turn is the highest or lowest prediction within this many bars before and after it, "
+                    "so it is certain only that many bars later. Once confirmed, the strategy acts then; at the "
+                    "turn, it acts on the turn itself, which nobody can know at the time",
                 )
             if rule in DETECTORS:
                 # Trade only the turns from an extreme: a long from at or under −L, a short from at or
                 # over +L. Every other signal still says the leg has ended, so it closes the position
                 # and the rule stands flat (`detect.gate`, close=True).
                 level = st.sidebar.slider(
-                    "Trade only the turns past ±L",
+                    "Enter only at turns beyond ±L",
                     0.0,
                     0.8,
                     LEVEL[rule],
                     0.05,
-                    help="a long only where the raw prediction is at or under −L, a short only at or over +L; any "
-                    "other signal closes the position and the rule waits flat. 0 trades every signal",
+                    help="a long opens only at a turn up with the raw prediction at or below −L, a short only at a "
+                    "turn down at or above +L. **Every turn the detector calls closes the open position**, "
+                    "wherever it is: a turn inside ±L closes it and the strategy waits flat (a grey ✕ in the "
+                    "strategy's row). 0 enters at every turn. The defaults, 0.5 for the zigzag and 0.6 for the "
+                    "Bayesian, were chosen on the development folds and were positive on every fold, under the "
+                    "0.5% round trip",
                 )
             if rule not in DETECTORS:
                 # The detectors were fitted on the prediction bar by bar; a mean would change the very
                 # increments their evidence is measured on.
                 mean = st.sidebar.select_slider(
-                    "Mean of the prediction (bars)",
+                    "Average the prediction over k bars",
                     MEANS,
                     value=1,
-                    help="the rule reads the mean of the last k predictions; 1 is the raw prediction",
+                    help="the strategy reads the mean of the last k predictions: smoother and later. 1 reads the "
+                    "prediction as it is",
                 )
             hindsight = st.sidebar.toggle(
-                "Judge the signals against the prediction's turns",
+                "Mark right and wrong signals",
                 value=rule in DETECTORS,
-                help="marks the prediction's own turns at 12 bars, which are known only 12 bars after them, and "
-                "draws every signal filled when it was on the right side of the leg and hollow when it was not",
+                help="drawing only, the trades do not change. Grey circles are the prediction's real turns, known "
+                "12 bars later. A filled signal came after a real turn; a hollow one called a turn while the "
+                "leg was still running",
             )
             inverse = st.sidebar.toggle(
-                "Invert every trade", value=False, help="every long becomes a short and every short a long"
+                "Take the opposite side",
+                value=False,
+                help="every long becomes a short and every short a long: if a strategy loses before fees, its "
+                "opposite should win",
             )
             filtered = st.sidebar.toggle(
-                "Only while BTC is under its 200-day mean",
+                "Trade only while BTC is below its 200-day average",
                 value=False,
-                help="read on yesterday's daily close, so it is causal. Flat while it is off; when it switches on, "
-                "the rule waits for a fresh signal",
+                help="read on yesterday's daily close, so it uses no future. Flat while BTC is above it; when it "
+                "drops below, the strategy waits for a new signal. Chosen on the development folds, it lost on the "
+                "hold-out, so it starts off",
             )
             # The exits. The stop opens on the study's 6 ATR and the take profit off: no take
             # profit tried in the study hurt at every size that fired.
-            stop = barrier("Stop loss", "sl", STOP)
+            st.sidebar.subheader("Exits")
+            stop = barrier(
+                "Stop loss",
+                "sl",
+                STOP,
+                help="closes the position when the price has moved against it by this distance from the entry. "
+                "ATR is the market's typical candle range, so the stop widens with volatility; a round trip is "
+                "the fee there and back; or a flat % of the price. 6 ATR was the best on the development folds",
+            )
             if stop:
                 # The fourth lever, and the only one that changes where the barrier *is* rather
                 # than how far away it starts. Off is the plain stop; on, the same width hangs off
                 # the best price the hold has seen, so the exit turns from "how much am I willing
                 # to lose" into "how much of what I am up am I willing to give back".
                 trail = st.sidebar.toggle(
-                    "Trail the stop",
+                    "Trailing stop",
                     value=False,
-                    help="same width, measured from the hold's best price instead of its entry — "
-                    "it ratchets one way and only off bars that have already closed",
+                    help="the same distance, measured from the best price since the entry instead of the entry: it "
+                    "only moves in the trade's favour, so it keeps part of a gain. It moves on closed candles only",
                 )
                 after_stop = st.sidebar.selectbox(
                     "After a stop",
                     list(POLICIES),
                     format_func=POLICIES.get,
                     key="after-stop",
-                    help="on the study's development folds, waiting for the opposite signal was the best of the three",
+                    help="what the strategy holds after a stop: nothing until a signal on the other side (the best "
+                    "on the development folds), the other side at once, or nothing until any new signal",
                 )
-            take = barrier("Take profit", "tp")
+            take = barrier(
+                "Take profit",
+                "tp",
+                help="closes the position when the price has moved in its favour by this distance from the entry. "
+                "Off by default: no size tried in the study helped",
+            )
             if take:
                 after_take = st.sidebar.selectbox(
-                    "After a take profit", list(POLICIES), format_func=POLICIES.get, key="after-take"
+                    "After a take profit",
+                    list(POLICIES),
+                    format_func=POLICIES.get,
+                    key="after-take",
+                    help="what the strategy holds after a take profit, with the same three choices as after a stop",
                 )
             if take and stop:
                 # The one control that is an assumption rather than a rule: which of two exits
@@ -970,14 +1071,14 @@ def main() -> None:
                 # assumption, and a result that only survives the optimistic one is a result about
                 # the intrabar path rather than about the rule.
                 tie_stop = st.sidebar.selectbox(
-                    "If one candle reaches the stop and the take profit",
-                    ["assume the stop came first (prudent)", "assume the take profit came first (optimistic)"],
-                    help="a candle gives a high and a low but not the order they arrived in, so a bar "
-                    "that reaches both levels has two readings and this picks one. Run it both ways: "
-                    "the gap between them is how much of the result is an assumption about the path.",
-                ).startswith("assume the stop")
+                    "Stop and take profit in the same candle",
+                    ["count it as a stop (prudent)", "count it as a take profit (optimistic)"],
+                    help="a candle shows its high and its low but not which came first, so a candle that touches "
+                    "both levels has two readings and this picks one. The gap between the two is how much of the "
+                    "result rests on that guess",
+                ).startswith("count it as a stop")
     else:
-        st.sidebar.caption("The trading rule needs a **prediction** of the swing leg position, not the label.")
+        st.sidebar.caption("A trading strategy needs a model's **prediction** of the leg, not the label.")
 
     request = (symbol, timeframe, days)
     if st.sidebar.button("Fetch candles", type="primary", use_container_width=True):
@@ -1156,7 +1257,7 @@ def main() -> None:
         # coloured.
         top, bottom = st.columns(3), st.columns(3)
         top[0].metric(
-            "Rule net return",
+            "Strategy net return",
             f"{np.expm1(gross - fees) * 100:+.1f}%",
             f"gross {np.expm1(gross) * 100:+.1f}%, fees {np.expm1(fees) * 100:.1f}%",
             delta_color="off",
@@ -1229,13 +1330,13 @@ def main() -> None:
             f"when it has risen **{h:.2f}** from its lowest",
             "shiryaev": f"long or short when the probability that the leg has turned reaches **{posterior:.2f}**",
         }[rule] + (
-            f"; a long kept only where the prediction is at or under **−{level:.2f}** and a short only at or over "
-            f"**+{level:.2f}**, and any other signal closes the position"
+            f"; it enters long only at a turn at or below **−{level:.2f}** and short only at one at or above "
+            f"**+{level:.2f}**, and every turn it calls closes the open position"
             if level and rule in DETECTORS
             else ""
         )
         st.caption(
-            f"Rule: {entry}"
+            f"Strategy: {entry}"
             + (f", read on the mean of the last **{mean}** predictions" if mean > 1 and rule not in DETECTORS else "")
             + (", **every trade inverted**" if inverse else "")
             + (
@@ -1248,11 +1349,11 @@ def main() -> None:
             + (
                 f"**{describe(stop)} {'trailing ' if trail else ''}stop**"
                 + (" off the best price the hold has seen" if trail else " from the entry price")
-                + f", and after it fires the rule {POLICIES[after_stop]}. "
+                + f", then {POLICIES[after_stop]}. "
                 if stop
                 else "No stop. "
             )
-            + (f"**{describe(take)} take profit**, and after it the rule {POLICIES[after_take]}. " if take else "")
+            + (f"**{describe(take)} take profit**, then {POLICIES[after_take]}. " if take else "")
             + (
                 f"A candle that reaches both levels is read as {'a stop' if tie_stop else 'a take profit'}. "
                 if take and stop
@@ -1326,7 +1427,7 @@ def main() -> None:
             index=rule_pnl.index,
         )
         st.plotly_chart(
-            book(rule_per, rule_pos, fetched[0], "rule position", "buy and hold"),
+            book(rule_per, rule_pos, fetched[0], "strategy position", "buy and hold"),
             use_container_width=True,
             key="rule-book",
         )

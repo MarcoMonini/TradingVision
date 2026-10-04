@@ -995,7 +995,8 @@ Ogni regola nuova sui fold 3-4 sarebbe scelta su dati già visti.
   regole: zigzag e rivelatore di Shiryaev (`detect.V2_FIT`), con le righe di ciò che la regola legge,
   dei segnali chiesti (pieni se dalla parte giusta della gamba, vuoti se falsi, giudicati sulle
   svolte col senno di poi) e della probabilità o del ritracciamento su cui il rivelatore decide.
-- `chart.py`: la sezione **Trading rule** passa da `strategy.play` invece che da `stops.run`.
+- `chart.py`: la sezione **Trading strategy** (fino al 2026-10-04 *Trading rule*) passa da `strategy.play`
+  invece che da `stops.run`.
   Regole: banda, rientro, momentum, svolte alla conferma, svolte col senno di poi (sotto un avviso).
   Poi soglia o finestra delle svolte, media della predizione, inversione, filtro BTC sui giornalieri
   di Alpaca (scaricati con le candele), uscite. Nuove metriche: bp per trade con la commissione di
@@ -1004,7 +1005,9 @@ Ogni regola nuova sui fold 3-4 sarebbe scelta su dati già visti.
   BTC spento dal 2026-10-04: con BTC sopra la media a 200 giorni lasciava la regola flat. Lo
   stesso giorno i rivelatori sono scesi a due controlli, h o p e il livello L: tolti la
   probabilità a priori costante, il ritracciamento combinato, la lettura del livello all'estremo e
-  il segnale scartato ignorato, nessuno dei quali ha mai guadagnato. **Con la v2 l'ATR degli stop è ora a 12 barre,
+  il segnale scartato ignorato, nessuno dei quali ha mai guadagnato. Poi la barra laterale è stata
+  divisa in sezioni (candele, modello ed etichetta, righe delle feature, strategia, uscite) e ogni
+  controllo rinominato per quello che fa, con un aiuto che lo spiega. **Con la v2 l'ATR degli stop è ora a 12 barre,
   la finestra del modello, invece di 24**: gli stessi multipli di ATR possono dare stop diversi
   da prima.
 - Un bug trovato e corretto durante lo studio: `--filter` veniva ignorato dalla CLI con `--tp`. Le
