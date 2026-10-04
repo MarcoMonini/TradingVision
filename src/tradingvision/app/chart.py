@@ -25,8 +25,11 @@ Alpaca's daily closes fetched with the candles.
 The rule's exits are `stops`, and they are controls rather than settings: a take profit and a stop
 loss, each named in ATR or in round trips or in a flat percentage, each with its own answer to
 what the rule holds afterwards — reverse into the other side, stand flat until the opposite
-signal, or stand flat until any fresh crossing. Both barriers are off by default, and off is
-exactly `threshold`'s rule, which is the one the spec priced. A stop fill is marked with an X on
+signal, or stand flat until any fresh crossing. The page opens on the configuration the study's
+development folds converged on — v2, re-entry at 0.40, the BTC filter, a 6 ATR stop and then flat
+until the opposite signal — which is the best the study found and still loses on its hold-out
+(`HANDOFF.md` §17). With both barriers off and no filter, the band is exactly `threshold`'s rule,
+the one the spec priced. A stop fill is marked with an X on
 the candle and at the price it filled at, a take profit with a star; a gap through a level fills
 at the open, so the mark can sit well past the level it was aimed at, and that is the point of
 drawing it at the fill.
@@ -98,19 +101,18 @@ def saved(module: ModuleType | None, name: str | None = None) -> Path | None:
 
 
 MAX_DAYS = 365
-# The rule's default band. Measured, like every other constant here: on `pred-swing-all-15m` (the archived GRU),
-# twenty pairs and fifteen months, |pred| clears 0.5 on 8.3% of the rows, which puts the pair at
-# the 0.917 quantile of the model's own output — 92.7 flips a year per pair against 195.8 at 0.4.
-# It is a starting point and not a tuned value: section 9 of the spec prices the whole grid and
-# every row of it is negative after fees, and the wider band is the default because it is the one
-# the exit rules are read on — a stop only has room to act on a hold the signal does not close
-# first, and at 0.4 the median hold is half as long.
-THRESHOLD = 0.5
+# The rule the page opens on: the combination `strategy`'s development folds (1-2) converged on, on
+# v2's predictions for ETH, BTC and SOL. Re-entry peaked at 0.35-0.40 for every mean tried; the 6 ATR
+# stop with a flat wait for the opposite signal was the best exit; the BTC filter is switched on
+# below. Together +37.2 bp a trade on folds 1-2 and -22.8 on the hold-out, folds 3-4 — the default
+# is the best the study found, not a rule that earns (`HANDOFF.md` §17).
+RULE = "reentry"
+THRESHOLD = 0.40
+STOP = ("atr", 6.0)
 # How a barrier width is spelled in the sidebar. The identifiers are `stops.KINDS` and the labels
 # are the unit each one is a multiple of: ATR is what this market does anyway, the round trip is
-# what the trade costs, and a flat percentage is neither. "off" is first and is the default, so
-# the page opens on `threshold`'s own rule — the one the spec priced — and every barrier is an
-# explicit act.
+# what the trade costs, and a flat percentage is neither. "off" is first, so turning a barrier off
+# is one pick and the bare rule is always one step away.
 WIDTHS = {"off": "off", "atr": "× ATR at entry", "fee": f"× round trip ({FEE * 200:.2f}%)", "pct": "% of price"}
 # What each policy does after a barrier fires, spelled as the sentence rather than the identifier.
 POLICIES = {
@@ -133,8 +135,8 @@ MEANS = (1, 2, 4, 8)  # the moving averages `strategy --smooth` measured
 # a margin for days the venue has no bar for.
 BTC_DAYS = 230
 
-# Starting multiples for the two barriers, one per unit. Not tuned — nothing here has been
-# measured yet — but each is the number the unit makes obvious: three ATR is the textbook stop,
+# Starting multiples for a barrier switched to a unit, one per unit. Not tuned — only the stop's
+# 6 ATR (`STOP`) was measured — but each is the number the unit makes obvious: three ATR is the textbook stop,
 # and three round trips is the smallest barrier that clears its own cost by a margin worth the
 # name (one round trip nets exactly zero).
 SIZE = {"atr": 3.0, "fee": 3.0, "pct": 2.0}
@@ -300,7 +302,7 @@ def book(
     return fig
 
 
-def barrier(name: str, key: str) -> tuple[str, float] | None:
+def barrier(name: str, key: str, start: tuple[str, float] | None = None) -> tuple[str, float] | None:
     """One sidebar barrier — its unit and its multiple — as the spec `stops` takes, or `None`.
 
     Two widgets and not one, because the unit is the question and the number is only the answer to
@@ -311,15 +313,25 @@ def barrier(name: str, key: str) -> tuple[str, float] | None:
 
     The number is a percentage when the unit is one, and `stops` wants a log distance, so it is
     the one place a division belongs. At these sizes the two agree to the fourth decimal.
+
+    `start` is the barrier the page opens on, in the same spelling; `None` opens it off.
     """
-    kind = st.sidebar.selectbox(name, list(WIDTHS), format_func=WIDTHS.get, key=f"{key}-kind")
+    kinds = list(WIDTHS)
+    kind = st.sidebar.selectbox(
+        name, kinds, index=kinds.index(start[0]) if start else 0, format_func=WIDTHS.get, key=f"{key}-kind"
+    )
     if kind == "off":
         return None
     # The unit is in the widget's key, so each unit keeps its own multiple. Sharing one key would
     # carry the number across a change of unit, and 3 is a textbook stop in ATR and a very
     # different barrier in percent — the kind of silent reinterpretation a reader cannot see.
     size = st.sidebar.number_input(
-        f"{name}, {WIDTHS[kind]}", min_value=0.1, max_value=20.0, value=SIZE[kind], step=0.1, key=f"{key}-{kind}-size"
+        f"{name}, {WIDTHS[kind]}",
+        min_value=0.1,
+        max_value=20.0,
+        value=start[1] if start and start[0] == kind else SIZE[kind],
+        step=0.1,
+        key=f"{key}-{kind}-size",
     )
     return kind, (size / 100 if kind == "pct" else size)
 
@@ -573,7 +585,7 @@ def main() -> None:
     if v2_card:
         v2 = st.sidebar.checkbox(
             V2,
-            value=False,
+            value=True,
             help=f"{v2_at.name}: {v2_card['timeframe']} candles, pivots and features at {v2_card['window']} bars, "
             f"time weight {v2_card['smoothing']}, {len(v2_card['inputs'])} inputs x {v2_card['steps']} bars, "
             f"trained to {v2_card['test_start']}",
@@ -662,7 +674,7 @@ def main() -> None:
             help="the rules of `strategy`, on the prediction: one code path for the page and for the study",
         )
         if ruling:
-            rule = st.sidebar.selectbox("Rule", list(RULES), format_func=RULES.get)
+            rule = st.sidebar.selectbox("Rule", list(RULES), index=list(RULES).index(RULE), format_func=RULES.get)
             if rule in BANDED:
                 # A constant and not a quantile: a quantile would move with the model, and a
                 # constant is what a live system has to commit to.
@@ -687,13 +699,13 @@ def main() -> None:
             )
             filtered = st.sidebar.toggle(
                 "Only while BTC is under its 200-day mean",
-                value=False,
+                value=True,
                 help="read on yesterday's daily close, so it is causal. Flat while it is off; when it switches on, "
                 "the rule waits for a fresh signal",
             )
-            # The exits. Both off by default, and off is the bare rule, so every number on this
-            # page stays comparable to the study's until a barrier is switched on.
-            stop = barrier("Stop loss", "sl")
+            # The exits. The stop opens on the study's 6 ATR and the take profit off: no take
+            # profit tried in the study hurt at every size that fired.
+            stop = barrier("Stop loss", "sl", STOP)
             if stop:
                 # The fourth lever, and the only one that changes where the barrier *is* rather
                 # than how far away it starts. Off is the plain stop; on, the same width hangs off

@@ -937,7 +937,10 @@ Ogni regola nuova sui fold 3-4 sarebbe scelta su dati già visti.
   Regole: banda, rientro, momentum, svolte alla conferma, svolte col senno di poi (sotto un avviso).
   Poi soglia o finestra delle svolte, media della predizione, inversione, filtro BTC sui giornalieri
   di Alpaca (scaricati con le candele), uscite. Nuove metriche: bp per trade con la commissione di
-  pareggio, e la curva del capitale della regola. **Con la v2 l'ATR degli stop è ora a 12 barre,
+  pareggio, e la curva del capitale della regola. La pagina si apre sulla combinazione dello
+  sviluppo: v2, rientro a 0,40, filtro BTC, stop 6 ATR e poi solo segnale opposto (+37,2 bp sullo
+  sviluppo, −22,8 sull'hold-out). Con BTC sopra la media a 200 giorni il filtro è spento e la
+  regola resta flat. **Con la v2 l'ATR degli stop è ora a 12 barre,
   la finestra del modello, invece di 24**: gli stessi multipli di ATR possono dare stop diversi
   da prima.
 - Un bug trovato e corretto durante lo studio: `--filter` veniva ignorato dalla CLI con `--tp`. Le
