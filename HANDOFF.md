@@ -20,7 +20,8 @@ trading sulla predizione v2 (`strategy.py`) e tutte quelle regole sulla pagina c
 
 **Aggiornamento 2026-10-06** — ramo `claude/lucid-brahmagupta-1bd8dn`: tre diagnostici in
 `detect.py` per qualunque filtro sui falsi allarmi (conservazione, test nullo, rivelatori sul
-residuo contro il mercato). Scritti e testati, **non ancora eseguiti sullo store**: sezione 19.
+residuo contro il mercato). Scritti e testati, **non ancora eseguiti sullo store**: sezione 19. Il
+ragionamento completo, con le simulazioni e il loro codice, è `false_alarms.html`.
 
 ---
 
@@ -1110,7 +1111,7 @@ sposta l'AUC o i falsi allarmi.
 - `_score` è il punteggio logistico che `separate` già calcolava, estratto senza cambiarne i numeri.
   `BETA_WINDOW` = 96·30 è scelto, non misurato.
 
-**I numeri attesi, da una simulazione fuori dal repo** (random walk GARCH con code t(4), 6 serie da
+**I numeri attesi, da una simulazione** (il codice è nell'appendice di `false_alarms.html`) (random walk GARCH con code t(4), 6 serie da
 200.000 barre, zigzag 0,3 su un RSI a 12, svolte centrate a 12): la catena riproduce le statistiche
 del §17 (80% di allarmi veri, veri +26 bp, falsi −102). Su un random walk puro il meta-classificatore
 arriva ad AUC 0,688, la quota di veri va dal 64% al 94% fra i quintili e ogni quintile fa fra −1,3 e

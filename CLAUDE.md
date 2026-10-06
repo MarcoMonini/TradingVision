@@ -28,6 +28,12 @@ measurements, and commit subjects are written that way ("Four branches lose to o
 (`strategy`, `detect`, HANDOFF §17), step by step with its tables and charts, ending on what is
 still open. A copy of a page that was published while the study ran; edit it here now.
 
+`false_alarms.html` (Italian) is why cutting the detectors' false alarms cannot pay while a filter
+reads only the price's past (P·W = (1−P)·L under optional stopping), what a second model has to be
+worth, and the three routes left (the residual against the market, the flow shock, limit orders at
+the extremes), with the Monte Carlo behind each number and its code in an appendix. HANDOFF §19 is
+its state: the diagnostics it describes are in `detect` and have not been run on the store.
+
 `swing_leg_pipeline.html` (Italian) explains the training pipeline of the `swing_leg_target` models.
 Part I is a lesson for a reader new to the subject, one concept per chapter with charts on real
 candles; Part II walks the pipeline stage by stage with the schema of every frame, tensor and

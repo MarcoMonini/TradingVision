@@ -1,0 +1,1059 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Falsi allarmi e vantaggio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* The same tokens as strategy_study.html, so the two reports read as one notebook. */
+:root {
+  --bg: #f5f7f9;
+  --surface: #ffffff;
+  --fg: #141820;
+  --fg2: #475161;
+  --muted: #7a8393;
+  --rule: #e1e5eb;
+  --axis: #c3c8d0;
+  --accent: #1f5fae;
+  --accent-wash: #e8f0fb;
+  --s1: #2a78d6;
+  --s2: #eb6834;
+  --s3: #1baf7a;
+  --pos: #006300;
+  --neg: #b42828;
+  --good: #0ca30c;
+  --warn: #c98500;
+  --bad: #d03b3b;
+  --chip-good: #e6f4e6;
+  --chip-warn: #fbf1dc;
+  --chip-bad: #fbe7e7;
+  --chip-neutral: #eceef2;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1216; --surface: #171b21; --fg: #eef1f5; --fg2: #b9c0cb; --muted: #8a93a1;
+    --rule: #2a3038; --axis: #3a414b; --accent: #6ea8f0; --accent-wash: #1a2636;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --pos: #4cc04c; --neg: #f07272;
+    --good: #0ca30c; --warn: #e0a42a; --bad: #e66767;
+    --chip-good: #16301a; --chip-warn: #33290f; --chip-bad: #3a1a1a; --chip-neutral: #232830;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1216; --surface: #171b21; --fg: #eef1f5; --fg2: #b9c0cb; --muted: #8a93a1;
+  --rule: #2a3038; --axis: #3a414b; --accent: #6ea8f0; --accent-wash: #1a2636;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --pos: #4cc04c; --neg: #f07272;
+  --good: #0ca30c; --warn: #e0a42a; --bad: #e66767;
+  --chip-good: #16301a; --chip-warn: #33290f; --chip-bad: #3a1a1a; --chip-neutral: #232830;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 16px; line-height: 1.6; }
+.page { max-width: 960px; margin: 0 auto; padding-inline: 16px; padding-block: 40px 80px; display: grid; gap: 56px; }
+header { display: grid; gap: 14px; }
+.eyebrow { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+h1 { font-size: clamp(28px, 4.4vw, 40px); line-height: 1.15; margin: 0; font-weight: 700; text-wrap: balance; letter-spacing: -.01em; }
+h2 { font-size: 24px; line-height: 1.25; margin: 0; font-weight: 600; text-wrap: balance; }
+h3 { font-size: 17px; margin: 0; font-weight: 600; }
+h4 { font-size: 15px; margin: 0; font-weight: 600; color: var(--fg2); }
+p { margin: 0; max-width: 68ch; color: var(--fg); }
+.lede { font-size: 18px; color: var(--fg2); max-width: 64ch; }
+.meta { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+section { display: grid; gap: 18px; min-width: 0; }
+.sub-section { display: grid; gap: 14px; padding-left: 14px; border-left: 3px solid var(--rule); }
+.sechead { display: grid; gap: 4px; border-top: 1px solid var(--rule); padding-top: 22px; }
+.step { font-family: var(--mono); font-size: 12px; color: var(--accent); letter-spacing: .04em; }
+ul.points, ol.points { margin: 0; padding-left: 20px; display: grid; gap: 8px; max-width: 70ch; }
+ul.points li::marker, ol.points li::marker { color: var(--muted); }
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 14px; }
+nav.toc a, a { color: var(--accent); text-decoration: none; }
+nav.toc a:hover, a:hover, a:focus-visible { text-decoration: underline; }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+code, .code { font-family: var(--mono); font-size: 13.5px; }
+p code, li code, td code, dd code { background: var(--accent-wash); padding: 1px 5px; border-radius: 4px; }
+.formula { font-family: var(--mono); font-size: 15px; background: var(--surface); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 8px; padding: 12px 16px; overflow-x: auto; white-space: nowrap; }
+.callout { background: var(--accent-wash); border-radius: 10px; padding: 14px 18px; display: grid; gap: 8px; }
+.callout p { max-width: 74ch; }
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.tile { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 16px 18px; display: grid; gap: 4px; align-content: start; }
+.tile .label { font-size: 13px; color: var(--fg2); }
+.tile .value { font-size: 32px; font-weight: 600; line-height: 1.1; }
+.tile .note { font-size: 13px; color: var(--muted); }
+.up { color: var(--pos); } .down { color: var(--neg); }
+
+.tablewrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { padding: 8px 12px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--rule); }
+th { font-weight: 600; color: var(--fg2); font-size: 12.5px; background: var(--surface); vertical-align: bottom; }
+td { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 13.5px; }
+th:first-child, td:first-child { text-align: left; font-family: var(--sans); font-size: 14px; }
+td.text, th.text { text-align: left; font-family: var(--sans); white-space: normal; min-width: 200px; font-size: 14px; }
+tr:last-child td { border-bottom: 0; }
+tr.hl td { background: var(--accent-wash); }
+tr.sep td { border-top: 2px solid var(--axis); }
+.caption { font-size: 13px; color: var(--muted); max-width: 80ch; }
+
+.chip { display: inline-flex; align-items: center; gap: 6px; font-family: var(--sans); font-size: 12.5px; font-weight: 600; padding: 2px 9px; border-radius: 999px; white-space: nowrap; color: var(--fg); }
+.chip i { font-style: normal; font-weight: 700; }
+.chip.good { background: var(--chip-good); } .chip.good i { color: var(--good); }
+.chip.warn { background: var(--chip-warn); } .chip.warn i { color: var(--warn); }
+.chip.bad { background: var(--chip-bad); } .chip.bad i { color: var(--bad); }
+.chip.neutral { background: var(--chip-neutral); } .chip.neutral i { color: var(--muted); }
+
+.spec { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 18px 20px; display: grid; gap: 10px; }
+.spec dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; }
+.spec dt { color: var(--fg2); font-size: 14px; }
+.spec dd { margin: 0; min-width: 0; }
+@media (max-width: 560px) { .spec dl { grid-template-columns: 1fr; } .spec dd { margin-bottom: 8px; } }
+
+.chart { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 14px 14px 8px; display: grid; gap: 8px; position: relative; min-width: 0; }
+.chart h3 { font-size: 15px; }
+.chart .sub { font-size: 13px; color: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--fg2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend svg { width: 14px; height: 14px; overflow: visible; }
+.plot { overflow-x: auto; }
+.plot svg { display: block; width: 100%; min-width: 520px; height: auto; }
+.plot svg text { font-family: var(--sans); font-size: 12px; fill: var(--muted); }
+.plot svg text.lab { fill: var(--fg2); font-size: 12.5px; }
+.tip { position: absolute; pointer-events: none; background: var(--surface); color: var(--fg); border: 1px solid var(--rule); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; box-shadow: 0 4px 16px rgba(0,0,0,.12); display: grid; gap: 2px; min-width: 160px; z-index: 2; }
+.tip[hidden] { display: none; }
+.tip .t { color: var(--fg); font-weight: 600; font-size: 12.5px; }
+.tip .r { display: flex; justify-content: space-between; gap: 12px; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.tip .r span:first-child { font-family: var(--sans); color: var(--fg2); }
+pre { margin: 0; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--fg); }
+details { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 10px 16px; }
+details > summary { cursor: pointer; font-weight: 600; color: var(--fg2); }
+details[open] > summary { margin-bottom: 10px; }
+details pre { border: 0; padding: 0; }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.two > * { min-width: 0; }
+.scrollx { overflow-x: auto; }
+.diagram svg { display: block; width: 100%; min-width: 520px; height: auto; }
+.diagram svg text { font-family: var(--sans); font-size: 12.5px; fill: var(--fg2); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <div class="eyebrow">TradingVision · ramo claude/lucid-brahmagupta-1bd8dn · 6 ottobre 2026 · teoria e simulazioni, nessuna misura sullo store</div>
+    <h1>Ridurre i falsi allarmi non crea vantaggio</h1>
+    <p class="lede">Perché un filtro sugli allarmi dei rivelatori di v2 non può rendere finché legge solo il passato del prezzo, quanto deve valere un secondo modello per pagare la commissione, e le tre strade che possono uscire da questo vincolo. Teoria, simulazioni Monte Carlo e i numeri già misurati da <code>detect.py</code>.</p>
+    <div class="meta">barre da 15m · rendimenti in log · bp = 0,01% · OKX spot taker 0,10% per lato, 20 bp andata e ritorno · HANDOFF §19</div>
+    <nav class="toc" aria-label="Sezioni">
+      <a href="#verdetto">Verdetto</a><a href="#domanda">La domanda</a><a href="#legge">La legge di conservazione</a><a href="#radar">Dove l'analogia radar si rompe</a><a href="#due-modelli">Lo schema a due modelli</a><a href="#soglia">L'IC minimo</a><a href="#bersaglio">Dove la rilevazione ha un bersaglio</a><a href="#catalogo">Catalogo delle tecniche</a><a href="#residuo">1 · Il residuo</a><a href="#shock">2 · Lo shock di flusso</a><a href="#limite">3 · Gli ordini limite</a><a href="#codice">Cosa c'è nel codice</a><a href="#ordine">Ordine e criteri</a><a href="#limiti">Limiti</a><a href="#riproduci">Riprodurre</a><a href="#fonti">Fonti</a>
+    </nav>
+  </header>
+
+  <section id="verdetto">
+    <div class="sechead"><div class="step">VERDETTO</div><h2>La quota di falsi allarmi è un parametro libero: la si sposta a piacere e il guadagno resta zero</h2></div>
+    <div class="tiles">
+      <div class="tile"><div class="label">Meta-classificatore sugli allarmi di un random walk</div><div class="value">AUC 0,69</div><div class="note">più dello 0,63 sui dati veri, e ogni quintile guadagna zero</div></div>
+      <div class="tile"><div class="label">Accuratezza del secondo modello per pagare 20 bp</div><div class="value">90% → 55%</div><div class="note">sulla candela successiva contro sul rendimento dell'intero trade</div></div>
+      <div class="tile"><div class="label">Stesso filtro, stessa precisione (96-97%)</div><div class="value"><span class="down">−0,3</span> → <span class="up">+10,3</span> bp</div><div class="note">random walk contro mondo con ritorno alla media</div></div>
+    </div>
+    <ul class="points">
+      <li><strong>La legge.</strong> Se il prezzo è una martingala rispetto a ciò che un filtro legge, ogni filtro rispetta <strong>P·W = (1−P)·L</strong>: dove la quota di allarmi veri P sale, gli allarmi veri valgono meno (W) e i falsi costano di più (L), nella misura esatta che riporta il lordo a zero. I quintili misurati da <code>detect --features</code> la seguono entro il rumore.</li>
+      <li><strong>Lo schema a due modelli</strong> (allarme e candela successiva concordi) guadagna al più l'informazione della prima barra. Servono il 90% di accuratezza per coprire 20 bp. Puntato sul rendimento dell'intero trade, basta un IC di circa 0,18, cioè un'accuratezza del 55%, e la precisione degli allarmi quasi non si muove.</li>
+      <li><strong>La metrica giusta</strong> non è AUC, né precisione, né quota di falsi allarmi: è quanto il filtro sposta il lordo per trade, cioè l'IC con il rendimento del periodo tenuto.</li>
+      <li><strong>La rilevazione ha senso dove la serie non è una martingala.</strong> In una simulazione con una componente che torna alla media lo stesso filtro sul livello, alla stessa precisione, passa da zero a +10 bp. Le tre strade prioritarie cercano un pezzo di mercato così: il residuo contro il mercato, lo shock di flusso, gli ordini limite agli estremi.</li>
+      <li><strong>Stato.</strong> Tre diagnostici sono in <code>detect.py</code> (<code>conservation</code>, <code>--null</code>, <code>--residual</code>), testati su dati sintetici e <strong>non ancora eseguiti sullo store</strong>. I numeri delle simulazioni dicono cosa cercare, non cosa c'è.</li>
+    </ul>
+  </section>
+
+  <section id="domanda">
+    <div class="sechead"><div class="step">LA DOMANDA</div><h2>Un secondo modello che filtri gli allarmi del primo</h2></div>
+    <p>La proposta di partenza: prendere gli allarmi di svolta rivelati sulla predizione v2 e addestrare, sui soli pivot, un secondo modello che predica il segno della candela successiva. A ogni allarme si presentano quattro scenari, e si opera solo quando i due modelli sono concordi:</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Allarme del primo modello</th><th>Candela successiva prevista</th><th class="text">Decisione</th></tr></thead>
+      <tbody>
+        <tr><td>LONG</td><td>verde</td><td class="text">compra</td></tr>
+        <tr><td>LONG</td><td>rossa</td><td class="text">scarta l'allarme</td></tr>
+        <tr><td>SHORT</td><td>verde</td><td class="text">scarta l'allarme</td></tr>
+        <tr><td>SHORT</td><td>rossa</td><td class="text">vendi</td></tr>
+      </tbody>
+    </table></div>
+    <p>È una fusione AND di due rivelatori. Il timore dichiarato era che un secondo modello poco accurato filtri allarmi buoni e falsi allo stesso modo. Il CFAR, l'algoritmo base dei radar, si era già mostrato inutile: è una soglia, e le soglie sulla predizione sono state provate tutte.</p>
+    <p>Il punto di partenza misurato (<code>detect.py</code>, HANDOFF §17, sviluppo, lordo per trade):</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Rivelatore</th><th>Svolte trovate</th><th>Ritardo medio</th><th>Falsi allarmi per svolta</th><th>Trade da rilevazione giusta</th><th>Trade da falso allarme</th><th>Tutti, sviluppo</th><th>Tutti, hold-out</th></tr></thead>
+      <tbody>
+        <tr><td>Shiryaev 0,5</td><td>79%</td><td>4,7 barre</td><td>0,35</td><td class="up">+30,9 bp</td><td class="down">−79,8 bp</td><td>−1,0</td><td>+0,1</td></tr>
+        <tr><td>Shiryaev 0,9</td><td>65%</td><td>7,1</td><td>0,10</td><td class="up">+21,9</td><td class="down">−89,0</td><td>+6,7</td><td>−13,3</td></tr>
+        <tr><td>zigzag 0,2</td><td>97%</td><td>5,1</td><td>0,31</td><td class="up">+19,8</td><td class="down">−79,5</td><td>−0,3</td><td>−1,5</td></tr>
+      </tbody>
+    </table></div>
+    <p class="caption">Rivelatori sulla predizione v2, ETH/BTC/SOL, svolte giudicate sulle svolte centrate a 12 barre della predizione stessa. Lordo, quindi indipendente dalla commissione.</p>
+    <p>Le rilevazioni giuste guadagnano, i falsi allarmi perdono, e le due parti si annullano. La domanda diventa: esiste un modo di togliere i falsi allarmi senza togliere il guadagno dei veri?</p>
+  </section>
+
+  <section id="legge">
+    <div class="sechead"><div class="step">LA LEGGE</div><h2>La precisione si paga con il rapporto fra vincita e perdita</h2></div>
+    <p>Un rivelatore causale apre il trade a un tempo d'arresto T (l'allarme usa solo dati fino a T) e lo chiude al successivo T′. Se il log del prezzo è una martingala rispetto a tutto ciò che il filtro legge, il teorema d'arresto opzionale dà E[R | dati fino a T] = 0, dove R è il lordo del trade. Allora, per qualunque filtro φ costruito su quei dati:</p>
+    <div class="formula">E[R | φ] = P<sub>φ</sub>·W<sub>φ</sub> − (1 − P<sub>φ</sub>)·L<sub>φ</sub> = 0 &nbsp;⟹&nbsp; L<sub>φ</sub> / W<sub>φ</sub> = P<sub>φ</sub> / (1 − P<sub>φ</sub>)</div>
+    <p>dove P<sub>φ</sub> è la quota di allarmi veri fra quelli tenuti, W<sub>φ</sub> quanto guadagna in media un vero, L<sub>φ</sub> quanto perde in media un falso. Il filtro sceglie P; la martingala sceglie il rapporto L/W che lo compensa. <strong>Ogni filtro sta sulla stessa curva</strong>: più precisione, peggior rapporto.</p>
+    <p>Il motivo concreto è in una frase della docstring di <code>detect.py</code>: <em>ciò che dice che una svolta è avvenuta è quanto è già andata, cioè quanto ne è già stato speso</em>. Un allarme arrivato dopo un ritracciamento profondo è quasi certamente vero, ma il movimento che resta da prendere è piccolo; un falso allarme che sopravvive a un filtro severo è stato aperto dopo un movimento grande contro la gamba, e il ritorno della gamba costa di più.</p>
+
+    <div class="chart" id="c-law">
+      <h3>Rapporto perdita/vincita contro odds della precisione, per quintile del filtro</h3>
+      <div class="sub">Scale logaritmiche. Sulla diagonale il filtro non porta informazione; sotto, il lordo è positivo; sopra, negativo.</div>
+      <div class="legend" aria-hidden="true">
+        <span><svg viewBox="-7 -7 14 14"><circle r="5" fill="var(--s1)"/></svg>simulazione, martingala</span>
+        <span><svg viewBox="-7 -7 14 14"><rect x="-4.5" y="-4.5" width="9" height="9" rx="1.5" fill="var(--s2)"/></svg>simulazione, ritorno alla media</span>
+        <span><svg viewBox="-7 -7 14 14"><path d="M0,-6 L6,0 L0,6 L-6,0 Z" fill="var(--s3)"/></svg>dati veri, v2 (detect.py)</span>
+      </div>
+      <div class="plot"></div>
+    </div>
+
+    <div class="tablewrap"><table>
+      <thead><tr><th>Quintile del meta-classificatore</th><th>P (veri)</th><th>W, vero</th><th>L, falso</th><th>L/W</th><th>P/(1−P)</th><th>Lordo per trade</th></tr></thead>
+      <tbody>
+        <tr><td>1 (meno probabili)</td><td>0,638</td><td>+43,3</td><td>−78,1</td><td>1,81</td><td>1,76</td><td>−0,7</td></tr>
+        <tr><td>2</td><td>0,738</td><td>+33,4</td><td>−96,7</td><td>2,90</td><td>2,82</td><td>−0,7</td></tr>
+        <tr><td>3</td><td>0,814</td><td>+27,8</td><td>−113,3</td><td>4,08</td><td>4,38</td><td>+1,6</td></tr>
+        <tr><td>4</td><td>0,861</td><td>+20,7</td><td>−137,4</td><td>6,64</td><td>6,20</td><td>−1,3</td></tr>
+        <tr class="hl"><td>5 (più probabili)</td><td>0,937</td><td>+11,5</td><td>−166,3</td><td>14,51</td><td>14,98</td><td>+0,3</td></tr>
+      </tbody>
+    </table></div>
+    <p class="caption">Simulazione su un random walk GARCH con code t(4) (6 serie da 200.000 barre, σ 0,4% a barra), zigzag 0,3 su un RSI a 12, svolte giudicate sulle svolte centrate a 12 barre dell'RSI. Logistica su otto colonne note all'allarme, adattata sulla prima metà e letta sulla seconda: AUC 0,688. bp. Il codice è in <a href="#riproduci">Riprodurre</a>.</p>
+    <ul class="points">
+      <li><strong>Su un prezzo che nessuno può prevedere il meta-classificatore separa gli allarmi veri dai falsi meglio che sul mercato vero</strong> (AUC 0,69 contro 0,63) e porta la precisione dal 64% al 94%. Ogni quintile guadagna zero.</li>
+      <li><strong>Sui dati veri la legge regge entro il rumore.</strong> I quintili di <code>detect --features</code>: sviluppo 53% veri con L/W 1,39 contro P/(1−P) 1,13, 83% con 3,96 contro 4,88; hold-out 60% con 1,63 contro 1,50, 86% con 11,3 contro 6,1. Il quintile migliore dello sviluppo sta sotto la diagonale e quello dell'hold-out sopra: è il rumore della stima, non un'informazione stabile.</li>
+      <li><strong>Lo stesso vale per tutto ciò che il progetto ha già provato</strong>: combinare Shiryaev e zigzag, lo stop loss, i futures, il filtro sul livello. Ognuno è un altro punto della stessa curva.</li>
+    </ul>
+    <div class="callout">
+      <p><strong>Perché l'AUC inganna.</strong> La "verità" di un allarme è definita dal percorso futuro del prezzo. Su qualunque percorso, anche puro rumore, una svolta che è già andata più lontano ha più probabilità di essere una svolta: le colonne geometriche (ritracciamento, movimento della gamba, età) separano veri e falsi per costruzione. Un'AUC maggiore di 0,5 dice che il classificatore ha imparato la definizione di svolta; solo la differenza rispetto ai percorsi casuali può dire che ha imparato qualcosa del mercato.</p>
+    </div>
+  </section>
+
+  <section id="radar">
+    <div class="sechead"><div class="step">L'ANALOGIA</div><h2>Dove l'analogia con il radar si rompe</h2></div>
+    <div class="tablewrap"><table>
+      <thead><tr><th class="text">Nel radar</th><th class="text">Nelle svolte del prezzo</th></tr></thead>
+      <tbody>
+        <tr><td class="text">Il bersaglio esiste indipendentemente dal rumore: sotto H₁ c'è un oggetto che produce un'eco.</td><td class="text">La svolta è una proprietà del rumore stesso. Sui prezzi a segni casuali le svolte valgono di più che sul prezzo vero (+216 contro +201 bp col senno di poi, <code>strategy --null</code>).</td></tr>
+        <tr><td class="text">Il costo di un falso allarme e il valore di una rilevazione sono fissati da fuori.</td><td class="text">Sono endogeni: dipendono dalla soglia. Un falso allarme sopravvissuto a un filtro più severo costa di più (−80 → −138 bp con <code>--both</code>).</td></tr>
+        <tr><td class="text">Neyman-Pearson: massimizzare la probabilità di rilevazione a quota di falsi allarmi fissata.</td><td class="text">Rilevazione e falsi allarmi si spostano lungo una curva su cui il guadagno è costante. L'ottimo di Neyman-Pearson non ha significato economico.</td></tr>
+        <tr><td class="text">CFAR: soglia adattata al rumore locale per tenere costante la quota di falsi allarmi.</td><td class="text">Una soglia sulla stessa informazione: un altro punto della stessa curva.</td></tr>
+        <tr><td class="text">L'ipotesi da verificare è "c'è un bersaglio".</td><td class="text">L'ipotesi giusta è "dopo l'allarme c'è una deriva": H₀ E[r futuro | passato] = 0 contro H₁ ≠ 0, con un rapporto segnale/rumore per barra dell'ordine di ρ², cioè 10⁻⁴-10⁻³.</td></tr>
+      </tbody>
+    </table></div>
+    <p>L'analogia torna utile quando il bersaglio esiste davvero: un oggetto che si stacca dal clutter (il residuo contro il mercato) o un'onda di forma nota (lo shock di flusso). Le tecniche radar che restano valide sono quelle che <strong>cambiano l'informazione</strong>, non la soglia: cancellazione del clutter, filtro adattato, fusione di sensori diversi.</p>
+  </section>
+
+  <section id="due-modelli">
+    <div class="sechead"><div class="step">LO SCHEMA A DUE MODELLI</div><h2>Il secondo modello vale quanto sa del periodo in cui si tiene il trade</h2></div>
+    <p>Nella simulazione il secondo modello è un oracolo rumoroso: conosce il segno della candela successiva con accuratezza a, cioè ha un'informazione che nella realtà andrebbe trovata. Si opera solo quando concorda con l'allarme, e si tiene fino all'allarme successivo:</p>
+    <div class="two">
+      <div class="tablewrap"><table>
+        <thead><tr><th>a (candela successiva)</th><th>Precisione</th><th>bp per trade</th><th>di cui 1ª barra</th></tr></thead>
+        <tbody>
+          <tr><td>0,50</td><td>0,796</td><td>+0,3</td><td>−0,0</td></tr>
+          <tr><td>0,55</td><td>0,807</td><td>+3,0</td><td>+2,6</td></tr>
+          <tr><td>0,60</td><td>0,820</td><td>+6,0</td><td>+5,4</td></tr>
+          <tr><td>0,70</td><td>0,844</td><td>+10,1</td><td>+10,6</td></tr>
+          <tr><td>0,80</td><td>0,868</td><td>+15,5</td><td>+16,2</td></tr>
+          <tr class="hl"><td>0,90</td><td>0,891</td><td>+20,8</td><td>+21,3</td></tr>
+        </tbody>
+      </table></div>
+      <div class="tablewrap"><table>
+        <thead><tr><th>ρ (rendimento del trade)</th><th>Accuratezza</th><th>Precisione</th><th>bp per trade</th></tr></thead>
+        <tbody>
+          <tr><td>0,03</td><td>50,6%</td><td>0,798</td><td>+3,2</td></tr>
+          <tr><td>0,05</td><td>51,1%</td><td>0,802</td><td>+5,2</td></tr>
+          <tr><td>0,10</td><td>52,5%</td><td>0,805</td><td>+10,6</td></tr>
+          <tr><td>0,15</td><td>53,9%</td><td>0,812</td><td>+16,5</td></tr>
+          <tr class="hl"><td>0,20</td><td>55,4%</td><td>0,818</td><td>+21,9</td></tr>
+          <tr><td>0,30</td><td>58,0%</td><td>0,831</td><td>+30,4</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+    <p class="caption">Stesso random walk e stessi allarmi della sezione precedente (precisione di partenza 0,797, trade di 13,7 barre in media, |r| medio della prima barra 26,6 bp, deviazione standard del trade 148 bp). A sinistra un oracolo sul segno della barra dopo l'allarme; a destra un punteggio gaussiano con correlazione ρ con il rendimento dell'intero trade. Metà degli allarmi tenuta in entrambi i casi.</p>
+
+    <div class="chart" id="c-two">
+      <h3>bp per trade contro accuratezza del secondo modello</h3>
+      <div class="sub">La linea orizzontale è l'andata e ritorno su OKX spot taker, 20 bp.</div>
+      <div class="legend" aria-hidden="true">
+        <span><svg viewBox="-7 -7 14 14"><rect x="-4.5" y="-4.5" width="9" height="9" rx="1.5" fill="var(--s2)"/></svg>sul segno della candela successiva</span>
+        <span><svg viewBox="-7 -7 14 14"><circle r="5" fill="var(--s1)"/></svg>sul rendimento dell'intero trade</span>
+      </div>
+      <div class="plot"></div>
+    </div>
+
+    <h3>Perché il primo modello non aggiunge niente</h3>
+    <p>Il lordo di un trade concordante si scompone nella prima barra e nel resto:</p>
+    <div class="formula">E[s·R | concordi] = E[s·r₁ | concordi] + E[s·(r₂ + … + r<sub>T′</sub>) | concordi] = (2a − 1)·E|r₁| + 0</div>
+    <p>Il secondo termine è zero per la stessa martingala: il secondo modello non sa nulla oltre la prima barra, il primo non sa nulla del tutto. Il trade dura circa 14 barre e il secondo modello ne conosce una. Per questo la colonna "di cui 1ª barra" coincide con il totale, e per pagare 20 bp servono il 90% di accuratezza sul segno di una barra da 15 minuti, dove il progetto non ha mai misurato niente di lontanamente vicino (la v2 ha IC −0,026 con il rendimento delle 12 barre successive).</p>
+    <p>Con l'orizzonte giusto le cose cambiano: un punteggio con correlazione ρ con il rendimento dell'intero trade vale, per una distribuzione gaussiana, circa <strong>0,8·ρ·σ<sub>h</sub></strong> per trade (0,8 ≈ √(2/π)), dove σ<sub>h</sub> è la deviazione standard del rendimento sul periodo tenuto. Con σ<sub>h</sub> = 148 bp, 20 bp chiedono ρ ≈ 0,18, un'accuratezza del 55%. E <strong>la precisione degli allarmi sale appena, da 0,80 a 0,82</strong>: un filtro che paga può lasciare la quota di falsi allarmi quasi dov'era.</p>
+    <div class="callout">
+      <p><strong>Cosa può ancora fare il primo modello.</strong> Se il mercato fosse una martingala ovunque, il secondo modello renderebbe lo stesso da solo, senza allarmi. Il primo modello serve solo se seleziona momenti in cui il secondo è più informato: un IC del rendimento futuro più alto dopo un allarme che in una barra qualsiasi. È un'ipotesi misurabile, la prevedibilità condizionata all'evento, e nessuno l'ha ancora misurata sul progetto.</p>
+    </div>
+  </section>
+
+  <section id="soglia">
+    <div class="sechead"><div class="step">L'IC MINIMO</div><h2>Quanto deve valere un'informazione per pagare il costo</h2></div>
+    <p>Dalla stessa approssimazione, l'IC minimo con il rendimento del periodo tenuto che copre un'andata e ritorno di c bp è:</p>
+    <div class="formula">ρ<sub>min</sub> ≈ c / (0,8 · σ · √h)</div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Andata e ritorno</th><th>h = 16 barre (4 ore)</th><th>h = 48 barre (12 ore)</th><th>h = 192 barre (2 giorni)</th></tr></thead>
+      <tbody>
+        <tr class="hl"><td>20 bp, OKX spot taker 0,10%</td><td>0,16</td><td>0,09</td><td>0,045</td></tr>
+        <tr><td>10 bp, perpetual taker 0,05%</td><td>0,08</td><td>0,045</td><td>0,023</td></tr>
+        <tr><td>4 bp, perpetual maker 0,02%</td><td>0,03</td><td>0,018</td><td>0,009</td></tr>
+      </tbody>
+    </table></div>
+    <p class="caption">σ = 0,4% a barra da 15m, un valore tipico per ETH e SOL, da misurare sullo store. Le fee dei perpetual OKX vengono da fonti secondarie e vanno verificate. Sulle code grasse della simulazione serve circa il 10% in più della formula (0,18 invece di 0,16 a h ≈ 14).</p>
+    <p>Gli IC misurati dal progetto sono piccoli: v2 −0,026 a 12 barre, lo squilibrio del book da +0,006 a +0,059 a 12 barre, l'open interest dietro al movimento da +0,045 a +0,125 a 48 barre, per fold. A 4 ore e alla commissione spot serve da tre a cinque volte tanto. <strong>L'orizzonte e il costo spostano la soglia più di qualunque filtro</strong>: a 48 barre su perpetual taker l'open interest dietro al movimento sarebbe già vicino al pareggio. Il funding dei perpetual non è in questa tabella.</p>
+  </section>
+
+  <section id="bersaglio">
+    <div class="sechead"><div class="step">IL CONTROLLO</div><h2>Dove la rilevazione ha un bersaglio, lo stesso filtro paga</h2></div>
+    <p>La stessa catena (zigzag 0,3 su un RSI a 12) gira su un secondo mondo sintetico: il log del prezzo è un random walk più una componente AR(1) con emivita di 24 barre, che porta il 30% della varianza di una barra. Il filtro è quello del progetto: tenere solo gli allarmi la cui gamba ha raggiunto il livello L.</p>
+    <div class="chart" id="c-gate">
+      <h3>bp per trade tenendo gli allarmi la cui gamba ha raggiunto L, ±1 errore standard</h3>
+      <div class="sub">La precisione sale allo stesso modo nei due mondi: 0,81 → 0,96-0,97.</div>
+      <div class="legend" aria-hidden="true">
+        <span><svg viewBox="-7 -7 14 14"><circle r="5" fill="var(--s1)"/></svg>martingala</span>
+        <span><svg viewBox="-7 -7 14 14"><rect x="-4.5" y="-4.5" width="9" height="9" rx="1.5" fill="var(--s2)"/></svg>ritorno alla media (AR(1), 30% della varianza)</span>
+      </div>
+      <div class="plot"></div>
+    </div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Mondo</th><th>L</th><th>Trade</th><th>Precisione</th><th>bp per trade</th><th>Errore</th><th>bp in unità di σ della barra</th></tr></thead>
+      <tbody>
+        <tr><td>martingala</td><td>0</td><td>80.609</td><td>0,81</td><td>+0,2</td><td>0,5</td><td>+0,01</td></tr>
+        <tr><td></td><td>0,6</td><td>6.348</td><td>0,96</td><td>−0,3</td><td>2,6</td><td>−0,00</td></tr>
+        <tr class="sep"><td>ritorno alla media</td><td>0</td><td>82.938</td><td>0,81</td><td>−1,2</td><td>0,5</td><td>−0,04</td></tr>
+        <tr class="hl"><td></td><td>0,6</td><td>4.858</td><td>0,97</td><td>+10,3</td><td>2,8</td><td>+0,27</td></tr>
+        <tr class="sep"><td>fattore comune + parte propria, prezzo</td><td>0</td><td>81.789</td><td>0,81</td><td>−0,4</td><td>0,5</td><td>−0,01</td></tr>
+        <tr><td></td><td>0,6</td><td>5.215</td><td>0,97</td><td>+6,2</td><td>2,9</td><td>+0,13</td></tr>
+        <tr><td>fattore comune + parte propria, residuo</td><td>0</td><td>82.832</td><td>0,82</td><td>−0,2</td><td>0,3</td><td>−0,03</td></tr>
+        <tr class="hl"><td></td><td>0,6</td><td>4.838</td><td>0,97</td><td>+8,5</td><td>1,7</td><td>+0,39</td></tr>
+      </tbody>
+    </table></div>
+    <p class="caption">L = 0 tiene le gambe che hanno passato lo zero, quasi tutte. Le ultime quattro righe: un fattore comune random walk (circa il 70% della varianza), una parte propria AR(1) con emivita 24 (10%) e una parte propria random walk (20%), β per asset fra 0,8 e 1,4. Il residuo è l'asset meno β·fattore, con β stimato sulle 960 barre precedenti. Le righe a L = 0,3-0,5 sono nell'output di <code>run3.py</code> (<a href="#riproduci">Riprodurre</a>).</p>
+    <ul class="points">
+      <li><strong>La precisione non distingue i due mondi; il lordo sì.</strong> La colonna della precisione è la stessa riga per riga: chi guardasse solo i falsi allarmi non vedrebbe nessuna differenza.</li>
+      <li><strong>Lo scarto dalla legge è la firma dell'informazione.</strong> Nel mondo con ritorno alla media il meta-classificatore ordina il lordo (−8,4 bp nel primo quintile, +9,0 nel quinto) e nel quinto L/W vale 7,9 contro P/(1−P) 14,6: il punto quadrato in basso a destra del grafico della legge.</li>
+      <li><strong>Senza filtro anche qui il rivelatore guadagna zero.</strong> Lo zigzag entra dopo il ritracciamento, cioè a rientro già cominciato. Il valore del ritorno alla media sta agli estremi, ed è lì che il filtro sul livello lo prende.</li>
+      <li><strong>Sul residuo il rumore si dimezza</strong> (errore 1,7 contro 2,9 a parità di trade): il fattore comune non contiene niente che torni alla media e copre la parte che lo fa. In unità di σ il residuo rende tre volte il prezzo.</li>
+    </ul>
+    <p>Questo spiega anche l'unica riga positiva in tutti i fold dello studio (§17): lo zigzag 0,2 con il filtro a 0,5, +12,5 / +19,2 bp. È la forma che lascerebbe un debole ritorno alla media agli estremi, ma con errori di 14,7 / 16,6 bp (t 0,85 e 1,16) non è distinguibile dal caso. I diagnostici servono a capire quale delle due letture è giusta.</p>
+  </section>
+
+  <section id="catalogo">
+    <div class="sechead"><div class="step">CATALOGO</div><h2>Le tecniche, una per una, contro la legge</h2></div>
+    <p>La domanda per ogni tecnica è una sola: porta un'informazione che il passato del prezzo non contiene, o cambia il costo? Se no, è un altro punto sulla curva.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Tecnica</th><th class="text">Da dove viene</th><th class="text">Informazione nuova?</th><th>Stato</th></tr></thead>
+      <tbody>
+        <tr><td>Soglia adattiva (CFAR)</td><td class="text">radar</td><td class="text">No: stessa informazione, soglia diversa</td><td><span class="chip bad"><i>✕</i>Esclusa</span></td></tr>
+        <tr><td>Integrazione M-su-N, combinazione di rivelatori</td><td class="text">radar</td><td class="text">No (<code>--both</code>: falsi allarmi 0,35 → 0,07, lordo invariato)</td><td><span class="chip bad"><i>✕</i>Misurata</span></td></tr>
+        <tr><td>Track-before-detect, HMM, Shiryaev</td><td class="text">radar, rilevazione sequenziale</td><td class="text">No, salvo uno stato che torna alla media</td><td><span class="chip bad"><i>✕</i>Misurata</span></td></tr>
+        <tr><td>Meta-labeling vero/falso</td><td class="text">López de Prado, Joubert</td><td class="text">No: AUC 0,69 anche sul rumore</td><td><span class="chip bad"><i>✕</i>Così no</span></td></tr>
+        <tr><td>Secondo modello sulla candela successiva</td><td class="text">la proposta di partenza</td><td class="text">Sì, ma una barra su quattordici</td><td><span class="chip bad"><i>✕</i>Serve il 90%</span></td></tr>
+        <tr><td>Stop loss</td><td class="text">pratica</td><td class="text">No (<code>--sl</code>: taglia veri e falsi insieme)</td><td><span class="chip bad"><i>✕</i>Misurato</span></td></tr>
+        <tr><td>Controllo conformal della quota di falsi allarmi</td><td class="text">statistica</td><td class="text">Garantisce la quota, non il guadagno</td><td><span class="chip bad"><i>✕</i>Solo per il rischio</span></td></tr>
+        <tr><td>Secondo modello sull'orizzonte del trade</td><td class="text">questo documento</td><td class="text">Sì, se IC ≥ 0,16-0,18 a 20 bp</td><td><span class="chip warn"><i>~</i>Soglia lontana</span></td></tr>
+        <tr><td>Filtro sul livello (gate)</td><td class="text">il progetto (§17)</td><td class="text">Solo se c'è ritorno alla media agli estremi</td><td><span class="chip warn"><i>~</i>t 0,85-1,16</span></td></tr>
+        <tr><td>Fusione fra asset: anticipo di BTC sulle alt</td><td class="text">radar distribuito, Chair-Varshney</td><td class="text">Sì, se l'anticipo esiste a 15 minuti</td><td><span class="chip warn"><i>~</i>Da misurare</span></td></tr>
+        <tr><td>15m nel verso della gamba a 4h</td><td class="text">integrazione coerente fra scale</td><td class="text">Sì, se il 4h ha deriva</td><td><span class="chip warn"><i>~</i>Da misurare</span></td></tr>
+        <tr><td>Posizione proporzionale al segnale</td><td class="text">l'effetto dell'open interest "vive nel grosso"</td><td class="text">Stessa informazione, meno trigger agli estremi</td><td><span class="chip warn"><i>~</i>Economica</span></td></tr>
+        <tr class="hl"><td>Rilevazione sul residuo contro il mercato</td><td class="text">radar: MTI, STAP</td><td class="text">Sì: la parte propria, dove sta l'inversione di breve</td><td><span class="chip good"><i>✓</i>Priorità 1</span></td></tr>
+        <tr class="hl"><td>Filtro adattato sullo shock di flusso</td><td class="text">radar: filtro adattato; Campbell-Grossman-Wang</td><td class="text">Sì: volume e open interest non sono il percorso del prezzo</td><td><span class="chip good"><i>✓</i>Priorità 2</span></td></tr>
+        <tr class="hl"><td>Ordini limite agli estremi</td><td class="text">microstruttura, fornitura di liquidità</td><td class="text">Cambia ritardo e costo, non l'informazione</td><td><span class="chip good"><i>✓</i>Priorità 3</span></td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section id="residuo">
+    <div class="sechead"><div class="step">STRADA 1</div><h2>Rilevare sul residuo contro il mercato</h2></div>
+    <div class="sub-section">
+      <h4>L'intuizione</h4>
+      <p>Il movimento di ETH si scompone in β·(movimento di BTC) più una parte sua. Se ETH scende del 3% mentre BTC scende del 2,7%, è quasi tutto mercato e non c'è niente di suo che possa rientrare. Se ETH scende del 3% con BTC fermo, è uno shock proprio di ETH, per esempio un grande venditore: la letteratura sull'inversione di breve nelle crypto dice che questi movimenti tendono a rientrare in parte, ed è la stessa idea del fattore cross-sectional, l'unico netto positivo del progetto (+0,238 l'anno, archiviato per concentrazione).</p>
+      <h4>L'analogia radar: la cancellazione del clutter</h4>
+      <p>L'MTI sottrae echi consecutivi e cancella il clutter fermo, così resta solo ciò che si muove. Qui il clutter è il movimento comune: con una correlazione 0,8-0,9 con BTC è il 60-80% della varianza di ETH e SOL a 15 minuti (da misurare sullo store). Non contiene la parte che rientra, ma domina l'RSI e i pivot. Tolto, il rivelatore guarda la sola componente dove può esserci un bersaglio.</p>
+      <h4>Il meccanismo</h4>
+      <div class="formula">spread<sub>t</sub> = exp(Σ (r<sub>ETH,t</sub> − β<sub>t</sub>·r<sub>BTC,t</sub>)) &nbsp;&nbsp; β<sub>t</sub> dalle 2.880 barre chiuse prima di t</div>
+      <p>Sullo spread si calcolano RSI a 12, zigzag, Shiryaev e filtro sul livello, come sul prezzo. Il trade è coperto: long 1 ETH, short β BTC. Costa due gambe, cioè 2 × 0,10% × (1 + |β|) su spot, circa 40 bp di andata e ritorno contro 20.</p>
+      <h4>I rischi</h4>
+      <ul class="points">
+        <li>Il residuo non è stazionario nel lungo periodo: ETH/BTC ha avuto trend di anni. Si cerca un rientro di ore, non una cointegrazione.</li>
+        <li>β si muove nelle crisi, proprio quando gli shock sono grandi.</li>
+        <li>Su spot lo short di BTC richiede il margine; i perpetual sono lo strumento naturale, con il funding come costo.</li>
+      </ul>
+      <h4>Il criterio, fissato prima di guardare i numeri</h4>
+      <p>Sui fold 1-2: lordo del rivelatore sul residuo sopra <code>fee_bp</code>, positivo in entrambi i fold, e <code>kept_dev</code> oltre due errori standard. Poi una conferma su dati che non hanno scelto niente (vedi <a href="#ordine">Ordine e criteri</a>).</p>
+    </div>
+  </section>
+
+  <section id="shock">
+    <div class="sechead"><div class="step">STRADA 2</div><h2>Un filtro adattato sullo shock di flusso</h2></div>
+    <div class="sub-section">
+      <h4>L'intuizione</h4>
+      <p>Il prezzo può scendere del 2% in mezz'ora per due ragioni. <strong>Informazione</strong>: una notizia, tutti rivalutano, il nuovo prezzo è quello giusto e non rientra. <strong>Flusso forzato</strong>: liquidazioni o un venditore obbligato; chi ha assorbito quel flusso vuole essere pagato, il prezzo va oltre il dovuto e poi rientra in parte (impatto temporaneo). Campbell, Grossman e Wang (1993) lo formalizzano: i movimenti di flusso non informativo, riconoscibili dal volume, tendono a invertire.</p>
+      <h4>Perché il pivot è il bersaglio sbagliato</h4>
+      <p>Un pivot compare in entrambi i casi, e compare anche sul rumore puro: è geometria del percorso del prezzo. Uno shock di flusso si riconosce invece da variabili che <strong>non sono il percorso del prezzo</strong>: un movimento grande in unità di σ, un picco di volume, open interest in calo (posizioni chiuse, cioè liquidazioni), lo squilibrio dei taker, un funding estremo. Sui percorsi a segni casuali queste variabili non esistono, e la legge di conservazione non le vincola a priori.</p>
+      <h4>L'analogia radar: il filtro adattato</h4>
+      <p>Si correla il segnale ricevuto con la forma d'onda nota del bersaglio, ed è il filtro che massimizza il rapporto segnale/rumore. La forma d'onda qui è lo shock (prezzo × volume × open interest in calo) seguito da un rientro che decade. Il rivelatore di pivot cerca invece una forma che il rumore produce da solo.</p>
+      <h4>Cosa è già misurato</h4>
+      <p><code>detect --oi</code>: dopo un movimento a 24 barre fatto con open interest in calo, le 48 barre successive tornano indietro di −22,0 / −13,0 / −2,4 / −6,1 bp per fold; con open interest in salita il movimento prosegue di +10,4 / +16,4 / +18,7 / +19,8. Il segno è stabile. È stato provato solo come conferma dei segnali tardivi di v2 e come trigger sugli estremi di |z|, e lì non ha retto: la docstring nota che l'effetto vive nel grosso dei movimenti e non negli estremi. È un avvertimento serio per una regola a trigger.</p>
+      <h4>Come si testa (non ancora nel codice)</h4>
+      <p>Un <strong>event study</strong>: eventi con |r|/σ &gt; k₁ e volume z &gt; k₂, divisi per il segno della variazione di open interest; il rendimento cumulato contro lo shock a 1…96 barre, per fold. È la risposta all'impulso: una regola si costruisce solo se la curva rientra in modo stabile. Servono i dati di <code>data.futures</code>, sedici mesi per BTC, ETH e SOL.</p>
+      <h4>Il criterio</h4>
+      <p>Rientro contro lo shock positivo fra 12 e 48 barre in ognuno dei fold di sviluppo, con il segno della divisione per open interest mantenuto, e più grande dell'andata e ritorno dello strumento.</p>
+    </div>
+  </section>
+
+  <section id="limite">
+    <div class="sechead"><div class="step">STRADA 3</div><h2>Ordini limite agli estremi invece della conferma</h2></div>
+    <div class="sub-section">
+      <h4>L'intuizione</h4>
+      <p>Oggi la regola aspetta la conferma (il ritracciamento) e poi compra a mercato. Aspettare costa: dopo un estremo il prezzo si allontana come σ√d, e la quota del valore di una svolta che resta dopo d barre di ritardo segue 1 − √(d/w). È la legge di un percorso browniano dopo un estremo, e vale identica sui prezzi a segni casuali.</p>
+      <div class="chart" id="c-decay">
+        <h3>Quota del valore di una svolta che resta dopo d barre di ritardo, finestra 12</h3>
+        <div class="sub">La curva è 1 − √(d/12); i punti sono misurati da <code>strategy --hindsight --delay</code>.</div>
+        <div class="legend" aria-hidden="true">
+          <span><svg viewBox="-7 -7 14 14"><line x1="-7" x2="7" y1="0" y2="0" stroke="var(--s1)" stroke-width="2"/></svg>1 − √(d/w), percorso browniano</span>
+          <span><svg viewBox="-7 -7 14 14"><rect x="-4.5" y="-4.5" width="9" height="9" rx="1.5" fill="var(--s2)"/></svg>svolte della predizione v2, sviluppo</span>
+          <span><svg viewBox="-7 -7 14 14"><path d="M0,-6 L6,0 L0,6 L-6,0 Z" fill="var(--s3)"/></svg>svolte del prezzo, strategy --null</span>
+        </div>
+        <div class="plot"></div>
+      </div>
+      <p>La conferma è il pagamento di quel ritardo. L'alternativa è <strong>pre-impegnarsi</strong>: quando la predizione o l'RSI sono nella zona estrema, mettere un ordine limite di acquisto k·σ sotto il prezzo. Se il prezzo ci arriva si è eseguiti più in basso: <strong>l'esecuzione è la rilevazione, con ritardo zero</strong>, a commissione maker e senza attraversare lo spread.</p>
+      <div class="chart diagram" id="d-limit">
+        <h3>Conferma contro ordine limite, sullo stesso percorso</h3>
+        <div class="sub">Schema, non dati.</div>
+        <div class="scrollx"><svg viewBox="0 0 720 300" role="img" aria-label="Schema: un percorso di prezzo scende a un estremo e risale. Un ordine limite piazzato prima dell'estremo viene eseguito durante la discesa; la conferma arriva solo dopo la risalita, più in alto. Un percorso tratteggiato mostra la discesa che continua oltre il limite.">
+          <text x="14" y="22">prezzo</text>
+          <text x="700" y="290" text-anchor="end">tempo</text>
+          <line x1="150" x2="330" y1="175" y2="175" stroke="var(--s1)" stroke-width="1.5" stroke-dasharray="5 4"/>
+          <text x="150" y="168">limite a p − kσ</text>
+          <polyline points="20,40 80,70 120,60 170,110 210,100 260,165 300,205 330,185 360,195 400,150 440,160 500,110 560,120 620,80 700,60" fill="none" stroke="var(--fg2)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+          <polyline points="300,205 340,228 370,220 410,252" fill="none" stroke="var(--muted)" stroke-width="2" stroke-dasharray="6 5" stroke-linejoin="round"/>
+          <text x="420" y="248">se la discesa continua:</text>
+          <text x="420" y="264">eseguito lo stesso, in perdita</text>
+          <line x1="300" x2="300" y1="205" y2="240" stroke="var(--axis)" stroke-width="1"/>
+          <text x="300" y="282" text-anchor="middle">estremo τ</text>
+          <circle cx="270" cy="175" r="6" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
+          <text x="262" y="196" text-anchor="end">eseguito qui: maker, ritardo zero</text>
+          <path d="M400,150 l6,-6 l6,6 l-6,6 Z" fill="var(--s2)" stroke="var(--surface)" stroke-width="1.5"/>
+          <line x1="406" x2="406" y1="142" y2="130" stroke="var(--axis)" stroke-width="1"/>
+          <text x="406" y="108" text-anchor="middle">conferma a τ + d:</text>
+          <text x="406" y="124" text-anchor="middle">ingresso taker</text>
+          <line x1="470" x2="470" y1="150" y2="175" stroke="var(--fg2)" stroke-width="1"/>
+          <line x1="464" x2="476" y1="150" y2="150" stroke="var(--fg2)" stroke-width="1"/>
+          <line x1="464" x2="476" y1="175" y2="175" stroke="var(--fg2)" stroke-width="1"/>
+          <line x1="330" x2="470" y1="175" y2="175" stroke="var(--axis)" stroke-width="1" stroke-dasharray="2 3"/>
+          <text x="482" y="167">≈ σ√d: quanto la conferma paga</text>
+        </svg></div>
+      </div>
+      <h4>Il problema: la selezione avversa</h4>
+      <p>Un ordine limite viene eseguito soprattutto quando il prezzo continua contro di te: il falso allarme che sfonda il livello e prosegue (la linea tratteggiata). Su una martingala neanche l'ordine limite crea vantaggio, perché anche l'esecuzione è un tempo d'arresto. Cambia due cose: <strong>il costo</strong> (maker invece di taker, nessuno spread) e <strong>chi incassa il rientro, se il rientro esiste</strong>. È l'esecuzione naturale della strada 2: chi fornisce liquidità all'estremo incassa l'impatto temporaneo, chi aspetta la conferma ne prende gli avanzi.</p>
+      <h4>Come si testa (non ancora nel codice)</h4>
+      <p>Una simulazione dei riempimenti sulle barre a 5 minuti dello store: limite a p·(1 − kσ) valido N barre; eseguito se il minimo va <em>sotto</em> il limite, una scelta prudente perché la posizione in coda è ignota. Si misurano il rendimento dopo l'esecuzione, la quota di ordini non eseguiti e il confronto con l'ingresso a mercato alla conferma. Le candele non dicono se dentro la barra sia venuto prima il massimo o il minimo: è il limite del metodo.</p>
+      <h4>Il criterio</h4>
+      <p>Rendimento dopo l'esecuzione, meno quello dell'ingresso alla conferma, positivo al netto della commissione maker in ognuno dei fold di sviluppo, riportando la quota di non eseguiti. Ha senso solo se la strada 1 o la 2 trovano un rientro: gli ordini limite non creano vantaggio, rendono più economico sfruttarne uno che esiste.</p>
+    </div>
+  </section>
+
+  <section id="codice">
+    <div class="sechead"><div class="step">NEL CODICE</div><h2>Tre diagnostici in <code>detect.py</code>, non ancora eseguiti sullo store</h2></div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Comando</th><th class="text">Cosa calcola</th><th class="text">Come si legge</th></tr></thead>
+      <tbody>
+        <tr><td><code>detect --features 0.5</code></td><td class="text"><code>conservation</code>: per quintile del meta-classificatore P, W, L, L/W accanto a P/(1−P), il lordo e il lordo nominale P·W̄ − (1−P)·L̄ (W e L fermi alla media del periodo).</td><td class="text"><code>kept</code> è la pendenza del lordo sul nominale fra i quintili, con errore standard: 0 sotto una martingala, 1 se la precisione vale quanto promette.</td></tr>
+        <tr><td><code>detect --null 0.5 [--seeds …]</code></td><td class="text">La stessa separazione vero/falso, con Shiryaev 0,5 e otto colonne di <code>geometry</code>, su v2, sull'RSI a 12 del prezzo vero e sull'RSI di prezzi a segni casuali (<code>strategy.signflip</code>).</td><td class="text">L'AUC dei percorsi casuali è la geometria della definizione di svolta. Conta la differenza fra l'RSI vero e la dispersione dei semi.</td></tr>
+        <tr><td><code>detect --residual BTC</code>, <code>--residual ew</code></td><td class="text">Zigzag 0,2 e Shiryaev 0,5 su ETH e SOL meno β·BTC (o su tutti e tre meno il mercato equipesato di <code>SYMBOLS</code>), contro gli stessi rivelatori su v2 e sull'RSI del prezzo; filtro sul livello letto all'allarme e all'estremo.</td><td class="text">Confronta <code>price: rsi 12</code> con <code>residual: rsi 12</code>: <code>dev_bp</code> contro <code>fee_bp</code> (le due gambe), <code>kept_dev</code> contro il suo errore, il segno per fold.</td></tr>
+      </tbody>
+    </table></div>
+    <ul class="points">
+      <li>v2 non si può calcolare su uno spread o su un percorso ricostruito, perché legge le candele. È per il 92,5% un RSI a 12 (HANDOFF §14), quindi il confronto equo è RSI contro RSI, con v2 come riferimento.</li>
+      <li>β usa le 2.880 barre (un mese) chiuse prima della barra: il self-check verifica che un salto del mercato sposti il β della barra dopo e non quello della barra stessa.</li>
+      <li>Verificato: ruff, black, 51 test, self-check di <code>detect</code> su una sega, su libri di allarmi costruiti e su una copertura sintetica. Le tre CLI sono girate da capo a fondo su uno store sintetico, poi cancellato: i loro numeri non significano niente. La sessione non raggiungeva <code>data.binance.vision</code>.</li>
+    </ul>
+  </section>
+
+  <section id="ordine">
+    <div class="sechead"><div class="step">ORDINE E CRITERI</div><h2>Cosa eseguire, in che ordine, e cosa conta come risultato</h2></div>
+    <ol class="points">
+      <li><strong><code>detect --features 0.5</code>.</strong> Previsione dai quintili del §17: <code>kept</code> vicino a 0. Se è oltre due errori in entrambi i periodi, le sedici colonne portano informazione e la legge non regge.</li>
+      <li><strong><code>detect --null 0.5 --seeds 0 1 2 3 4</code>.</strong> Se l'AUC reale cade dentro quella dei semi, la separazione degli allarmi è geometria, e il ramo "filtro sugli allarmi" è chiuso per tutte le colonne del prezzo.</li>
+      <li><strong><code>detect --residual BTC</code> e <code>--residual ew</code>.</strong> Criterio della strada 1. È l'unico dei tre che può aprire una strada.</li>
+      <li><strong>Event study dello shock di flusso</strong> (strada 2), da scrivere.</li>
+      <li><strong>Simulazione degli ordini limite</strong> (strada 3), solo se 3 o 4 trovano un rientro.</li>
+    </ol>
+    <div class="callout">
+      <p><strong>Dati puliti per la conferma.</strong> L'hold-out dei fold 3-4 è consumato (§17). Ma l'RSI sul prezzo e sul residuo non leggono v2: si possono misurare sul 2021-2025, prima del test di v2, un periodo mai usato per scegliere una regola. È la conferma più economica di qualunque cosa i punti 1-3 trovino, in attesa del walk-forward di v2 dal 2023 (HANDOFF §17, punto 1). Oggi <code>residual_study</code> lavora sulle righe di v2: estenderlo a tutta la storia è un passo piccolo.</p>
+    </div>
+  </section>
+
+  <section id="limiti">
+    <div class="sechead"><div class="step">LIMITI</div><h2>Cosa questo documento non può dire</h2></div>
+    <ul class="points">
+      <li><strong>Le simulazioni sono mondi sintetici.</strong> Dimostrano la legge e il meccanismo; la quota di varianza che torna alla media (30%, 10%) e l'emivita (24 barre) sono ipotesi, non stime. Quanta ce n'è nel mercato è esattamente ciò che <code>--residual</code> misura.</li>
+      <li><strong>σ = 0,4% a barra e le fee dei perpetual OKX</strong> (0,05% taker, 0,02% maker per lato) non sono misurati qui; le fee vengono da fonti secondarie.</li>
+      <li><strong>La formula 0,8·ρ·σ<sub>h</sub> è gaussiana</strong>: sulle code grasse la simulazione chiede circa il 10% di IC in più.</li>
+      <li><strong>Test multipli.</strong> Il progetto ha provato decine di varianti; le righe positive vanno lette con una correzione (Deflated Sharpe, Benjamini-Hochberg). Le due righe positive del §17 hanno t 0,85 e 1,16.</li>
+      <li><strong>Funding e prestito</strong> dei trade coperti e short non sono nel conto.</li>
+    </ul>
+  </section>
+
+  <section id="riproduci">
+    <div class="sechead"><div class="step">RIPRODURRE</div><h2>I comandi e il codice delle simulazioni</h2></div>
+    <pre>uv run python -m tradingvision.detect --features 0.5           # con la tabella di conservazione e kept
+uv run python -m tradingvision.detect --null 0.5 --seeds 0 1 2 3 4
+uv run python -m tradingvision.detect --residual BTC --gate 0.4 0.5 0.6
+uv run python -m tradingvision.detect --residual ew</pre>
+    <p>Le simulazioni non sono un modulo del progetto: sono quattro script numpy/pandas, riportati qui sotto così come hanno prodotto i numeri del documento. Si eseguono da una cartella che contenga <code>sim.py</code>: <code>python sim.py rw h=0.3</code> (legge, quintili, modello sulla candela successiva), <code>python run2.py</code> (tabella dei mondi), <code>python run3.py</code> (filtro sul livello), <code>python run4.py</code> (modello sul rendimento del trade). Il seme è fisso (7), e l'ordine delle chiamate dentro ogni script decide i numeri.</p>
+    <details>
+      <summary><code>sim.py</code>: i due mondi, il rivelatore, il meta-classificatore, il filtro AND</summary>
+<pre>&quot;&quot;&quot;Monte Carlo for the false-alarm question, on worlds whose truth is known.
+
+S1  martingale world (GARCH + t(4) returns): zigzag on an RSI(12) of the price, alarms judged
+    against the RSI&#x27;s own centred turns at 12 bars, as detect.py does on v2. Meta-classifier on
+    alarm-time features; the user&#x27;s AND filter with a next-bar sign model of accuracy a.
+S2  same pipeline on a world with a mean-reverting component, and the clutter-cancellation
+    variant: common random-walk factor + idiosyncratic OU, detector on raw price vs on residual.
+&quot;&quot;&quot;
+
+from __future__ import annotations
+
+import sys
+
+import numpy as np
+import pandas as pd
+
+W = 12
+rng = np.random.default_rng(7)
+
+
+def garch_returns(n, sigma=0.004, a=0.08, b=0.90, df=4):
+    w = sigma**2 * (1 - a - b)
+    eps = rng.standard_t(df, n) / np.sqrt(df / (df - 2))
+    r = np.empty(n)
+    s2 = sigma**2
+    for t in range(n):
+        r[t] = np.sqrt(s2) * eps[t]
+        s2 = w + a * r[t] ** 2 + b * s2
+    return r
+
+
+def rsi(logp, n=W):
+    d = np.diff(logp, prepend=logp[0])
+    up, dn = np.clip(d, 0, None), np.clip(-d, 0, None)
+    au = pd.Series(up).ewm(alpha=1 / n, adjust=False).mean().to_numpy()
+    ad = pd.Series(dn).ewm(alpha=1 / n, adjust=False).mean().to_numpy()
+    return np.where(au + ad &gt; 0, (au - ad) / (au + ad + 1e-18), 0.0)  # = RSI/50 - 1
+
+
+def centred_turns(v, w=W):
+    &quot;&quot;&quot;+1 at lows, -1 at highs: centred-window extrema, same-kind runs merged to the most extreme.&quot;&quot;&quot;
+    s = pd.Series(v)
+    mx = s.rolling(2 * w + 1, center=True).max().to_numpy()
+    mn = s.rolling(2 * w + 1, center=True).min().to_numpy()
+    cand = [(t, -1) for t in np.flatnonzero(v == mx)] + [(t, 1) for t in np.flatnonzero(v == mn)]
+    cand.sort()
+    out = []
+    for t, k in cand:
+        if out and out[-1][1] == k:
+            if (k == -1 and v[t] &gt; v[out[-1][0]]) or (k == 1 and v[t] &lt; v[out[-1][0]]):
+                out[-1] = (t, k)
+        else:
+            out.append((t, k))
+    e = np.zeros(len(v))
+    for t, k in out:
+        e[t] = k
+    return e
+
+
+def zigzag(v, h):
+    out = np.zeros(len(v))
+    side, hi, lo = 0, v[0], v[0]
+    for t in range(len(v)):
+        hi, lo = max(hi, v[t]), min(lo, v[t])
+        if side &gt;= 0 and hi - v[t] &gt;= h:
+            out[t], side, lo = -1, -1, v[t]
+        elif side &lt;= 0 and v[t] - lo &gt;= h:
+            out[t], side, hi = 1, 1, v[t]
+    return out
+
+
+def alarm_table(v, logp, h, truth):
+    &quot;&quot;&quot;One row per alarm: truth, gross to next alarm, gross of the first bar, alarm-time features.&quot;&quot;&quot;
+    a = zigzag(v, h)
+    at = np.flatnonzero(a != 0)
+    tt = np.flatnonzero(truth != 0)
+    r = np.diff(logp, append=logp[-1])  # r[t] = logp[t+1]-logp[t]: the bar after the alarm
+    sig = pd.Series(np.diff(logp, prepend=logp[0])).rolling(4 * W).std().to_numpy()
+    rows = []
+    for k in range(1, len(at) - 1):
+        i, kind = at[k], a[at[k]]
+        side, start, end = -kind, at[k - 1], at[k + 1]
+        j = np.searchsorted(tt, i, side=&quot;right&quot;) - 1
+        legv, legp = side * v[start : i + 1], side * logp[start : i + 1]
+        rows.append(
+            {
+                &quot;t&quot;: i,
+                &quot;kind&quot;: kind,
+                &quot;true&quot;: int(j &gt;= 0 and truth[tt[j]] == kind),
+                &quot;gross&quot;: kind * (logp[end] - logp[i]),
+                &quot;first&quot;: kind * r[i],
+                &quot;bars&quot;: end - i,
+                &quot;level&quot;: side * v[i - 1],
+                &quot;extreme&quot;: legv.max(),
+                &quot;retrace&quot;: legv.max() - side * v[i],
+                &quot;move&quot;: side * (v[i] - v[i - 1]),
+                &quot;age&quot;: i - start,
+                &quot;leg_move&quot;: (legp[-1] - legp[0]) / (sig[i] * np.sqrt(max(i - start, 1))),
+                &quot;price_retrace&quot;: (legp.max() - legp[-1]) / sig[i],
+                &quot;vol&quot;: sig[i],
+            }
+        )
+    return pd.DataFrame(rows).dropna()
+
+
+def logit(X, y, iters=30):
+    b = np.zeros(X.shape[1])
+    for _ in range(iters):
+        p = 1 / (1 + np.exp(-X @ b))
+        b += np.linalg.solve((X * (p * (1 - p))[:, None]).T @ X + 1e-6 * np.eye(len(b)), X.T @ (y - p))
+    return b
+
+
+def auc(score, y):
+    r = pd.Series(score).rank().to_numpy()
+    n1 = y.sum()
+    return (r[y == 1].sum() - n1 * (n1 + 1) / 2) / (n1 * (len(y) - n1))
+
+
+FEATS = [&quot;level&quot;, &quot;extreme&quot;, &quot;retrace&quot;, &quot;move&quot;, &quot;age&quot;, &quot;leg_move&quot;, &quot;price_retrace&quot;, &quot;vol&quot;]
+
+
+def meta(f, cols=FEATS):
+    &quot;&quot;&quot;Logistic on true/false fitted on the first half; AUC and quintiles on the second half.&quot;&quot;&quot;
+    dev = (f.index &lt; len(f) // 2)
+    z = ((f[cols] - f[cols][dev].mean()) / f[cols][dev].std()).clip(-5, 5).to_numpy()
+    X = np.column_stack([np.ones(len(z)), z])
+    y = f[&quot;true&quot;].to_numpy().astype(float)
+    s = X @ logit(X[dev], y[dev])
+    q = np.searchsorted(np.quantile(s[dev], [0.2, 0.4, 0.6, 0.8]), s) + 1
+    g = f.assign(q=q)[~dev]
+    by = g.groupby(&quot;q&quot;).agg(n=(&quot;true&quot;, &quot;size&quot;), P=(&quot;true&quot;, &quot;mean&quot;), all_bp=(&quot;gross&quot;, &quot;mean&quot;))
+    by[&quot;W_bp&quot;] = g[g[&quot;true&quot;] == 1].groupby(&quot;q&quot;).gross.mean()
+    by[&quot;L_bp&quot;] = -g[g[&quot;true&quot;] == 0].groupby(&quot;q&quot;).gross.mean()
+    by[[&quot;all_bp&quot;, &quot;W_bp&quot;, &quot;L_bp&quot;]] *= 1e4
+    by[&quot;L/W&quot;] = by.L_bp / by.W_bp
+    by[&quot;P/(1-P)&quot;] = by.P / (1 - by.P)
+    # the money objective: regression of gross on the same features, first half -&gt; second half
+    beta = np.linalg.lstsq(X[dev], f.gross.to_numpy()[dev], rcond=None)[0]
+    pr = X @ beta
+    qq = np.searchsorted(np.quantile(pr[dev], [0.2, 0.4, 0.6, 0.8]), pr) + 1
+    reg = f.assign(q=qq)[~dev].groupby(&quot;q&quot;).gross.mean() * 1e4
+    by[&quot;reg_q_bp&quot;] = reg
+    return auc(s[~dev], y[~dev]), by
+
+
+def and_filter(f, a, fee_bp=20):
+    &quot;&quot;&quot;User&#x27;s scheme: a next-bar sign model of accuracy a; keep an alarm only if it agrees.
+
+    The model is a noisy oracle of sign(first bar): information it would have to find in reality.
+    Kept alarms hold to the next alarm (flat if that one is dropped: the gross still runs to it).
+    &quot;&quot;&quot;
+    true_sign = np.sign(f[&quot;first&quot;].to_numpy())
+    right = rng.random(len(f)) &lt; a
+    says = np.where(right, true_sign, -true_sign)  # +1: the bar goes the alarm&#x27;s way
+    keep = says &gt; 0
+    k = f[keep]
+    return {
+        &quot;a&quot;: a,
+        &quot;kept&quot;: keep.mean(),
+        &quot;precision&quot;: k[&quot;true&quot;].mean(),
+        &quot;bp_trade&quot;: k.gross.mean() * 1e4,
+        &quot;bp_first_bar&quot;: k[&quot;first&quot;].mean() * 1e4,
+        &quot;bp_rest&quot;: (k.gross - k[&quot;first&quot;]).mean() * 1e4,
+        &quot;net_bp&quot;: k.gross.mean() * 1e4 - fee_bp,
+    }
+
+
+def world(kind, n=200_000, assets=6, **kw):
+    out = []
+    for _ in range(assets):
+        if kind == &quot;rw&quot;:
+            logp = np.cumsum(garch_returns(n))
+        elif kind == &quot;mr&quot;:  # random walk + AR(1) component: half-life hl bars, share of variance at 1 bar
+            hl, share = kw.get(&quot;hl&quot;, 24), kw.get(&quot;share&quot;, 0.3)
+            phi = 0.5 ** (1 / hl)
+            r = garch_returns(n)
+            e_rw, e_ar = np.sqrt(1 - share) * r, np.sqrt(share) * garch_returns(n)
+            u = np.zeros(n)
+            for t in range(1, n):
+                u[t] = phi * u[t - 1] + e_ar[t]
+            logp = np.cumsum(e_rw) + u
+        out.append(logp)
+    return out
+
+
+def run(kind, h=0.3, **kw):
+    tabs = []
+    for logp in world(kind, **kw):
+        v = rsi(logp)
+        tabs.append(alarm_table(v, logp, h, centred_turns(v)))
+    return pd.concat(tabs, ignore_index=True)
+
+
+if __name__ == &quot;__main__&quot;:
+    pd.set_option(&quot;display.width&quot;, 200, &quot;display.precision&quot;, 3)
+    which = sys.argv[1] if len(sys.argv) &gt; 1 else &quot;rw&quot;
+    kw = {k: float(v) for k, v in (x.split(&quot;=&quot;) for x in sys.argv[2:])}
+    h = kw.pop(&quot;h&quot;, 0.3)
+    f = run(which, h=h, **kw)
+    turns_per_alarm = None
+    print(f&quot;== world {which} {kw} h={h}: {len(f)} alarms, precision {f[&#x27;true&#x27;].mean():.3f}&quot;)
+    print(
+        f&quot;true alarms {f[f[&#x27;true&#x27;]==1].gross.mean()*1e4:+.1f} bp, false {f[f[&#x27;true&#x27;]==0].gross.mean()*1e4:+.1f} bp,&quot;
+        f&quot; all {f.gross.mean()*1e4:+.2f} +/- {f.gross.std()/np.sqrt(len(f))*1e4:.2f} bp, bars {f.bars.mean():.1f}&quot;
+    )
+    A, by = meta(f)
+    print(f&quot;meta-classifier AUC (out of sample) {A:.3f}&quot;)
+    print(by)
+    print(pd.DataFrame([and_filter(f, a) for a in (0.5, 0.52, 0.55, 0.6, 0.7, 0.8, 0.9)]).set_index(&quot;a&quot;))
+    print(&quot;E|first bar| bp:&quot;, f[&quot;first&quot;].abs().mean() * 1e4)
+
+
+def mti(n=200_000, assets=6, h=0.3, hl=24, share_mkt=0.7, share_ou=0.1, est=True):
+    &quot;&quot;&quot;Clutter cancellation: common random-walk factor + idiosyncratic OU + idiosyncratic RW.
+
+    Detector on each asset&#x27;s raw price vs on its residual against the market (beta known or
+    estimated causally on a rolling window). Trades on the raw asset vs on the hedged spread.
+    &quot;&quot;&quot;
+    m = np.cumsum(garch_returns(n))
+    phi = 0.5 ** (1 / hl)
+    raw, res = [], []
+    for _ in range(assets):
+        beta = rng.uniform(0.8, 1.4)
+        e = np.sqrt(share_ou) * garch_returns(n)
+        u = np.zeros(n)
+        for t in range(1, n):
+            u[t] = phi * u[t - 1] + e[t]
+        idio = np.cumsum(np.sqrt(1 - share_mkt - share_ou) * garch_returns(n))
+        logp = beta * np.sqrt(share_mkt) * m + idio + u
+        if est:  # rolling OLS beta on the last 960 bars of returns, known at t
+            ra, rm = pd.Series(np.diff(logp, prepend=0)), pd.Series(np.diff(m, prepend=0))
+            b = (ra.rolling(960).cov(rm) / rm.rolling(960).var()).shift(1).bfill().to_numpy()
+            spread = np.cumsum(np.diff(logp, prepend=0) - b * np.diff(m, prepend=0))
+        else:
+            spread = logp - beta * np.sqrt(share_mkt) * m
+        v1, v2 = rsi(logp), rsi(spread)
+        raw.append(alarm_table(v1, logp, h, centred_turns(v1)))
+        res.append(alarm_table(v2, spread, h, centred_turns(v2)))
+    return pd.concat(raw, ignore_index=True), pd.concat(res, ignore_index=True)
+
+
+def summary(name, f):
+    A, by = meta(f)
+    return {
+        &quot;series&quot;: name,
+        &quot;alarms&quot;: len(f),
+        &quot;precision&quot;: f[&quot;true&quot;].mean(),
+        &quot;true_bp&quot;: f[f[&quot;true&quot;] == 1].gross.mean() * 1e4,
+        &quot;false_bp&quot;: f[f[&quot;true&quot;] == 0].gross.mean() * 1e4,
+        &quot;all_bp&quot;: f.gross.mean() * 1e4,
+        &quot;se&quot;: f.gross.std() / np.sqrt(len(f)) * 1e4,
+        &quot;meta_auc&quot;: A,
+        &quot;q1_bp&quot;: by.all_bp.iloc[0],
+        &quot;q5_bp&quot;: by.all_bp.iloc[-1],
+        &quot;q5_P&quot;: by.P.iloc[-1],
+        &quot;reg_q1&quot;: by.reg_q_bp.iloc[0],
+        &quot;reg_q5&quot;: by.reg_q_bp.iloc[-1],
+    }</pre>
+    </details>
+    <details>
+      <summary><code>run2.py</code>: la tabella dei mondi e il residuo</summary>
+<pre>import sys
+import numpy as np, pandas as pd
+import sim
+pd.set_option(&quot;display.width&quot;, 220, &quot;display.precision&quot;, 3)
+rows = []
+f = sim.run(&quot;rw&quot;, h=0.3); rows.append(sim.summary(&quot;martingala&quot;, f))
+for hl, share in ((24, 0.1), (24, 0.3), (96, 0.3)):
+    f = sim.run(&quot;mr&quot;, h=0.3, hl=hl, share=share)
+    rows.append(sim.summary(f&quot;RW + AR(hl={hl}, quota={share})&quot;, f))
+    if (hl, share) == (24, 0.3):
+        A, by = sim.meta(f); print(f&quot;mr hl=24 share=0.3 meta AUC {A:.3f}&quot;); print(by)
+raw, res = sim.mti()
+rows.append(sim.summary(&quot;MTI: prezzo grezzo&quot;, raw))
+rows.append(sim.summary(&quot;MTI: residuo vs mercato&quot;, res))
+print(pd.DataFrame(rows).set_index(&quot;series&quot;).to_string())</pre>
+    </details>
+    <details>
+      <summary><code>run3.py</code>: il filtro sul livello nei quattro mondi</summary>
+<pre>import numpy as np, pandas as pd
+import sim
+pd.set_option(&quot;display.width&quot;, 220, &quot;display.precision&quot;, 2)
+tabs = {&quot;martingala&quot;: sim.run(&quot;rw&quot;, h=0.3), &quot;RW+AR(hl24,q0.3)&quot;: sim.run(&quot;mr&quot;, h=0.3, hl=24, share=0.3)}
+tabs[&quot;MTI grezzo&quot;], tabs[&quot;MTI residuo&quot;] = sim.mti()
+rows = []
+for name, f in tabs.items():
+    for L in (0.0, 0.3, 0.4, 0.5, 0.6):
+        k = f[f.extreme &gt;= L]
+        g = k.gross * 1e4
+        rows.append({&quot;serie&quot;: name, &quot;L&quot;: L, &quot;trade&quot;: len(k), &quot;precision&quot;: k[&quot;true&quot;].mean(), &quot;bp&quot;: g.mean(), &quot;se&quot;: g.std() / np.sqrt(len(k)),
+                     &quot;bp/sigma_bar&quot;: (k.gross / k.vol).mean()})
+print(pd.DataFrame(rows).set_index([&quot;serie&quot;, &quot;L&quot;]).to_string())</pre>
+    </details>
+    <details>
+      <summary><code>run4.py</code>: il secondo modello sul rendimento del trade</summary>
+<pre>import numpy as np, pandas as pd
+import sim
+f = sim.run(&quot;rw&quot;, h=0.3)
+g = f.gross.to_numpy()
+print(&quot;E|R_hold| bp&quot;, np.abs(g).mean()*1e4, &quot;sd&quot;, g.std()*1e4, &quot;E|r_1| bp&quot;, f[&quot;first&quot;].abs().mean()*1e4)
+rng = np.random.default_rng(1)
+# second model on the HOLDING-PERIOD return: Gaussian score with correlation rho to R_hold/sd
+z = (g - g.mean()) / g.std()
+for rho in (0.03, 0.05, 0.1, 0.15, 0.2, 0.3):
+    s = rho * z + np.sqrt(1 - rho**2) * rng.standard_normal(len(z))
+    keep = s &gt; 0
+    print(f&quot;rho {rho:.2f}  acc {np.mean(np.sign(s)==np.sign(g)):.3f}  kept {keep.mean():.2f}  precision {f[&#x27;true&#x27;][keep].mean():.3f}  bp/trade {g[keep].mean()*1e4:+.1f}  (0.8*rho*sd {0.798*rho*g.std()*1e4:.1f})&quot;)</pre>
+    </details>
+  </section>
+
+  <section id="fonti">
+    <div class="sechead"><div class="step">FONTI</div><h2>Letteratura</h2></div>
+    <ul class="points">
+      <li>Campbell, Grossman, Wang (1993), <a href="https://dash.harvard.edu/bitstream/1/3128710/2/campbell_trading.pdf">Trading Volume and Serial Correlation in Stock Returns</a>: i movimenti con volume alto, di flusso non informativo, tendono a invertire.</li>
+      <li>Riksbank WP 413, <a href="https://www.riksbank.se/globalassets/media/rapporter/working-papers/2022/no.-413-trading-volume-and-liquidity-provision-in-cryptocurreny-markets.pdf">Trading volume and liquidity provision in cryptocurrency markets</a>; <a href="https://fairfield.elsevierpure.com/en/publications/cryptocurrency-return-reversals/">Cryptocurrency return reversals</a>; <a href="https://arxiv.org/pdf/2608.21888">Short-horizon mean reversion in cryptocurrency markets</a>.</li>
+      <li><a href="https://t2r2.star.titech.ac.jp/rrws/file/CTT100941776/ATD100000413/">Trasmissione ritardata da BTC alle altcoin</a> (Tokyo Tech).</li>
+      <li>Meta-labeling: <a href="https://en.wikipedia.org/wiki/Meta-Labeling">panoramica</a>, <a href="https://hudsonthames.org/?p=3043">Hudson &amp; Thames</a>; Joubert, Meta-Labeling: Calibration and Position Sizing, Journal of Financial Data Science.</li>
+      <li>Shiryaev, Zhitlukhin, <a href="https://arxiv.org/abs/1212.03709">arresto ottimo di un moto browniano con disordine</a>.</li>
+      <li><a href="https://arxiv.org/pdf/2512.12844">Selective Conformal Risk Control</a>.</li>
+      <li><a href="https://arxiv.org/pdf/2109.10662v1">Pairs trading sulle crypto</a>, sensibilità ai costi.</li>
+      <li>Fee OKX: <a href="https://www.finder.com/cryptocurrency/exchanges/okx-exchange-review">Finder</a>, da verificare sul sito di OKX.</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+(function () {
+  const NS = "http://www.w3.org/2000/svg";
+  const num = (v, d = 1) => (v < 0 ? "−" : "") + Math.abs(v).toFixed(d).replace(".", ",");
+  const sgn = (v, d = 1) => (v > 0 ? "+" : "") + num(v, d);
+  function el(tag, attrs, parent) {
+    const e = document.createElementNS(NS, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function ticks(lo, hi, n) {
+    const span = hi - lo, raw = span / n, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+    const step = [1, 2, 2.5, 5, 10].map(s => s * mag).find(s => span / s <= n) || 10 * mag;
+    const out = [];
+    for (let v = Math.floor(lo / step) * step; v <= Math.ceil(hi / step) * step + 1e-9; v += step) out.push(+v.toFixed(6));
+    return out;
+  }
+  function tooltip(box) {
+    const t = document.createElement("div");
+    t.className = "tip"; t.hidden = true; box.appendChild(t);
+    return {
+      show(html, x, y) {
+        t.innerHTML = html; t.hidden = false;
+        const bw = box.clientWidth, tw = t.offsetWidth;
+        t.style.left = Math.min(Math.max(8, x + 14), bw - tw - 8) + "px";
+        t.style.top = Math.max(8, y - t.offsetHeight - 10) + "px";
+      },
+      hide() { t.hidden = true; }
+    };
+  }
+  const line = (name, value) => `<div class="r"><span>${name}</span><span>${value}</span></div>`;
+  // Shape is the second channel next to colour: circle, square, diamond.
+  function mark(svg, shape, x, y, color, r = 5) {
+    const ring = { stroke: "var(--surface)", "stroke-width": 2 };
+    if (shape === "square") return el("rect", { x: x - r, y: y - r, width: 2 * r, height: 2 * r, rx: 1.5, fill: color, ...ring }, svg);
+    if (shape === "diamond") return el("path", { d: `M${x},${y - r - 1.5} L${x + r + 1.5},${y} L${x},${y + r + 1.5} L${x - r - 1.5},${y} Z`, fill: color, ...ring }, svg);
+    return el("circle", { cx: x, cy: y, r, fill: color, ...ring }, svg);
+  }
+  // Every point gets a hit area larger than its mark and its own tooltip.
+  function hover(box, svg, W, points) {
+    const tip = tooltip(box);
+    points.forEach(p => {
+      const hit = el("circle", { cx: p.x, cy: p.y, r: 13, fill: "transparent" }, svg);
+      hit.addEventListener("pointerenter", evt => {
+        const b = box.getBoundingClientRect();
+        tip.show(p.html, evt.clientX - b.left, evt.clientY - b.top);
+      });
+      hit.addEventListener("pointerleave", () => tip.hide());
+    });
+  }
+  function frame(box, W, H, aria) {
+    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": aria });
+    box.querySelector(".plot").appendChild(svg);
+    return svg;
+  }
+
+  // 1. The law: L/W against P/(1-P), log-log, the diagonal is the martingale.
+  (function () {
+    const box = document.getElementById("c-law");
+    const W = 720, H = 390, m = { l: 56, r: 24, t: 26, b: 50 };
+    const lo = Math.log(0.8), hi = Math.log(20);
+    const X = v => m.l + (W - m.l - m.r) * (Math.log(v) - lo) / (hi - lo);
+    const Y = v => m.t + (H - m.t - m.b) * (1 - (Math.log(v) - lo) / (hi - lo));
+    const svg = frame(box, W, H, "Diagramma a dispersione in scala logaritmica del rapporto perdita su vincita contro le odds della precisione: i punti della simulazione martingala stanno sulla diagonale, quelli del mondo con ritorno alla media se ne staccano nel quintile migliore.");
+    [1, 2, 4, 8, 16].forEach(v => {
+      el("line", { x1: X(v), x2: X(v), y1: m.t, y2: H - m.b, stroke: "var(--rule)", "stroke-width": 1 }, svg);
+      el("line", { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), stroke: "var(--rule)", "stroke-width": 1 }, svg);
+      el("text", { x: X(v), y: H - m.b + 18, "text-anchor": "middle" }, svg).textContent = v;
+      el("text", { x: m.l - 8, y: Y(v) + 4, "text-anchor": "end" }, svg).textContent = v;
+    });
+    el("text", { x: m.l + (W - m.l - m.r) / 2, y: H - 8, "text-anchor": "middle" }, svg).textContent = "P / (1 − P), odds della precisione";
+    el("text", { x: 12, y: 14 }, svg).textContent = "L / W";
+    el("line", { x1: X(0.8), y1: Y(0.8), x2: X(20), y2: Y(20), stroke: "var(--axis)", "stroke-width": 2 }, svg);
+    el("text", { x: X(11), y: Y(16.5), class: "lab", "text-anchor": "end" }, svg).textContent = "martingala: L/W = P/(1−P)";
+    el("text", { x: X(1.05), y: Y(10) }, svg).textContent = "sopra: il filtro perde";
+    el("text", { x: X(18), y: Y(1.1), "text-anchor": "end" }, svg).textContent = "sotto: il filtro guadagna";
+    const sims = [
+      { name: "simulazione, martingala", color: "var(--s1)", shape: "circle", pts: [
+        ["quintile 1", 0.638, 43.25, 78.10, -0.66], ["quintile 2", 0.738, 33.38, 96.74, -0.72], ["quintile 3", 0.814, 27.79, 113.25, 1.59],
+        ["quintile 4", 0.861, 20.69, 137.38, -1.26], ["quintile 5", 0.937, 11.46, 166.26, 0.34]] },
+      { name: "simulazione, ritorno alla media", color: "var(--s2)", shape: "square", pts: [
+        ["quintile 1", 0.634, 34.59, 82.98, -8.45], ["quintile 2", 0.743, 30.56, 99.98, -3.02], ["quintile 3", 0.810, 24.71, 119.80, -2.75],
+        ["quintile 4", 0.873, 19.77, 134.75, 0.22], ["quintile 5", 0.936, 20.95, 164.99, 9.05]] },
+      { name: "dati veri, v2", color: "var(--s3)", shape: "diamond", pts: [
+        ["--features, quintile 1, sviluppo", 0.53, 49, 68, null], ["--features, quintile 5, sviluppo", 0.83, 25, 99, null],
+        ["--features, quintile 1, hold-out", 0.60, 40, 65, null], ["--features, quintile 5, hold-out", 0.86, 9, 102, null],
+        ["Shiryaev 0,5, sviluppo", 0.691, 30.9, 79.8, null], ["Shiryaev 0,9, sviluppo", 0.864, 21.9, 89.0, null], ["zigzag 0,2, sviluppo", 0.759, 19.8, 79.5, null]] },
+    ];
+    const hits = [];
+    sims.forEach(s => s.pts.forEach(([lab, P, Wn, L, bp]) => {
+      const x = X(P / (1 - P)), y = Y(L / Wn);
+      mark(svg, s.shape, x, y, s.color);
+      const implied = P * Wn - (1 - P) * L;
+      hits.push({ x, y, html: `<div class="t">${s.name}</div><div class="r"><span>${lab}</span><span></span></div>` +
+        line("P", num(P, 3)) + line("W, vero", sgn(Wn) + " bp") + line("L, falso", "−" + num(L) + " bp") +
+        line("L/W", num(L / Wn, 2)) + line("P/(1−P)", num(P / (1 - P), 2)) +
+        line(bp === null ? "P·W − (1−P)·L" : "lordo per trade", sgn(bp === null ? implied : bp) + " bp") });
+    }));
+    hover(box, svg, W, hits);
+  })();
+
+  // 2. The second model: bp a trade against its accuracy, two horizons, the 20 bp line.
+  (function () {
+    const box = document.getElementById("c-two");
+    const W = 720, H = 330, m = { l: 52, r: 24, t: 26, b: 50 };
+    const X = v => m.l + (W - m.l - m.r) * (v - 50) / (92 - 50);
+    const Y = v => m.t + (H - m.t - m.b) * (1 - (v - 0) / (35 - 0));
+    const svg = frame(box, W, H, "Grafico del guadagno per trade contro l'accuratezza del secondo modello: sul rendimento del trade si supera 20 bp poco oltre il 55%, sulla candela successiva serve il 90%.");
+    [0, 5, 10, 15, 20, 25, 30, 35].forEach(v => {
+      el("line", { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), stroke: v === 0 ? "var(--axis)" : "var(--rule)", "stroke-width": 1 }, svg);
+      el("text", { x: m.l - 8, y: Y(v) + 4, "text-anchor": "end" }, svg).textContent = v;
+    });
+    [50, 55, 60, 65, 70, 75, 80, 85, 90].forEach(v => {
+      el("text", { x: X(v), y: H - m.b + 18, "text-anchor": "middle" }, svg).textContent = v + "%";
+    });
+    el("text", { x: m.l + (W - m.l - m.r) / 2, y: H - 8, "text-anchor": "middle" }, svg).textContent = "accuratezza del secondo modello sul segno che predice";
+    el("text", { x: 12, y: 14 }, svg).textContent = "bp";
+    el("line", { x1: m.l, x2: W - m.r, y1: Y(20), y2: Y(20), stroke: "var(--fg2)", "stroke-width": 1.25, "stroke-dasharray": "5 4" }, svg);
+    el("text", { x: X(62), y: Y(20) - 6, class: "lab" }, svg).textContent = "andata e ritorno, 20 bp";
+    const series = [
+      { name: "sul segno della candela successiva", color: "var(--s2)", shape: "square", pts: [
+        [50, 0.29, "a 0,50", 0.796], [52, 0.96, "a 0,52", 0.800], [55, 2.99, "a 0,55", 0.807], [60, 6.01, "a 0,60", 0.820],
+        [70, 10.09, "a 0,70", 0.844], [80, 15.46, "a 0,80", 0.868], [90, 20.80, "a 0,90", 0.891]] },
+      { name: "sul rendimento dell'intero trade", color: "var(--s1)", shape: "circle", pts: [
+        [50.6, 3.2, "ρ 0,03", 0.798], [51.1, 5.2, "ρ 0,05", 0.802], [52.5, 10.6, "ρ 0,10", 0.805], [53.9, 16.5, "ρ 0,15", 0.812],
+        [55.4, 21.9, "ρ 0,20", 0.818], [58.0, 30.4, "ρ 0,30", 0.831]] },
+    ];
+    const hits = [];
+    series.forEach(s => {
+      el("path", { d: s.pts.map(([a, bp], i) => `${i ? "L" : "M"}${X(a)},${Y(bp)}`).join(""), fill: "none", stroke: s.color, "stroke-width": 2, "stroke-linejoin": "round" }, svg);
+      s.pts.forEach(([a, bp, lab, prec]) => {
+        mark(svg, s.shape, X(a), Y(bp), s.color);
+        hits.push({ x: X(a), y: Y(bp), html: `<div class="t">${s.name}</div>` + line(lab, "") + line("accuratezza", num(a) + "%") +
+          line("precisione degli allarmi", num(prec, 3)) + line("lordo per trade", sgn(bp) + " bp") });
+      });
+    });
+    el("text", { x: X(58.0) + 10, y: Y(30.4) + 4, class: "lab" }, svg).textContent = "orizzonte del trade";
+    el("text", { x: X(70), y: Y(10.09) + 28, class: "lab", "text-anchor": "middle" }, svg).textContent = "candela successiva";
+    hover(box, svg, W, hits);
+  })();
+
+  // 3. The gate in two worlds, with ±1 se whiskers; the two series sit 6px apart.
+  (function () {
+    const box = document.getElementById("c-gate");
+    const W = 720, H = 330, m = { l: 52, r: 190, t: 26, b: 50 };
+    const Ls = [0, 0.3, 0.4, 0.5, 0.6];
+    const yt = ticks(-4, 14, 6), y0 = yt[0], y1 = yt[yt.length - 1];
+    const X = i => m.l + (W - m.l - m.r) * i / (Ls.length - 1);
+    const Y = v => m.t + (H - m.t - m.b) * (1 - (v - y0) / (y1 - y0));
+    const svg = frame(box, W, H, "Grafico del lordo per trade contro il livello del filtro: nel random walk resta a zero a ogni livello, con ritorno alla media sale fino a più 10 bp a 0,6.");
+    yt.forEach(v => {
+      el("line", { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), stroke: v === 0 ? "var(--axis)" : "var(--rule)", "stroke-width": 1 }, svg);
+      el("text", { x: m.l - 8, y: Y(v) + 4, "text-anchor": "end" }, svg).textContent = num(v, 0);
+    });
+    Ls.forEach((L, i) => { el("text", { x: X(i), y: H - m.b + 18, "text-anchor": "middle" }, svg).textContent = L === 0 ? "0" : num(L); });
+    el("text", { x: m.l + (W - m.l - m.r) / 2, y: H - 8, "text-anchor": "middle" }, svg).textContent = "livello L raggiunto dalla gamba";
+    el("text", { x: 12, y: 14 }, svg).textContent = "bp";
+    const series = [
+      { name: "martingala", short: "martingala", color: "var(--s1)", shape: "circle", dx: -3,
+        bp: [0.18, 0.50, 1.02, 1.35, -0.25], se: [0.53, 0.78, 1.02, 1.53, 2.60], n: [80609, 44567, 28751, 15417, 6348], p: [0.81, 0.88, 0.91, 0.94, 0.96] },
+      { name: "ritorno alla media", short: "ritorno alla media", color: "var(--s2)", shape: "square", dx: 3,
+        bp: [-1.23, 3.56, 6.82, 7.49, 10.34], se: [0.49, 0.73, 0.99, 1.52, 2.77], n: [82938, 44416, 27232, 13399, 4858], p: [0.81, 0.89, 0.92, 0.95, 0.97] },
+    ];
+    const hits = [];
+    series.forEach(s => {
+      el("path", { d: s.bp.map((v, i) => `${i ? "L" : "M"}${X(i) + s.dx},${Y(v)}`).join(""), fill: "none", stroke: s.color, "stroke-width": 2, "stroke-linejoin": "round" }, svg);
+      s.bp.forEach((v, i) => {
+        const x = X(i) + s.dx;
+        el("line", { x1: x, x2: x, y1: Y(v + s.se[i]), y2: Y(v - s.se[i]), stroke: "var(--fg2)", "stroke-width": 1.25 }, svg);
+        mark(svg, s.shape, x, Y(v), s.color);
+        hits.push({ x, y: Y(v), html: `<div class="t">${s.name}</div>` + line("livello", i ? num(Ls[i]) : "0") +
+          line("trade", s.n[i].toLocaleString("it-IT")) + line("precisione", num(s.p[i], 2)) + line("lordo per trade", sgn(v) + " ± " + num(s.se[i]) + " bp") });
+      });
+      const last = s.bp.length - 1;
+      el("text", { x: X(last) + 14, y: Y(s.bp[last]) + 4, class: "lab" }, svg).textContent = `${s.short} ${sgn(s.bp[last])}`;
+    });
+    hover(box, svg, W, hits);
+  })();
+
+  // 4. The square-root law: what is left of a turn after d bars, against 1 - sqrt(d / 12).
+  (function () {
+    const box = document.getElementById("c-decay");
+    const W = 720, H = 300, m = { l: 52, r: 24, t: 16, b: 50 };
+    const X = d => m.l + (W - m.l - m.r) * d / 12;
+    const Y = v => m.t + (H - m.t - m.b) * (1 - v);
+    const svg = frame(box, W, H, "Quota del valore di una svolta che resta dopo d barre di ritardo: i punti misurati seguono la curva uno meno radice di d su 12.");
+    [0, 0.25, 0.5, 0.75, 1].forEach(v => {
+      el("line", { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), stroke: v === 0 ? "var(--axis)" : "var(--rule)", "stroke-width": 1 }, svg);
+      el("text", { x: m.l - 8, y: Y(v) + 4, "text-anchor": "end" }, svg).textContent = Math.round(v * 100) + "%";
+    });
+    for (let d = 0; d <= 12; d += 2) el("text", { x: X(d), y: H - m.b + 18, "text-anchor": "middle" }, svg).textContent = d;
+    el("text", { x: m.l + (W - m.l - m.r) / 2, y: H - 8, "text-anchor": "middle" }, svg).textContent = "barre di ritardo dopo la svolta (finestra 12)";
+    const curve = [];
+    for (let i = 0; i <= 120; i++) { const d = i / 10; curve.push(`${i ? "L" : "M"}${X(d)},${Y(1 - Math.sqrt(d / 12))}`); }
+    el("path", { d: curve.join(""), fill: "none", stroke: "var(--s1)", "stroke-width": 2 }, svg);
+    const v2 = [180.4, 126.1, 99.4, 79.4, 68.0, 54.1, 41.3];
+    const hits = [];
+    v2.forEach((bp, d) => {
+      const share = bp / v2[0];
+      mark(svg, "square", X(d), Y(share), "var(--s2)");
+      hits.push({ x: X(d), y: Y(share), html: `<div class="t">svolte della predizione v2, sviluppo</div>` + line("ritardo", d + " barre") +
+        line("lordo per trade", sgn(bp) + " bp") + line("quota rimasta", Math.round(share * 100) + "%") + line("1 − √(d/12)", Math.round((1 - Math.sqrt(d / 12)) * 100) + "%") });
+    });
+    [[1, 0.73], [2, 0.59], [4, 0.40], [6, 0.27]].forEach(([d, share]) => {
+      mark(svg, "diamond", X(d), Y(share), "var(--s3)");
+      hits.push({ x: X(d), y: Y(share), html: `<div class="t">svolte del prezzo (strategy --null)</div>` + line("ritardo", d + " barre") +
+        line("quota rimasta", Math.round(share * 100) + "%") + line("1 − √(d/12)", Math.round((1 - Math.sqrt(d / 12)) * 100) + "%") });
+    });
+    el("text", { x: X(12) - 4, y: Y(0.3), class: "lab", "text-anchor": "end" }, svg).textContent = "a d = w la curva arriva a zero";
+    hover(box, svg, W, hits);
+  })();
+})();
+</script>
+</body>
+</html>

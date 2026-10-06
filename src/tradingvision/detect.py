@@ -164,10 +164,10 @@ gross, never what it moves the AUC or the false alarms, and these ask that quest
   reduces them to `kept`, the share of the precision's face value that reaches the gross: 0 under
   a martingale, 1 when W and L do not move.
 - `--null` runs the separation on prices with every return's sign drawn at random, through an RSI
-  at 12 since v2 needs candles. A simulation outside this repo (a GARCH random walk, zigzag 0.3 on
-  its RSI at 12, a logistic on the eight columns of `geometry`) gave an AUC of 0.69, above the
-  market's 0.63 here, and every quintile at zero: what the real path adds is its AUC above the
-  random ones.
+  at 12 since v2 needs candles. A simulation (a GARCH random walk, zigzag 0.3 on its RSI at 12, a
+  logistic on the eight columns of `geometry`; its code is in the appendix of `false_alarms.html`)
+  gave an AUC of 0.69, above the market's 0.63 here, and every quintile at zero: what the real
+  path adds is its AUC above the random ones.
 - `--residual MARKET` runs the detectors on each asset less beta times BTC, or the equal-weighted
   market (`ew`). A filter can only pay where the path is not a martingale. In the same simulation,
   with an AR(1) component holding 30% of the variance, keeping the alarms whose leg reached 0.6
