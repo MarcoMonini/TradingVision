@@ -18,6 +18,10 @@ etichette retrospettive. Tutto il lavoro predittivo e la prima pipeline (`datase
 **Aggiornamento 2026-10-03, più tardi** — ramo `claude/strategy-study`: lo studio delle regole di
 trading sulla predizione v2 (`strategy.py`) e tutte quelle regole sulla pagina chart: sezione 17.
 
+**Aggiornamento 2026-10-06** — ramo `claude/lucid-brahmagupta-1bd8dn`: tre diagnostici in
+`detect.py` per qualunque filtro sui falsi allarmi (conservazione, test nullo, rivelatori sul
+residuo contro il mercato). Scritti e testati, **non ancora eseguiti sullo store**: sezione 19.
+
 ---
 
 ## 1. Cosa è stato misurato, e su cosa
@@ -1071,3 +1075,63 @@ convergeva su zero trade. `OLD/README.md` ha la tabella e l'elenco di cosa è us
 
 **Verificato.** ruff, black, 52 test. La pagina gira su BTC/USD 15m con v2 (regola, libro, fee 0,10%
 in barra laterale) e senza v2, senza eccezioni.
+
+## 19. I falsi allarmi sono un parametro libero: tre diagnostici (2026-10-06, ramo `claude/lucid-brahmagupta-1bd8dn`)
+
+**Domanda.** Un secondo stadio che riduca i falsi allarmi dei rivelatori del §17 (per esempio un
+modello sul segno della candela successiva, in AND con l'allarme) può rendere la regola
+profittevole?
+
+**Risposta teorica, già nei numeri del §17.** No, se legge solo il passato del prezzo. Con P la quota
+di allarmi veri, W quanto fa un allarme vero e L quanto perde uno falso, il teorema d'arresto
+opzionale impone P·W = (1−P)·L per *ogni* filtro causale: dove il filtro alza P, W scende e L sale
+finché il lordo torna a zero. I quintili di `--features` lo rispettano entro il rumore (sviluppo:
+53% veri con L/W 1,39 contro P/(1−P) 1,13; 83% con 3,96 contro 4,88). La precisione si compra, e il
+prezzo è il rapporto fra vincita e perdita. Un filtro vale quanto sposta il lordo, non quanto
+sposta l'AUC o i falsi allarmi.
+
+**Cosa è stato aggiunto a `detect.py`.**
+
+- `conservation(f, score, cut)`: per quintile del punteggio, P, W, L, L/W accanto a P/(1−P), il
+  lordo e il lordo "nominale" (P·W̄ − (1−P)·L̄, con W e L fermi alla media del periodo). `kept` è la
+  pendenza del lordo sul nominale fra i quintili, con l'errore: 0 sotto una martingala, 1 se la
+  precisione vale quello che promette. `--features` ora stampa anche questa tabella.
+- `geometry` e `null_test` (`--null P [--seeds]`): la stessa separazione vero/falso, con Shiryaev P
+  e otto colonne che richiedono solo serie e chiusura, su v2, sull'RSI a 12 del prezzo vero e
+  sull'RSI di prezzi con il segno di ogni rendimento estratto a caso (`strategy.signflip`). L'AUC
+  dei percorsi casuali è la geometria della definizione di svolta; quello che porta il mercato è la
+  differenza.
+- `residual`, `spreads`, `residual_study` (`--residual BTC|ew [--gate L ...]`): i rivelatori
+  sull'asset meno beta per il mercato (beta su un mese di barre chiuse prima della barra, quindi
+  causale), contro gli stessi rivelatori sul prezzo, con il gate al livello letto all'allarme e
+  all'estremo della gamba. Il trade sullo spread
+  è quello coperto e paga due gambe: `fee_bp` = 2·`FEE`·(1 + |beta|). v2 non si può calcolare su
+  uno spread (legge candele), quindi il confronto equo è RSI sul prezzo contro RSI sul residuo.
+- `_score` è il punteggio logistico che `separate` già calcolava, estratto senza cambiarne i numeri.
+  `BETA_WINDOW` = 96·30 è scelto, non misurato.
+
+**I numeri attesi, da una simulazione fuori dal repo** (random walk GARCH con code t(4), 6 serie da
+200.000 barre, zigzag 0,3 su un RSI a 12, svolte centrate a 12): la catena riproduce le statistiche
+del §17 (80% di allarmi veri, veri +26 bp, falsi −102). Su un random walk puro il meta-classificatore
+arriva ad AUC 0,688, la quota di veri va dal 64% al 94% fra i quintili e ogni quintile fa fra −1,3 e
++1,6 bp, con L/W che segue P/(1−P) (1,81/1,76 … 14,5/15,0). Il modello sulla candela successiva in AND
+rende (2a−1)·E|r₁|, solo sulla prima barra: servono il 90% di accuratezza per 20 bp. Sul rendimento
+dell'intera posizione bastano un IC di 0,15-0,2 (accuratezza 54-55%), con la precisione quasi ferma
+(0,80 → 0,82). Con una componente AR(1) al 30% della varianza, tenere gli allarmi la cui gamba ha raggiunto
+0,6 fa +10,3 bp (errore 2,8) contro −0,3 (2,6) del random walk, alla stessa precisione del 96-97%. Sono numeri di un mondo
+sintetico: dicono cosa cercare, non cosa c'è.
+
+**Verificato.** ruff, black e 51 test. Il self-check di `swing` non è girato: il proxy della sessione
+blocca `download.pytorch.org`, e torch non si installa. Le tre CLI nuove e `--features` sono girate da
+capo a fondo su uno store sintetico, poi cancellato; i loro numeri non significano niente.
+
+**Da eseguire, in ordine** (serve lo store; `data.binance.vision` era bloccato da questa sessione):
+
+1. `detect --features 0.5`: `kept` sulle sedici colonne. La previsione dai quintili del §17 è vicina a 0.
+2. `detect --null 0.5`: se l'AUC dei percorsi casuali è vicina allo 0,63 reale, la separazione degli
+   allarmi è geometria e il ramo "filtro sugli allarmi" è chiuso per tutte le colonne del prezzo.
+3. `detect --residual BTC` e `--residual ew`: lordo, `kept` e gate sul residuo contro il prezzo, a
+   confronto con `fee_bp`. È l'unico dei tre che può aprire una strada. Sui perpetual di OKX (0,05%
+   taker, 0,02% maker per lato, da verificare) le due gambe con beta ≈ 1 costano a taker quanto una
+   gamba spot e a maker meno della metà, più il funding.
+

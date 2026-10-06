@@ -152,6 +152,30 @@ The price's own zigzag at 3-8% retracements is the one row with a positive numbe
 trade, all 16 months; against the same zigzag on 20 sign-randomised paths it is within 0.7-1.6
 null standard deviations and changes sign between folds.
 
+**The false-alarm rate is a free parameter, and three diagnostics say so** (added 2026-10-06, **not
+yet run on the store**). Optional stopping holds for any filter on the past, so where a filter
+raises the share P of true alarms it lowers what a true one makes (W) and raises what a false one
+costs (L) until P W = (1 - P) L again. The quintiles of `--features` above already obey it: 53% true
+with L/W = 68/49 = 1.39 against P/(1-P) = 1.13, 83% with 99/25 = 3.96 against 4.88, on development.
+Precision can be bought, and its price is the payoff ratio. A filter is worth what it moves the
+gross, never what it moves the AUC or the false alarms, and these ask that question:
+
+- `conservation` (printed by `--features`) sets L/W beside P/(1-P) by quintile of the logistic and
+  reduces them to `kept`, the share of the precision's face value that reaches the gross: 0 under
+  a martingale, 1 when W and L do not move.
+- `--null` runs the separation on prices with every return's sign drawn at random, through an RSI
+  at 12 since v2 needs candles. A simulation outside this repo (a GARCH random walk, zigzag 0.3 on
+  its RSI at 12, a logistic on the eight columns of `geometry`) gave an AUC of 0.69, above the
+  market's 0.63 here, and every quintile at zero: what the real path adds is its AUC above the
+  random ones.
+- `--residual MARKET` runs the detectors on each asset less beta times BTC, or the equal-weighted
+  market (`ew`). A filter can only pay where the path is not a martingale. In the same simulation,
+  with an AR(1) component holding 30% of the variance, keeping the alarms whose leg reached 0.6
+  made +10.3 bp (error 2.8) where the random walk made -0.3 (2.6), at the same 96-97% of true
+  alarms. The common move is
+  most of each asset's variance, and the reversal documented at short horizons is in the part it
+  leaves out. The hedged trade pays two legs, `fee_bp`.
+
     uv run python -m tradingvision.detect --zigzag 0.05 0.1 0.15 0.2 0.3 0.5 0.8
     uv run python -m tradingvision.detect --shiryaev 0.5 0.7 0.8 0.9 0.95 0.98 0.99 [--flat]
     uv run python -m tradingvision.detect --shiryaev 0.5 0.9 --zigzag 0.2 --split
@@ -162,6 +186,9 @@ null standard deviations and changes sign between folds.
     uv run python -m tradingvision.detect --oi
     uv run python -m tradingvision.detect --gate 0.1 0.2 0.3 0.4 0.5
     uv run python -m tradingvision.detect --confirm
+    uv run python -m tradingvision.detect --null 0.5 [--seeds 0 1 2]
+    uv run python -m tradingvision.detect --residual BTC [--gate 0.4 0.5 0.6]
+    uv run python -m tradingvision.detect --residual ew
 """
 
 from __future__ import annotations
@@ -172,12 +199,17 @@ import math
 import numpy as np
 import pandas as pd
 
-from tradingvision import legs, strategy
+from tradingvision import legs, stops, strategy
 from tradingvision.data import futures
+from tradingvision.data.binance import SYMBOLS
 from tradingvision.data.binance import load as candles
+from tradingvision.oracle import FEE
 from tradingvision.strategy import fold_of, hold, plain, turn_events
 
 POST = 6  # the first bars of a leg that make the post-turn increment distribution
+# The beta `residual` hedges with: a month of 15m bars, the window `_zscore` already reads. Chosen,
+# not measured; a beta that moves slower than the legs is the only requirement.
+BETA_WINDOW = 96 * 30
 # `fit` on v2's walk-forward predictions, development folds only (ETH, BTC, SOL, 2025-06-01 to
 # 2026-01-28), in the head's raw units. Fixed here so the chart page, which has no store, runs the
 # detector the study measured; `main` refits it and refuses to run if the two have drifted apart.
@@ -431,6 +463,19 @@ def at_alarm(found: pd.Series, x: pd.Series, close: pd.Series, truth: pd.Series,
     return pd.DataFrame(rows).dropna()
 
 
+def _columns(f: pd.DataFrame) -> list[str]:
+    """The columns of an alarm table that were known at the alarm: everything but who, when and what came."""
+    return [c for c in f.columns if c not in ("symbol", "when", "side", "true", "gross")]
+
+
+def _score(f: pd.DataFrame, cut: pd.Timestamp) -> np.ndarray:
+    """A logistic of `true` on every known column, standardised and fitted on development, at every alarm."""
+    cols, dev = _columns(f), (f.when < cut).to_numpy()
+    z = ((f[cols] - f[cols][dev].mean()) / f[cols][dev].std()).clip(-5, 5).to_numpy()
+    X = np.column_stack([np.ones(len(z)), z])
+    return X @ _logit(X[dev], f.true.to_numpy()[dev].astype(float))
+
+
 def separate(f: pd.DataFrame, cut: pd.Timestamp) -> tuple[pd.DataFrame, tuple[float, float], pd.DataFrame]:
     """How well each column, and a logistic on all of them, tells true alarms from false ones.
 
@@ -440,7 +485,7 @@ def separate(f: pd.DataFrame, cut: pd.Timestamp) -> tuple[pd.DataFrame, tuple[fl
     a true and a false alarm each make there.
     """
     dev = (f.when < cut).to_numpy()
-    cols = [c for c in f.columns if c not in ("symbol", "when", "side", "true", "gross")]
+    cols = _columns(f)
     y = f.true.to_numpy()
     rows = []
     for col in cols:
@@ -456,9 +501,7 @@ def separate(f: pd.DataFrame, cut: pd.Timestamp) -> tuple[pd.DataFrame, tuple[fl
             }
         )
     one = pd.DataFrame(rows).set_index("column").sort_values("auc_dev", ascending=False)
-    z = ((f[cols] - f[cols][dev].mean()) / f[cols][dev].std()).clip(-5, 5).to_numpy()
-    X = np.column_stack([np.ones(len(z)), z])
-    score = X @ _logit(X[dev], y[dev].astype(float))
+    score = _score(f, cut)
     both = (_auc(score[dev], y[dev]), _auc(score[~dev], y[~dev]))
     q = np.searchsorted(np.quantile(score[dev], [0.2, 0.4, 0.6, 0.8]), score) + 1
     frame = f.assign(period=np.where(dev, "dev", "holdout"), q=q)
@@ -474,6 +517,134 @@ def separate(f: pd.DataFrame, cut: pd.Timestamp) -> tuple[pd.DataFrame, tuple[fl
         }
     )
     return one, both, by
+
+
+def conservation(f: pd.DataFrame, score: np.ndarray, cut: pd.Timestamp) -> tuple[pd.DataFrame, dict]:
+    """The precision a filter buys, and how much of it reaches the gross: `(by quintile, kept)`.
+
+    If the log price is a martingale given what `score` reads, every quintile of it grosses zero, so
+    P W = (1 - P) L in each: where the true alarms are likelier they are worth less and the false
+    ones cost more, by the ratio that cancels, and `L/W` tracks `P/(1-P)`. `naive_bp` is what a
+    quintile would gross if W and L stayed at their period's means, the face value of its precision.
+    `kept` is the least-squares slope of the gross on that face value across the five quintiles, per
+    period, with its error from the quintiles' (`dev_se`, `holdout_se`): 0 when the martingale takes
+    the whole gain back, 1 when the precision is worth what it says. It is the number a filter has
+    to move, and AUC is not: a logistic on a random walk's alarms separates the true from the false
+    as well as one on the market's. Quintiles cut on development.
+    """
+    dev = (f.when < cut).to_numpy()
+    q = np.searchsorted(np.quantile(score[dev], [0.2, 0.4, 0.6, 0.8]), score) + 1
+    frame = f.assign(period=np.where(dev, "dev", "holdout"), q=q)
+    rows, kept = [], {}
+    for period, g in frame.groupby("period"):
+        w, loss = g.gross[g.true == 1].mean(), -g.gross[g.true == 0].mean()
+        part = []
+        for k, h in g.groupby("q"):
+            p = h.true.mean()
+            win, lose = h.gross[h.true == 1].mean(), -h.gross[h.true == 0].mean()
+            part.append(
+                {
+                    "period": period,
+                    "q": k,
+                    "alarms": len(h),
+                    "share_true": p,
+                    "true_bp": win * 1e4,
+                    "false_bp": -lose * 1e4,
+                    "L/W": lose / win,
+                    "P/(1-P)": p / (1 - p),
+                    "all_bp": h.gross.mean() * 1e4,
+                    "se": h.gross.std() / np.sqrt(len(h)) * 1e4,
+                    "naive_bp": (p * w - (1 - p) * loss) * 1e4,
+                }
+            )
+        t = pd.DataFrame(part)
+        face = t.naive_bp - t.naive_bp.mean()
+        kept[period] = float((face * (t.all_bp - t.all_bp.mean())).sum() / (face**2).sum())
+        kept[f"{period}_se"] = float(np.sqrt((face**2 * t.se**2).sum()) / (face**2).sum())
+        rows += part
+    return pd.DataFrame(rows).set_index(["period", "q"]), kept
+
+
+def geometry(found: pd.Series, x: pd.Series, close: pd.Series, truth: pd.Series, window: int = strategy.WINDOW):
+    """`at_alarm`'s columns that need only the series and its close: the ones a rebuilt path has too.
+
+    From `x` the level, the leg's extreme, the retracement from it, the last move and the leg's age;
+    from the price the leg's move in units of its noise, the retracement from the leg's extreme in
+    units of the bar's volatility (`at_alarm` reads it in ATR, which needs the highs and lows a
+    sign-randomised close does not have) and the volatility itself. `close` is on `x`'s index, so
+    the first `4 * window` bars have no volatility and their alarms are dropped.
+    """
+    rows = []
+    for sym in x.index.get_level_values(1).unique():
+        xv, a, t = x.xs(sym, level=1), found.xs(sym, level=1), truth.xs(sym, level=1)
+        t = t[t != 0]
+        lc = np.log(close.xs(sym, level=1).reindex(xv.index).to_numpy())
+        sigma = pd.Series(lc).diff().rolling(4 * window).std().to_numpy()
+        v = xv.to_numpy()
+        at = np.flatnonzero(a.to_numpy() != 0)
+        for k, i in enumerate(at):
+            kind = a.iloc[i]
+            side, start = -kind, at[k - 1] if k else 0
+            leg_x, leg_c = side * v[start : i + 1], side * lc[start : i + 1]
+            j = t.index.searchsorted(xv.index[i], side="right") - 1
+            end = at[k + 1] if k + 1 < len(at) else len(v) - 1
+            rows.append(
+                {
+                    "symbol": sym,
+                    "when": xv.index[i],
+                    "side": side,
+                    "true": int(j >= 0 and t.iloc[j] == kind),
+                    "gross": kind * (lc[end] - lc[i]),
+                    "level": side * v[i - 1],
+                    "extreme": leg_x.max(),
+                    "retrace": leg_x.max() - side * v[i],
+                    "move": side * (v[i] - v[i - 1]),
+                    "age": i - start,
+                    "leg_move": (leg_c[-1] - leg_c[0]) / (sigma[i] * np.sqrt(max(i - start, 1))),
+                    "price_retrace": (leg_c.max() - leg_c[-1]) / sigma[i],
+                    "volatility": sigma[i],
+                }
+            )
+    return pd.DataFrame(rows).dropna()
+
+
+def null_test(pred: pd.Series, close: pd.Series, cut: pd.Timestamp, p: float = 0.5, seeds=(0, 1, 2)) -> pd.DataFrame:
+    """Does telling a true alarm from a false one read the market, or the definition of a turn?
+
+    Shiryaev at `p` with its own `fit`, judged against each series' own centred turns, on v2 and on
+    an RSI at 12 of the real price, then on the RSI of prices rebuilt with every return's sign drawn
+    at random (`strategy.signflip`), where no reader can know the next leg. The logistic reads the
+    eight `geometry` columns on every path. Whatever AUC the random paths reach is the geometry of
+    an extreme of noise: a turn that has gone further is likelier to be a turn on any path. What
+    the market adds is the real RSI's AUC above them, and it pays only if `kept` is above zero too.
+    The RSI stands in for v2 on the random paths because v2 needs candles a rebuilt close has not.
+    """
+    paths = [("v2", "real", pred, close), ("rsi 12", "real", strategy.rsi(pred.index, close=close), close)]
+    for k in seeds:
+        c = strategy.signflip(close, k)
+        paths.append(("rsi 12", f"random signs #{k}", strategy.rsi(pred.index, close=c), c))
+    rows = []
+    for name, path, x, c in paths:
+        f = geometry(alarms(x, shiryaev, fit(x, cut), p), x, c, turn_events(x, strategy.WINDOW))
+        dev, y, score = (f.when < cut).to_numpy(), f.true.to_numpy(), _score(f, cut)
+        kept = conservation(f, score, cut)[1]
+        rows.append(
+            {
+                "series": name,
+                "path": path,
+                "alarms": len(f),
+                "share_true": y.mean(),
+                "auc_dev": _auc(score[dev], y[dev]),
+                "auc_holdout": _auc(score[~dev], y[~dev]),
+                "kept_dev": kept["dev"],
+                "kept_dev_se": kept["dev_se"],
+                "kept_holdout": kept["holdout"],
+                "kept_holdout_se": kept["holdout_se"],
+                "dev_bp": f.gross[dev].mean() * 1e4,
+                "holdout_bp": f.gross[~dev].mean() * 1e4,
+            }
+        )
+    return pd.DataFrame(rows).set_index(["series", "path"])
 
 
 def gate(
@@ -507,6 +678,110 @@ def gate(
             off = off or rejected
         kept.iloc[i], on.iloc[i] = keep, live
     return kept, on
+
+
+def residual(asset: pd.Series, market: pd.Series, window: int = BETA_WINDOW) -> tuple[pd.Series, pd.Series]:
+    """`(spread, beta)`: the asset's price with the market's move taken out, bar by bar.
+
+    The spread's 15m log return is the asset's less beta times the market's, beta the slope of the
+    first on the second over the `window` bars that closed before the bar: the hedge a bar is paid
+    on was set at the close before it. Held long, the spread is one unit of the asset against beta
+    units of the market, rebalanced every bar, which a month's beta makes a rounding error.
+    """
+    ra, rm = np.log(asset).diff(), np.log(market).reindex(asset.index).diff()
+    n = window // 2
+    beta = (ra.rolling(window, min_periods=n).cov(rm) / rm.rolling(window, min_periods=n).var()).shift()
+    e = (ra - beta * rm).fillna(0.0)
+    return np.exp(np.log(asset.iloc[0]) + e.cumsum()), beta
+
+
+def spreads(index: pd.MultiIndex, market: str = "BTC", window: int = BETA_WINDOW) -> tuple[pd.Series, pd.Series]:
+    """`residual` of each asset of `index` against `market`, over the whole store: `(spread, beta)`.
+
+    `market` is a symbol of the store, or `ew` for the equal-weighted 15m return of `SYMBOLS` other
+    than the asset: no one trades it, but it is the common move itself rather than one pair's. The
+    spread spans the store, so an RSI on it has its warm-up behind it; `beta` is on `index`.
+    """
+    closes: dict[str, pd.Series] = {}
+
+    def close_of(s: str) -> pd.Series:
+        if s not in closes:
+            closes[s] = candles(s, "15m").close
+        return closes[s]
+
+    parts, betas = [], []
+    for sym in index.get_level_values(1).unique():
+        a = close_of(sym)
+        if market == "ew":
+            r = pd.concat({s: np.log(close_of(s)).diff() for s in SYMBOLS if s != sym}, axis=1).reindex(a.index)
+            m = np.exp(r.mean(axis=1).fillna(0.0).cumsum())
+        else:
+            m = close_of(market)
+        s, b = residual(a, m, window)
+        parts.append(s.set_axis(pd.MultiIndex.from_arrays([s.index, [sym] * len(s)], names=index.names)))
+        betas.append(b.set_axis(pd.MultiIndex.from_arrays([b.index, [sym] * len(b)], names=index.names)))
+    return pd.concat(parts), pd.concat(betas).reindex(index)
+
+
+def residual_study(
+    pred: pd.Series,
+    close: pd.Series,
+    cut: pd.Timestamp,
+    market: str = "BTC",
+    levels=(0.4, 0.5, 0.6),
+    h: float = 0.2,
+    p: float = 0.5,
+) -> pd.DataFrame:
+    """The detectors on each asset's price and on its residual against `market`, on the same assets.
+
+    Three series: v2 and an RSI at 12 on the price, and an RSI at 12 on the spread (`spreads`). v2
+    cannot be run on a spread, it reads candles; it is 92.5% an RSI at 12 (§14 of the handoff), so
+    the fair comparison is the RSI on the price against the RSI on the spread, and v2 is the
+    yardstick. Zigzag `h` and Shiryaev `p` (fitted on each series), alone and through `gate` at
+    each level, read at the alarm as the page runs it and at the leg's extreme as the simulation in
+    the module's docstring did, closing on a rejected alarm. A trade on the spread is the hedged
+    trade, and it pays two legs: `fee_bp` is the round trip at `oracle.FEE` times 1 + |beta| at the
+    entries. AUC and `kept` are `null_test`'s, at each detector's alarms. The levels are in each
+    series' own units, and v2's are shrunk towards zero, so a level is not the same selection on v2
+    as on an RSI.
+    """
+    assets = [s for s in strategy.ASSETS if s != market]
+    keep = pred.index.get_level_values(1).isin(assets)
+    pred, close = pred[keep], close[keep]
+    spread, beta = spreads(pred.index, market)
+    on_index = spread.reindex(pred.index)
+    series = {
+        "price: v2": (pred, close, None),
+        "price: rsi 12": (strategy.rsi(pred.index), close, None),
+        "residual: rsi 12": (strategy.rsi(pred.index, close=spread), on_index, 1 + beta.abs()),
+    }
+    rows = []
+    for name, (x, c, hedge) in series.items():
+        truth, params = turn_events(x, strategy.WINDOW), fit(x, cut)
+        bars = pd.DataFrame({col: c for col in stops.OHLC})  # flat bars: no barrier is asked of them
+        for label, found in (
+            (f"zigzag {h:g}", alarms(x, zigzag, h)),
+            (f"shiryaev {p:g}", alarms(x, shiryaev, params, p)),
+        ):
+            fee = 2 * FEE * (1.0 if hedge is None else float(hedge[found != 0].mean())) * 1e4
+            row = {"series": name, "detector": label, "fee_bp": fee}
+            f = geometry(found, x, c, truth)
+            score, dev = _score(f, cut), (f.when < cut).to_numpy()
+            kept = conservation(f, score, cut)[1]
+            stats = {
+                "auc_dev": _auc(score[dev], f.true.to_numpy()[dev]),
+                "kept_dev": kept["dev"],
+                "kept_dev_se": kept["dev_se"],
+            }
+            rows.append(row | {"gate": "none"} | match(found, truth, cut) | stats | book(found, c, cut))
+            for where in ("alarm", "extreme"):
+                for level in levels:
+                    kept_sig, on = gate(found, x, level, where, True)
+                    held = strategy.walked(kept_sig, bars, on=on)[2]
+                    # A level no alarm reaches keeps no trade, and `_periods` cannot date an empty book.
+                    found_any = _periods(held, cut) if len(held) else {"dev_n": 0, "holdout_n": 0}
+                    rows.append(row | {"gate": f"{where}, close {level:g}"} | found_any)
+    return pd.DataFrame(rows).set_index(["series", "detector", "gate"])
 
 
 def _zscore(v: pd.Series, n: int = 96 * 30) -> pd.Series:
@@ -714,6 +989,38 @@ def _selfcheck() -> None:
     noisy = z.copy()
     noisy.iloc[turns[0] + 6] = 1.0
     assert match(noisy, truth, cut)["false"] == 1 / len(turns)
+    # `geometry` on the saw: every alarm closing a whole leg is true, 3 bars and 0.15 off its extreme,
+    # 12 bars after the last, and grosses the 0.30 the next leg travels before its own alarm. The
+    # first 48 bars have no volatility yet and the last alarm's trade is cut by the data.
+    g = geometry(z, x, np.exp(x), truth)
+    assert len(g) == 8 and g.true.all() and np.allclose(g.retrace, 0.15) and (g.age == 12).all(), g
+    assert np.allclose(g.gross.iloc[:-1], 0.30)
+    # `conservation`: precision worth its face value keeps all of it, a martingale's keeps none. Five
+    # score buckets from 50% to 90% true; true alarms make 30 bp; false ones lose a fixed 80 bp, or
+    # whatever makes the bucket gross zero. The same rows on both sides of the cut.
+    share = np.repeat([0.5, 0.6, 0.7, 0.8, 0.9], 100)
+    y = (np.tile(np.arange(100), 5) < share * 100).astype(int)
+    when = pd.date_range("2025-06-01", periods=2 * len(y), freq="h", tz="UTC")
+    for loss, expected in ((np.full(len(y), 0.008), 1.0), (0.003 * share / (1 - share), 0.0)):
+        gross = np.where(y == 1, 0.003, -loss)
+        f = pd.DataFrame({"when": when, "true": np.tile(y, 2), "gross": np.tile(gross, 2)})
+        table, kept = conservation(f, np.tile(np.repeat(np.arange(5.0), 100), 2), when[len(y)])
+        assert np.isclose(kept["dev"], expected) and np.isclose(kept["holdout"], expected), kept
+    assert np.allclose(table["L/W"], table["P/(1-P)"]) and np.allclose(table.all_bp, 0.0)
+    # `residual`: beta found, the market's move gone from the spread, and the hedge a bar is paid on
+    # set before it: a jump in the market moves the next bar's beta and not its own.
+    rng = np.random.default_rng(0)
+    t = pd.date_range("2025-01-01", periods=4000, freq="15min", tz="UTC")
+    rm = rng.normal(0, 0.004, len(t))
+    ra = 1.5 * rm + rng.normal(0, 0.002, len(t))
+    market, asset = pd.Series(np.exp(np.cumsum(rm)), index=t), pd.Series(100 * np.exp(np.cumsum(ra)), index=t)
+    spread, beta = residual(asset, market, 960)
+    assert abs(beta.iloc[-1] - 1.5) < 0.05, beta.iloc[-1]
+    assert abs(np.corrcoef(np.log(spread).diff()[1000:], rm[1000:])[0, 1]) < 0.05
+    jump = rm.copy()
+    jump[3000] += 0.1
+    moved = residual(asset, pd.Series(np.exp(np.cumsum(jump)), index=t), 960)[1]
+    assert moved.iloc[3000] == beta.iloc[3000] and moved.iloc[3001] != beta.iloc[3001]
 
 
 def main() -> None:
@@ -729,6 +1036,9 @@ def main() -> None:
     ap.add_argument("--gate", type=float, nargs="+", metavar="L", help="zigzag 0.2 and Shiryaev 0.5 past these levels")
     ap.add_argument("--oi", action="store_true", help="open interest behind the move: IC, quadrants, a 48-bar rule")
     ap.add_argument("--confirm", action="store_true", help="open interest as a confirmation of the rules' signals")
+    ap.add_argument("--null", type=float, metavar="P", help="Shiryaev P's true/false split on real and random paths")
+    ap.add_argument("--seeds", type=int, nargs="+", default=[0, 1, 2], help="with --null: the random paths")
+    ap.add_argument("--residual", metavar="MARKET", help="the detectors on each asset less beta times MARKET, or ew")
     args = ap.parse_args()
 
     _selfcheck()
@@ -736,6 +1046,16 @@ def main() -> None:
     series = {"prediction": pred, "rsi 12": strategy.rsi(pred.index)}
     pd.set_option("display.width", 250)
     truth = turn_events(pred, strategy.WINDOW)
+    if args.null is not None:
+        t = null_test(pred, close, cut, args.null, args.seeds)
+        print(f"shiryaev {args.null}: true and false alarms told apart on the real price and on random paths\n")
+        print(t.round(3).to_string())
+        return
+    if args.residual:
+        t = residual_study(pred, close, cut, args.residual, tuple(args.gate or (0.4, 0.5, 0.6)))
+        print(f"the detectors on the price and on the residual against {args.residual}; bp a trade, no fees\n")
+        print(t.filter(regex="^(?!.*stopped)").round(2).to_string())
+        return
     if args.confirm:
         p, bars, rows = fit(pred, cut), strategy.ohlc(pred.index), []
         rules = {
@@ -804,6 +1124,12 @@ def main() -> None:
         print(one.round(3).to_string())
         print(f"\nlogistic on every column, fitted on development: AUC {dev:.3f}, hold-out {holdout:.3f}\n")
         print(by.round(2).to_string())
+        table, kept = conservation(f, _score(f, cut), cut)
+        print(
+            f"\nwhat the precision is worth: kept {kept['dev']:.2f} +/- {kept['dev_se']:.2f} on development,"
+            f" {kept['holdout']:.2f} +/- {kept['holdout_se']:.2f} on the hold-out\n"
+        )
+        print(table.round(2).to_string())
         return
     if args.sl:
         found, bars = alarms(pred, shiryaev, fit(pred, cut), 0.5), strategy.ohlc(pred.index)

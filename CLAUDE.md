@@ -63,6 +63,7 @@ uv run python -m tradingvision.threshold --pred data/pred-swing-*.parquet --at 0
 uv run python -m tradingvision.stops --pred data/pred-swing-*.parquet --at 0.5 --grid  # the same rule with exits
 uv run python -m tradingvision.strategy --candidates --at 0.40  # the rule study on v2's predictions, ETH/BTC/SOL
 uv run python -m tradingvision.detect --shiryaev 0.5 0.9 0.99 --split  # recognising v2's turns causally: what it earns
+uv run python -m tradingvision.detect --null 0.5    # does telling true alarms from false read the market? (also --residual BTC)
 ```
 
 `swing --save` writes `data/swing.pt`, and v2 is `--save data/swing-v2.pt`, the only checkpoint the
