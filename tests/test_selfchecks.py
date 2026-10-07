@@ -12,7 +12,7 @@ import sys
 
 import pytest
 
-from tradingvision import detect, stopmap, stops, strategy, swingrule, threshold
+from tradingvision import detect, stopmap, stops, strategy, swingrule, threshold, timing
 
 SELF_CHECKED = [
     "tradingvision.data.candles",
@@ -77,3 +77,8 @@ def test_futures_selfcheck():
 def test_stopmap_selfcheck():
     """`stopmap` keeps its checks in a function: its `__main__` reads the 5m store of fifteen pairs."""
     stopmap._selfcheck()
+
+
+def test_timing_selfcheck():
+    """`timing` keeps its checks in a function: its `__main__` reads the 4h and 15m store."""
+    timing._selfcheck()

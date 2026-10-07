@@ -1267,6 +1267,19 @@ bp). L'unica traccia è il primo quarto del 2021-2025 (2021-01 → 2022-02): piv
 40 bp si vedono l'86-100% delle volte, 20 il 32-38%, zero passa al più il 3,4%. La mappa delle
 liquidazioni non è stata fatta.
 
+**Strada 5 — la base lenta non passa** (`timing --base [--period] [--fee]`, `--power`). `rsi_centered` a
+24 su 4h, long sopra 0,3, flat sotto 0, 13 `TRADABLE` a pesi uguali, commissione OKX. Sharpe per fold
+(errore a blocchi settimanali), regola contro hold: sviluppo +1,06 / −1,14 contro +1,51 / −1,45 (errori
+1,0-1,8); hold-out −3,39 / +1,88 contro −1,56 / +2,14; 2021-2025 +2,97 / −0,10 / +1,41 / +0,98 contro
++1,96 / −0,50 / +1,40 / +0,56. Scalata con w = min(σ*/σ̂, w_max) (σ̂ esponenziale a 30 giorni, σ* la
+mediana dei 365 giorni prima), Sharpe scalata meno non scalata sullo sviluppo +0,05 / −0,44 a w_max 1,
++0,13 / −0,52 a w_max 2: nessuna variante passa. Senza leva il tetto lega quasi sempre. Potenza: le
+differenze vere sono fra −0,05 e +0,07 di Sharpe e il criterio le vede il 3-23% delle volte. **Il
++0,116 non si riproduce**: `swing.baselines` sulle righe del passo 7 (`data/swing-4h-full.parquet`,
+finestra 24, 20 `STUDY`) dà +0,126 a 0,25% (lordo 0,182, hold +0,057), come la tabella del passo 7
+della specifica, e +0,159 a 0,10%. CLAUDE.md, `OLD/README.md`, il commento di `swing.BASELINES` e
+questo file citano +0,116: da allineare.
+
 ### Tolto
 
 Gli ordini limite agli estremi (2026-10-07): simulati, il loro vantaggio è solo di costo (2-3 bp di
