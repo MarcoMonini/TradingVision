@@ -1295,6 +1295,20 @@ a N 96**: +13,4 / +23,3 sullo sviluppo, +20,2 / +16,3 sull'hold-out, +44,5 / +17
 ± 4 bp per esecuzione, +0,04 log l'anno per coppia. È l'unico numero positivo in ogni fold del piano, e
 decresce nel tempo sul 2021-2025. Da confermare in paper trading con il test per scommessa, scritto prima.
 
+**Strada 3 — la liquidità non separa gli estremi di v2** (`events --liquidity [--period]`, `--power`).
+Un evento per escursione nel 10% di coda di |v2| (0,519 grezzo, dallo sviluppo), 15 coppie, rendimento
+contro la gamba a 12 / 24 / 48 barre; sei stati in terzili tagliati sullo sviluppo (Amihud, volatilità,
+volume della gamba per ora, profondità entro l'1%, sessione di New York, drawdown del paniere); medie
+per evento, errore a rapporto sui blocchi; spread di Abdi-Ranaldo 0-12 bp. Ogni estremo di v2 a 48
+barre: −14,7 / +23,7 sullo sviluppo, −36,0 / −30,8 sull'hold-out (errori 13-18); il fold decide il segno,
+non lo stato. Criterio: 0 di 18 (v2 e RSI) su sviluppo e hold-out, 0 di 15 sul 2021-2025. Sul 2021-2025
+la volatilità ha il segno di Nagel (terzile agitato +29,7 / +16,1 / +9,2 / +13,6 a 12 barre, calmo −14,2
+/ −8,4 / −0,8 / −0,6), sotto i 20 bp salvo il fold 1, e le gambe di volume pesante rientrano mentre le
+sottili proseguono (Campbell-Grossman-Wang, al contrario dell'orientamento fissato prima). Potenza:
+l'effetto richiesto si vede il 7-18% delle volte, il doppio il 23-78%. `metrics.blocked` come media
+avrebbe detto +21 bp dove gli eventi fanno +0,3: un movimento che prosegue porta più coppie nella coda
+nello stesso blocco.
+
 ### Tolto
 
 Gli ordini limite agli estremi (2026-10-07): simulati, il loro vantaggio è solo di costo (2-3 bp di

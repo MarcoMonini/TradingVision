@@ -571,6 +571,40 @@ details pre { border: 0; padding: 0; }
       <dt>Se no</dt><dd>Lo stato non separa gli estremi. Resta la strada 4, che guarda il singolo evento (lo shock) e non lo stato.</dd>
       <dt>Dati e stato</dt><dd>Store, 15 asset dal 2017 (il volume in dollari c'è); <code>bookDepth</code> solo per 3 asset e sedici mesi. Da scrivere: un event study agli estremi, che serve anche alla strada 4.</dd>
     </dl></div>
+    <div class="sub-section" id="liquidita-esito">
+      <h3>Misurato il 7 ottobre <span class="chip bad"><i>✕</i> non passa</span></h3>
+      <p><code>events --liquidity</code>: un evento per escursione, alla barra in cui |v2| entra nel suo 10% di coda (|v2| ≥ 0,519 grezzo, tagliato sullo sviluppo; 5% e 15% come controllo), sulle 15 coppie; rendimento contro la gamba a 12, 24, 48 barre, positivo se rientra. Sei stati, ognuno orientato perché il terzile 3 sia l'illiquido: Amihud a 96 barre contro la sua mediana a 30 giorni, volatilità di un giorno contro la sua mediana, volume della gamba contro quello tipico della stessa ora, profondità entro l'1% (BTC, ETH, SOL), sessione di New York, drawdown del paniere da 3 giorni. Terzili tagliati sullo sviluppo e riusati. Medie per evento, errori a blocchi con lo stimatore a rapporto. Spread di Abdi e Ranaldo (2017): 0-12 bp, quasi sempre 0, quindi il costo è la commissione.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Ogni estremo, bp per evento</th><th>fold</th><th>eventi</th><th>12 barre</th><th>24</th><th>48</th></tr></thead>
+        <tbody>
+          <tr><td>v2, sviluppo</td><td>1</td><td>4.384</td><td>+0,3 ± 5,4</td><td>−9,1 ± 9,5</td><td>−14,7 ± 12,6</td></tr>
+          <tr><td></td><td>2</td><td>3.915</td><td>−10,5 ± 11,3</td><td>+4,4 ± 12,5</td><td>+23,7 ± 18,5</td></tr>
+          <tr><td>v2, hold-out</td><td>3</td><td>3.272</td><td>−15,6 ± 7,1</td><td>−24,2 ± 12,6</td><td>−36,0 ± 17,9</td></tr>
+          <tr><td></td><td>4</td><td>2.807</td><td>−0,5 ± 5,9</td><td>−4,4 ± 8,9</td><td>−30,8 ± 16,3</td></tr>
+          <tr class="sep"><td>RSI 12, 2021-25</td><td>1-4</td><td>17.600-19.300</td><td>+3,8 / +4,0 / +4,0 / +4,7</td><td>+0,7 / +5,7 / +4,4 / +0,3</td><td>−9,7 / +7,4 / +5,4 / +1,9</td></tr>
+          <tr><td>segni casuali, sviluppo</td><td>1 / 2</td><td></td><td>−0,5 / −1,9</td><td>+0,1 / −1,9</td><td>+0,6 / −3,5</td></tr>
+        </tbody>
+      </table></div>
+      <p class="caption"><code>events --liquidity --period dev|holdout|2021</code>. Errori del 2021-2025 da 3,4 a 13,1 bp; quelli dei percorsi nulli da 1,2 a 4,0. La media delle medie di blocco di <code>metrics.blocked</code> avrebbe detto +21,2 e +22,2 al posto di +0,3 e −9,1 nel fold 1: un movimento che prosegue porta più coppie nella coda nello stesso blocco, e la media di blocco le pesa meno.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>v2, sviluppo, 48 barre: liquido / medio / illiquido</th><th>fold 1</th><th>fold 2</th></tr></thead>
+        <tbody>
+          <tr><td>Amihud</td><td>−13,6 / −17,2 / −13,3</td><td>+34,1 / +19,1 / +21,3</td></tr>
+          <tr><td>volatilità</td><td>−9,7 / −53,0 / +23,0</td><td>+8,0 / +33,3 / +27,3</td></tr>
+          <tr><td>volume della gamba</td><td>−20,0 / −25,1 / +3,0</td><td>−2,9 / +43,8 / +27,1</td></tr>
+          <tr><td>profondità del book</td><td>−13,7 / −5,3 / −21,9</td><td>+63,9 / +14,6 / +28,1</td></tr>
+          <tr><td>sessione</td><td>+6,5 / −32,2 / +3,1</td><td>+13,7 / +31,7 / +20,5</td></tr>
+          <tr><td>stress del paniere</td><td>−28,8 / −23,1 / +16,2</td><td>+19,8 / +6,5 / +39,4</td></tr>
+        </tbody>
+      </table></div>
+      <p class="caption">Errori da 14,5 a 42,9 bp per cella.</p>
+      <ul class="points">
+        <li><strong>Il fold decide il segno, non lo stato.</strong> Il fold 2 rientra in quasi ogni terzile, il fold 1 prosegue nella maggior parte: nessuno stato separa gli estremi che rientrano da quelli che proseguono. Criterio passato su 0 righe di 18 per v2 e per l'RSI sullo sviluppo e sull'hold-out, 0 di 15 sul 2021-2025.</li>
+        <li><strong>Sul 2021-2025 c'è il segno di Nagel nella volatilità, troppo piccolo.</strong> Con l'RSI a 12 a 12 barre il terzile calmo prosegue (−14,2 / −8,4 / −0,8 / −0,6) e quello agitato rientra (+29,7 / +16,1 / +9,2 / +13,6), in ordine in ogni fold; sulle coppie tradabili supera i 20 bp nel solo fold 1, e sullo sviluppo l'ordine si rompe. Il volume della gamba va al contrario di come era stato orientato prima di guardare: le gambe pesanti rientrano (+29,8 / +17,0 / +7,3 / +13,1), quelle sottili proseguono, il segno di Campbell, Grossman e Wang. È letto sul periodo di conferma, quindi non è una scelta.</li>
+        <li><strong>Potenza</strong> (<code>--power</code>, studi simulati agli errori misurati): l'effetto richiesto (20-28 bp nel terzile illiquido, 0 nel liquido) si vede il 7-18% delle volte, il doppio il 23-78%; senza effetto passa lo 0-1,3%. La scheda poteva vedere solo un effetto grande a 12 barre.</li>
+        <li><strong>Esito:</strong> lo stato della liquidità non separa gli estremi di v2. Resta da guardare il singolo evento (strada 4).</li>
+      </ul>
+    </div>
   </section>
 
   <section id="shock">
