@@ -18,12 +18,10 @@ etichette retrospettive. Tutto il lavoro predittivo e la prima pipeline (`datase
 **Aggiornamento 2026-10-03, più tardi** — ramo `claude/strategy-study`: lo studio delle regole di
 trading sulla predizione v2 (`strategy.py`) e tutte quelle regole sulla pagina chart: sezione 17.
 
-**Aggiornamento 2026-10-06** — ramo `claude/lucid-brahmagupta-1bd8dn`: tre diagnostici in
-`detect.py` per qualunque filtro sui falsi allarmi (conservazione, test nullo, rivelatori sul
-residuo contro il mercato). Scritti e testati, **non ancora eseguiti sullo store**: sezione 19. Il
-ragionamento completo, con le simulazioni e il loro codice, è `false_alarms.html`. Il 2026-10-07 gli
-ordini limite ne sono usciti (vantaggio solo di costo) e sono entrate sei strade nuove e un test
-sequenziale, nessuno nel codice.
+**Aggiornamento 2026-10-06/07** — ramo `claude/lucid-brahmagupta-1bd8dn`: perché ridurre i falsi
+allarmi non può rendere finché un filtro legge solo il prezzo, tre diagnostici in `detect.py` (non
+ancora eseguiti sullo store) e il piano delle otto strade che restano, in ordine, con cosa cercare in
+ognuna: sezione 19 e `false_alarms.html`.
 
 ---
 
@@ -1079,21 +1077,40 @@ convergeva su zero trade. `OLD/README.md` ha la tabella e l'elenco di cosa è us
 **Verificato.** ruff, black, 52 test. La pagina gira su BTC/USD 15m con v2 (regola, libro, fee 0,10%
 in barra laterale) e senza v2, senza eccezioni.
 
-## 19. I falsi allarmi sono un parametro libero: tre diagnostici (2026-10-06, ramo `claude/lucid-brahmagupta-1bd8dn`)
+## 19. I falsi allarmi sono un parametro libero, e le strade che restano (2026-10-06/07, ramo `claude/lucid-brahmagupta-1bd8dn`)
+
+Il documento è `false_alarms.html`: la parte I è la teoria con le simulazioni, la parte II è il piano
+che segue qui, con una scheda per strada (perché, cosa cercare, come si decide, cosa succede dopo).
+**Niente di questa sezione è stato misurato sullo store**: la sessione non raggiungeva
+`data.binance.vision`.
+
+### La domanda e la risposta
 
 **Domanda.** Un secondo stadio che riduca i falsi allarmi dei rivelatori del §17 (per esempio un
 modello sul segno della candela successiva, in AND con l'allarme) può rendere la regola
 profittevole?
 
-**Risposta teorica, già nei numeri del §17.** No, se legge solo il passato del prezzo. Con P la quota
-di allarmi veri, W quanto fa un allarme vero e L quanto perde uno falso, il teorema d'arresto
-opzionale impone P·W = (1−P)·L per *ogni* filtro causale: dove il filtro alza P, W scende e L sale
-finché il lordo torna a zero. I quintili di `--features` lo rispettano entro il rumore (sviluppo:
-53% veri con L/W 1,39 contro P/(1−P) 1,13; 83% con 3,96 contro 4,88). La precisione si compra, e il
-prezzo è il rapporto fra vincita e perdita. Un filtro vale quanto sposta il lordo, non quanto
-sposta l'AUC o i falsi allarmi.
+**Risposta.** No, finché il filtro legge solo il passato del prezzo. Con P la quota di allarmi veri,
+W quanto fa un vero e L quanto perde un falso, il teorema d'arresto opzionale impone
+**P·W = (1−P)·L** per *ogni* filtro causale su un prezzo martingala: dove il filtro alza P, W scende e
+L sale finché il lordo torna a zero. I quintili di `--features` lo rispettano entro il rumore
+(sviluppo: 53% veri con L/W 1,39 contro P/(1−P) 1,13; 83% con 3,96 contro 4,88). Un filtro vale
+quanto sposta il lordo, cioè l'IC con il rendimento del periodo tenuto, non quanto sposta l'AUC o i
+falsi allarmi.
 
-**Cosa è stato aggiunto a `detect.py`.**
+**Le simulazioni** (codice nell'appendice del documento), su un random walk GARCH con code t(4), 6
+serie da 200.000 barre, zigzag 0,3 su un RSI a 12:
+
+- il meta-classificatore arriva ad AUC 0,688 su un prezzo che nessuno può prevedere; la quota di
+  veri va dal 64% al 94% fra i quintili e ogni quintile fa fra −1,3 e +1,6 bp;
+- il modello sulla candela successiva in AND rende (2a−1)·E|r₁|, solo sulla prima barra: servono il
+  90% di accuratezza per 20 bp. Sul rendimento dell'intero trade bastano un IC di 0,15-0,2 (54-55%),
+  con la precisione quasi ferma (0,80 → 0,82);
+- con una componente che torna alla media (AR(1), 30% della varianza) lo stesso filtro sul livello, a
+  0,6, fa +10,3 bp (errore 2,8) contro −0,3 (2,6) del random walk, alla stessa precisione del 96-97%:
+  la precisione non distingue i due mondi, il lordo sì.
+
+### Cosa c'è nel codice
 
 - `conservation(f, score, cut)`: per quintile del punteggio, P, W, L, L/W accanto a P/(1−P), il
   lordo e il lordo "nominale" (P·W̄ − (1−P)·L̄, con W e L fermi alla media del periodo). `kept` è la
@@ -1101,80 +1118,119 @@ sposta l'AUC o i falsi allarmi.
   precisione vale quello che promette. `--features` ora stampa anche questa tabella.
 - `geometry` e `null_test` (`--null P [--seeds]`): la stessa separazione vero/falso, con Shiryaev P
   e otto colonne che richiedono solo serie e chiusura, su v2, sull'RSI a 12 del prezzo vero e
-  sull'RSI di prezzi con il segno di ogni rendimento estratto a caso (`strategy.signflip`). L'AUC
-  dei percorsi casuali è la geometria della definizione di svolta; quello che porta il mercato è la
-  differenza.
+  sull'RSI di prezzi con il segno di ogni rendimento estratto a caso (`strategy.signflip`).
 - `residual`, `spreads`, `residual_study` (`--residual BTC|ew [--gate L ...]`): i rivelatori
-  sull'asset meno beta per il mercato (beta su un mese di barre chiuse prima della barra, quindi
-  causale), contro gli stessi rivelatori sul prezzo, con il gate al livello letto all'allarme e
-  all'estremo della gamba. Il trade sullo spread
-  è quello coperto e paga due gambe: `fee_bp` = 2·`FEE`·(1 + |beta|). v2 non si può calcolare su
-  uno spread (legge candele), quindi il confronto equo è RSI sul prezzo contro RSI sul residuo.
+  sull'asset meno beta per il mercato (beta su un mese di barre chiuse prima della barra), contro gli
+  stessi rivelatori sul prezzo, con il gate al livello letto all'allarme e all'estremo. Il trade sullo
+  spread paga due gambe: `fee_bp` = 2·`FEE`·(1 + |beta|). v2 non si calcola su uno spread (legge
+  candele), quindi il confronto equo è RSI sul prezzo contro RSI sul residuo.
 - `_score` è il punteggio logistico che `separate` già calcolava, estratto senza cambiarne i numeri.
   `BETA_WINDOW` = 96·30 è scelto, non misurato.
 
-**I numeri attesi, da una simulazione** (il codice è nell'appendice di `false_alarms.html`) (random walk GARCH con code t(4), 6 serie da
-200.000 barre, zigzag 0,3 su un RSI a 12, svolte centrate a 12): la catena riproduce le statistiche
-del §17 (80% di allarmi veri, veri +26 bp, falsi −102). Su un random walk puro il meta-classificatore
-arriva ad AUC 0,688, la quota di veri va dal 64% al 94% fra i quintili e ogni quintile fa fra −1,3 e
-+1,6 bp, con L/W che segue P/(1−P) (1,81/1,76 … 14,5/15,0). Il modello sulla candela successiva in AND
-rende (2a−1)·E|r₁|, solo sulla prima barra: servono il 90% di accuratezza per 20 bp. Sul rendimento
-dell'intera posizione bastano un IC di 0,15-0,2 (accuratezza 54-55%), con la precisione quasi ferma
-(0,80 → 0,82). Con una componente AR(1) al 30% della varianza, tenere gli allarmi la cui gamba ha raggiunto
-0,6 fa +10,3 bp (errore 2,8) contro −0,3 (2,6) del random walk, alla stessa precisione del 96-97%. Sono numeri di un mondo
-sintetico: dicono cosa cercare, non cosa c'è.
+### Il piano, in ordine
 
-**Gli ordini limite agli estremi sono tolti (2026-10-07).** Simulati, il loro vantaggio è solo di
-costo (2-3 bp di commissione maker per lato): su una martingala con percorso continuo valgono zero,
-con i salti perdono (−11,8 bp, la selezione avversa di un book spazzato), e con il ritorno alla media
-non battono l'ingresso a mercato nella zona (+10,4 contro +12,6). Sui dati veri gli estremi di v2
-proseguono, il caso peggiore per un limite. Non portano niente di utile e sono usciti da
-`false_alarms.html`; lo script è nella storia del ramo (commit `6535fbf`).
+Un'idea entra nel piano solo se porta un'informazione che il prezzo non contiene, sfrutta un flusso
+forzato (liquidazioni, stop, chi fornisce liquidità) o sposta chi paga la commissione. Ogni criterio
+si applica ai fold di sviluppo; la conferma è fuori (ultimo punto). Le strade sono numerate
+nell'ordine di esecuzione.
 
-**Sei strade nuove (2026-10-07), in `false_alarms.html`, nessuna nel codice.** Il criterio per
-ammetterle: un'informazione che il passato del prezzo non contiene, un flusso meccanico in momenti o
-livelli riconoscibili, oppure chi paga la commissione.
+**Fase 0 — chiudere il ramo dei filtri** (nel codice, minuti).
 
-- **3, il tempismo di un trade lento.** Gli IC già misurati (open interest dietro al movimento,
-  book, esaurimento) non pagano 20 bp da soli, ma possono scegliere *quando* eseguire i trade di una
-  base lenta che li farebbe comunque (regola a 4h, fattore), senza commissioni in più. Simulato con un
-  segnale AR(1) il cui effetto si ferma a una deviazione standard (la forma di `--oi`): a IC 0,05 da
-  solo fa −5,3 bp netti, come tempismo +8,2 ± 1,9 bp per esecuzione in una finestra di 48 barre e
-  +12,8 ± 3,0 in 96; a IC 0 fa zero, e la barra a caso resta nel rumore.
-- **4, il premio di liquidità.** Nagel (2012): l'inversione di breve è il compenso di chi fornisce
-  liquidità e cresce quando questa si ritira. Agli estremi di v2, rendimento contro la gamba per
-  terzile di illiquidità di Amihud, volatilità relativa, volume, profondità, ora e stress di mercato;
-  i segni casuali conservano queste variabili e cancellano la direzione.
-- **5, i due stadi nella forma giusta.** L'IC delle colonne dei futures sulle barre ai pivot contro
-  quello su tutte le barre: il primo stadio vale solo se il rapporto è sopra 1. È il test più
-  economico.
-- **6, il flusso dei taker scomposto** (Hasbrouck; Llorente-Michaely-Saar-Wang). Richiede di tenere
-  `taker_buy_base` e `taker_buy_quote`, che `binance.KEEP` scarta: 15 asset dal 2017 invece di 3 su
-  sedici mesi. Il flusso grezzo all'allarme non aveva dato niente.
-- **7, i pivot come mappa degli stop** (Osler): cascata alla rottura dell'ultimo minimo confermato,
-  inversione se la rottura fallisce; controllo con livelli placebo spostati di 0,5-1σ.
-- **8, la base lenta** con la posizione 1/σ̂ (Moreira-Muir) su `swing --baseline`. Non usa v2.
-- **Verificare con un test per scommessa** (Waudby-Smith e Ramdas). Simulato su trade con 150 bp di
-  deviazione standard: il t-test guardato dopo ogni trade dà il 43% di falsi positivi entro 3.000
-  trade, il test per scommessa il 2,4%. A 160 trade un vantaggio di 15 bp si vede il 37% delle
-  volte.
+0. `detect --features 0.5`, poi `detect --null 0.5 --seeds 0 1 2 3 4`.
+   *Cercare:* `kept` vicino a 0 su sviluppo e hold-out; l'AUC dell'RSI vero dentro la dispersione dei
+   semi a segni casuali. *Se è così:* il filtro sugli allarmi con colonne del prezzo è chiuso. *Se
+   `kept` supera due errori in entrambi i periodi:* le sedici colonne portano informazione, e si
+   riapre il meta-labeling addestrato sul lordo del trade.
 
-Gli script `sim_timing.py` e `sim_sequential.py` sono nell'appendice di `false_alarms.html`.
+**Fase 1 — cercare informazione nei dati già nello store.**
 
-**Verificato.** ruff, black e 51 test. Il self-check di `swing` non è girato: il proxy della sessione
-blocca `download.pytorch.org`, e torch non si installa. Le tre CLI nuove e `--features` sono girate da
-capo a fondo su uno store sintetico, poi cancellato; i loro numeri non significano niente.
+1. **Residuo contro il mercato** (nel codice): `detect --residual BTC --gate 0.4 0.5 0.6` e
+   `--residual ew`. *Perché:* il movimento comune domina RSI e pivot ma non contiene la parte che
+   rientra; nella simulazione il filtro a 0,6 fa +8,5 bp sul residuo contro +6,2 sul prezzo, con metà
+   dell'errore. *Cercare:* nella riga `residual: rsi 12` contro `price: rsi 12`, `dev_bp` sopra
+   `fee_bp` (circa 40 bp su spot), un lordo che cresce con il livello del gate, `kept_dev` oltre due
+   errori, stesso segno nei due fold. Variante: BTC della barra precedente, per l'anticipo sulle alt.
+   *Se passa:* regola coperta sui perpetual, conferma sul 2021-2025 estendendo `residual_study` a
+   tutta la storia. *Se no:* le strade 3 e 4 cercano il rientro in un sottoinsieme, non in media.
+2. **IC ai pivot** (una funzione, sui dati di `detect --futures`). È la proposta di partenza nella
+   forma giusta: il primo stadio serve solo se il secondo è più informato ai pivot. *Cercare:*
+   IC(colonna, rendimento a 12/24/48 | |v2| ≥ L o allarme) diviso IC(… | ogni barra), per fold, con
+   `metrics.blocked`; nullo ≈ 1. *Si decide:* sopra 1 di due errori in ogni fold e IC condizionato
+   sopra ρ_min (a 48 barre 0,09 spot taker, 0,045 perpetual taker). *Se passa:* allarme + punteggio sui
+   futures. *Se no:* le colonne si usano su tutte le barre, nel tempismo (6).
+3. **Premio di liquidità** (event study da scrivere). *Perché:* Nagel (2012), e nelle crypto Bianchi,
+   Babiak, Dickerson (2022) e Farag e altri (2025): il rientro è il compenso di chi fornisce
+   liquidità e cresce quando questa scarseggia; la media agli estremi di v2 che prosegue (passo 1 del
+   §17) può essere una miscela. *Cercare:* agli estremi di v2, rendimento a 12-48 barre contro la
+   gamba per terzile di Amihud relativa, volatilità relativa, volume della gamba per ora, profondità
+   entro l'1%, fine settimana e ore senza borsa americana, drawdown del paniere: il terzile liquido
+   prosegue, l'illiquido rientra, relazione monotona, zero sui segni casuali. *Si decide:* rientro
+   dell'illiquido in ogni fold, sopra l'andata e ritorno maggiorata dello spread di quegli stati.
+   *Se passa:* regola "estremo in stato illiquido", conferma con l'RSI sul 2021-2025.
+4. **Shock di flusso** (stesso event study). *Già misurato* (`--oi`): con open interest in calo le 48
+   barre dopo rientrano di −22,0 / −13,0 / −2,4 / −6,1 bp per fold; in salita proseguono. *Cercare:*
+   la risposta all'impulso dopo |r|/σ > k₁ e volume z > k₂, divisa per segno dell'open interest: il
+   rientro fra 12 e 48 barre in ogni fold e **che cresce con la dimensione dello shock**. *Si decide:*
+   rientro sopra i 10 bp del perpetual taker in ogni fold. *Se l'effetto vive nel grosso:* colonna del
+   tempismo (6), non trigger.
 
-**Da eseguire, in ordine** (serve lo store; `data.binance.vision` era bloccato da questa sessione):
+**Fase 2 — una base lenta, e il tempismo.**
 
-1. `detect --features 0.5`: `kept` sulle sedici colonne. La previsione dai quintili del §17 è vicina a 0.
-2. `detect --null 0.5`: se l'AUC dei percorsi casuali è vicina allo 0,63 reale, la separazione degli
-   allarmi è geometria e il ramo "filtro sugli allarmi" è chiuso per tutte le colonne del prezzo.
-3. `detect --residual BTC` e `--residual ew`: lordo, `kept` e gate sul residuo contro il prezzo, a
-   confronto con `fee_bp`. È l'unico dei tre che può aprire una strada.
-4. L'IC condizionato ai pivot (strada 5), poi i terzili di liquidità (strada 4), la base lenta con
-   1/σ̂ (strada 8) e il tempismo su di essa (strada 3); il flusso dei taker (6) e la mappa degli stop
-   (7) dopo. Ciò che passa lo sviluppo va in paper trading con il test sequenziale. Sui perpetual di OKX (0,05%
-   taker, 0,02% maker per lato, da verificare) le due gambe con beta ≈ 1 costano a taker quanto una
-   gamba spot e a maker meno della metà, più il funding.
+5. **Base lenta** (un peso in `swing --baseline`). *Perché:* i vantaggi documentati sono lenti
+   (momentum a 1-4 settimane, Liu e Tsyvinski; la regola a 4h `rsi_centered` > 0,3, +0,116 contro
+   +0,057 dell'hold a 0,25%), e Moreira e Muir alzano lo Sharpe dimensionando come 1/σ̂ senza
+   prevedere la direzione. *Cercare:* prima il netto della regola a 4h alla commissione di OKX per
+   fold, poi lo stesso con w = min(σ*/σ̂, w_max) e una banda di non ribilanciamento: Sharpe,
+   drawdown, turnover. *Si decide:* scalata sopra non scalata e sopra l'hold in ogni fold. Non usa v2.
+6. **Tempismo** (da scrivere). *Perché:* i segnali veloci misurati (open interest, book,
+   esaurimento) non pagano 20 bp da soli, ma possono scegliere *quando* eseguire i trade della base,
+   che pagano la commissione comunque. Simulato con un segnale il cui effetto si ferma a una
+   deviazione standard: a IC 0,05 da solo fa −5,3 bp netti, come tempismo +8,2 ± 1,9 bp per
+   esecuzione in 48 barre e +12,8 ± 3,0 in 96; a IC 0 fa zero. *Cercare:* per ogni decisione della
+   base, esecuzione subito, alla prima barra con d·punteggio ≥ b, a una barra a caso: guadagno contro
+   "subito" per fold, b fra 0,5 e 1, barra a caso entro il rumore (se è negativa, aspettare costa alla
+   base). *Si decide:* guadagno positivo in ogni fold. Qui v2 e i pivot entrano come colonne del
+   punteggio.
 
+**Fase 3 — dati o codice nuovi, prior più basso.**
+
+7. **Flusso dei taker scomposto** (Hasbrouck; Llorente-Michaely-Saar-Wang). Prima tenere
+   `taker_buy_base` e `taker_buy_quote`, che `binance.KEEP` scarta: 15 asset dal 2017 invece di 3 su
+   sedici mesi, al prezzo di nuovi stamp della cache e di un nuovo download. *Cercare:* VAR a 8
+   ritardi su (rendimento, flusso con segno) per asset; agli estremi, IC fra la quota della gamba non
+   spiegata dall'impatto permanente e il rendimento a 12-48 barre, segno stabile in ogni fold. Il
+   flusso grezzo all'allarme non aveva dato niente (AUC 0,53-0,54).
+8. **Pivot come mappa degli stop** (Osler). *Cercare:* dopo la rottura dell'ultimo minimo di
+   `legs.confirmed`, accelerazione nelle 1-4 barre (cascata) e, se il prezzo richiude sopra entro k
+   barre, rientro nelle 12-48 (rottura che fallisce), entrambe **contro livelli placebo** spostati di
+   0,5-1σ; i numeri tondi come secondo placebo. Variante esplorativa: la mappa delle liquidazioni
+   stimata dall'open interest.
+
+**Conferma.** Il 2021-2025 per ciò che non legge v2 (RSI, residuo, stati di liquidità, stop, taker,
+base lenta), il walk-forward di v2 dal 2023 (§17, punto 1) per ciò che lo legge. Poi paper trading
+con un **test per scommessa** (Waudby-Smith e Ramdas): W = Π(1 + λᵢ·xᵢ/B) con λ dai trade precedenti
+e uno stop che limita la perdita a B; si dichiara un vantaggio a W ≥ 1/α, valido in qualunque momento
+si guardi. Simulato su trade con 150 bp di deviazione standard: il t-test guardato dopo ogni trade dà
+il 43% di falsi positivi entro 3.000 trade, il test per scommessa il 2,4%; a 160 trade un vantaggio
+di 15 bp si vede il 37% delle volte.
+
+**Cosa fare con i risultati.** Una strada della fase 1 passa: regola su quella, sui perpetual con il
+funding. Passa solo la fase 2: il capitale va sulla base lenta con il tempismo, e v2 resta una
+colonna. Passa solo la base lenta: il lavoro sulle svolte a 15 minuti si ferma. Non passa niente: con
+l'informazione dello store il mercato è efficiente fino ai costi; si chiude il ramo delle svolte e si
+riprende il fattore archiviato su `SYMBOLS` o il carry.
+
+### Tolto
+
+Gli ordini limite agli estremi (2026-10-07): simulati, il loro vantaggio è solo di costo (2-3 bp di
+commissione maker per lato). Su una martingala con percorso continuo valgono zero, con i salti
+perdono (−11,8 bp, la selezione avversa di un book spazzato), con il ritorno alla media non battono
+l'ingresso a mercato nella zona (+10,4 contro +12,6). Sui dati veri gli estremi di v2 proseguono, il
+caso peggiore per un limite. Lo script è nella storia del ramo (commit `6535fbf`).
+
+### Verificato
+
+ruff, black e 51 test. Il self-check di `swing` non è girato: il proxy della sessione blocca
+`download.pytorch.org`, e torch non si installa. Le tre CLI nuove e `--features` sono girate da capo a
+fondo su uno store sintetico, poi cancellato; i loro numeri non significano niente. Le strade 2-8 e il
+test per scommessa non sono nel codice.

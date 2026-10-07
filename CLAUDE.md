@@ -28,14 +28,16 @@ measurements, and commit subjects are written that way ("Four branches lose to o
 (`strategy`, `detect`, HANDOFF §17), step by step with its tables and charts, ending on what is
 still open. A copy of a page that was published while the study ran; edit it here now.
 
-`false_alarms.html` (Italian) is why cutting the detectors' false alarms cannot pay while a filter
-reads only the price's past (P·W = (1−P)·L under optional stopping), what a second model has to be
-worth, and the routes left: the residual against the market, the flow shock, using the weak fast
-signals to time a slow strategy's trades, the liquidity premium, conditional predictability at the
-pivots, the decomposed taker flow, pivots as a map of stop orders, a volatility-managed slow base, and
-a test by betting to confirm any of them on paper trades. The Monte Carlo behind each number and its
-code are in an appendix. HANDOFF §19 is its state: the diagnostics it describes are in `detect`
-and have not been run on the store; the newer routes are not in the code.
+`false_alarms.html` (Italian) is in two parts. Part I is why cutting the detectors' false alarms
+cannot pay while a filter reads only the price's past (P·W = (1−P)·L under optional stopping), and
+what a second model has to be worth. Part II is the plan: the eight routes left, numbered in the
+order they run — the residual against the market, the futures columns' IC at the pivots against
+everywhere, the liquidity premium at v2's extremes, the flow shock, a volatility-managed slow base,
+the weak fast signals as the timing of that base's trades, the decomposed taker flow, pivots as a map
+of stop orders — each with why, what to look for, the criterion and what follows, then the
+confirmation (2021-2025, paper trading with a test by betting). The Monte Carlo behind each number
+and its code are in an appendix. HANDOFF §19 is the same plan: the phase-0 diagnostics and route 1
+are in `detect` and have not been run on the store; routes 2-8 are not in the code.
 
 `swing_leg_pipeline.html` (Italian) explains the training pipeline of the `swing_leg_target` models.
 Part I is a lesson for a reader new to the subject, one concept per chapter with charts on real
