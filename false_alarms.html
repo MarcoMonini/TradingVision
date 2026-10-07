@@ -618,6 +618,28 @@ details pre { border: 0; padding: 0; }
       <dt>Se no</dt><dd>Se l'effetto c'è ma vive nel grosso, l'open interest dietro al movimento diventa una colonna del tempismo (strada 6), dove la commissione non è a suo carico.</dd>
       <dt>Dati e stato</dt><dd><code>data.futures</code>, 3 asset e sedici mesi: pochi eventi grandi, quindi poca potenza. Da scrivere, con lo stesso event study della strada 3.</dd>
     </dl></div>
+    <div class="sub-section" id="shock-esito">
+      <h3>Misurato il 7 ottobre <span class="chip bad"><i>✕</i> non passa</span></h3>
+      <p><code>events --shock</code>: la prima barra di una serie con |r|/σ ≥ k₁ (r su 1 o 2 barre, σ la volatilità del giorno prima per √barre) e volume in quote k₂ deviazioni sopra il giorno prima, k₁ 2 / 3 / 4, k₂ 1 / 2; BTC, ETH, SOL; divisi per segno della variazione dell'open interest sulle barre dello shock. Rendimento cumulato contro lo shock da 1 a 96 barre, medie per evento, errori a blocchi con lo stimatore a rapporto.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Span 1, k₁ 2, k₂ 1, bp contro lo shock</th><th>eventi</th><th>4 barre</th><th>12</th><th>24</th><th>48</th><th>96</th></tr></thead>
+        <tbody>
+          <tr><td>fold 1, open interest in calo</td><td>608</td><td>+0,3 ± 4,3</td><td>+12,1 ± 7,6</td><td>+0,4 ± 12,4</td><td>+15,5 ± 17,5</td><td>+2,7 ± 24,3</td></tr>
+          <tr><td>fold 1, in salita</td><td>548</td><td>−6,7</td><td>−10,1 ± 8,2</td><td>−26,0 ± 11,3</td><td>−33,6 ± 16,0</td><td>−39,1 ± 25,6</td></tr>
+          <tr class="sep"><td>fold 2, in calo</td><td>663</td><td>−10,3</td><td>−16,7 ± 10,7</td><td>−26,0 ± 20,4</td><td>−10,0 ± 28,3</td><td>−45,7 ± 34,9</td></tr>
+          <tr><td>fold 2, in salita</td><td>585</td><td>+0,7</td><td>+4,2 ± 11,1</td><td>+24,4 ± 15,2</td><td>+26,5 ± 18,2</td><td>+62,3 ± 25,4</td></tr>
+        </tbody>
+      </table></div>
+      <p class="caption"><code>events --shock --period dev</code>, la configurazione più frequente. Sulle dodici configurazioni la divisione per open interest si inverte fra i due fold di sviluppo in tutte e dodici. Sui percorsi a segni casuali la risposta a 48 barre è +1,6 ± 1,7 e +0,6 ± 2,0.</p>
+      <ul class="points">
+        <li><strong>La divisione per segno dell'open interest cambia verso fra i fold</strong>: nel fold 1 rientrano gli shock fatti chiudendo posizioni, nel fold 2 quelli fatti aprendole. Criterio passato su 0 configurazioni di 12 sullo sviluppo e 0 sull'hold-out.</li>
+        <li><strong>Il rientro non cresce con lo shock, cala</strong>: con open interest in calo, sullo sviluppo a 48 barre, gli shock di 2-3 / 3-4 / oltre 4σ fanno +17,3 / −15,2 / −36,0 bp (span 1, k₂ 1). Gli shock grandi proseguono di più.</li>
+        <li><strong>Il contesto non regge su ogni barra.</strong> I quadranti di <code>detect --oi</code> ricalcolati qui su ogni barra, nel verso del rientro: open interest in calo +4,6 / +1,1 / −10,9 / +0,7, in salita −16,7 / +19,3 / −6,6 / −17,0 (vedi la correzione in <a href="#condizionata-esito">strada 2</a>).</li>
+        <li><strong>2021-2025</strong>, senza open interest (inizia nel 2025-05), la risposta non divisa: +10,2 / −1,5 / +1,5 / −0,3 bp a 12 barre, +3,7 / −3,0 / −3,8 / −11,8 a 48. Nessun rientro.</li>
+        <li><strong>Potenza</strong> (<code>--power</code>): un rientro di 10 bp con open interest in calo si vede il 9-12% delle volte, di 20 il 18-34%, con lo 2-4% di falsi positivi; "cresce con lo shock" passa il 16-18% delle volte senza effetto. Con tre asset e sedici mesi la scheda non poteva vedere l'effetto che chiedeva.</li>
+        <li><strong>Esito:</strong> nessuno shock di flusso riconoscibile rientra abbastanza, e l'open interest non dice quale rientra. Non diventa nemmeno una colonna del tempismo: sul suo fold 2 il segno si inverte.</li>
+      </ul>
+    </div>
   </section>
 
   <section id="base">

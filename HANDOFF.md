@@ -1309,6 +1309,17 @@ l'effetto richiesto si vede il 7-18% delle volte, il doppio il 23-78%. `metrics.
 avrebbe detto +21 bp dove gli eventi fanno +0,3: un movimento che prosegue porta più coppie nella coda
 nello stesso blocco.
 
+**Strada 4 — gli shock di flusso non rientrano, e l'open interest non dice quali** (`events --shock
+[--period]`, `--power`). Prima barra con |r|/σ ≥ k₁ (r su 1 o 2 barre) e volume z ≥ k₂, k₁ 2 / 3 / 4, k₂ 1 / 2,
+BTC, ETH, SOL, divisi per segno dell'open interest sullo shock. Span 1, k₁ 2, k₂ 1 a 48 barre contro lo
+shock: fold 1 in calo +15,5, in salita −33,6; fold 2 −10,0 e +26,5 (errori 16-28). La divisione si
+inverte fra i fold di sviluppo in tutte e dodici le configurazioni; 0 di 12 sullo sviluppo e
+sull'hold-out. Il rientro con open interest in calo scende con la taglia dello shock (+17,3 / −15,2 /
+−36,0 bp a 2-3 / 3-4 / oltre 4σ). Sul 2021-2025 (senza open interest) la risposta non divisa a 48 barre
+è +3,7 / −3,0 / −3,8 / −11,8. I quadranti di `--oi` su ogni barra, nel verso del rientro: in calo +4,6 /
++1,1 / −10,9 / +0,7, in salita −16,7 / +19,3 / −6,6 / −17,0. Potenza bassa: 10 bp si vedono il 9-12% delle
+volte, 20 il 18-34%.
+
 ### Tolto
 
 Gli ordini limite agli estremi (2026-10-07): simulati, il loro vantaggio è solo di costo (2-3 bp di

@@ -2,8 +2,7 @@
 
 Routes 3 and 4 of the plan in `false_alarms.html` (cards `#liquidita` and `#shock`, HANDOFF §19)
 ask the same question of two kinds of event: does the price come back after it, and does it come
-back more in a state that information outside the price can name. One engine serves both; route
-4 lands on it next.
+back more in a state that information outside the price can name. One engine serves both.
 
 **The engine.** `respond` reads, for each event (bar t, pair, direction d), the forward log return
 against d, -d (log c[t+j] - log c[t]), from the close of the event bar: positive is a reversal, and
@@ -21,6 +20,10 @@ shrinks exactly the events that continued: fold 1 at 12 bars is +0.3 bp a trade 
 as a mean of blocks, and +2.0 weighting by the events of the block so far; on the null paths,
 where the pairs are independent, the three agree within their errors. Every table and verdict
 reads the per-event mean; the mean of blocks is printed once, labelled, beside "every extreme".
+The clustered errors are calibrated: over ten more null seeds the seed means scatter by 5.2 and
+4.3 bp at 48 bars (route 4, dev, spans 1 and 2) against a mean error of 5.2 and 5.7, and by 2.2
+and 2.4 at one bar on 2021 against 2.0 and 2.3. That null is centred: +1.6 +/- 1.7 and +0.6 +/-
+2.0 bp at 48 bars.
 
 **Route 3: the liquidity premium at v2's extremes** (`--liquidity`). An event is the bar |v2|
 enters its 10% tail, one per excursion: |v2| >= 0.519 in the raw units, one cut for the 15 pairs
@@ -72,12 +75,37 @@ confirmation period, it is not a choice. 0 of 15 pass (no depth before May 2025)
 (fold 1 at 48 bars, 1 / 2-3 / 4-7 / 8+ pairs: -17.4 / -0.3 / -16.3 / -25.7). Isolated extremes do not
 revert; the gap between the two means above is the weight's look-ahead.
 
-**Power** (`--power`, 2,000 studies a cell at dev's measured errors, on TRADABLE). The criterion
-fires 0-1.3% of the time with no effect, finds an illiquid tercile reverting by the full cost
-(20-28 bp) 7-18% of the time and by twice it 23-78%, best at 12 bars. The card could not see an
-effect of the size it asks for; it sees nothing, and the signs that move between folds say the same.
+**Route 4: the flow shock** (`--shock`, ETH, BTC, SOL). A shock is the first bar of a run where
+|r|/sigma >= k1 (r over 1 or 2 bars, sigma the trailing day of 15m returns before them, times
+sqrt of the span) and the window's mean log volume is k2 trailing-day deviations over its mean,
+k1 2 / 3 / 4, k2 1 / 2; split by the sign of open interest's change over the same bars. At span 1,
+k1 2, k2 1 there are 1,156 shocks in fold 1 and 1,248 in fold 2. Against the shock, at 12 / 48 bars:
+fold 1, OI falling +12.1 (7.6) / +15.5 (17.5), rising -10.1 (8.2) / -33.6 (16.0); fold 2, falling
+-16.7 (10.7) / -10.0 (28.3), rising +4.2 (11.1) / +26.5 (18.2). The split turns over between dev's
+two folds in all 12 (span, k1, k2), and none passes (falling reverting at 12, 24 and 48 above
+rising, and over the 10 bp perpetual round trip at 48, in both folds). The reversal does not grow
+with the shock: dev pooled, OI falling, at 48 bars, 2-3 / 3-4 / over 4 sigma: +17.3 / -15.2 / -36.0
+(span 1, k2 1); larger shocks made closing positions continue more. The hold-out puts falling over
+rising in most rows (span 1, k1 2, k2 1 at 48: -1.6 against -19.0, +24.4 against -0.9), the
+direction `detect --oi` reported, but nothing is chosen there. 2021 has no open interest; unsplit,
+the same shocks give +10.2 / -1.5 / +1.5 / -0.3 bp at 12 bars and +3.7 / -3.0 / -3.8 / -11.8 at 48.
+
+The context the card quotes (`detect --oi`'s quadrants, -22.0 / -13.0 / -2.4 / -6.1 bp after a
+24-bar move with OI falling) was sampled one bar in 48 from phase 0. On every bar (`behind`), the
+next 48 bars come back +4.6 (7.8) / +1.1 (9.6) / -10.9 (9.5) / +0.7 (6.9) after a move with OI
+falling and -16.7 / +19.3 / -6.6 / -17.0 after one with OI rising: no stable split in the bulk
+either.
+
+**Power** (`--power`, 2,000 studies a cell at dev's measured errors). Route 3, on TRADABLE: the
+criterion fires 0-1.3% of the time with no effect, finds an illiquid tercile reverting by the full
+cost (20-28 bp) 7-18% of the time and by twice it 23-78%, best at 12 bars. Route 4: 2-4% with no
+effect, 9-12% at a 10 bp reversal with OI falling, 18-34% at 20 bp; "grows with the size" fires
+16-18% with no effect (three noisy buckets fall in order one time in six) and 39-50% at a 20 bp
+step. Neither card could see an effect of the size it asks for; both see nothing, and the signs
+that move between folds say the same.
 
     uv run python -m tradingvision.events --liquidity [--period dev|holdout|2021] [--seeds 0 1 2]
+    uv run python -m tradingvision.events --shock [--period dev|holdout|2021] [--seeds 0 1 2]
     uv run python -m tradingvision.events --power
 """
 
@@ -92,6 +120,7 @@ from tradingvision import legs, strategy
 from tradingvision.data import futures
 from tradingvision.data.binance import SYMBOLS, TRADABLE
 from tradingvision.data.binance import load as candles
+from tradingvision.detect import behind_the_move
 from tradingvision.metrics import blocked
 from tradingvision.oracle import FEE
 
@@ -100,6 +129,9 @@ DAY = 96  # 15m bars
 MONTH = 30 * DAY
 LEG = strategy.WINDOW  # v2's pivot window: the legs and the RSI are read at 12 bars
 SPOT_RT = 2 * FEE * 1e4  # OKX spot taker round trip, bp
+# A perpetual's taker fee at OKX's base tier, 0.05% a side, from secondary sources (fee pages quoted
+# in reviews), not measured or checked against an account: the cost the shock's rule would pay.
+PERP_RT = 2 * 0.0005 * 1e4
 
 # Route 3. The tail is the share of v2's (or the RSI's) bars most extreme in absolute value, its
 # cut taken on development and kept everywhere; 10% is step 1's tail (`strategy`), 5% and 15% the
@@ -110,6 +142,12 @@ LIQ_H = (12, 24, 48)
 STATES = ("amihud", "vol", "thin_leg", "thin_book", "session", "stress")
 MIN_LEG = 4  # bars: a leg's volume is read over an hour at least
 
+# Route 4. The shock's sigma is the trailing day of 15m returns, before the shock's own bars, so a
+# shock cannot dilute itself; the volume z is the window's mean log quote volume against the same
+# trailing day. A day adapts to the volatility cluster the shock is in: a 3-sigma bar on a quiet
+# day is a shock, on a crash day it is the weather.
+SPANS, K1, K2 = (1, 2), (2, 3, 4), (1, 2)
+IRF_H = (1, 2, 4, 8, 12, 24, 48, 96)
 EFFECTS = ("0", "0.5x", "1x", "2x")
 
 
@@ -190,6 +228,11 @@ def entries(x: np.ndarray, cut: float) -> tuple[np.ndarray, np.ndarray]:
     prev = np.r_[0, side[:-1]]
     at = np.flatnonzero((side != 0) & (side != prev))
     return at, side[at]
+
+
+def starts(flag: np.ndarray) -> np.ndarray:
+    """The first bar of each run of `flag`: a shock that lasts two bars is one event."""
+    return np.flatnonzero(flag & ~np.r_[False, flag[:-1]])
 
 
 def _one(c: pd.Series, symbol: str) -> pd.Series:
@@ -407,6 +450,97 @@ def liquidity_table(ev: pd.DataFrame, family: str, tail: float = TAIL, symbols=S
     )
 
 
+# --- route 4: the shocks ------------------------------------------------------------------------
+
+
+def shocks(bars: pd.DataFrame, oi: pd.Series | None, close: pd.Series | None = None) -> dict[int, pd.DataFrame]:
+    """At each bar and for each span of `SPANS` bars: the move's size in trailing sigmas, its volume
+    z, its sign and the open interest's log change over the same bars, all known at the bar's close.
+    `close` replaces the bars' own (a `signflip` path); volume and open interest stay the real ones."""
+    c = np.log(bars.close if close is None else close)
+    r = c.diff()
+    lv = np.log(bars.quote_volume.where(bars.quote_volume > 0).astype(float))
+    sd = r.rolling(DAY, min_periods=DAY // 2).std()
+    mv, sv = lv.rolling(DAY, min_periods=DAY // 2).mean(), lv.rolling(DAY, min_periods=DAY // 2).std()
+    loi = np.log(oi.where(oi > 0)).reindex(bars.index) if oi is not None else pd.Series(np.nan, index=bars.index)
+    out = {}
+    for n in SPANS:
+        move = c - c.shift(n)
+        out[n] = pd.DataFrame(
+            {
+                "size": move.abs() / (sd.shift(n) * np.sqrt(n)),
+                "vz": (lv.rolling(n).mean() - mv.shift(n)) / sv.shift(n),
+                "d": np.sign(move),
+                "doi": loi - loi.shift(n),
+            }
+        )
+    return out
+
+
+def shock_events(period: str, seeds, assets=strategy.ASSETS) -> pd.DataFrame:
+    """Every shock of every (span, k1, k2) on `assets` in `period`, on the real path and on
+    sign-randomised ones, with its open-interest sign, its size bucket and its reversal at `IRF_H`."""
+    rows = []
+    for sym in assets:
+        bars = candles(sym, "15m")
+        oi = futures.load(sym).oi if period != "2021" else None
+        live = strategy.fold_in(bars.index, period) > 0
+        paths = {"real": None} | {f"random signs {s}": _flip(bars.close, sym, s) for s in seeds}
+        for name, close in paths.items():
+            logc = np.log((bars.close if close is None else close).to_numpy())
+            for n, f in shocks(bars, oi, close).items():
+                size, vz, d, doi = (f[k].to_numpy() for k in ("size", "vz", "d", "doi"))
+                for k1 in K1:
+                    for k2 in K2:
+                        at = starts(live & (size >= k1) & (vz >= k2) & (d != 0))
+                        e = pd.DataFrame({"when": bars.index[at], "size": size[at], "doi": doi[at]})
+                        e[[f"r{h}" for h in IRF_H]] = respond(logc, at, d[at], IRF_H)
+                        rows.append(e.assign(symbol=sym, path=name, span=n, k1=k1, k2=k2))
+    ev = pd.concat(rows, ignore_index=True)
+    ev["fold"] = strategy.fold_in(pd.DatetimeIndex(ev.when), period)
+    ev["oi"] = np.where(np.isnan(ev.doi), "n/a", np.where(ev.doi < 0, "fell", "rose"))
+    ev["bucket"] = np.digitize(ev["size"], [3, 4])  # 0: 2-3 sigma, 1: 3-4, 2: over 4
+    return ev[ev.fold > 0]
+
+
+def behind(period: str, k: int = 24, h: int = 48) -> pd.DataFrame:
+    """`detect --oi`'s quadrants on every bar instead of one bar in `h`: after a `k`-bar move, the
+    next `h` bars against it (positive = it comes back), by whether open interest rose or fell over
+    the move (`detect.behind_the_move`). Every bar is an event, so the error is `clustered`'s."""
+    rows = []
+    for sym in strategy.ASSETS:
+        d = behind_the_move(sym, candles(sym, "15m").close, k)
+        at = np.flatnonzero(
+            (strategy.fold_in(d.index, period) > 0) & (d.move != 0).to_numpy() & d.oi_z.notna().to_numpy()
+        )
+        e = pd.DataFrame({"when": d.index[at], "oi": np.where(d.oi_z.to_numpy()[at] > 0, "rose", "fell")})
+        e[f"r{h}"] = respond(d.c.to_numpy(), at, d.move.to_numpy()[at], (h,))[:, 0]
+        rows.append(e)
+    ev = pd.concat(rows, ignore_index=True)
+    ev["fold"] = strategy.fold_in(pd.DatetimeIndex(ev.when), period)
+    return aggregate(ev, ["oi"], (h,))
+
+
+def shock_verdict(m: pd.DataFrame, folds) -> bool:
+    """Route 4's criterion on `m` (rows (fold, oi), columns horizons): in every fold the curve with
+    open interest falling reverts at 12, 24 and 48 bars, sits above the curve with it rising there,
+    and clears the perpetual's round trip at 48."""
+    try:
+        return all(
+            all(m.loc[(f, "fell"), h] > max(0.0, m.loc[(f, "rose"), h]) for h in (12, 24, 48))
+            and m.loc[(f, "fell"), 48] > PERP_RT
+            for f in folds
+        )
+    except KeyError:
+        return False
+
+
+def grows(m) -> bool:
+    """The reversal with open interest falling grows with the shock, bucket over bucket."""
+    v = np.asarray(m, dtype=float)
+    return len(v) > 1 and bool(np.all(np.diff(v) > 0))
+
+
 # --- power ----------------------------------------------------------------------------------------
 
 
@@ -459,6 +593,7 @@ def _selfcheck() -> None:
     # One event per excursion into the tail, on the bar it enters; a change of side is a new one.
     a, s = entries(np.array([0, 0.5, 0.6, 0.2, -0.7, -0.8, 0.9, 0.0]), 0.5)
     assert list(a) == [1, 4, 6] and list(s) == [1, -1, 1]
+    assert list(starts(np.array([0, 1, 1, 0, 1], dtype=bool))) == [1, 4]
     # The crowd counts the hour up to an event and nothing after it: three pairs within 30 minutes,
     # then one alone two hours later, then one more family that does not count against the first.
     t0 = pd.Timestamp("2025-06-01", tz="UTC")
@@ -496,11 +631,29 @@ def _selfcheck() -> None:
     other = terciles(pd.DataFrame({v: [0.0, 4.0, 100.0] for v in STATES} | {"session": [0.0, 1.0, 2.0]}), cuts)
     assert all(other[other.state == v].tercile.tolist() == [1, 2, 3] for v in STATES)
 
+    # A 2% jump on ten times the volume with open interest falling: a shock of every span, its sigma
+    # and volume z read before its own bars, and nothing after it moving its row.
+    c = pd.Series(100 * np.exp(np.cumsum(rng.normal(0, 0.002, n))), index=when)
+    j = 10 * DAY
+    c.iloc[j:] *= 1.02
+    b = pd.DataFrame({"close": c, "quote_volume": np.where(np.arange(n) == j, 1e5, 1e4)}, index=when)
+    oi = pd.Series(np.where(np.arange(n) >= j, 0.9, 1.0), index=when)
+    f = shocks(b, oi)
+    assert all(
+        f[k]["size"].iloc[j] > 5 and f[k].vz.iloc[j] > 2 and f[k].d.iloc[j] == 1 and f[k].doi.iloc[j] < 0 for k in SPANS
+    )
+    late = shocks(b.iloc[: j + 1], oi.iloc[: j + 1])
+    assert all(np.allclose(late[k].iloc[-1], f[k].iloc[j]) for k in SPANS)
+
     # The criteria and their power: a large effect against small errors passes nearly always, none never.
     folds = pd.Series(20.0, index=[1, 2])
     se = pd.DataFrame(1.0, index=pd.MultiIndex.from_product([folds.index, [1, 2, 3]]), columns=[48])
     rates = power(se, lambda cell, h, e: e * (cell[1] - 1) / 2, lambda m: liquidity_verdict(m, folds, 48), [0, 40], 200)
     assert rates[0] == 0 and rates[1] > 0.95, rates
+    se = pd.DataFrame(1.0, index=pd.MultiIndex.from_product([folds.index, ["fell", "rose"]]), columns=[12, 24, 48])
+    rates = power(se, lambda cell, h, e: e * (cell[1] == "fell"), lambda m: shock_verdict(m, folds.index), [0, 20], 200)
+    assert rates[0] == 0 and rates[1] > 0.95, rates
+    assert grows([1.0, 2.0, 3.0]) and not grows([1.0, 3.0, 2.0]) and not grows([1.0])
 
 
 # --- the runs -------------------------------------------------------------------------------------
@@ -579,6 +732,44 @@ def liquidity(period: str, seeds) -> None:
         print(f"  {family}: {passed} of {tested} (state, horizon) pass")
 
 
+def shock(period: str, seeds) -> None:
+    """Route 4, printed: the impulse responses by open interest and by size, the null, the verdict."""
+    ev = shock_events(period, seeds)
+    real, null = ev[ev.path == "real"], ev[ev.path != "real"]
+    folds = sorted(set(real.fold))
+    by = ["span", "k1", "k2", "oi"]
+    print(f"route 4, the flow shock on {', '.join(strategy.ASSETS)}; period {period}")
+    print("bp against the shock (positive = reversal) from the shock bar's close")
+    print("mean per event (error clustered on h-bar blocks)")
+    if period == "2021":
+        print("no open interest before 2025-05: the curves are not split (oi n/a)")
+    t = aggregate(real, by, IRF_H)
+    for f in folds:
+        _show(
+            f"fold {f}: impulse response by span, k1, k2 and open interest over the shock",
+            cells(t.xs(f, level="fold", drop_level=False), IRF_H),
+        )
+    sized = aggregate(real[real.k1 == K1[0]], ["span", "k2", "bucket", "oi"], (12, 24, 48))
+    _show("by shock size (bucket 0: 2-3 sigma, 1: 3-4, 2: over 4)", cells(sized, (12, 24, 48)))
+    _show(
+        f"random signs, seeds {list(seeds)}, every fold pooled", cells(aggregate(null.assign(fold=0), by, IRF_H), IRF_H)
+    )
+    if period == "2021":
+        return
+    title = "context, `detect --oi` on every bar: after a 24-bar move, the next 48 bars against it, by open interest"
+    _show(title, cells(behind(period), (48,)))
+    pooled = aggregate(real[real.k1 == K1[0]].assign(fold=0), ["span", "k2", "oi", "bucket"], (48,))[48]
+    print(f"\nverdict (route 4): every fold, OI falling reverts at 12/24/48 above OI rising, >{PERP_RT:.0f} bp at 48;")
+    print("and, every fold pooled, the reversal with OI falling at 48 grows over the size buckets 2-3 / 3-4 / 4+ sigma")
+    for (span, k1, k2), g in t.groupby(level=["span", "k1", "k2"]):
+        m = g.droplevel(["span", "k1", "k2"]).reorder_levels(["fold", "oi"])
+        size = pooled.xs((span, k2, "fell"), level=["span", "k2", "oi"])
+        line = "  ".join(f"f{f} fell {m.loc[(f, 'fell'), 48]:+.1f} rose {m.loc[(f, 'rose'), 48]:+.1f}" for f in folds)
+        verdict = "PASS" if shock_verdict(m, folds) else "fail"
+        bucket = np.round(size.to_numpy(), 1).tolist()
+        print(f"  span {span} k1 {k1} k2 {k2}: {verdict}  {line}  | grows {grows(size)} {bucket}")
+
+
 def power_tables(reps: int = 2000) -> None:
     """Each card's criterion simulated at development's measured errors: the detection rate at 0,
     half, 1x and 2x the effect it needs; the 0 column is the false-positive rate."""
@@ -603,10 +794,32 @@ def power_tables(reps: int = 2000) -> None:
     )
     _show(title + " (state, bars, cost bp)", pd.DataFrame(rows, index=EFFECTS).T.round(3))
 
+    ev = shock_events("dev", ())
+    t = aggregate(ev, ["span", "k1", "k2", "oi"], (12, 24, 48))
+    folds, effects = [1, 2], [0, PERP_RT / 2, PERP_RT, 2 * PERP_RT]
+    rows = {}
+    for (span, k1, k2), g in t.groupby(level=["span", "k1", "k2"]):
+        m = g.droplevel(["span", "k1", "k2"]).reorder_levels(["fold", "oi"]).sort_index()
+        se = m[["12_se", "24_se", "48_se"]].set_axis([12, 24, 48], axis=1)
+        key = (span, k1, k2, int(m.n.xs("fell", level="oi").sum()))
+        rows[key] = power(
+            se, lambda cell, _, e: e * (cell[1] == "fell"), lambda x: shock_verdict(x, folds), effects, reps
+        )
+    title = f"route 4: OI falling at 0 / 0.5 / 1 / 2 x {PERP_RT:.0f} bp from 12 bars on, OI rising at 0"
+    _show(title + " (span, k1, k2, events with OI falling)", pd.DataFrame(rows, index=EFFECTS).T.round(3))
+    sized = aggregate(ev[ev.k1 == K1[0]].assign(fold=0), ["span", "k2", "oi", "bucket"], (48,))
+    rows = {}
+    for (span, k2), g in sized.xs("fell", level="oi").groupby(level=["span", "k2"]):
+        se = g["48_se"].droplevel(["span", "k2"]).to_frame(48)
+        rows[(span, k2, tuple(g.n))] = power(se, lambda cell, _, e: e * cell[0], lambda x: grows(x[48]), effects, reps)
+    title = f"route 4, the reversal grows with the size: buckets at 0 / 1 / 2 steps of 0 / 5 / {PERP_RT:.0f} / 20 bp"
+    _show(title + " (span, k2, events by bucket)", pd.DataFrame(rows, index=EFFECTS).T.round(3))
+
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--liquidity", action="store_true", help="route 3: v2's extremes by liquidity state")
+    ap.add_argument("--shock", action="store_true", help="route 4: flow shocks by the sign of open interest")
     ap.add_argument("--power", action="store_true", help="each card's criterion simulated at development's errors")
     ap.add_argument("--period", choices=strategy.PERIODS, default="dev")
     ap.add_argument("--seeds", type=int, nargs="+", default=[0, 1, 2], help="the sign-randomised paths of the null")
@@ -616,6 +829,8 @@ def main() -> None:
     pd.set_option("display.max_columns", 60)
     if args.liquidity:
         liquidity(args.period, args.seeds)
+    if args.shock:
+        shock(args.period, args.seeds)
     if args.power:
         power_tables()
 
