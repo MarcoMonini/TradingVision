@@ -30,9 +30,12 @@ still open. A copy of a page that was published while the study ran; edit it her
 
 `false_alarms.html` (Italian) is why cutting the detectors' false alarms cannot pay while a filter
 reads only the price's past (P·W = (1−P)·L under optional stopping), what a second model has to be
-worth, and the three routes left (the residual against the market, the flow shock, limit orders at
-the extremes), with the Monte Carlo behind each number and its code in an appendix. HANDOFF §19 is
-its state: the diagnostics it describes are in `detect` and have not been run on the store.
+worth, and the routes left: the residual against the market, the flow shock, using the weak fast
+signals to time a slow strategy's trades, the liquidity premium, conditional predictability at the
+pivots, the decomposed taker flow, pivots as a map of stop orders, a volatility-managed slow base, and
+a test by betting to confirm any of them on paper trades. The Monte Carlo behind each number and its
+code are in an appendix. HANDOFF §19 is its state: the diagnostics it describes are in `detect`
+and have not been run on the store; the newer routes are not in the code.
 
 `swing_leg_pipeline.html` (Italian) explains the training pipeline of the `swing_leg_target` models.
 Part I is a lesson for a reader new to the subject, one concept per chapter with charts on real

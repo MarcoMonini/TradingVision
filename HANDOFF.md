@@ -21,7 +21,9 @@ trading sulla predizione v2 (`strategy.py`) e tutte quelle regole sulla pagina c
 **Aggiornamento 2026-10-06** — ramo `claude/lucid-brahmagupta-1bd8dn`: tre diagnostici in
 `detect.py` per qualunque filtro sui falsi allarmi (conservazione, test nullo, rivelatori sul
 residuo contro il mercato). Scritti e testati, **non ancora eseguiti sullo store**: sezione 19. Il
-ragionamento completo, con le simulazioni e il loro codice, è `false_alarms.html`.
+ragionamento completo, con le simulazioni e il loro codice, è `false_alarms.html`. Il 2026-10-07 gli
+ordini limite ne sono usciti (vantaggio solo di costo) e sono entrate sei strade nuove e un test
+sequenziale, nessuno nel codice.
 
 ---
 
@@ -1122,16 +1124,42 @@ dell'intera posizione bastano un IC di 0,15-0,2 (accuratezza 54-55%), con la pre
 0,6 fa +10,3 bp (errore 2,8) contro −0,3 (2,6) del random walk, alla stessa precisione del 96-97%. Sono numeri di un mondo
 sintetico: dicono cosa cercare, non cosa c'è.
 
-**Gli ordini limite, simulati (2026-10-07).** Barre con minimo e massimo dentro la barra (S passi
-GARCH t(4) a barra), tre ingressi tenuti 12 barre: a mercato quando l'RSI a 12 arriva a ±0,5, a
-mercato alla conferma dello zigzag 0,3, con un limite a 1σ finché l'RSI resta nella zona. Su una
-martingala con percorso quasi continuo (S = 192) fanno +2,1 / +1,0 / +3,4 bp (errori 2,6-3,9): zero.
-Con S = 12 il limite fa −11,8 (3,9): quando il prezzo scavalca K si viene eseguiti a K con il prezzo
-già sotto, che è la selezione avversa di un gap o di un book spazzato. Con il ritorno alla media il
-limite batte la conferma (+10,4 contro +5,4) ma non l'ingresso a mercato nella zona (+12,6). Il
-vantaggio dell'ordine limite è di costo, non di segnale; e sui dati veri gli estremi di v2
-proseguono (passo 1 di `strategy_study.html`), il caso peggiore per un limite. La strada 3 ha senso
-solo dietro la 2. Script `sim_limit.py` nell'appendice di `false_alarms.html`.
+**Gli ordini limite agli estremi sono tolti (2026-10-07).** Simulati, il loro vantaggio è solo di
+costo (2-3 bp di commissione maker per lato): su una martingala con percorso continuo valgono zero,
+con i salti perdono (−11,8 bp, la selezione avversa di un book spazzato), e con il ritorno alla media
+non battono l'ingresso a mercato nella zona (+10,4 contro +12,6). Sui dati veri gli estremi di v2
+proseguono, il caso peggiore per un limite. Non portano niente di utile e sono usciti da
+`false_alarms.html`; lo script è nella storia del ramo (commit `6535fbf`).
+
+**Sei strade nuove (2026-10-07), in `false_alarms.html`, nessuna nel codice.** Il criterio per
+ammetterle: un'informazione che il passato del prezzo non contiene, un flusso meccanico in momenti o
+livelli riconoscibili, oppure chi paga la commissione.
+
+- **3, il tempismo di un trade lento.** Gli IC già misurati (open interest dietro al movimento,
+  book, esaurimento) non pagano 20 bp da soli, ma possono scegliere *quando* eseguire i trade di una
+  base lenta che li farebbe comunque (regola a 4h, fattore), senza commissioni in più. Simulato con un
+  segnale AR(1) il cui effetto si ferma a una deviazione standard (la forma di `--oi`): a IC 0,05 da
+  solo fa −5,3 bp netti, come tempismo +8,2 ± 1,9 bp per esecuzione in una finestra di 48 barre e
+  +12,8 ± 3,0 in 96; a IC 0 fa zero, e la barra a caso resta nel rumore.
+- **4, il premio di liquidità.** Nagel (2012): l'inversione di breve è il compenso di chi fornisce
+  liquidità e cresce quando questa si ritira. Agli estremi di v2, rendimento contro la gamba per
+  terzile di illiquidità di Amihud, volatilità relativa, volume, profondità, ora e stress di mercato;
+  i segni casuali conservano queste variabili e cancellano la direzione.
+- **5, i due stadi nella forma giusta.** L'IC delle colonne dei futures sulle barre ai pivot contro
+  quello su tutte le barre: il primo stadio vale solo se il rapporto è sopra 1. È il test più
+  economico.
+- **6, il flusso dei taker scomposto** (Hasbrouck; Llorente-Michaely-Saar-Wang). Richiede di tenere
+  `taker_buy_base` e `taker_buy_quote`, che `binance.KEEP` scarta: 15 asset dal 2017 invece di 3 su
+  sedici mesi. Il flusso grezzo all'allarme non aveva dato niente.
+- **7, i pivot come mappa degli stop** (Osler): cascata alla rottura dell'ultimo minimo confermato,
+  inversione se la rottura fallisce; controllo con livelli placebo spostati di 0,5-1σ.
+- **8, la base lenta** con la posizione 1/σ̂ (Moreira-Muir) su `swing --baseline`. Non usa v2.
+- **Verificare con un test per scommessa** (Waudby-Smith e Ramdas). Simulato su trade con 150 bp di
+  deviazione standard: il t-test guardato dopo ogni trade dà il 43% di falsi positivi entro 3.000
+  trade, il test per scommessa il 2,4%. A 160 trade un vantaggio di 15 bp si vede il 37% delle
+  volte.
+
+Gli script `sim_timing.py` e `sim_sequential.py` sono nell'appendice di `false_alarms.html`.
 
 **Verificato.** ruff, black e 51 test. Il self-check di `swing` non è girato: il proxy della sessione
 blocca `download.pytorch.org`, e torch non si installa. Le tre CLI nuove e `--features` sono girate da
@@ -1143,7 +1171,10 @@ capo a fondo su uno store sintetico, poi cancellato; i loro numeri non significa
 2. `detect --null 0.5`: se l'AUC dei percorsi casuali è vicina allo 0,63 reale, la separazione degli
    allarmi è geometria e il ramo "filtro sugli allarmi" è chiuso per tutte le colonne del prezzo.
 3. `detect --residual BTC` e `--residual ew`: lordo, `kept` e gate sul residuo contro il prezzo, a
-   confronto con `fee_bp`. È l'unico dei tre che può aprire una strada. Sui perpetual di OKX (0,05%
+   confronto con `fee_bp`. È l'unico dei tre che può aprire una strada.
+4. L'IC condizionato ai pivot (strada 5), poi i terzili di liquidità (strada 4), la base lenta con
+   1/σ̂ (strada 8) e il tempismo su di essa (strada 3); il flusso dei taker (6) e la mappa degli stop
+   (7) dopo. Ciò che passa lo sviluppo va in paper trading con il test sequenziale. Sui perpetual di OKX (0,05%
    taker, 0,02% maker per lato, da verificare) le due gambe con beta ≈ 1 costano a taker quanto una
    gamba spot e a maker meno della metà, più il funding.
 
