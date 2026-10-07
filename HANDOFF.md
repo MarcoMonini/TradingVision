@@ -1236,6 +1236,19 @@ v2 0,616. `kept` sui semi nulli va da −0,65 a +0,35 (deviazione 0,40 contro un
 0,22-0,28): il +0,62 ± 0,24 di v2 sullo sviluppo è 1,5 deviazioni dei semi e torna a −0,26 sull'hold-out.
 Non si riapre il meta-labeling.
 
+**Strada 2 — le colonne dei futures non sanno di più ai pivot** (`detect --conditional [--period dev|holdout]
+[--power]`). Rank IC di 24 colonne (futures, open interest dietro al movimento a k 4 / 12 / 24, v2 e RSI
+come riferimento) col rendimento a 12 / 24 / 48 barre, sulle barre con |v2| ≥ 0,4 / 0,5 / 0,6 e su quelle
+d'allarme di Shiryaev 0,5, contro tutte le barre; rapporto e differenza con errori delta sui blocchi di
+h barre, e placebo (l'insieme spostato nel tempo nel fold). Criterio passato su **0 di 288** righe sullo
+sviluppo, 0 sull'hold-out, 0 di 864 placebo. All'allarme il rapporto mediano è 0,72-0,89 (placebo
+0,91-1,08). La riga più forte è il book entro il 5% oltre |v2| ≥ 0,6 a 12 barre: IC 0,149 / 0,121 /
+0,182 / 0,220 contro 0,028 / 0,039 / 0,020 / 0,056 su tutte le barre, ma è il lato di v2 (correlazione
+0,42-0,74 con long al minimo e short al massimo) e il rapporto ha errore 1,6-3,2. Potenza: con IC 0,03 su
+tutte le barre nessun rapporto fino a 3 si vede più del 22% delle volte; con 0,06 un rapporto di 2 agli
+allarmi il 78 / 55 / 24% a 12 / 24 / 48 barre; falsi positivi 0-0,5%. Il 2021 non c'è (futures dal
+2025-05). Le colonne dei futures vanno su tutte le barre, nel tempismo.
+
 ### Tolto
 
 Gli ordini limite agli estremi (2026-10-07): simulati, il loro vantaggio è solo di costo (2-3 bp di

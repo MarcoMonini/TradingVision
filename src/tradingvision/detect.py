@@ -176,6 +176,46 @@ gross, never what it moves the AUC or the false alarms, and these ask that quest
   most of each asset's variance, and the reversal documented at short horizons is in the part it
   leaves out. The hedged trade pays two legs, `fee_bp`.
 
+**The futures columns know no more at v2's pivots than anywhere** (`--conditional`, route 2 of
+`false_alarms.html`, `conditional_ic`; added 2026-10-07). The two-stage idea in its right form: a
+first stage is worth something only if it picks the bars where a second model, on columns that are
+not the price, knows more about the held period's return. Per column (the futures columns, open
+interest behind the move at k = 4 / 12 / 24, v2 and the RSI at 12 as yardsticks), horizon (12 / 24
+/ 48 bars) and fold: the rank IC on the bars at the pivot against the rank IC on every bar, ratio and
+difference. "At the pivot" is |v2| >= 0.4 / 0.5 / 0.6 (8,803 / 3,887 / 1,177 bars of 34,758 in fold
+1, 8,296 / 4,044 / 1,359 in fold 2) and Shiryaev 0.5's alarm bars (2,177 / 2,055). The IC is the mean
+product of standardised ranks, ranked within asset, fold and subset and pooled bar by bar, so a
+bar weighs one; its error, the ratio's and the difference's are the delta method over the clock
+blocks of h bars (`_delta`), which on full blocks is `metrics.blocked`'s error and matches the spread
+of 200 simulated draws (0.092 against 0.084). Not `metrics.blocked`'s mean, a mean of block means:
+on a subset that comes in runs it weighs a block holding one bar like one holding 36, and since the
+short runs are the ones that ended, fading v2 at |v2| >= 0.4 for 12 bars makes -1.4 bp a bar on fold
+1 and +17.3 as a mean of blocks. The criterion (ratio above 1 by two errors in both development
+folds, |IC| on the subset above rho_min = c / (0.8 sigma sqrt h) with one sign) passes on 0 of 288
+rows on development and 0 on the hold-out, at spot and at perpetual; the placebos, each subset rolled
+in time inside its fold, pass 0 of 864. sigma on development is 0.21% (BTC), 0.34% (ETH), 0.40% (SOL),
+0.32% pooled, so rho_min is 0.23 / 0.16 / 0.11 at 12 / 24 / 48 bars on spot and half on perpetuals.
+At the alarm no column gains: the median ratio over the columns is 0.72-0.89 against 0.91-1.08 for
+the placebos. Past |v2| >= 0.6 at 12 bars the book's imbalance within 5% has an IC of 0.149 / 0.121
+on development and 0.182 / 0.220 on the hold-out against 0.028 / 0.039 / 0.020 / 0.056 on every bar
+(difference +0.12 +/- 0.05, +0.08 +/- 0.05, +0.16 +/- 0.08, +0.16 +/- 0.07), above the perpetual's
+0.114 in every fold, and still fails: the ratio is 5.3 +/- 3.2 and 3.1 +/- 1.6, because an IC of 0.03
+on every bar is barely measured and its error is the ratio's. That row is mostly v2's own side: there
+book5 correlates 0.42-0.74 with long-at-a-bottom against short-at-a-top, v2's IC on the same bars is
+-0.18 / -0.15 / -0.17 / -0.15, and within one tail book5's runs from -0.00 to +0.27. Nor is a
+rank IC money: fading v2 at |v2| >= 0.6 for 12 bars grosses +13.5 / +10.0 / +9.5 / -3.4 bp a bar
+(errors 6.5-16). `--power` plants a column with the store's subsets, returns and blocks: at an IC of
+0.03 on every bar, the futures columns' size, no ratio up to 3 is seen more than 22% of the time; at
+0.06 a ratio of 2 at the alarms is seen 78% / 55% / 24% of the time at 12 / 24 / 48 bars, past
+|v2| >= 0.6 a ratio of 3 50% / 9% / 2%; a ratio of 1 passes 0-0.5% everywhere. The ratio is the
+wrong statistic for columns whose IC on every bar is not distinct from zero, and the test cannot rule
+out a ratio of 2 on them: what it rules out is a pivot that turns a 0.06 column into a 0.12 one at
+12-24 bars. On the card, that sends the columns to every bar, as timing columns (route 6).
+Read on every bar, open interest behind the move at k = 24 has an IC with the 48-bar return of
++0.029 / +0.007 / +0.007 / +0.016 by fold, the mean of the 48 phases a one-in-48 sampling can start
+on: `--oi`'s +0.057 / +0.125 / +0.057 / +0.045 is phase 0, and fold 2's is the second highest of
+the 48 (phase-to-phase sd 0.03-0.07). `forward_ic` samples the same way.
+
     uv run python -m tradingvision.detect --zigzag 0.05 0.1 0.15 0.2 0.3 0.5 0.8
     uv run python -m tradingvision.detect --shiryaev 0.5 0.7 0.8 0.9 0.95 0.98 0.99 [--flat]
     uv run python -m tradingvision.detect --shiryaev 0.5 0.9 --zigzag 0.2 --split
@@ -189,6 +229,7 @@ gross, never what it moves the AUC or the false alarms, and these ask that quest
     uv run python -m tradingvision.detect --null 0.5 [--seeds 0 1 2]
     uv run python -m tradingvision.detect --residual BTC [--gate 0.4 0.5 0.6]
     uv run python -m tradingvision.detect --residual ew
+    uv run python -m tradingvision.detect --conditional [--period dev|holdout] [--power] [--seeds 0 1 2]
 """
 
 from __future__ import annotations
@@ -210,6 +251,9 @@ POST = 6  # the first bars of a leg that make the post-turn increment distributi
 # The beta `residual` hedges with: a month of 15m bars, the window `_zscore` already reads. Chosen,
 # not measured; a beta that moves slower than the legs is the only requirement.
 BETA_WINDOW = 96 * 30
+# OKX's perpetual taker fee, 0.05% a side (10 bp round trip): from secondary sources, not measured
+# and not checked against OKX's own schedule (`false_alarms.html`, #soglia). Spot is `oracle.FEE`.
+PERP_FEE = 0.0005
 # `fit` on v2's walk-forward predictions, development folds only (ETH, BTC, SOL, 2025-06-01 to
 # 2026-01-28), in the head's raw units. Fixed here so the chart page, which has no store, runs the
 # detector the study measured; `main` refits it and refuses to run if the two have drifted apart.
@@ -863,6 +907,266 @@ def behind_the_move(symbol: str, close: pd.Series, k: int) -> pd.DataFrame:
     )
 
 
+def forward(close: pd.Series, h: int) -> pd.Series:
+    """The log return from each bar's close to the close `h` bars later, per asset. The bar's own
+    return is not in it: a column known at the bar's close is read against what comes after."""
+    lc = np.log(close)
+    return lc.groupby(level=1).shift(-h) - lc
+
+
+def _shifted(mask: np.ndarray, sym: pd.Index, fold: np.ndarray, rng: np.random.Generator) -> np.ndarray:
+    """A placebo of `mask`: within each asset and fold the same mask rolled in time by a random offset
+    between a tenth and nine tenths of the fold. Same size, same runs, any tie to the market gone."""
+    out = np.zeros(len(mask), dtype=bool)
+    for s in sym.unique():
+        for f in np.unique(fold[fold > 0]):
+            i = np.flatnonzero((sym == s) & (fold == f))
+            out[i] = np.roll(mask[i], rng.integers(len(i) // 10, 9 * len(i) // 10))
+    return out
+
+
+def conditional_frame(pred: pd.Series, cut: pd.Timestamp, period: str = "dev", seeds=(0, 1, 2), horizons=(12, 24, 48)):
+    """`(x, fwd, subsets, fold)` on v2's rows of `period`: what `conditional_ic` and `power` read.
+
+    `x`: every `futures_columns` column, open interest behind the move (`move * oi_z`) at k = 4, 12
+    and 24, and v2's prediction and the RSI at 12 as the yardstick rows. The futures columns are
+    built on the store's close, so their trailing windows are warm by v2's first bar. `fwd`: the
+    `forward` return at each horizon, on the store's close too. `subsets`: the bars at the pivot,
+    |v2| >= 0.4 / 0.5 / 0.6 in its raw units and the alarm bars of Shiryaev 0.5 with `fit` on
+    development, and for each seed a `_shifted` placebo of each.
+    """
+    when, sym = pred.index.get_level_values(0), pred.index.get_level_values(1)
+    fold = strategy.fold_in(when, period)
+    rsi, parts, closes = strategy.rsi(pred.index), [], []
+    for s in sym.unique():
+        c = candles(s, "15m").close
+        cols = futures_columns(s, c)
+        for k in (4, 12, 24):
+            d = behind_the_move(s, c, k)
+            cols[f"oi behind the move {k}"] = d.move * d.oi_z
+        idx = pred.xs(s, level=1).index
+        cols = cols.reindex(idx).assign(**{"v2 prediction": pred.xs(s, level=1), "rsi 12": rsi.xs(s, level=1)})
+        on = pd.MultiIndex.from_arrays([idx, [s] * len(idx)], names=pred.index.names)
+        parts.append(cols.set_axis(on))
+        closes.append(c.reindex(idx).set_axis(on))
+    x, close = pd.concat(parts).reindex(pred.index), pd.concat(closes).reindex(pred.index)
+    fwd = pd.DataFrame({h: forward(close, h) for h in horizons})
+    found = alarms(pred, shiryaev, fit(pred, cut), 0.5)
+    real = {f"|v2| >= {L:g}": (pred.abs() >= L).to_numpy() for L in (0.4, 0.5, 0.6)}
+    real["shiryaev 0.5 alarm"] = (found != 0).to_numpy()
+    subsets = pd.DataFrame(real, index=pred.index)
+    for k in seeds:
+        rng = np.random.default_rng(k)
+        for name, m in real.items():
+            subsets[f"placebo #{k}: {name}"] = _shifted(m, sym, fold, rng)
+    keep = fold > 0
+    return x[keep], fwd[keep], subsets[keep], fold[keep]
+
+
+def _zrank(v: np.ndarray) -> np.ndarray | None:
+    """Ranks, ties averaged as Spearman takes them, standardised with ddof 0: the mean product of two
+    of these is Pearson on the ranks. None when the ranks cannot be standardised."""
+    r = pd.Series(v).rank().to_numpy()
+    return (r - r.mean()) / r.std() if len(r) > 2 and r.std() > 0 else None
+
+
+def _sums(p: np.ndarray, block: np.ndarray, nb: int) -> np.ndarray:
+    """`p` (..., n) summed over each clock block, `block` the sorted block codes of its n rows."""
+    out = np.zeros(p.shape[:-1] + (nb,))
+    if len(block):
+        start = np.flatnonzero(np.r_[True, block[1:] != block[:-1]])
+        out[..., block[start]] = np.add.reduceat(p, start, axis=-1)
+    return out
+
+
+def _pair_sums(xv: np.ndarray, yv: np.ndarray, keep: np.ndarray, assets: list, block: np.ndarray, nb: int):
+    """`(S, N)` per clock block: the products of standardised ranks of `xv` and `yv` on the rows `keep`
+    where both are known, ranked within each asset (`assets` are their rows), and their count."""
+    S, N = np.zeros(nb), np.zeros(nb)
+    for i in assets:
+        ok = keep[i] & np.isfinite(xv[i]) & np.isfinite(yv[i])
+        zx, zy = _zrank(xv[i][ok]), _zrank(yv[i][ok])
+        if zx is not None and zy is not None:
+            S += _sums(zx * zy, block[i][ok], nb)
+            N += _sums(np.ones(len(zx)), block[i][ok], nb)
+    return S, N
+
+
+def _delta(Sa: np.ndarray, Na: np.ndarray, Sc: np.ndarray, Nc: np.ndarray) -> dict:
+    """IC on every bar (`a`) and on the subset (`c`), their ratio and difference, each with its error.
+
+    Each IC is Σ products / Σ bars over the clock blocks. A block moves it by its residual sum over
+    the total (`ea`, `ec`), the ratio by ec / a - c ea / a², the difference by ec - ea; the variance
+    is the sum of their squares over the blocks, times nb / (nb - 1). With full blocks it is
+    `metrics.blocked`'s error of the mean (the self-check asserts it). Arrays (..., nb) to (...).
+    """
+    nb = (Na > 0).sum(-1)
+    k = nb / (nb - 1)
+    na, nc = Na.sum(-1), Nc.sum(-1)
+    a, c = Sa.sum(-1) / na, Sc.sum(-1) / nc
+    ea = (Sa - a[..., None] * Na) / np.asarray(na)[..., None]
+    ec = (Sc - c[..., None] * Nc) / np.asarray(nc)[..., None]
+    er = ec / a[..., None] - c[..., None] * ea / a[..., None] ** 2
+    se = {name: np.sqrt(k * (e**2).sum(-1)) for name, e in (("a", ea), ("c", ec), ("r", er), ("d", ec - ea))}
+    return {
+        "ic_all": a,
+        "ic_all_se": se["a"],
+        "ic_cond": c,
+        "ic_cond_se": se["c"],
+        "ratio": c / a,
+        "ratio_se": se["r"],
+        "diff": c - a,
+        "diff_se": se["d"],
+    }
+
+
+def _blocks(when: pd.DatetimeIndex, fold: np.ndarray, f: int, h: int) -> tuple[np.ndarray, int]:
+    """Codes of the clock blocks of `h` bars (`metrics.blocked`'s floor) of fold `f`'s rows, -1 elsewhere."""
+    block, on = np.full(len(fold), -1), fold == f
+    block[on] = pd.factorize(when[on].floor(h * strategy.BAR), sort=True)[0]
+    return block, int(block.max()) + 1
+
+
+def conditional_ic(x: pd.DataFrame, fwd: pd.DataFrame, subsets: pd.DataFrame, fold: np.ndarray) -> pd.DataFrame:
+    """One row per (subset, h, column, fold): the rank IC with the h-bar forward return on every bar of
+    the fold and on the subset's bars, their ratio and their difference, with errors from `_delta`.
+
+    The ranks are taken within each asset, fold and subset, and the three assets are pooled bar by
+    bar: the IC is the mean product of standardised ranks, which weighs each asset by its bars.
+    """
+    when, sym = x.index.get_level_values(0), x.index.get_level_values(1)
+    rows = []
+    for f in np.unique(fold):
+        assets = [np.flatnonzero((fold == f) & (sym == s)) for s in sym.unique()]
+        for h in fwd.columns:
+            block, nb = _blocks(when, fold, f, h)
+            yv = fwd[h].to_numpy()
+            for col in x.columns:
+                xv = x[col].to_numpy()
+                Sa, Na = _pair_sums(xv, yv, np.ones(len(xv), dtype=bool), assets, block, nb)
+                for name in subsets.columns:
+                    Sc, Nc = _pair_sums(xv, yv, subsets[name].to_numpy(), assets, block, nb)
+                    head = {"subset": name, "h": h, "column": col, "fold": f, "bars": Na.sum(), "bars_cond": Nc.sum()}
+                    rows.append(head | {k: float(v) for k, v in _delta(Sa, Na, Sc, Nc).items()})
+    return pd.DataFrame(rows)
+
+
+def thresholds(close: pd.Series, horizons=(12, 24, 48)) -> pd.DataFrame:
+    """ρ_min ≈ c / (0.8 σ √h) (`false_alarms.html`, #soglia): the IC with the h-bar return that pays a
+    round trip c, spot taker (2 `FEE`) and perpetual taker (2 `PERP_FEE`). σ is the sd of each asset's
+    15m log return on development, and `pooled` takes the mean of the three: a common IC on the three
+    pays the round trip at that σ. Measured on development and applied unchanged to the hold-out."""
+    dev = strategy.fold_in(close.index.get_level_values(0), "dev") > 0
+    sigma = np.log(close).groupby(level=1).diff()[dev].groupby(level=1).std()
+    sigma["pooled"] = sigma.mean()
+    fees = {"spot": 2 * FEE, "perp": 2 * PERP_FEE}
+    return pd.DataFrame(
+        {"sigma": sigma} | {f"{k} {h}": c / (0.8 * sigma * np.sqrt(h)) for k, c in fees.items() for h in horizons}
+    )
+
+
+def _passes(ratio: np.ndarray, ratio_se: np.ndarray, ic_cond: np.ndarray, rho: float) -> tuple[np.ndarray, np.ndarray]:
+    """The card's criterion over the last axis, the folds: `(ratio part, whole)`. The ratio above 1 by
+    more than two errors in every fold; and the subset's IC above `rho` in size, with one sign in
+    every fold, since a column is traded on either sign but not on both."""
+    up = (ratio - 1 > 2 * ratio_se).all(-1)
+    same = (np.sign(ic_cond) == np.sign(ic_cond[..., :1])).all(-1)
+    return up, up & same & (np.abs(ic_cond) > rho).all(-1)
+
+
+def verdict(t: pd.DataFrame, rho: pd.DataFrame) -> pd.DataFrame:
+    """`_passes` on `conditional_ic`'s rows, per (subset, h, column), at the pooled ρ_min of each instrument."""
+    w = t.set_index(["subset", "h", "column", "fold"])[["ratio", "ratio_se", "ic_cond"]].unstack("fold")
+    out = {}
+    h = w.index.get_level_values("h")
+    for inst in ("spot", "perp"):
+        r = rho.loc["pooled", [f"{inst} {k}" for k in h]].to_numpy()
+        out["ratio"], out[inst] = _passes(w.ratio.to_numpy(), w.ratio_se.to_numpy(), w.ic_cond.to_numpy(), r[:, None])
+    return pd.DataFrame(out, index=w.index)
+
+
+def power(
+    fwd: pd.DataFrame,
+    subsets: pd.DataFrame,
+    fold: np.ndarray,
+    rho: pd.DataFrame,
+    ratios=(1.0, 1.5, 2.0, 3.0),
+    levels=(0.03, 0.06),
+    reps: int = 400,
+    seed: int = 0,
+    chunk: int = 100,
+) -> pd.DataFrame:
+    """How often the card's criterion passes on a column with a known effect, at the store's sizes.
+
+    The forward returns, the subsets and the clock blocks are the real ones of the period, so the
+    sample sizes, the subsets' runs and the overlap are the store's. Only the column is drawn:
+    x = ρ_t z + sqrt(1 - ρ_t²) ε, with z the standardised rank of the forward return within each
+    asset and fold, ρ_t = ratio × ρ_all on the subset's bars and the value that keeps the IC on every
+    bar at ρ_all elsewhere, and ε an independent moving sum of h bars, as persistent as the forward
+    return (ponytail: real columns run from a few bars, the book, to weeks, funding; a slower ε
+    widens the errors). The IC is Pearson of x on the ranks, which is the rank IC's sampling law at
+    these sizes. ratio = 1 is the null of the ratio, so its column is the false-positive rate.
+    Returns the share of `reps` passing the ratio part, and the whole criterion at spot and perpetual.
+    """
+    when, sym = fwd.index.get_level_values(0), fwd.index.get_level_values(1)
+    folds, rng, rows = np.unique(fold), np.random.default_rng(seed), []
+    for h in fwd.columns:
+        y = fwd[h].to_numpy()
+        data = {}
+        for f in folds:
+            block, nb = _blocks(when, fold, f, h)
+            per = []
+            for s in sym.unique():
+                i = np.flatnonzero((fold == f) & (sym == s) & np.isfinite(y))
+                per.append((_zrank(y[i]), block[i], {c: subsets[c].to_numpy()[i] for c in subsets.columns}))
+            data[f] = (per, nb)
+        hits = {}
+        for start in range(0, reps, chunk):
+            r = min(chunk, reps - start)
+            stats = {}
+            for f, (per, nb) in data.items():
+                eps = []
+                for z, _, _ in per:
+                    walk = np.concatenate([np.zeros((r, 1)), rng.standard_normal((r, len(z) + h)).cumsum(1)], axis=1)
+                    eps.append((walk[:, h : h + len(z)] - walk[:, : len(z)]) / np.sqrt(h))
+                for cond in subsets.columns:
+                    for level in levels:
+                        for ratio in ratios:
+                            Sa, Sc, Na, Nc = np.zeros((r, nb)), np.zeros((r, nb)), np.zeros(nb), np.zeros(nb)
+                            for (z, b, masks), e in zip(per, eps):
+                                m = masks[cond]
+                                q = m.mean()
+                                rho_t = np.where(m, ratio * level, (level - q * ratio * level) / (1 - q))
+                                xv = rho_t * z + np.sqrt(1 - rho_t**2) * e
+                                xa = (xv - xv.mean(1, keepdims=True)) / xv.std(1, keepdims=True)
+                                Sa += _sums(xa * z, b, nb)
+                                Na += _sums(np.ones(len(z)), b, nb)
+                                xc, zc = xv[:, m], z[m]
+                                xc = (xc - xc.mean(1, keepdims=True)) / xc.std(1, keepdims=True)
+                                Sc += _sums(xc * ((zc - zc.mean()) / zc.std()), b[m], nb)
+                                Nc += _sums(np.ones(m.sum()), b[m], nb)
+                            d = _delta(Sa, Na, Sc, Nc)
+                            stats.setdefault((cond, level, ratio), []).append((d["ratio"], d["ratio_se"], d["ic_cond"]))
+            for key, per_fold in stats.items():
+                ratio_, se_, ic_ = (np.stack(v, axis=-1) for v in zip(*per_fold))
+                for inst in ("spot", "perp"):
+                    up, whole = _passes(ratio_, se_, ic_, rho.loc["pooled", f"{inst} {h}"])
+                    hits.setdefault(key + (inst,), []).append(whole)
+                hits.setdefault(key + ("ratio",), []).append(up)
+        for (cond, level, ratio, part), v in hits.items():
+            rows.append(
+                {
+                    "subset": cond,
+                    "h": h,
+                    "ic_all": level,
+                    "ratio": ratio,
+                    "part": part,
+                    "pass": np.concatenate(v).mean(),
+                }
+            )
+    return pd.DataFrame(rows)
+
+
 def open_interest(close: pd.Series, cut: pd.Timestamp, ks=(4, 12, 24), horizons=(12, 24, 48, 96), hold_bars=48):
     """Open interest behind the move, three ways: `(ic, quadrants, rule)`.
 
@@ -1021,6 +1325,55 @@ def _selfcheck() -> None:
     jump[3000] += 0.1
     moved = residual(asset, pd.Series(np.exp(np.cumsum(jump)), index=t), 960)[1]
     assert moved.iloc[3000] == beta.iloc[3000] and moved.iloc[3001] != beta.iloc[3001]
+    # Route 2. `_delta`'s error of a mean over full clock blocks is `metrics.blocked`'s: one estimator.
+    # Imported here: at module level it is in sys.modules before `tests` runs `metrics` as __main__.
+    from tradingvision import metrics
+
+    t = pd.date_range("2025-06-01", periods=4800, freq="15min", tz="UTC")
+    p, one = rng.normal(0.05, 1, len(t)), np.ones(len(t))
+    b, nb = _blocks(t, np.ones(len(t), dtype=int), 1, 12)
+    d = _delta(_sums(p, b, nb), _sums(one, b, nb), _sums(p, b, nb), _sums(one, b, nb))
+    ref = metrics.blocked(pd.Series(p, index=t), 12 * strategy.BAR)
+    assert np.isclose(d["ic_all"], p.mean()) and np.isclose(d["ic_all_se"], ref["se"]), (d, ref)
+    # Three random walks, a subset of 15% of the bars, h = 12. A column planted at IC 0.5 on the
+    # subset and 0.2 on every bar comes back at a ratio of 2.5; one at 0.2 everywhere at 1; the
+    # bar's own return, known at its close, has no IC with `forward`, and the next bar's would.
+    n, h = 6000, 12
+    t = pd.date_range("2025-06-01", periods=n, freq="15min", tz="UTC")
+    idx = pd.MultiIndex.from_product([t, ["A", "B", "C"]], names=["open_time", "symbol"])
+    close = pd.Series(np.exp(rng.normal(0, 0.004, (n, 3)).cumsum(0)).ravel(), index=idx)
+    fwd = pd.DataFrame({h: forward(close, h)})
+    z = ((fwd[h] - fwd[h].mean()) / fwd[h].std()).to_numpy()
+    sub, noise, fold = rng.random(len(idx)) < 0.15, rng.normal(size=len(idx)), np.ones(len(idx), dtype=int)
+    rho_t = np.where(sub, 0.5, (0.2 - 0.15 * 0.5) / 0.85)
+    own = np.log(close).groupby(level=1).diff()
+    x = pd.DataFrame(
+        {
+            "planted": rho_t * z + np.sqrt(1 - rho_t**2) * noise,
+            "flat": 0.2 * z + np.sqrt(1 - 0.2**2) * noise,
+            "own bar": own,
+            "next bar": own.groupby(level=1).shift(-1),
+        },
+        index=idx,
+    )
+    subsets = pd.DataFrame({"pivot": sub}, index=idx)
+    got = conditional_ic(x, fwd, subsets, fold).set_index("column")
+    g = got.loc["planted"]
+    assert abs(g.ratio - 2.5) < 3 * g.ratio_se and g.ratio - 1 > 2 * g.ratio_se, g
+    assert abs(got.loc["flat"].ratio - 1) < 3 * got.loc["flat"].ratio_se, got.loc["flat"]
+    assert abs(got.loc["own bar"].ic_all) < 3 * got.loc["own bar"].ic_all_se and got.loc["next bar"].ic_all > 0.2
+    # The placebo keeps each asset's count; `power` holds its false-positive rate at ratio 1 (one
+    # fold, one side: 2.3% nominal) and finds a ratio of 3 on these sizes.
+    sym = idx.get_level_values(1)
+    placebo = _shifted(sub, sym, fold, rng)
+    assert all(placebo[sym == s].sum() == sub[sym == s].sum() for s in "ABC") and (placebo != sub).any()
+    rho = pd.DataFrame({"spot 12": [0.3], "perp 12": [0.3]}, index=["pooled"])
+    pw = power(fwd, subsets, fold, rho, ratios=(1.0, 3.0), levels=(0.15,), reps=300).set_index(["ratio", "part"])
+    assert pw.loc[(1.0, "ratio"), "pass"] < 0.06 and pw.loc[(3.0, "ratio"), "pass"] > 0.9, pw
+    assert pw.loc[(1.0, "spot"), "pass"] == 0 and pw.loc[(3.0, "spot"), "pass"] > 0.9, pw
+    # The alarms the subsets are cut on are causal: the bars after a cut change none before it.
+    v = np.cumsum(rng.normal(0, 0.08, 3000))
+    assert (shiryaev(v, V2_FIT, 0.5)[:2000] == shiryaev(v[:2000], V2_FIT, 0.5)).all()
 
 
 def main() -> None:
@@ -1037,15 +1390,89 @@ def main() -> None:
     ap.add_argument("--oi", action="store_true", help="open interest behind the move: IC, quadrants, a 48-bar rule")
     ap.add_argument("--confirm", action="store_true", help="open interest as a confirmation of the rules' signals")
     ap.add_argument("--null", type=float, metavar="P", help="Shiryaev P's true/false split on real and random paths")
-    ap.add_argument("--seeds", type=int, nargs="+", default=[0, 1, 2], help="with --null: the random paths")
+    ap.add_argument(
+        "--seeds", type=int, nargs="+", default=[0, 1, 2], help="with --null: the random paths; --conditional: placebos"
+    )
     ap.add_argument("--residual", metavar="MARKET", help="the detectors on each asset less beta times MARKET, or ew")
+    ap.add_argument("--conditional", action="store_true", help="route 2: the futures columns' IC at v2's pivots")
+    ap.add_argument("--power", action="store_true", help="with --conditional: the criterion on planted columns")
+    ap.add_argument("--period", choices=strategy.PERIODS, default="dev", help="with --conditional: the folds read")
     args = ap.parse_args()
+    if args.conditional and args.period == "2021":
+        raise SystemExit(
+            "--conditional reads the futures columns, which start on 2025-05-01 (data.futures): route 2 has no"
+            " 2021-2025 reading. Run it with --period dev or --period holdout."
+        )
 
     _selfcheck()
     pred, close, cut = strategy.load()
     series = {"prediction": pred, "rsi 12": strategy.rsi(pred.index)}
     pd.set_option("display.width", 250)
     truth = turn_events(pred, strategy.WINDOW)
+    if args.conditional:
+        x, fwd, subsets, fold = conditional_frame(pred, cut, args.period, args.seeds)
+        rho, folds = thresholds(close), [int(f) for f in np.unique(fold)]
+        real = [c for c in subsets.columns if not c.startswith("placebo")]
+        print(f"route 2 on {args.period}, folds {folds}: rank IC with the h-bar forward return, ETH/BTC/SOL pooled\n")
+        print(subsets[real].assign(all=True).groupby(fold).sum().T.rename(columns=lambda f: f"bars, fold {f}"))
+        print("\nrho_min = round trip / (0.8 sigma sqrt(h)), sigma the sd of the 15m log return on development\n")
+        print(rho.round(4).to_string())
+        t = conditional_ic(x, fwd, subsets, fold)
+        v = verdict(t, rho)
+        shown = {
+            "ic_all": "all",
+            "ic_cond": "cond",
+            "ratio": "ratio",
+            "ratio_se": "+/-",
+            "diff": "diff",
+            "diff_se": "+/- ",
+        }
+        for name in real:
+            w = t[t.subset == name].set_index(["h", "column", "fold"])[list(shown)].unstack("fold")
+            w.columns = [f"f{f} {shown[s]}" for s, f in w.columns]
+            w = w[[f"f{f} {s}" for f in folds for s in shown.values()]].join(v.loc[name])
+            print(f"\n{name}: IC on every bar and on the subset, their ratio and difference, by fold\n")
+            print(w.round(3).to_string())
+        base = t.subset.str.replace(r"^placebo #\d+: ", "", regex=True)
+        z = t.assign(base=base, kind=np.where(base != t.subset, "placebo", "real"))
+        z = z.assign(z_ratio=(z.ratio - 1) / z.ratio_se, z_diff=z["diff"] / z.diff_se)
+        g = z.groupby(["base", "kind", "h"])
+        vv = v.reset_index()
+        vv["base"] = vv.subset.str.replace(r"^placebo #\d+: ", "", regex=True)
+        vv["kind"] = np.where(vv.base != vv.subset, "placebo", "real")
+        summary = pd.DataFrame(
+            {
+                "rows": g.size(),
+                "median ratio": g.ratio.median(),
+                "z_ratio > 2": g.z_ratio.apply(lambda s: (s > 2).mean()),
+                "|z_diff| > 2": g.z_diff.apply(lambda s: (s.abs() > 2).mean()),
+            }
+        ).join(vv.groupby(["base", "kind", "h"])[["ratio", "spot", "perp"]].sum().add_prefix("pass "))
+        print(f"\nthe real subsets against their placebos ({len(args.seeds)} draws each); rows are (column, fold)\n")
+        print(summary.round(3).to_string())
+        rv, pv = v.loc[real], v.drop(index=real, level="subset")
+        check = "" if args.period == "dev" else ", read as a check on the spent hold-out and never a choice"
+        print(
+            f"\nverdict (#condizionata{check}): the ratio above 1 by two errors in every fold on {rv.ratio.sum()}"
+            f" of {len(rv)} (subset, h, column); with |IC_cond| above rho_min and one sign, spot taker"
+            f" {rv.spot.sum()}, perpetual taker {rv.perp.sum()}. Placebos: {pv.ratio.sum()} of {len(pv)} on the"
+            f" ratio, {pv.perp.sum()} on the whole at perpetual."
+        )
+        if rv.ratio.any():
+            print(rv[rv.ratio].to_string())
+        if args.power:
+            pw = power(fwd, subsets[real], fold, rho)
+            table = pw.pivot_table(index=["subset", "h", "ic_all"], columns=["part", "ratio"], values="pass")
+            table = table[[(p, r) for p in ("ratio", "spot", "perp") for r in sorted(pw.ratio.unique())]]
+            print(
+                "\npower: share of 400 planted columns passing the ratio part and the whole criterion, by true ratio\n"
+            )
+            print(table.round(3).to_string())
+            levels = pw.ic_all.unique()
+            needs = {f"{i} {h}": rho.loc["pooled", f"{i} {h}"] / levels for i in ("spot", "perp") for h in fwd.columns}
+            print("\nthe true ratio the whole criterion needs, rho_min / ic_all\n")
+            print(pd.DataFrame(needs, index=pd.Index(levels, name="ic_all")).round(2).to_string())
+        return
     if args.null is not None:
         t = null_test(pred, close, cut, args.null, args.seeds)
         print(f"shiryaev {args.null}: true and false alarms told apart on the real price and on random paths\n")

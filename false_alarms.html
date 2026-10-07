@@ -527,6 +527,26 @@ details pre { border: 0; padding: 0; }
       <dt>Se no</dt><dd>Con un rapporto vicino a 1 il pivot toglie solo trade: le colonne si usano su tutte le barre, come colonne del punteggio della strada 6.</dd>
       <dt>Dati e stato</dt><dd><code>data.futures</code> (BTC, ETH, SOL, sedici mesi), già allineato alla griglia a 15 minuti da <code>detect --futures</code>. Da scrivere: una funzione. È il test più economico della fase 1.</dd>
     </dl></div>
+    <div class="sub-section" id="condizionata-esito">
+      <h3>Misurato il 7 ottobre <span class="chip bad"><i>✕</i> non passa</span></h3>
+      <p><code>detect --conditional</code>: 24 colonne (le 19 dei futures, l'open interest dietro al movimento a k = 4, 12, 24, v2 e l'RSI come riferimento), tre orizzonti, quattro insiemi "al pivot". L'IC è la media del prodotto dei ranghi standardizzati, barra per barra; errori col metodo delta sui blocchi di h barre. Il criterio passa su <strong>0 righe di 288</strong> sullo sviluppo e 0 sull'hold-out, su spot e su perpetual; i placebo (lo stesso insieme spostato nel tempo dentro il fold) su 0 di 864.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Insieme, sviluppo</th><th>barre fold 1 / 2</th><th>rapporto mediano, h 12 / 24 / 48</th><th>placebo</th><th>righe con |z| della differenza &gt; 2</th><th>placebo</th></tr></thead>
+        <tbody>
+          <tr><td>allarme di Shiryaev 0,5</td><td>2.177 / 2.055</td><td>0,72 / 0,84 / 0,89</td><td>1,08 / 0,91 / 0,93</td><td>4 / 4 / 6%</td><td>1 / 4 / 1%</td></tr>
+          <tr><td>|v2| ≥ 0,4</td><td>8.803 / 8.296</td><td>1,29 / 1,48 / 1,54</td><td>0,87 / 0,79 / 0,92</td><td>0 / 4 / 2%</td><td>5 / 6 / 1%</td></tr>
+          <tr><td>|v2| ≥ 0,5</td><td>3.887 / 4.044</td><td>2,13 / 2,24 / 1,48</td><td>1,43 / 1,22 / 0,86</td><td>2 / 4 / 2%</td><td>9 / 7 / 8%</td></tr>
+          <tr><td>|v2| ≥ 0,6</td><td>1.177 / 1.359</td><td>3,65 / 3,70 / 1,68</td><td>0,89 / 0,76 / 0,72</td><td>13 / 17 / 4%</td><td>10 / 8 / 10%</td></tr>
+        </tbody>
+      </table></div>
+      <p class="caption">Il rapporto mediano è sulle colonne; la quota nominale delle righe oltre due errori è il 4,6%. σ sullo sviluppo 0,21% (BTC), 0,34% (ETH), 0,40% (SOL), 0,32% insieme: ρ<sub>min</sub> 0,23 / 0,16 / 0,11 a 12 / 24 / 48 barre su spot, la metà su perpetual.</p>
+      <ul class="points">
+        <li><strong>All'allarme nessuna colonna sa di più</strong>: il rapporto mediano è sotto 1 (0,72-0,89) e sotto i placebo.</li>
+        <li><strong>Agli estremi di v2 i rapporti mediani salgono, ma il rapporto non è leggibile.</strong> Con IC su tutte le barre intorno a 0,03, non distinti da zero, l'errore del rapporto esplode. La riga più forte, lo squilibrio del book entro il 5% oltre |v2| ≥ 0,6 a 12 barre, passa da 0,028 / 0,039 / 0,020 / 0,056 su tutte le barre a 0,149 / 0,121 / 0,182 / 0,220 per fold (differenza da +0,08 a +0,16, 1,6-2,4 errori), sopra lo 0,114 del perpetual in ogni fold, e il rapporto fa 5,3 ± 3,2 e 3,1 ± 1,6. È soprattutto il lato di v2: lì il book correla 0,42-0,74 con "long al minimo, short al massimo", e v2 stessa ha IC −0,18 / −0,15 / −0,17 / −0,15. Contrastare v2 oltre 0,6 per 12 barre fa +13,5 / +10,0 / +9,5 / −3,4 bp lordi a barra, con errori di 6-16.</li>
+        <li><strong>Potenza</strong> (<code>--power</code>, una colonna piantata sugli stessi insiemi, rendimenti e blocchi): con IC 0,03 su tutte le barre, la taglia delle colonne dei futures, nessun rapporto fino a 3 si vede più del 22% delle volte; con 0,06 un rapporto di 2 agli allarmi si vede il 78 / 55 / 24% delle volte a 12 / 24 / 48 barre. Un rapporto di 1 passa lo 0-0,5%. Il test esclude un pivot che porti una colonna da 0,06 a 0,12 a 12-24 barre, non un rapporto di 2 su colonne da 0,03.</li>
+        <li><strong>Esito:</strong> il primo stadio non seleziona momenti più informati. Le colonne dei futures vanno su tutte le barre, come colonne del tempismo (strada 6).</li>
+      </ul>
+    </div>
   </section>
 
   <section id="liquidita">
