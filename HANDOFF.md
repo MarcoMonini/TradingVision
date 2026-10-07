@@ -1254,6 +1254,19 @@ tutte le barre nessun rapporto fino a 3 si vede più del 22% delle volte; con 0,
 allarmi il 78 / 55 / 24% a 12 / 24 / 48 barre; falsi positivi 0-0,5%. Il 2021 non c'è (futures dal
 2025-05). Le colonne dei futures vanno su tutte le barre, nel tempismo.
 
+**Strada 8 — gli stop ai pivot non lasciano traccia che paghi** (`stopmap.py`, `--period`, `--window
+12 24`, `--power`). Livelli di `legs.confirmed` (finestra 12 e 24) allo stoppino della gamba, rottura
+alla prima barra da 5 minuti oltre il livello dopo la conferma; placebo a ±0,5σ e ±1σ e numeri tondi
+(griglia tarata sullo sviluppo perché le rotture siano altrettante: 1,3-5,3% del prezzo); nullo su barre
+intere a segni casuali; medie per trade ed errori a blocchi con lo stimatore a rapporto (la media delle
+medie di blocco di `metrics.blocked` dava −2 / −8 bp alla cascata sui percorsi nulli). Criterio su 13
+`TRADABLE`: **0 di 24 righe** sullo sviluppo, sull'hold-out e sul 2021-2025. Sullo sviluppo la cascata
+è entro 3 / 9 bp dai placebo per fold e le rotture fallite proseguono invece di rientrare (da −3 a −19
+bp). L'unica traccia è il primo quarto del 2021-2025 (2021-01 → 2022-02): pivot meno placebo spostato
++8,0 / +11,1 bp a una barra (finestra 12 / 24), +16,3 a quattro, a 2,8-4,4 errori; poi 1-3 bp. Potenza:
+40 bp si vedono l'86-100% delle volte, 20 il 32-38%, zero passa al più il 3,4%. La mappa delle
+liquidazioni non è stata fatta.
+
 ### Tolto
 
 Gli ordini limite agli estremi (2026-10-07): simulati, il loro vantaggio è solo di costo (2-3 bp di

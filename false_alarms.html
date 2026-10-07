@@ -681,6 +681,28 @@ details pre { border: 0; padding: 0; }
       <dt>Se no</dt><dd>A 15 minuti, sulle coppie liquide, gli stop non lasciano traccia nei prezzi: si chiude.</dd>
       <dt>Dati e stato</dt><dd>I livelli sono quelli che un lettore in tempo reale conosceva, <code>legs.confirmed</code>, mai <code>find_pivots</code>; il minimo dentro la barra dalle barre a 5 minuti. Store, 15 asset dal 2017. Da scrivere.</dd>
     </dl></div>
+    <div class="sub-section" id="stop-esito">
+      <h3>Misurato il 7 ottobre <span class="chip bad"><i>✕</i> non passa</span></h3>
+      <p><code>stopmap.py</code>: livelli di <code>legs.confirmed</code> a finestra 12 e 24 sulle chiusure a 15 minuti, al prezzo dello stoppino della gamba (lo stop sta oltre ciò che il grafico mostra); rottura alla prima barra da 5 minuti che lo attraversa dopo la conferma. Placebo: lo stesso livello spostato di ±0,5σ e ±1σ, e una griglia di numeri tondi tarata sullo sviluppo perché le rotture siano altrettante. Nullo: barre intere a segni casuali. Medie per trade, errori a blocchi con lo stimatore a rapporto. Il criterio passa su <strong>0 righe di 24</strong> sullo sviluppo, sull'hold-out e sul 2021-2025.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Pivot − placebo spostato, bp</th><th>sviluppo, fold 1</th><th>fold 2</th><th>2021-25, fold 1</th><th>fold 2</th><th>fold 3</th><th>fold 4</th></tr></thead>
+        <tbody>
+          <tr><td>cascata, finestra 12, 1 barra</td><td>−1,4 ± 1,7</td><td>+0,1 ± 3,0</td><td>+8,0 ± 1,8</td><td>+1,1 ± 1,8</td><td>+0,7 ± 1,3</td><td>+0,1 ± 1,3</td></tr>
+          <tr><td>cascata, finestra 24, 1 barra</td><td>−0,0 ± 2,4</td><td>−0,3 ± 5,1</td><td>+11,1 ± 2,6</td><td>+1,4 ± 2,2</td><td>+2,5 ± 2,7</td><td>+1,7 ± 1,8</td></tr>
+          <tr><td>cascata, finestra 24, 4 barre</td><td>+3,1 ± 4,7</td><td>+1,4 ± 11,5</td><td>+16,3 ± 4,5</td><td>+1,5 ± 3,6</td><td>+3,4 ± 4,0</td><td>+3,3 ± 4,0</td></tr>
+          <tr class="sep"><td>rottura fallita, finestra 12, k 1, 24 barre</td><td>−3,9 ± 8,4</td><td>−1,9 ± 14,6</td><td colspan="4" class="text">segno che cambia fra le fette</td></tr>
+          <tr><td>rottura fallita, finestra 24, k 1, 24 barre</td><td>−1,3 ± 11,7</td><td>−16,9 ± 23,9</td><td colspan="4" class="text">da −17,5 a +7,9 bp al pivot</td></tr>
+        </tbody>
+      </table></div>
+      <p class="caption"><code>stopmap --period dev|holdout|2021</code>, le 13 coppie di <code>TRADABLE</code>, nel verso della firma (la cascata nel verso della rottura, la rottura fallita nel verso del rientro). Sullo sviluppo 3.619 / 3.487 rotture a finestra 12 e 1.819 / 1.792 a 24 per fold. Sui cinque semi nulli la cascata a una barra fa da −0,6 a +0,5 bp.</p>
+      <ul class="points">
+        <li><strong>Nessuna cascata oggi</strong>: sullo sviluppo il pivot sta entro 3 bp dai placebo nel fold 1 ed entro 9 nel fold 2; sull'hold-out le differenze della cascata vanno da −1,0 a +1,2 bp.</li>
+        <li><strong>Le rotture fallite non rientrano</strong>: il "rientro" al pivot è negativo in ogni riga dello sviluppo (da −3 a −19 bp in media sui due fold), cioè il prezzo riprende la rottura, e i placebo fanno quasi lo stesso.</li>
+        <li><strong>L'unica traccia degli stop è nel 2021.</strong> Nella prima fetta (gennaio 2021 – febbraio 2022) un pivot rotto prosegue di 8-11 bp nei 15 minuti dopo più dei placebo, 16 a quattro barre, a 2,8-4,4 errori; dal 2022 la differenza scende a 1-3 bp. A finestra 24 ha lo stesso segno in tutte e quattro le fette, 3-5 bp sull'intero periodo: un quarto dell'andata e ritorno. Le cascate c'erano con la leva del 2021, e oggi quasi non si vedono.</li>
+        <li><strong>Potenza</strong> (<code>--power</code>, bootstrap a blocchi alle taglie misurate): un vantaggio di 40 bp ai pivot si vede l'86-100% delle volte, uno di 20 il 32-38% (metà delle estrazioni cade sotto la soglia e servono entrambi i placebo), nessun effetto passa al più il 3,4%.</li>
+        <li><strong>Esito:</strong> a 15 minuti, sulle coppie liquide, gli stop non lasciano una traccia che paghi 20 bp. La strada si chiude. La variante esplorativa (la mappa delle liquidazioni dall'open interest) non è stata fatta.</li>
+      </ul>
+    </div>
   </section>
 
   <section id="conferma">
