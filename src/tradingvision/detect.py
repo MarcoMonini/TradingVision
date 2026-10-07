@@ -81,27 +81,29 @@ true ones too.
 (`--futures`, `data.futures`). Fifteen futures columns at Shiryaev 0.5's alarms, signed into the
 leg: on their own a logistic reaches AUC 0.546 on development and 0.525 on the hold-out, with the
 sixteen columns above 0.639 / 0.624 against their 0.637 / 0.629 alone, and every quintile still
-makes -11 to +6 bp a trade. Against the forward return, unconditionally, two keep their sign on all
-four folds: the open interest's 12-bar change signed by the price's 12-bar move, against the 48-bar
-return (+0.111 / +0.039 / +0.077 / +0.001 by fold: a move made with new positions keeps going), and
-the book's imbalance within 5% over the last hour against the 12-bar return (+0.025 / +0.059 /
-+0.006 / +0.042). Both are the size of v2's own IC (-0.031 / -0.039 at 12 bars) and neither is a
+makes -11 to +6 bp a trade. Against the forward return, unconditionally and on every bar, one family
+keeps its sign on all four folds: the book's imbalance within 1, 2 and 5% against the 12-bar return
+(within 5%: +0.028 / +0.039 / +0.020 / +0.056 by fold; its last hour's mean +0.023 / +0.042 / +0.020
+/ +0.050). It is the size of v2's own IC (-0.026 / -0.039 / -0.022 / -0.063 at 12 bars) and not a
 strategy: at an IC of 0.05 a trade on the 48-bar return is worth of the order of 10 bp, against a
-20-50 bp round trip.
+20-50 bp round trip. Until 2026-10-07 the IC was read on one bar in h, from the first, and the open
+interest's 12-bar change signed by the price's move looked stable too, +0.111 / +0.039 / +0.077 /
++0.001 against the 48-bar return: on every bar it is +0.020 / -0.012 / +0.008 / +0.007.
 
 **Open interest behind the move, in depth** (`--oi`, `open_interest`). Signed by the direction of the
-last k bars' move, the open interest's k-bar change (in units of its month's dispersion) has a
-positive rank IC with the 48-bar forward return on every fold for k = 4, 12 and 24 (k = 24: +0.057 /
-+0.125 / +0.057 / +0.045), and the move alone, momentum, has none (-0.048 / -0.010 / +0.016 /
--0.006). Split by sign: after a 24-bar move made with open interest rising, the next 48 bars go its
-way by +10.4 / +16.4 / +18.7 / +19.8 bp; after one made with it falling, they come back by -22.0 /
--13.0 / -2.4 / -6.1. New positions behind a move keep it going, a move made by closing positions
-reverses. It is the cleanest fold-by-fold sign of the study, and it was read among 64 variants
-that included the hold-out: the one development alone picks, k = 4, falls from +0.117 to +0.024
-there. As a rule it does not hold: following the move when open interest rose and fading it when
-it fell, entering when |z| reaches 0.5 to 2 and out after 48 bars, makes -6.9 to +0.7 bp a trade
-on development and +0.8 to +17.2 on the hold-out, with fold 2 negative in all twelve variants
-(-6.4 to -41.5). The effect lives in the bulk of the moves, not in the extremes a trigger picks.
+last k bars' move, the open interest's k-bar change (in units of its month's dispersion), against the
+48-bar forward return on every bar: +0.029 / +0.007 / +0.007 / +0.016 by fold at k = 24, -0.008 in fold
+2 at k = 12 and -0.015 at k = 4; the move alone, momentum, +0.008 / -0.049 / +0.022 / +0.000. Split by
+sign: after a 24-bar move made with open interest rising the next 48 bars go its way by +16.1 /
+-19.3 / +6.5 / +16.9 bp, after one made with it falling they go -4.9 / -1.1 / +10.9 / -0.8. No
+sign holds across the folds. **Corrected on 2026-10-07**: until then the IC and the split were read
+on one bar in 48, from the first, and said +0.057 / +0.125 / +0.057 / +0.045, +10.4 / +16.4 / +18.7 /
++19.8 and -22.0 / -13.0 / -2.4 / -6.1, "the cleanest fold-by-fold sign of the study". That was one
+phase of 48: fold 2's +0.125 is the second highest of them, and the IC moves by 0.03-0.07 from phase
+to phase (route 2, `--conditional`, found it). As a rule, which never subsampled, it does not hold:
+following the move when open interest rose and fading it when it fell, entering when |z| reaches 0.5
+to 2 and out after 48 bars, makes -6.9 to +0.7 bp a trade on development and +0.8 to +17.2 on the
+hold-out, with fold 2 negative in all twelve variants (-6.4 to -41.5).
 
 **Keeping only signals past a level** (`--gate`, `gate`). A long only where the prediction is at or
 under -L, a short only at or over +L, read at the signal's bar or at the extreme of the leg it
@@ -214,7 +216,7 @@ out a ratio of 2 on them: what it rules out is a pivot that turns a 0.06 column 
 Read on every bar, open interest behind the move at k = 24 has an IC with the 48-bar return of
 +0.029 / +0.007 / +0.007 / +0.016 by fold, the mean of the 48 phases a one-in-48 sampling can start
 on: `--oi`'s +0.057 / +0.125 / +0.057 / +0.045 is phase 0, and fold 2's is the second highest of
-the 48 (phase-to-phase sd 0.03-0.07). `forward_ic` samples the same way.
+the 48 (phase-to-phase sd 0.03-0.07). `forward_ic` sampled the same way; both read every bar now.
 
     uv run python -m tradingvision.detect --zigzag 0.05 0.1 0.15 0.2 0.3 0.5 0.8
     uv run python -m tradingvision.detect --shiryaev 0.5 0.7 0.8 0.9 0.95 0.98 0.99 [--flat]
@@ -871,8 +873,10 @@ def futures_columns(symbol: str, close: pd.Series) -> pd.DataFrame:
 def forward_ic(columns: dict, pred: pd.Series, close: pd.Series, horizons=(12, 48)) -> pd.DataFrame:
     """Rank IC of every column with the forward log return, by fold, mean over the assets.
 
-    Sampled every `h` bars so no two returns overlap; v2's prediction and an RSI at 12 are rows too,
-    the yardstick a new column has to clear.
+    On every bar; v2's prediction and an RSI at 12 are rows too, the yardstick a new column has to
+    clear. Until 2026-10-07 it sampled one bar in `h`, from the first, so that no two returns
+    overlapped: the IC of one phase, which moves by 0.03-0.07 from phase to phase at 48 bars. Every
+    bar is the mean of the `h` phases; no error is printed here, so the overlap inflates nothing.
     """
     rows = []
     rsi = strategy.rsi(pred.index)
@@ -884,7 +888,7 @@ def forward_ic(columns: dict, pred: pd.Series, close: pd.Series, horizons=(12, 4
             fwd = c.shift(-h) - c
             for col in x.columns:
                 for k in range(1, strategy.FOLDS + 1):
-                    m = (np.arange(len(c)) % h == 0) & (fold == k) & x[col].notna().to_numpy() & fwd.notna().to_numpy()
+                    m = (fold == k) & x[col].notna().to_numpy() & fwd.notna().to_numpy()
                     ic = np.corrcoef(x[col][m].rank(), fwd[m].rank())[0, 1]
                     rows.append({"column": col, "h": h, "fold": k, "ic": ic})
     ic = pd.DataFrame(rows).groupby(["column", "h", "fold"]).ic.mean().unstack("fold")
@@ -1174,6 +1178,7 @@ def open_interest(close: pd.Series, cut: pd.Timestamp, ks=(4, 12, 24), horizons=
     forward return, by fold. `quadrants`: the next `hold_bars` in the move's direction, bp, by
     whether open interest rose or fell with it. `rule`: when flat and |oi_z| >= Z, follow the move if
     open interest rose with it or fade it if it fell, out after `hold_bars`; one position at a time.
+    The IC and the quadrants read every bar, not one bar in `h` (see `forward_ic`).
     """
     ic_rows, quad_rows, rule_rows = [], [], []
     for k in ks:
@@ -1182,14 +1187,14 @@ def open_interest(close: pd.Series, cut: pd.Timestamp, ks=(4, 12, 24), horizons=
             d = d[d.index >= strategy.TEST_START]
             fold = fold_of(d.index)
             for h in horizons:
-                fwd, take = d.c.shift(-h) - d.c, np.arange(len(d)) % h == 0
+                fwd = d.c.shift(-h) - d.c
                 for name, x in (("oi behind the move", d.move * d.oi_z), ("momentum", d.move)):
                     for f in range(1, strategy.FOLDS + 1):
-                        m = take & (fold == f) & x.notna().to_numpy() & fwd.notna().to_numpy()
+                        m = (fold == f) & x.notna().to_numpy() & fwd.notna().to_numpy()
                         ic = np.corrcoef(x[m].rank(), fwd[m].rank())[0, 1]
                         ic_rows.append({"column": name, "k": k, "h": h, "fold": f, "ic": ic})
                 if h == hold_bars:
-                    m = take & fwd.notna().to_numpy() & d.oi_z.notna().to_numpy()
+                    m = fwd.notna().to_numpy() & d.oi_z.notna().to_numpy()
                     q = pd.DataFrame({"bp": (d.move * fwd)[m] * 1e4, "oi": np.where(d.oi_z[m] > 0, "rose", "fell")})
                     q["fold"] = fold[m]
                     quad_rows += [
@@ -1532,7 +1537,7 @@ def main() -> None:
         return
     if args.futures:
         columns = {sym: futures_columns(sym, close.xs(sym, level=1)) for sym in strategy.ASSETS}
-        print("rank IC with the forward log return, mean of ETH/BTC/SOL, one sample every h bars\n")
+        print("rank IC with the forward log return, mean of ETH/BTC/SOL, every bar\n")
         print(forward_ic(columns, pred, close).round(3).sort_values(["h", "dev"]).to_string())
         f = at_alarm(alarms(pred, shiryaev, fit(pred, cut), 0.5), pred, close, truth)
         g = futures_at_alarm(f, columns)

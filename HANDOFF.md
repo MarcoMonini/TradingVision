@@ -952,16 +952,20 @@ del 2026-07-01.
 - **Funding, open interest, posizionamento, flusso dei taker e book non aggiungono niente
   all'allarme** (`--futures`, `data/futures.py`, dump dei futures Binance). Da soli AUC 0,546 /
   0,525, con le sedici di prima 0,639 / 0,624; ogni quintile fra −11 e +6 bp. Contro il rendimento
-  futuro due colonne hanno lo stesso segno nei quattro fold: l'open interest dietro al movimento
-  contro il rendimento a 48 barre (+0,075 / +0,039) e lo squilibrio del book entro il 5% contro
-  quello a 12 (+0,042 / +0,024). Piccole quanto l'IC della v2, e non ancora una strategia.
-- **Open interest dietro al movimento** (`--oi`). Il segno del movimento delle ultime k barre per la
-  variazione dell'open interest ha IC positivo col rendimento a 48 barre in tutti i fold (k = 24:
-  +0,057 / +0,125 / +0,057 / +0,045); il solo momentum no. Dopo un movimento a 24 barre con open
-  interest in salita le 48 barre dopo vanno nella sua direzione (+10 / +16 / +19 / +20 bp), con open
-  interest in calo tornano indietro (−22 / −13 / −2 / −6). Letto fra 64 varianti, hold-out incluso;
-  come regola (segui o contrasta oltre |z|, esci dopo 48 barre) fa da −6,9 a +0,7 bp sullo sviluppo
-  e il fold 2 è negativo in tutte e dodici le varianti.
+  futuro, su ogni barra, ha lo stesso segno nei quattro fold solo lo squilibrio del book (entro il 5%,
+  a 12 barre: +0,028 / +0,039 / +0,020 / +0,056). Piccolo quanto l'IC della v2, e non una strategia.
+  *Corretto il 2026-10-07* (§19, strada 2): l'IC era letto su una barra ogni h, dalla prima, e
+  l'open interest dietro al movimento sembrava stabile (+0,075 / +0,039 a 48 barre); su ogni barra fa
+  +0,020 / −0,012 / +0,008 / +0,007.
+- **Open interest dietro al movimento** (`--oi`). *Corretto il 2026-10-07.* Il segno del movimento
+  delle ultime k barre per la variazione dell'open interest, contro il rendimento a 48 barre su ogni
+  barra: +0,029 / +0,007 / +0,007 / +0,016 a k = 24, negativo nel fold 2 a k = 4 e 12. Divisi per
+  segno: con open interest in salita le 48 barre dopo fanno +16 / −19 / +7 / +17 bp nella direzione del
+  movimento, in calo −5 / −1 / +11 / −1. Nessun segno regge fra i fold. Prima si leggeva una barra
+  ogni 48, dalla prima, e ne usciva "il segno più pulito dello studio" (+0,057 / +0,125 / +0,057 /
+  +0,045; +10 / +16 / +19 / +20 contro −22 / −13 / −2 / −6): una fase su 48, con il fold 2 la seconda
+  più alta. Come regola (segui o contrasta oltre |z|, esci dopo 48 barre; non campionava) fa da −6,9 a
+  +0,7 bp sullo sviluppo e il fold 2 è negativo in tutte e dodici le varianti.
 - **L'open interest come conferma non conferma** (`--confirm`). Lato del segnale per open interest
   dietro al movimento: il lordo del trade non sale con la conferma (rivelatori fra −9 e +7 bp per
   quintile); tenere solo i segnali confermati abbassa lo sviluppo e alza un poco l'hold-out
@@ -1038,7 +1042,7 @@ consumato. Il report dello studio, passo per passo e con i grafici, è `strategy
 3. **Un modello sul rendimento futuro che unisca futures e v2.** Colonne: open interest dietro al
    movimento a 4 / 12 / 24 barre, squilibrio del book entro il 5%, base, funding, flusso dei taker,
    più la predizione v2 come input. Prima una ridge in walk-forward contro il rendimento a 48 barre;
-   una rete solo se l'IC regge sopra 0,1 in ogni fold (oggi le colonne singole stanno fra 0,03 e
+   una rete solo se l'IC regge sopra 0,1 in ogni fold (oggi, su ogni barra, le colonne singole stanno fra 0 e
    0,09). Servono più dei sedici mesi di futures scaricati (`data.futures`), e riaprire un'etichetta
    sul rendimento è una decisione: quelle predittive sono archiviate in `OLD/`.
 4. **Una scala più lunga**: la v2 riaddestrata su gambe di 24-48 barre. Il rumore cresce come
@@ -1168,7 +1172,8 @@ nell'ordine di esecuzione.
    dell'illiquido in ogni fold, sopra l'andata e ritorno maggiorata dello spread di quegli stati.
    *Se passa:* regola "estremo in stato illiquido", conferma con l'RSI sul 2021-2025.
 4. **Shock di flusso** (stesso event study). *Già misurato* (`--oi`): con open interest in calo le 48
-   barre dopo rientrano di −22,0 / −13,0 / −2,4 / −6,1 bp per fold; in salita proseguono. *Cercare:*
+   barre dopo rientrano di −22,0 / −13,0 / −2,4 / −6,1 bp per fold; in salita proseguono. (Una fase
+   su 48: su ogni barra −4,9 / −1,1 / +10,9 / −0,8 e +16,1 / −19,3 / +6,5 / +16,9, §17.) *Cercare:*
    la risposta all'impulso dopo |r|/σ > k₁ e volume z > k₂, divisa per segno dell'open interest: il
    rientro fra 12 e 48 barre in ogni fold e **che cresce con la dimensione dello shock**. *Si decide:*
    rientro sopra i 10 bp del perpetual taker in ogni fold. *Se l'effetto vive nel grosso:* colonna del
