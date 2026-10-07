@@ -592,6 +592,35 @@ def fold_of(when: pd.DatetimeIndex, path: Path = PRED) -> np.ndarray:
     return np.searchsorted(pd.DatetimeIndex(edges), when, side="right") + 1
 
 
+# The history no walk-forward of v2 tested on, up to its first test bar: where the plan of
+# `false_alarms.html` confirms whatever does not read v2 (an RSI in its place, the residual, the
+# liquidity states, the stops, the taker flow, the slow base). v2 trained on it, so nothing that
+# reads v2 is confirmed here.
+CONFIRM = (pd.Timestamp("2021-01", tz="UTC"), TEST_START)
+PERIODS = ("dev", "holdout", "2021")
+
+
+def edges(period: str = "dev", path: Path = PRED) -> pd.DatetimeIndex:
+    """The fold boundaries of a study period, first bar to end: `dev` is v2's folds 1-2, where every
+    criterion of the plan is applied; `holdout` its folds 3-4, read in §17 and so a check and never a
+    choice; `2021` is `CONFIRM` cut in `FOLDS` equal slices."""
+    if period == "2021":
+        a, b = CONFIRM
+        return pd.DatetimeIndex([a + (b - a) * i / FOLDS for i in range(FOLDS + 1)])
+    last = pd.read_parquet(path, columns=["symbol"]).index.max()
+    e = [TEST_START + (last - TEST_START) * i / FOLDS for i in range(FOLDS)] + [last + BAR]  # the last bar is in
+    return pd.DatetimeIndex({"dev": e[:3], "holdout": e[2:]}[period])
+
+
+def fold_in(when: pd.DatetimeIndex, period: str = "dev", path: Path = PRED) -> np.ndarray:
+    """The fold of each timestamp inside `period`, 0 outside it. v2's periods keep v2's numbers (1-2,
+    3-4) and agree with `fold_of`; `2021` numbers its slices 1 to `FOLDS`."""
+    e = edges(period, path)
+    k = np.searchsorted(e, when, side="right")
+    first = 3 if period == "holdout" else 1
+    return np.where((when >= e[0]) & (when < e[-1]), k + first - 1, 0)
+
+
 def rsi(index: pd.MultiIndex, window: int = WINDOW, close: pd.Series | None = None) -> pd.Series:
     """`rsi_centered` at `window` on each asset's 15m close, the column `features` computes, read
     from the whole store so the warm-up is over before the first row. `close` replaces the store
@@ -812,6 +841,9 @@ def _selfcheck() -> None:
     # Trade gross adds up to bar gross: the two ledgers never disagree.
     r = threshold.forward_return(close).fillna(0.0)
     assert np.isclose(held.gross.sum(), (pos * r).sum())
+    # The confirmation period in four equal slices, nothing outside it, the end exclusive.
+    when = pd.DatetimeIndex(["2020-12-31", "2021-01-01", "2022-03-01", "2025-05-31", "2025-06-01"], tz="UTC")
+    assert list(fold_in(when, "2021")) == [0, 1, 2, 4, 0]
     # The cycle high on 2025-10-06 splits the week; the cut puts the last two days in the hold-out.
     seg = label(t, pd.Timestamp("2026-10-06", tz="UTC"))
     assert list(seg.regime) == ["bull"] * 6 + ["bear"] * 2 and set(seg.period) == {"dev"}
