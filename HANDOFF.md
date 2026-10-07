@@ -1280,6 +1280,21 @@ finestra 24, 20 `STUDY`) dà +0,126 a 0,25% (lordo 0,182, hold +0,057), come la 
 della specifica, e +0,159 a 0,10%. CLAUDE.md, `OLD/README.md`, il commento di `swing.BASELINES` e
 questo file citano +0,116: da allineare.
 
+**Strada 6 — il criterio non decide, il controllo dà un indizio** (`timing --timing [--period]`,
+`--power`). Le entrate e uscite della regola a 4h eseguite sui 15 minuti subito, alla prima barra con
+d·punteggio ≥ b entro N, a una barra a caso, all'ultima, e ai ritardi della regola presi a caso fra le
+altre decisioni dell'asset (`lag`). Punteggio: media delle colonne veloci in z contro il mese, col segno
+dell'IC sullo sviluppo letto su ogni barra (esaurimento a 12 e livello di v2 su 13 `TRADABLE`; open
+interest e book su BTC, ETH, SOL; sul 2021-2025 esaurimento e RSI a 12). b = 1 scelto sullo sviluppo.
+Il criterio passa sullo sviluppo a N 48 e 96 (contro subito +0,6 / +43,0 bp a N 48), ma la potenza dice
+che con 106 / 82 esecuzioni "positivo in ogni fold" capita il 33% delle volte a IC 0: non è prova.
+Sull'hold-out e sul 2021-2025 cade (barra a caso fuori dal rumore nel fold 3, fold 4 negativo).
+**`b − lag`, la parte del punteggio al netto dell'attesa, è positiva in tutti gli otto fold a N 48 e
+a N 96**: +13,4 / +23,3 sullo sviluppo, +20,2 / +16,3 sull'hold-out, +44,5 / +17,4 / +8,4 / +4,1 sul
+2021-2025 (errori 8-20); sull'hold-out e sul 2021-2025, dove né segni né b sono stati scelti, circa +16
+± 4 bp per esecuzione, +0,04 log l'anno per coppia. È l'unico numero positivo in ogni fold del piano, e
+decresce nel tempo sul 2021-2025. Da confermare in paper trading con il test per scommessa, scritto prima.
+
 ### Tolto
 
 Gli ordini limite agli estremi (2026-10-07): simulati, il loro vantaggio è solo di costo (2-3 bp di

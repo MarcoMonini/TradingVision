@@ -677,6 +677,31 @@ details pre { border: 0; padding: 0; }
       <dt>Se no</dt><dd>I segnali veloci non servono nemmeno quando non pagano la commissione: si tolgono, e la base lenta resta da sola.</dd>
       <dt>Dati e stato</dt><dd>Le decisioni della strada 5 (o i ribilanciamenti del fattore) e le colonne veloci a 15 minuti: open interest e book (3 asset), esaurimento e livello di v2 (15 asset), più ciò che la fase 1 conferma. Da scrivere.</dd>
     </dl></div>
+    <div class="sub-section" id="tempismo-esito">
+      <h3>Misurato il 7 ottobre <span class="chip warn"><i>~</i> criterio non leggibile, un indizio</span></h3>
+      <p><code>timing --timing</code>: le entrate e le uscite della regola a 4h della strada 5, eseguite sulle barre da 15 minuti subito, alla prima barra con d·punteggio ≥ b nelle N successive, o a una barra a caso. Il punteggio è la media delle colonne veloci, ognuna in z contro il suo mese e col segno del suo IC sullo sviluppo, letto su ogni barra: le sei di esaurimento a 12 barre e il livello di v2 su tutte le coppie, l'open interest dietro al movimento e il book entro il 5% su BTC, ETH e SOL; sul 2021-2025 esaurimento e RSI a 12 al posto di v2 e futures. b scelto sullo sviluppo: 1 deviazione, il bordo della griglia. Medie pesate per esecuzione, errori a blocchi di N barre con lo stimatore a rapporto. Oltre alla barra a caso, un secondo controllo: <strong>lag</strong>, gli stessi ritardi della regola presi a caso fra le altre decisioni dell'asset. <code>b − lag</code> è la parte del punteggio, al netto di quanto costa o rende aspettare.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Regola, N 48, b 1, bp per esecuzione</th><th>esecuzioni</th><th>contro subito</th><th>barra a caso</th><th>ultima barra</th><th><code>b − lag</code></th><th><code>b − lag</code>, N 96</th></tr></thead>
+        <tbody>
+          <tr><td>sviluppo 1</td><td>106</td><td>+0,6 ± 26,5</td><td>−11,8</td><td>−14,2</td><td>+13,4 ± 20,4</td><td>+21,6 ± 20,2</td></tr>
+          <tr><td>sviluppo 2</td><td>82</td><td>+43,0 ± 17,5</td><td>+21,7</td><td>+43,0</td><td>+23,3 ± 9,7</td><td>+25,3 ± 9,6</td></tr>
+          <tr><td>hold-out 3</td><td>92</td><td>+60,8 ± 11,0</td><td>+42,9</td><td>+87,8</td><td>+20,2 ± 12,2</td><td>+16,6 ± 11,2</td></tr>
+          <tr><td>hold-out 4</td><td>113</td><td>−1,0 ± 20,9</td><td>−25,1</td><td>−56,2</td><td>+16,3 ± 12,7</td><td>+25,6 ± 14,0</td></tr>
+          <tr class="sep"><td>2021-25, 1</td><td>313</td><td>+35,2 ± 23,4</td><td>−10,9</td><td>−77,1</td><td>+44,5 ± 15,1</td><td>+45,6 ± 13,4</td></tr>
+          <tr><td>2021-25, 2</td><td>287</td><td>+31,9 ± 16,9</td><td>+9,3</td><td>−2,1</td><td>+17,4 ± 8,2</td><td>+23,4 ± 9,4</td></tr>
+          <tr><td>2021-25, 3</td><td>343</td><td>+18,0 ± 28,3</td><td>+6,8</td><td>+22,9</td><td>+8,4 ± 10,5</td><td>+10,1 ± 10,5</td></tr>
+          <tr class="hl"><td>2021-25, 4</td><td>342</td><td>−8,1 ± 20,2</td><td>−14,2</td><td>−33,7</td><td>+4,1 ± 9,8</td><td>+0,7 ± 10,6</td></tr>
+        </tbody>
+      </table></div>
+      <p class="caption"><code>timing --timing --period dev|holdout|2021</code>, le 13 coppie di <code>TRADABLE</code>. A N 16 sullo sviluppo il tempismo fa −7,0 / +5,9 e <code>b − lag</code> −3,7 / +4,0: dodici barre non bastano. L'insieme dei ribilanciamenti della regola scalata dà numeri quasi uguali (<code>b − lag</code> a N 48: +12,7 / +26,3, +19,6 / +15,8, +45,1 / +20,1 / +4,0 / +5,0).</p>
+      <ul class="points">
+        <li><strong>Il criterio della scheda passa sullo sviluppo a N 48 e 96, e non vuol dire niente.</strong> La simulazione di potenza (la costruzione di <code>sim_timing.py</code> alle esecuzioni dello sviluppo, 106 e 82) dà "positivo in ogni fold" il 33% delle volte con un segnale a IC 0, e il 56% a IC 0,05. Con un centinaio di esecuzioni per fold e 15-25 bp di errore, due fold positivi sono una moneta. Sull'hold-out e sul 2021-2025 il criterio cade comunque: la barra a caso esce dal rumore nel fold 3 e il fold 4 è negativo.</li>
+        <li><strong>La parte del punteggio è positiva in tutti e otto i fold, a N 48 e a N 96</strong>, anche se da sola supera due errori in tre fold su otto. Sull'hold-out e sul 2021-2025, dove né i segni né b sono stati scelti, la media pesata è circa <strong>+16 bp per esecuzione, errore 4</strong>. Sui percorsi nulli lo stesso confronto fa +4 bp sullo sviluppo, che è la scelta di b fra tre valori sulle stesse righe; fuori dallo sviluppo quella distorsione non c'è.</li>
+        <li><strong>Quanto vale.</strong> Con circa 24 esecuzioni l'anno per coppia sono +0,04 log l'anno per coppia, senza commissioni in più, contro un netto della base che sul 2021-2025 va da −0,04 a +1,03 per fold. Ma il guadagno che arriva al conto è "contro subito", che contiene anche il costo dell'attesa: nel fold 4 del 2021-2025 aspettare costa più di quanto il punteggio guadagna.</li>
+        <li><strong>Colonne da sole</strong> (sviluppo, N 48, ognuna al suo b): v2 +6,9 / +62,9, divergenza +1,7 / +42,5, RSI a 12 −8,5 / +57,3, stretch −13,6 / +45,4; open interest a 12 e book su 26 e 24 esecuzioni −14,8 / +35,2 e −4,3 / +19,0. Decelerazione e volume climax negative in entrambi i fold.</li>
+        <li><strong>Esito:</strong> il criterio scritto non può decidere a queste taglie. Il controllo <code>b − lag</code> è l'unico numero positivo in ogni fold dell'intero piano, ed è un indizio da confermare, non un risultato: va scritto prima e misurato in paper trading con il test per scommessa (<a href="#conferma">Conferma</a>).</li>
+      </ul>
+    </div>
   </section>
 
   <section id="taker">
