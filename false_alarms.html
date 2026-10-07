@@ -462,6 +462,35 @@ details pre { border: 0; padding: 0; }
       <dt>Se no</dt><dd><code>kept</code> oltre due errori in entrambi i periodi vuol dire che le sedici colonne portano informazione: si riapre il meta-labeling, addestrato sul lordo del trade e non su vero/falso.</dd>
       <dt>Costo</dt><dd>Minuti, sullo store.</dd>
     </dl></div>
+    <div class="sub-section" id="fase0-esito">
+      <h3>Misurato il 7 ottobre <span class="chip bad"><i>✕</i> filtro chiuso</span></h3>
+      <p>Su 8.244 allarmi di Shiryaev 0,5 (72% veri) la logistica sulle sedici colonne separa come prima (AUC 0,637 sullo sviluppo, 0,629 sull'hold-out), e della precisione che promette arriva al lordo <strong><code>kept</code> = 0,28 ± 0,20 sullo sviluppo e −0,15 ± 0,23 sull'hold-out</strong>: entro due errori da zero in entrambi i periodi. Il rapporto L/W segue P/(1−P) quintile per quintile, come vuole la legge.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Quintile, sviluppo</th><th>quota veri</th><th>vero, bp</th><th>falso, bp</th><th>L/W</th><th>P/(1−P)</th><th>lordo nominale</th><th>lordo misurato</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>53%</td><td>+49,0</td><td>−67,8</td><td>1,38</td><td>1,13</td><td>−20,8</td><td>−5,9 ± 5,4</td></tr>
+          <tr><td>2</td><td>69%</td><td>+39,2</td><td>−95,7</td><td>2,44</td><td>2,20</td><td>−3,3</td><td>−2,9 ± 4,9</td></tr>
+          <tr><td>3</td><td>74%</td><td>+24,3</td><td>−72,8</td><td>2,99</td><td>2,79</td><td>+2,1</td><td>−1,3 ± 3,6</td></tr>
+          <tr><td>4</td><td>76%</td><td>+26,3</td><td>−76,2</td><td>2,90</td><td>3,21</td><td>+5,0</td><td>+1,9 ± 4,1</td></tr>
+          <tr><td>5</td><td>83%</td><td>+24,7</td><td>−99,2</td><td>4,02</td><td>4,72</td><td>+12,0</td><td>+3,0 ± 4,1</td></tr>
+        </tbody>
+      </table></div>
+      <p class="caption"><code>detect --features 0.5</code>, quintili tagliati sullo sviluppo, bp per trade senza commissione. Il nominale è P·W̄ − (1−P)·L̄ con W e L fermi alla media del periodo: dal primo al quinto quintile promette 33 bp, ne arrivano 9. Sull'hold-out il quinto quintile ha l'86% di veri e fa −6,6 bp.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Serie e percorso</th><th>allarmi</th><th>quota veri</th><th>AUC sviluppo</th><th>AUC hold-out</th><th><code>kept</code> sviluppo</th><th><code>kept</code> hold-out</th></tr></thead>
+        <tbody>
+          <tr><td>v2, prezzo vero</td><td>8.236</td><td>72%</td><td>0,616</td><td>0,615</td><td>+0,62 ± 0,24</td><td>−0,26 ± 0,28</td></tr>
+          <tr class="hl"><td>RSI 12, prezzo vero</td><td>6.963</td><td>69%</td><td>0,619</td><td>0,602</td><td>+0,30 ± 0,25</td><td>−0,74 ± 0,33</td></tr>
+          <tr class="sep"><td>RSI 12, segni casuali, 5 semi</td><td>6.877-7.082</td><td>70%</td><td>0,613-0,630</td><td>0,605-0,622</td><td>−0,65 … +0,35</td><td>−0,25 … +0,47</td></tr>
+        </tbody>
+      </table></div>
+      <p class="caption"><code>detect --null 0.5 --seeds 0 1 2 3 4</code>. Sui cinque percorsi a segni casuali l'AUC media è 0,621: quella dell'RSI vero, 0,619, ci cade dentro.</p>
+      <ul class="points">
+        <li><strong>Separare gli allarmi veri dai falsi è la geometria della definizione di svolta.</strong> L'RSI di un prezzo che nessuno può prevedere si separa quanto quello vero; il mercato non aggiunge niente all'AUC.</li>
+        <li><strong>L'errore di <code>kept</code> è ottimista.</strong> Sui cinque semi nulli <code>kept</code> va da −0,65 a +0,35, una deviazione standard di 0,40 contro l'errore di 0,22-0,28 che ciascuno dichiara. Il +0,62 di v2 sullo sviluppo è 2,5 errori dichiarati ma 1,5 deviazioni dei semi, e sull'hold-out torna a −0,26: è rumore, non precisione che paga.</li>
+        <li><strong>Esito:</strong> il ramo dei filtri sugli allarmi con colonne del prezzo è chiuso. Non si riapre il meta-labeling.</li>
+      </ul>
+    </div>
   </section>
 
   <section id="residuo">

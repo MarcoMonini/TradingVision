@@ -1220,6 +1220,22 @@ colonna. Passa solo la base lenta: il lavoro sulle svolte a 15 minuti si ferma. 
 l'informazione dello store il mercato è efficiente fino ai costi; si chiude il ramo delle svolte e si
 riprende il fattore archiviato su `SYMBOLS` o il carry.
 
+### Misurato (2026-10-07, store al 2026-09-26)
+
+Tutte le strade sono state eseguite, ciascuna fino in fondo; i criteri si applicano solo nella lettura.
+Ogni modulo nuovo accetta `--period dev|holdout|2021` (`strategy.edges`, `strategy.fold_in`): `dev` sono
+i fold 1-2 di v2, dove si decide; `holdout` i fold 3-4, consumati, solo controllo; `2021` è
+2021-01-01 → 2025-06-01 in quattro fold uguali (`strategy.CONFIRM`), la conferma di ciò che non legge v2.
+
+**Fase 0 — il filtro sugli allarmi è chiuso.** `detect --features 0.5`: 8.244 allarmi, 72% veri, AUC
+0,637 / 0,629 come prima; `kept` **0,28 ± 0,20** sullo sviluppo e **−0,15 ± 0,23** sull'hold-out, entro
+due errori da zero in entrambi. Dal primo al quinto quintile il lordo nominale sale di 33 bp, quello
+misurato di 9 (−5,9 → +3,0); L/W segue P/(1−P) (1,38 / 1,13 … 4,02 / 4,72). `detect --null 0.5 --seeds
+0 1 2 3 4`: AUC dell'RSI vero 0,619 contro 0,613-0,630 dei cinque percorsi a segni casuali (media 0,621);
+v2 0,616. `kept` sui semi nulli va da −0,65 a +0,35 (deviazione 0,40 contro un errore dichiarato di
+0,22-0,28): il +0,62 ± 0,24 di v2 sullo sviluppo è 1,5 deviazioni dei semi e torna a −0,26 sull'hold-out.
+Non si riapre il meta-labeling.
+
 ### Tolto
 
 Gli ordini limite agli estremi (2026-10-07): simulati, il loro vantaggio è solo di costo (2-3 bp di
