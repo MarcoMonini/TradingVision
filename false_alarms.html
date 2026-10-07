@@ -163,7 +163,7 @@ details pre { border: 0; padding: 0; }
       <li><strong>La legge.</strong> Se il prezzo è una martingala rispetto a ciò che un filtro legge, ogni filtro rispetta <strong>P·W = (1−P)·L</strong>: dove la quota di allarmi veri P sale, gli allarmi veri valgono meno (W) e i falsi costano di più (L), nella misura esatta che riporta il lordo a zero. I quintili misurati da <code>detect --features</code> la seguono entro il rumore.</li>
       <li><strong>Lo schema a due modelli</strong> (allarme e candela successiva concordi) guadagna al più l'informazione della prima barra. Servono il 90% di accuratezza per coprire 20 bp. Puntato sul rendimento dell'intero trade, basta un IC di circa 0,18, cioè un'accuratezza del 55%, e la precisione degli allarmi quasi non si muove.</li>
       <li><strong>La metrica giusta</strong> non è AUC, né precisione, né quota di falsi allarmi: è quanto il filtro sposta il lordo per trade, cioè l'IC con il rendimento del periodo tenuto.</li>
-      <li><strong>La rilevazione ha senso dove la serie non è una martingala.</strong> In una simulazione con una componente che torna alla media lo stesso filtro sul livello, alla stessa precisione, passa da zero a +10 bp. Le tre strade prioritarie cercano un pezzo di mercato così: il residuo contro il mercato, lo shock di flusso, gli ordini limite agli estremi.</li>
+      <li><strong>La rilevazione ha senso dove la serie non è una martingala.</strong> In una simulazione con una componente che torna alla media lo stesso filtro sul livello, alla stessa precisione, passa da zero a +10 bp. Le prime due strade prioritarie cercano un pezzo di mercato così (il residuo contro il mercato, lo shock di flusso); la terza, gli ordini limite agli estremi, non cerca informazione ma riduce il costo di sfruttarne una che esista.</li>
       <li><strong>Stato.</strong> Tre diagnostici sono in <code>detect.py</code> (<code>conservation</code>, <code>--null</code>, <code>--residual</code>), testati su dati sintetici e <strong>non ancora eseguiti sullo store</strong>. I numeri delle simulazioni dicono cosa cercare, non cosa c'è.</li>
     </ul>
   </section>
@@ -368,7 +368,7 @@ details pre { border: 0; padding: 0; }
         <tr><td>Posizione proporzionale al segnale</td><td class="text">l'effetto dell'open interest "vive nel grosso"</td><td class="text">Stessa informazione, meno trigger agli estremi</td><td><span class="chip warn"><i>~</i>Economica</span></td></tr>
         <tr class="hl"><td>Rilevazione sul residuo contro il mercato</td><td class="text">radar: MTI, STAP</td><td class="text">Sì: la parte propria, dove sta l'inversione di breve</td><td><span class="chip good"><i>✓</i>Priorità 1</span></td></tr>
         <tr class="hl"><td>Filtro adattato sullo shock di flusso</td><td class="text">radar: filtro adattato; Campbell-Grossman-Wang</td><td class="text">Sì: volume e open interest non sono il percorso del prezzo</td><td><span class="chip good"><i>✓</i>Priorità 2</span></td></tr>
-        <tr class="hl"><td>Ordini limite agli estremi</td><td class="text">microstruttura, fornitura di liquidità</td><td class="text">Cambia ritardo e costo, non l'informazione</td><td><span class="chip good"><i>✓</i>Priorità 3</span></td></tr>
+        <tr class="hl"><td>Ordini limite agli estremi</td><td class="text">microstruttura, fornitura di liquidità</td><td class="text">No: cambia costo e ritardo. Sui dati veri gli estremi di v2 proseguono</td><td><span class="chip warn"><i>~</i>Priorità 3, solo con la 2</span></td></tr>
       </tbody>
     </table></div>
   </section>
@@ -415,8 +415,36 @@ details pre { border: 0; padding: 0; }
   <section id="limite">
     <div class="sechead"><div class="step">STRADA 3</div><h2>Ordini limite agli estremi invece della conferma</h2></div>
     <div class="sub-section">
-      <h4>L'intuizione</h4>
-      <p>Oggi la regola aspetta la conferma (il ritracciamento) e poi compra a mercato. Aspettare costa: dopo un estremo il prezzo si allontana come σ√d, e la quota del valore di una svolta che resta dopo d barre di ritardo segue 1 − √(d/w). È la legge di un percorso browniano dopo un estremo, e vale identica sui prezzi a segni casuali.</p>
+      <h4>In una frase</h4>
+      <p>Invece di aspettare che il rivelatore confermi la svolta e poi comprare a mercato, si lascia nel book un ordine di acquisto sotto il prezzo mentre v2 dice che la gamba al ribasso è matura: se qualcuno vende fino a quel prezzo, si compra da lui. È un cambio di <em>esecuzione</em>, non di informazione.</p>
+
+      <h4>Chi genera il segnale, e cosa dice</h4>
+      <p>Lo stesso v2, o l'RSI a 12, letto in un altro modo. Nella strategia di oggi il rivelatore (zigzag, Shiryaev) dice <strong>"la svolta è avvenuta"</strong>, e lo dice d barre dopo (3 di mediana). Qui il livello di v2 dice <strong>"siamo dove una svolta è probabile"</strong>: v2 ≤ −L, gamba al ribasso matura, arma gli acquisti; v2 ≥ +L arma le vendite. Non c'è niente da rilevare: il segnale decide solo <em>quando</em> stare nel book e da che parte.</p>
+      <p>Perché il livello di v2: è dove le svolte si concentrano. La probabilità che la gamba giri nella barra successiva, stimata da <code>detect.fit</code> sullo sviluppo, è il 4% con v2 fra 0 e 0,25, il 10% fra 0,4 e 0,5, il 14% fra 0,5 e 0,6 e il 25% fra 0,6 e 0,7. Una seconda condizione possibile è la firma dello shock di flusso della strada 2, che serve a distinguere l'estremo che rientra da quello che prosegue (vedi sotto).</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th></th><th class="text">Conferma (oggi)</th><th class="text">Ordine limite</th></tr></thead>
+        <tbody>
+          <tr><td>Chi decide</td><td class="text">Un rivelatore sulla svolta della predizione (zigzag, Shiryaev)</td><td class="text">Il livello di v2 (la zona), eventualmente con la firma dello shock</td></tr>
+          <tr><td>Cosa dice il segnale</td><td class="text">"La svolta è avvenuta"</td><td class="text">"Qui una svolta è probabile"</td></tr>
+          <tr><td>Quando si entra</td><td class="text">d barre dopo l'estremo</td><td class="text">Durante la discesa, se il prezzo arriva al limite</td></tr>
+          <tr><td>Ordine</td><td class="text">A mercato (taker), alla chiusura della barra</td><td class="text">Limite (maker), lasciato nel book una barra alla volta</td></tr>
+          <tr><td>Prezzo</td><td class="text">Quello della conferma, già risalito di circa σ√d</td><td class="text">K, fissato prima</td></tr>
+          <tr><td>Commissione OKX per lato</td><td class="text">0,10% spot, 0,05% perpetual</td><td class="text">0,08% spot, 0,02% perpetual</td></tr>
+          <tr><td>Su una svolta vera</td><td class="text">Entra tardi e più in alto</td><td class="text">Entra prima e più in basso</td></tr>
+          <tr><td>Su un estremo che prosegue</td><td class="text">Di solito non entra (nessuna conferma)</td><td class="text">Entra lo stesso, e perde</td></tr>
+        </tbody>
+      </table></div>
+
+      <h4>Gli ordini, passo per passo</h4>
+      <ol class="points">
+        <li><strong>Armare.</strong> A ogni chiusura di barra da 15 minuti si legge v2. Se v2 ≤ −L e non si è in posizione, si mette un ordine limite di acquisto a K = prezzo × (1 − k·σ), con σ la volatilità di una barra (le ultime 48). Esempio: ETH a 2.500 $, σ = 0,4% = 10 $, k = 1: acquisto limite a 2.490 $.</li>
+        <li><strong>Rinnovare o ritirare.</strong> L'ordine vale una barra. Alla chiusura successiva si cancella e, se v2 è ancora nella zona, si rimette al nuovo prezzo. Se v2 esce dalla zona senza esecuzione non succede niente: nessun trade, nessun costo.</li>
+        <li><strong>Esecuzione.</strong> Se durante la barra il prezzo scende sotto 2.490 $, si compra a 2.490 $ con commissione maker. Su un percorso continuo succede circa una barra su tre (2·Φ(−k) = 32% per k = 1; 30% nella simulazione qui sotto).</li>
+        <li><strong>Uscita.</strong> Come oggi: il segnale opposto, uno stop o un tempo massimo. Può essere anch'essa un ordine limite, una vendita sopra il prezzo quando v2 ≥ +L, e allora entrambi i lati pagano la commissione maker.</li>
+      </ol>
+
+      <h4>Perché la conferma costa</h4>
+      <p>Dopo un estremo il prezzo si allontana come σ√d, e la quota del valore di una svolta che resta dopo d barre di ritardo segue 1 − √(d/w). È la legge di un percorso browniano dopo un estremo, e vale identica sui prezzi a segni casuali.</p>
       <div class="chart" id="c-decay">
         <h3>Quota del valore di una svolta che resta dopo d barre di ritardo, finestra 12</h3>
         <div class="sub">La curva è 1 − √(d/12); i punti sono misurati da <code>strategy --hindsight --delay</code>.</div>
@@ -427,7 +455,6 @@ details pre { border: 0; padding: 0; }
         </div>
         <div class="plot"></div>
       </div>
-      <p>La conferma è il pagamento di quel ritardo. L'alternativa è <strong>pre-impegnarsi</strong>: quando la predizione o l'RSI sono nella zona estrema, mettere un ordine limite di acquisto k·σ sotto il prezzo. Se il prezzo ci arriva si è eseguiti più in basso: <strong>l'esecuzione è la rilevazione, con ritardo zero</strong>, a commissione maker e senza attraversare lo spread.</p>
       <div class="chart diagram" id="d-limit">
         <h3>Conferma contro ordine limite, sullo stesso percorso</h3>
         <div class="sub">Schema, non dati.</div>
@@ -452,15 +479,43 @@ details pre { border: 0; padding: 0; }
           <line x1="464" x2="476" y1="150" y2="150" stroke="var(--fg2)" stroke-width="1"/>
           <line x1="464" x2="476" y1="175" y2="175" stroke="var(--fg2)" stroke-width="1"/>
           <line x1="330" x2="470" y1="175" y2="175" stroke="var(--axis)" stroke-width="1" stroke-dasharray="2 3"/>
-          <text x="482" y="167">≈ σ√d: quanto la conferma paga</text>
+          <text x="482" y="160">≈ σ√d: quanto più in alto</text>
+          <text x="482" y="176">compra la conferma</text>
         </svg></div>
       </div>
-      <h4>Il problema: la selezione avversa</h4>
-      <p>Un ordine limite viene eseguito soprattutto quando il prezzo continua contro di te: il falso allarme che sfonda il livello e prosegue (la linea tratteggiata). Su una martingala neanche l'ordine limite crea vantaggio, perché anche l'esecuzione è un tempo d'arresto. Cambia due cose: <strong>il costo</strong> (maker invece di taker, nessuno spread) e <strong>chi incassa il rientro, se il rientro esiste</strong>. È l'esecuzione naturale della strada 2: chi fornisce liquidità all'estremo incassa l'impatto temporaneo, chi aspetta la conferma ne prende gli avanzi.</p>
+      <h4>Da dove viene il vantaggio, e da dove no</h4>
+      <p>Rispetto alla conferma, l'ordine limite cambia tre cose:</p>
+      <ul class="points">
+        <li><strong>La commissione</strong>: 0,08% invece di 0,10% per lato su spot, 0,02% invece di 0,05% sui perpetual. È certa, e piccola: 2-3 bp per lato.</li>
+        <li><strong>Lo spread</strong>: chi compra a mercato paga mezzo spread, chi aspetta nel book lo incassa. Su BTC ed ETH è meno di 1 bp.</li>
+        <li><strong>Il prezzo</strong>: si compra più in basso della conferma, di circa σ√d (la parentesi nello schema). <strong>Questo non è un guadagno.</strong> È di nuovo la legge di conservazione: l'ordine limite viene eseguito anche quando la discesa prosegue (la linea tratteggiata), cioè ha più "falsi allarmi" della conferma e un prezzo migliore sui veri. Su una martingala le due cose si compensano esattamente.</li>
+      </ul>
+      <p>La simulazione lo verifica su barre con un minimo e un massimo dentro la barra: ogni barra da 15 minuti è fatta di S passi di un percorso GARCH con code t(4), nei due mondi delle sezioni precedenti. Tre ingressi, ognuno tenuto 12 barre, un trade alla volta per asset: a mercato alla prima barra in cui l'RSI a 12 arriva a −0,5 (o +0,5); a mercato alla conferma dello zigzag 0,3, se la gamba ha toccato quel livello; con un ordine limite a k = 1 finché l'RSI resta nella zona.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Percorso dentro la barra</th><th>Mondo</th><th>A mercato nella zona</th><th>Alla conferma</th><th>Ordine limite</th></tr></thead>
+        <tbody>
+          <tr><td>quasi continuo (S = 192)</td><td style="font-family: var(--sans)">martingala</td><td>+2,1 ± 2,6</td><td>+1,0 ± 2,6</td><td>+3,4 ± 3,9</td></tr>
+          <tr class="hl"><td></td><td style="font-family: var(--sans)">ritorno alla media</td><td>+12,6 ± 2,7</td><td>+5,4 ± 3,0</td><td>+10,4 ± 4,0</td></tr>
+          <tr class="sep"><td>a salti (S = 12)</td><td style="font-family: var(--sans)">martingala</td><td>−4,3 ± 2,4</td><td>−1,3 ± 2,4</td><td class="down">−11,8 ± 3,9</td></tr>
+          <tr><td></td><td style="font-family: var(--sans)">ritorno alla media</td><td>+10,2 ± 2,6</td><td>+7,8 ± 2,6</td><td>+5,4 ± 4,0</td></tr>
+        </tbody>
+      </table></div>
+      <p class="caption">bp lordi per trade, ± errore standard. 3 × 100.000 barre per mondo; da 1.500 a 3.600 trade per riga, l'ordine limite ne fa circa la metà degli altri perché viene eseguito solo in una barra su tre o quattro. Le colonne a mercato cambiano fra le due granularità solo per il campione (stesso seme, percorsi diversi). Script <code>sim_limit.py</code> in <a href="#riproduci">Riprodurre</a>.</p>
+      <ul class="points">
+        <li><strong>Su una martingala nessuno dei tre guadagna, se il percorso è continuo.</strong> Il prezzo migliore dell'ordine limite è compensato esattamente dagli ingressi nelle discese che proseguono.</li>
+        <li><strong>Se il prezzo salta oltre il limite, l'ordine limite perde</strong> (−11,8 bp). Quando un passo scavalca K, l'ordine viene eseguito a K mentre il prezzo è già sotto. Su un mercato vero è ciò che fanno un gap o un ordine grande che spazza il book, ed è la norma nelle cadute veloci: è la selezione avversa che lo spread paga ai market maker.</li>
+        <li><strong>Con il ritorno alla media l'ordine limite batte la conferma</strong> (+10,4 contro +5,4) <strong>ma non l'ingresso a mercato appena v2 entra nella zona</strong> (+12,6). Nella zona il rientro è già atteso; aspettare un prezzo più basso fa perdere i trade in cui il prezzo non scende ancora.</li>
+        <li><strong>Il vantaggio dell'ordine limite è di costo, non di segnale</strong>: 2-3 bp per lato di commissione e mezzo spread, contro il rischio dei salti. Vale qualcosa solo dove l'ingresso nella zona ha già un lordo positivo.</li>
+      </ul>
+
+      <h4>Cosa dicono già i dati veri</h4>
+      <p>Il passo 1 dello studio delle regole (<a href="strategy_study.html#passo1">strategy_study.html</a>) ha misurato cosa succede quando v2 è all'estremo: nel 10% più basso il prezzo continua a scendere, circa 3 bp nelle 12 barre successive, su 13 asset su 15; nel 10% più alto continua a salire su 12 su 15. La banda, che entra a mercato all'estremo, fa da −0,57 a +0,05 log per asset sugli otto mesi di sviluppo, a ogni soglia da 0,2 a 0,7. <strong>Sui dati veri gli estremi di v2 proseguono</strong>: è il caso peggiore per un ordine limite, che viene eseguito proprio nei movimenti che continuano.</p>
+      <p>Per questo la strada 3 non sta in piedi da sola. Ha senso solo con un segnale che distingua l'estremo che rientra da quello che prosegue, ed è la strada 2: un movimento fatto chiudendo posizioni (open interest in calo) è tornato indietro su quattro fold su quattro, uno fatto aprendone di nuove è proseguito. <strong>La strada 2 dice dove stare nel book, la strada 3 come entrare.</strong></p>
+
       <h4>Come si testa (non ancora nel codice)</h4>
-      <p>Una simulazione dei riempimenti sulle barre a 5 minuti dello store: limite a p·(1 − kσ) valido N barre; eseguito se il minimo va <em>sotto</em> il limite, una scelta prudente perché la posizione in coda è ignota. Si misurano il rendimento dopo l'esecuzione, la quota di ordini non eseguiti e il confronto con l'ingresso a mercato alla conferma. Le candele non dicono se dentro la barra sia venuto prima il massimo o il minimo: è il limite del metodo.</p>
+      <p>Una simulazione dei riempimenti sulle barre a 5 minuti dello store: limite a p·(1 − kσ) valido una barra da 15 minuti; eseguito se il minimo va <em>sotto</em> il limite, una scelta prudente perché la posizione in coda è ignota. Si confronta con due ingressi a mercato, alla prima barra nella zona e alla conferma, a parità di uscita, riportando la quota di ordini eseguiti. Le candele non dicono se dentro la barra sia venuto prima il massimo o il minimo, né quanto il prezzo abbia saltato: è il limite del metodo, e la tabella sopra mostra quanto conta.</p>
       <h4>Il criterio</h4>
-      <p>Rendimento dopo l'esecuzione, meno quello dell'ingresso alla conferma, positivo al netto della commissione maker in ognuno dei fold di sviluppo, riportando la quota di non eseguiti. Ha senso solo se la strada 1 o la 2 trovano un rientro: gli ordini limite non creano vantaggio, rendono più economico sfruttarne uno che esiste.</p>
+      <p>L'ordine limite deve battere al netto delle commissioni <em>l'ingresso a mercato nella stessa zona</em>, non solo la conferma, in ognuno dei fold di sviluppo, e la zona deve avere già un lordo positivo con la firma della strada 2. Senza quella, il test non ha motivo di partire.</p>
     </div>
   </section>
 
@@ -488,7 +543,7 @@ details pre { border: 0; padding: 0; }
       <li><strong><code>detect --null 0.5 --seeds 0 1 2 3 4</code>.</strong> Se l'AUC reale cade dentro quella dei semi, la separazione degli allarmi è geometria, e il ramo "filtro sugli allarmi" è chiuso per tutte le colonne del prezzo.</li>
       <li><strong><code>detect --residual BTC</code> e <code>--residual ew</code>.</strong> Criterio della strada 1. È l'unico dei tre che può aprire una strada.</li>
       <li><strong>Event study dello shock di flusso</strong> (strada 2), da scrivere.</li>
-      <li><strong>Simulazione degli ordini limite</strong> (strada 3), solo se 3 o 4 trovano un rientro.</li>
+      <li><strong>Simulazione degli ordini limite</strong> (strada 3), solo se 3 o 4 trovano un rientro, e contro l'ingresso a mercato nella stessa zona.</li>
     </ol>
     <div class="callout">
       <p><strong>Dati puliti per la conferma.</strong> L'hold-out dei fold 3-4 è consumato (§17). Ma l'RSI sul prezzo e sul residuo non leggono v2: si possono misurare sul 2021-2025, prima del test di v2, un periodo mai usato per scegliere una regola. È la conferma più economica di qualunque cosa i punti 1-3 trovino, in attesa del walk-forward di v2 dal 2023 (HANDOFF §17, punto 1). Oggi <code>residual_study</code> lavora sulle righe di v2: estenderlo a tutta la storia è un passo piccolo.</p>
@@ -512,7 +567,7 @@ details pre { border: 0; padding: 0; }
 uv run python -m tradingvision.detect --null 0.5 --seeds 0 1 2 3 4
 uv run python -m tradingvision.detect --residual BTC --gate 0.4 0.5 0.6
 uv run python -m tradingvision.detect --residual ew</pre>
-    <p>Le simulazioni non sono un modulo del progetto: sono quattro script numpy/pandas, riportati qui sotto così come hanno prodotto i numeri del documento. Si eseguono da una cartella che contenga <code>sim.py</code>: <code>python sim.py rw h=0.3</code> (legge, quintili, modello sulla candela successiva), <code>python run2.py</code> (tabella dei mondi), <code>python run3.py</code> (filtro sul livello), <code>python run4.py</code> (modello sul rendimento del trade). Il seme è fisso (7), e l'ordine delle chiamate dentro ogni script decide i numeri.</p>
+    <p>Le simulazioni non sono un modulo del progetto: sono cinque script numpy/pandas, riportati qui sotto così come hanno prodotto i numeri del documento. Si eseguono da una cartella che contenga <code>sim.py</code>: <code>python sim.py rw h=0.3</code> (legge, quintili, modello sulla candela successiva), <code>python run2.py</code> (tabella dei mondi), <code>python run3.py</code> (filtro sul livello), <code>python run4.py</code> (modello sul rendimento del trade), <code>python sim_limit.py 192</code> e <code>python sim_limit.py 12</code> (ordini limite; usa scipy). I semi sono fissi (7, e 11 per gli ordini limite), e l'ordine delle chiamate dentro ogni script decide i numeri.</p>
     <details>
       <summary><code>sim.py</code>: i due mondi, il rivelatore, il meta-classificatore, il filtro AND</summary>
 <pre>&quot;&quot;&quot;Monte Carlo for the false-alarm question, on worlds whose truth is known.
@@ -823,6 +878,109 @@ for rho in (0.03, 0.05, 0.1, 0.15, 0.2, 0.3):
     s = rho * z + np.sqrt(1 - rho**2) * rng.standard_normal(len(z))
     keep = s &gt; 0
     print(f&quot;rho {rho:.2f}  acc {np.mean(np.sign(s)==np.sign(g)):.3f}  kept {keep.mean():.2f}  precision {f[&#x27;true&#x27;][keep].mean():.3f}  bp/trade {g[keep].mean()*1e4:+.1f}  (0.8*rho*sd {0.798*rho*g.std()*1e4:.1f})&quot;)</pre>
+    </details>
+    <details>
+      <summary><code>sim_limit.py</code>: ordine limite, ingresso a mercato e conferma, su barre con minimo e massimo</summary>
+<pre>&quot;&quot;&quot;Limit order at the extreme against market entry, with bars that have an intrabar low and high.
+
+Each 15m bar is S sub-steps of a GARCH(1,1) t(4) path (sigma 0.4% a bar), so a resting limit can
+be filled inside the bar at its own price. Two worlds: a martingale, and the same path plus an
+AR(1) component (half-life 24 bars, 30% of a bar&#x27;s variance). One position at a time per asset,
+every trade held H bars and closed at that bar&#x27;s close. `python sim_limit.py S` sets the sub-steps
+(12 or 192 in the document): the fewer they are, the further a bar&#x27;s path jumps past a resting
+limit, which is what a gap or a sweep of the book does to one. Three entries, long side shown, the
+short side mirrored:
+
+  market   buy at the close of the bar where RSI(12) first falls to -L or below (taker)
+  confirm  buy at the close of the zigzag(0.3) alarm on the RSI whose leg reached -L (taker)
+  limit    while RSI &lt;= -L and flat, rest a buy at close * exp(-k * sigma_hat) for the next bar;
+           filled at that price if the bar&#x27;s low goes below it (maker)
+&quot;&quot;&quot;
+
+import sys
+
+import numpy as np
+import pandas as pd
+
+import sim
+from scipy.signal import lfilter
+
+S, H, L, K = 12, 12, 0.5, 1.0
+rng = np.random.default_rng(11)
+
+
+def paths(n, world):
+    a, b, sigma = 0.08, 0.90, 0.004
+    w = sigma**2 * (1 - a - b)
+    s2, sig = sigma**2, np.empty(n)
+    eps_bar = rng.standard_t(4, n) / np.sqrt(2)
+    for t in range(n):  # GARCH on the bar, the sub-steps share the bar&#x27;s sigma
+        sig[t] = np.sqrt(s2)
+        s2 = w + a * (sig[t] * eps_bar[t]) ** 2 + b * s2
+    z = rng.standard_t(4, (n, S)) / np.sqrt(2) / np.sqrt(S)
+    share = 0.3 if world == &quot;mr&quot; else 0.0
+    rw = (np.sqrt(1 - share) * sig[:, None] * z).ravel()
+    x = np.cumsum(rw)
+    if share:
+        phi = 0.5 ** (1 / (24 * S))
+        e = (np.sqrt(share) * sig[:, None] * rng.standard_t(4, (n, S)) / np.sqrt(2) / np.sqrt(S)).ravel()
+        x = x + lfilter([1.0], [1.0, -phi], e)
+    sub = x.reshape(n, S)
+    close = sub[:, -1]
+    prev = np.r_[close[0], close[:-1]]
+    low = np.minimum(sub.min(axis=1), prev)
+    high = np.maximum(sub.max(axis=1), prev)
+    return close, low, high
+
+
+def trades(close, low, high):
+    v = sim.rsi(close)
+    sig = pd.Series(np.diff(close, prepend=close[0])).rolling(48).std().to_numpy()
+    z = sim.zigzag(v, 0.3)
+    out = {&quot;market&quot;: [], &quot;confirm&quot;: [], &quot;limit&quot;: [], &quot;orders&quot;: []}
+    n = len(close)
+    at = np.flatnonzero(z != 0)
+    prev_alarm = np.zeros(n, dtype=int)  # the alarm before each alarm: where its leg started
+    prev_alarm[at[1:]] = at[:-1]
+    for name in (&quot;market&quot;, &quot;confirm&quot;, &quot;limit&quot;):
+        busy, last_ext = -1, 0
+        for t in range(60, n - H - 2):
+            if t &lt;= busy:
+                continue
+            for side in (1, -1):
+                zone = side * v[t] &lt;= -L
+                if name == &quot;market&quot; and zone and side * v[t - 1] &gt; -L:
+                    out[name].append(side * (close[t + H] - close[t]))
+                    busy = t + H
+                elif name == &quot;confirm&quot; and z[t] == side:
+                    start = prev_alarm[t]
+                    if (side * v[start : t + 1]).min() &lt;= -L:
+                        out[name].append(side * (close[t + H] - close[t]))
+                        busy = t + H
+                elif name == &quot;limit&quot; and zone:
+                    k = close[t] - side * K * sig[t]
+                    hit = low[t + 1] &lt; k if side &gt; 0 else high[t + 1] &gt; k
+                    out[&quot;orders&quot;].append(hit)
+                    if hit:
+                        out[name].append(side * (close[t + 1 + H] - k))
+                        busy = t + 1 + H
+    return out
+
+
+if __name__ == &quot;__main__&quot;:
+    rows = []
+    S = int(sys.argv[1]) if len(sys.argv) &gt; 1 else S
+    for world in (&quot;rw&quot;, &quot;mr&quot;):
+        agg = {&quot;market&quot;: [], &quot;confirm&quot;: [], &quot;limit&quot;: [], &quot;orders&quot;: []}
+        for _ in range(3):
+            res = trades(*paths(100_000, world))
+            for k2 in agg:
+                agg[k2] += res.get(k2, [])
+        for name in (&quot;market&quot;, &quot;confirm&quot;, &quot;limit&quot;):
+            g = np.array(agg[name]) * 1e4
+            rows.append({&quot;world&quot;: world, &quot;entry&quot;: name, &quot;trades&quot;: len(g), &quot;bp&quot;: g.mean(), &quot;se&quot;: g.std() / np.sqrt(len(g))})
+        print(world, &quot;limit orders placed&quot;, len(agg[&quot;orders&quot;]), &quot;filled&quot;, np.mean(agg[&quot;orders&quot;]))
+    print(pd.DataFrame(rows).set_index([&quot;world&quot;, &quot;entry&quot;]).round(2).to_string())</pre>
     </details>
   </section>
 

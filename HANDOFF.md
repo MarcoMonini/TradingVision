@@ -1122,6 +1122,17 @@ dell'intera posizione bastano un IC di 0,15-0,2 (accuratezza 54-55%), con la pre
 0,6 fa +10,3 bp (errore 2,8) contro −0,3 (2,6) del random walk, alla stessa precisione del 96-97%. Sono numeri di un mondo
 sintetico: dicono cosa cercare, non cosa c'è.
 
+**Gli ordini limite, simulati (2026-10-07).** Barre con minimo e massimo dentro la barra (S passi
+GARCH t(4) a barra), tre ingressi tenuti 12 barre: a mercato quando l'RSI a 12 arriva a ±0,5, a
+mercato alla conferma dello zigzag 0,3, con un limite a 1σ finché l'RSI resta nella zona. Su una
+martingala con percorso quasi continuo (S = 192) fanno +2,1 / +1,0 / +3,4 bp (errori 2,6-3,9): zero.
+Con S = 12 il limite fa −11,8 (3,9): quando il prezzo scavalca K si viene eseguiti a K con il prezzo
+già sotto, che è la selezione avversa di un gap o di un book spazzato. Con il ritorno alla media il
+limite batte la conferma (+10,4 contro +5,4) ma non l'ingresso a mercato nella zona (+12,6). Il
+vantaggio dell'ordine limite è di costo, non di segnale; e sui dati veri gli estremi di v2
+proseguono (passo 1 di `strategy_study.html`), il caso peggiore per un limite. La strada 3 ha senso
+solo dietro la 2. Script `sim_limit.py` nell'appendice di `false_alarms.html`.
+
 **Verificato.** ruff, black e 51 test. Il self-check di `swing` non è girato: il proxy della sessione
 blocca `download.pytorch.org`, e torch non si installa. Le tre CLI nuove e `--features` sono girate da
 capo a fondo su uno store sintetico, poi cancellato; i loro numeri non significano niente.
