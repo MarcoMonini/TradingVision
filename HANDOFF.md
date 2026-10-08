@@ -1252,6 +1252,13 @@ trade (+220 bp, `kept` 0,28 ± 0,12). Sul 2021-2025 (h, p, L congelati, Shiryaev
 `--lag 1` il β delle alt sulla barra precedente di BTC è 0,05: il residuo ritardato è il prezzo, e BTC
 non anticipa. Chiusa.
 
+**Conferma — il test per scommessa** (`sequential.py`, `--sim`, `--trades`). Riporta la tabella del
+documento con il seme 17 (falsi positivi 1,8% / 2,4% entro 1.000 / 3.000 trade, potenza 76,9% a 15 bp
+entro 1.000). Ogni asset è un processo, gli e-value si mediano alla data finale; media ed e-BH per
+combinare le strade. Sulle due righe del §17 (zigzag 0,2 a L 0,5 e Shiryaev 0,5 a L 0,6, stop 6 ATR, 160
+e 121 trade, lordo +15,3 e +20,0 bp) al netto di OKX il capitale finisce a 0,96 e 0,86 contro 20; al lordo
+servirebbero 896 e 1.913 trade, 8-21 anni al loro ritmo.
+
 **Strada 2 — le colonne dei futures non sanno di più ai pivot** (`detect --conditional [--period dev|holdout]
 [--power]`). Rank IC di 24 colonne (futures, open interest dietro al movimento a k 4 / 12 / 24, v2 e RSI
 come riferimento) col rendimento a 12 / 24 / 48 barre, sulle barre con |v2| ≥ 0,4 / 0,5 / 0,6 e su quelle

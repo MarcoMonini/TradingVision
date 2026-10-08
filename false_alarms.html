@@ -883,6 +883,22 @@ details pre { border: 0; padding: 0; }
     </ul>
     <h4>Come si usa</h4>
     <p>Prima di accendere il paper trading si fissano per iscritto la regola, lo stop B, α e un numero massimo di trade. Dopo ogni trade chiuso si aggiorna W. Si dichiara un vantaggio a W ≥ 1/α; si abbandona al numero massimo di trade.</p>
+    <div class="sub-section" id="conferma-esito">
+      <h3>Nel codice dal 7 ottobre <span class="chip good"><i>✓</i> <code>sequential.py</code></span></h3>
+      <p><code>sequential --sim</code> riporta la tabella sopra con lo stesso seme (17): falsi positivi 1,8% entro 1.000 trade e 2,4% entro 3.000, potenza 76,9% a 15 bp entro 1.000, mediane 1.487 / 587 / 154 trade. La puntata è un Kelly stimato sui soli trade precedenti, fra 0 e ½; ogni asset è un processo a sé e gli e-value si mediano alla data finale, perché trade contemporanei su ETH e SOL non fanno un prodotto valido. Ci sono anche la media e l'e-BH per combinare le strade.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th><code>sequential --trades</code>, 16 mesi, commissione OKX</th><th>trade</th><th>lordo</th><th>netto</th><th>dev. std.</th><th>B mediano</th><th>W finale</th><th>trade per arrivare a 20, al lordo</th></tr></thead>
+        <tbody>
+          <tr><td>zigzag 0,2, filtro L 0,5, stop 6 ATR</td><td>160</td><td>+15,3</td><td>−4,7 ± 11,0</td><td>139</td><td>419</td><td>0,96</td><td>896</td></tr>
+          <tr><td>Shiryaev 0,5, filtro L 0,6, stop 6 ATR</td><td>121</td><td>+20,0</td><td>−0,0 ± 15,8</td><td>173</td><td>360</td><td>0,86</td><td>1.913</td></tr>
+        </tbody>
+      </table></div>
+      <p class="caption">Le due righe positive in tutti e quattro i fold del §17, ricostruite trade per trade (+12,5 su 93 e +19,2 su 67; +15,8 su 81 e +28,4 su 40). B è la distanza dello stop all'ingresso più l'andata e ritorno. L'ultima colonna è la mediana simulata alla media lorda, senza commissione, sulla media dei tre asset: a 90-120 trade l'anno sono da 8 a 21 anni.</p>
+      <ul class="points">
+        <li><strong>Al netto della commissione di OKX le due righe migliori di v2 non hanno vantaggio da dichiarare</strong>: il capitale virtuale finisce a 0,96 e 0,86, lontano da 1/α = 20.</li>
+        <li>Il test è pronto per il paper trading, con la regola, lo stop B, α e il numero massimo di trade scritti prima di accendere.</li>
+      </ul>
+    </div>
   </section>
 
   <section id="esiti">
