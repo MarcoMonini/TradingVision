@@ -59,7 +59,10 @@ uv run ruff check . && uv run black --check .    # what CI runs, line-length 120
 ```
 
 The Streamlit page: `preview_start` with the `chart` config in `.claude/launch.json`, or
-`uv run streamlit run src/tradingvision/app/chart.py`.
+`uv run streamlit run src/tradingvision/app/chart.py`. A second page, local only and not deployed:
+`uv run streamlit run src/tradingvision/app/decomposer.py`, descriptive statistics of one pair's candles
+read from the store, which it never downloads. It grows by request: add a chart or a number to it only
+when asked.
 
 Pipeline modules, each a `python -m` entry point, in the order they depend on each other:
 

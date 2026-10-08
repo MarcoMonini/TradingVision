@@ -99,6 +99,13 @@ def test_flow_selfcheck():
     flow._selfcheck()
 
 
+def test_decomposer_selfcheck():
+    """`app.decomposer` keeps its checks in a function: its `__main__` is the Streamlit page."""
+    from tradingvision.app import decomposer
+
+    decomposer._selfcheck()
+
+
 def test_binance_selfcheck():
     """`data.binance` keeps its checks in a function: its `__main__` downloads the dumps."""
     from tradingvision.data import binance

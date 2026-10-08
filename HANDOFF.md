@@ -1394,3 +1394,22 @@ test per scommessa non sono nel codice.
 - Verificato: ruff, black, 62 test (il self-check di `swing` no: torch non si installa dietro il proxy).
   La pagina è girata con `AppTest` su candele e OI sintetici, senza eccezioni, e la figura è stata
   guardata. Nessuna chiamata vera a Binance o ad Alpaca: il proxy della sessione le blocca.
+
+## 21. `decomposer.py`, la pagina delle statistiche descrittive (2026-10-08, stesso ramo)
+
+Una seconda pagina Streamlit, solo locale (`uv run streamlit run src/tradingvision/app/decomposer.py`),
+senza barra laterale. Legge le candele 5m dello store in `data/` e non scarica niente: offre solo le
+coppie che hanno un file. Cresce a richiesta: si aggiunge un grafico o una statistica solo quando
+viene chiesto.
+
+- In alto l'asset (una coppia alla volta) e il timeframe (5m, 15m, 1h, 4h, 1d, aggregati dai 5m con
+  `binance.load`; default 15m).
+- Media e deviazione standard della variazione open → close, in %, su tutte le candele, sulle sole
+  positive e sulle sole negative. La media di tutte è quella vicina a zero; la deviazione standard è
+  la taglia di una candela tipica. Le candele con open = close contano solo in "tutte".
+- Il grafico delle candele su un periodo scelto (default gli ultimi 30 giorni): è l'unica cosa che
+  legge il periodo.
+- L'istogramma della variazione di tutte le candele caricate: 201 classi su un asse simmetrico fino al
+  percentile 0,1 o 99,9 più lontano da zero; le candele oltre sono contate in didascalia.
+- Verificato su uno store sintetico (code t a 4 gradi): `AppTest` senza eccezioni su BTC/ETH e 15m/1d,
+  la pagina servita e fotografata. Lo store vero non è in questa sessione. Self-check registrato.
