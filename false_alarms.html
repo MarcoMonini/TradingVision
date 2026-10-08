@@ -514,6 +514,44 @@ details pre { border: 0; padding: 0; }
       <dt>Se no</dt><dd>La parte propria non rientra abbastanza, in media, da pagare due gambe. Le strade 3 e 4 restano: cercano il rientro in un sottoinsieme (stati illiquidi, shock di flusso), non in media.</dd>
       <dt>Dati e stato</dt><dd>Store; ETH e SOL contro BTC (<code>--residual BTC</code>) o i tre contro il paniere (<code>--residual ew</code>). Nel codice, da eseguire.</dd>
     </dl></div>
+    <div class="sub-section" id="residuo-esito">
+      <h3>Misurato il 7 ottobre <span class="chip bad"><i>✕</i> non passa</span></h3>
+      <p>Il movimento comune è il 60-68% della varianza a 15 minuti sullo sviluppo (R² di ETH su BTC 0,68, di SOL 0,60; sul paniere 0,65 e 0,67), con σ di 34 bp a barra per ETH e 40 per SOL. Toglierlo costa: la copertura paga due gambe, <code>fee_bp</code> 49,6 bp contro BTC (β medio intorno a 1,5) e 34,6 contro il paniere, sulle barre d'allarme dello sviluppo.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Sviluppo, bp per trade</th><th>senza filtro</th><th>allarme, L 0,4</th><th>L 0,5</th><th>L 0,6</th><th>estremo, L 0,4</th><th>L 0,5</th><th>L 0,6</th><th><code>kept</code></th></tr></thead>
+        <tbody>
+          <tr><td>prezzo, RSI 12, zigzag 0,2</td><td>+1,2</td><td>−4,8</td><td>−20,6</td><td>(4 trade)</td><td>+6,5</td><td>+5,1</td><td>−5,9</td><td>0,09 ± 0,12</td></tr>
+          <tr><td>residuo BTC, zigzag 0,2</td><td>+0,0</td><td>−4,2</td><td>−14,1</td><td>(2)</td><td>+2,0</td><td>−6,2</td><td>−8,5</td><td>0,16 ± 0,12</td></tr>
+          <tr><td>residuo BTC, Shiryaev 0,5</td><td>+0,7</td><td>+1,0</td><td>+0,4</td><td>−3,2</td><td>+4,5</td><td>−5,4</td><td>−4,8</td><td>−0,07 ± 0,29</td></tr>
+          <tr class="sep"><td>prezzo, RSI 12, zigzag 0,2 (3 asset)</td><td>+0,2</td><td>−4,4</td><td>−14,8</td><td>(5)</td><td>+5,2</td><td>+4,2</td><td>−4,0</td><td>0,09 ± 0,10</td></tr>
+          <tr><td>residuo paniere, zigzag 0,2</td><td>+0,6</td><td>+10,5</td><td>+29,8</td><td>(5)</td><td>+3,5</td><td>+7,7</td><td>+5,0</td><td>0,28 ± 0,12</td></tr>
+          <tr class="hl"><td>residuo paniere, Shiryaev 0,5</td><td>+3,1</td><td>+17,4</td><td>+31,5</td><td>+70,1</td><td>+4,2</td><td>+9,7</td><td>+26,5</td><td>−0,01 ± 0,32</td></tr>
+        </tbody>
+      </table></div>
+      <p class="caption"><code>detect --residual BTC --gate 0.4 0.5 0.6</code> (ETH e SOL) e <code>detect --residual ew</code> (ETH, BTC, SOL), lordo senza commissione, filtro che chiude sugli allarmi scartati. Shiryaev 0,5 sul residuo contro il paniere al filtro sull'allarme: 302 / 138 / 69 trade, errori 9,7 / 19,6 / 36,9 bp, fold 1 e 2 +10,6 / +23,6, +10,4 / +52,6, +13,0 / +125,5; sull'hold-out −13,2 / −8,7 / +2,3.</p>
+      <ul class="points">
+        <li><strong>Contro BTC non c'è niente:</strong> il residuo lordo sta fra −14 e +5 bp a ogni filtro, lontano dai 47 bp delle due gambe, e non cresce con il livello.</li>
+        <li><strong>Contro il paniere c'è la firma e non il resto.</strong> Shiryaev sul residuo, filtrato all'allarme, sale con il livello (+17 → +31 → +70 bp) in entrambi i fold di sviluppo, e lo zigzag ha <code>kept</code> 0,28 ± 0,12. Letto alla lettera il criterio passa una volta, lo zigzag a L 0,6: +220 bp su <strong>5 trade</strong> (3 e 2 per fold), <code>kept</code> 0,28 ± 0,12; su ogni coppia tradabile la stessa riga fa +80,5 su 26 trade. Shiryaev a L 0,6 (+70,1 su 69 trade) ha <code>kept</code> −0,01, e l'hold-out torna negativo.</li>
+      </ul>
+      <h4>La conferma sul 2021-2025</h4>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Residuo, RSI 12, allarme, bp per trade</th><th>L 0,4</th><th>L 0,5</th><th>L 0,6</th><th><code>kept</code></th><th><code>fee_bp</code></th></tr></thead>
+        <tbody>
+          <tr><td>contro BTC, zigzag 0,2</td><td>−15,6 ± 7,2</td><td>−10,1 ± 18,6</td><td>−45,5 ± 34,0</td><td>−0,14 ± 0,06</td><td>44,4</td></tr>
+          <tr><td>contro BTC, Shiryaev 0,5</td><td>−19,3 ± 7,2</td><td>−20,6 ± 11,8</td><td>−45,5 ± 21,4</td><td>−0,19 ± 0,15</td><td></td></tr>
+          <tr><td>contro il paniere, zigzag 0,2</td><td>−11,1 ± 4,5</td><td>−9,9 ± 7,5</td><td>−21,7 ± 18,7</td><td>−0,11 ± 0,05</td><td>36,6</td></tr>
+          <tr class="hl"><td>contro il paniere, Shiryaev 0,5</td><td>−8,3 ± 4,3</td><td>−12,8 ± 6,8</td><td>−25,4 ± 12,6</td><td>−0,31 ± 0,13</td><td></td></tr>
+          <tr class="sep"><td>ogni coppia tradabile, paniere, zigzag</td><td>−7,1 ± 2,9</td><td>−5,0 ± 7,6</td><td>−10,9 ± 25,6</td><td>−0,04 ± 0,02</td><td>39,4</td></tr>
+          <tr><td>ogni coppia tradabile, BTC, Shiryaev</td><td>−14,2 ± 3,3</td><td>−20,7 ± 5,5</td><td>−34,4 ± 9,9</td><td>−0,04 ± 0,07</td><td>44,1</td></tr>
+        </tbody>
+      </table></div>
+      <p class="caption"><code>detect --residual BTC|ew --period 2021 [--tradable]</code>: 2021-01 → 2025-06 in quattro fold, h, p e L congelati dallo sviluppo, l'azzardo di Shiryaev e la logistica di <code>kept</code> stimati sul 2020. Sugli stessi tre asset l'RSI del prezzo fa −144 (zigzag) e −57 (Shiryaev) a L 0,6 contro il paniere: gli estremi proseguono.</p>
+      <ul class="points">
+        <li><strong>Sul 2021-2025 non sopravvive niente.</strong> Ogni riga filtrata del residuo è negativa e più bassa a L 0,6 che a 0,4, il contrario della firma; <code>kept</code> è negativo, oltre due errori sotto zero in cinque righe. Il residuo toglie una parte del momentum del prezzo e non lascia un rientro che paghi nemmeno una gamba.</li>
+        <li><strong>BTC non anticipa le alt a 15 minuti</strong> (<code>--lag 1</code>): sulla barra precedente di BTC il β delle alt è circa 0,05, e il residuo ritardato è il prezzo (zigzag −24,0 / −53,2 / −175,7 sul 2021-2025).</li>
+        <li><strong>Esito:</strong> la strada 1 è chiusa. La forma che lo sviluppo mostrava contro il paniere era di un periodo.</li>
+      </ul>
+    </div>
   </section>
 
   <section id="condizionata">
@@ -636,7 +674,7 @@ details pre { border: 0; padding: 0; }
         <li><strong>Il rientro non cresce con lo shock, cala</strong>: con open interest in calo, sullo sviluppo a 48 barre, gli shock di 2-3 / 3-4 / oltre 4σ fanno +17,3 / −15,2 / −36,0 bp (span 1, k₂ 1). Gli shock grandi proseguono di più.</li>
         <li><strong>Il contesto non regge su ogni barra.</strong> I quadranti di <code>detect --oi</code> ricalcolati qui su ogni barra, nel verso del rientro: open interest in calo +4,6 / +1,1 / −10,9 / +0,7, in salita −16,7 / +19,3 / −6,6 / −17,0 (vedi la correzione in <a href="#condizionata-esito">strada 2</a>).</li>
         <li><strong>2021-2025</strong>, senza open interest (inizia nel 2025-05), la risposta non divisa: +10,2 / −1,5 / +1,5 / −0,3 bp a 12 barre, +3,7 / −3,0 / −3,8 / −11,8 a 48. Nessun rientro.</li>
-        <li><strong>Potenza</strong> (<code>--power</code>): un rientro di 10 bp con open interest in calo si vede il 9-12% delle volte, di 20 il 18-34%, con lo 2-4% di falsi positivi; "cresce con lo shock" passa il 16-18% delle volte senza effetto. Con tre asset e sedici mesi la scheda non poteva vedere l'effetto che chiedeva.</li>
+        <li><strong>Potenza</strong> (<code>--power</code>): un rientro di 10 bp con open interest in calo si vede il 9-12% delle volte, di 20 il 18-34%, con il 2-4% di falsi positivi; "cresce con lo shock" passa il 16-18% delle volte senza effetto. Con tre asset e sedici mesi la scheda non poteva vedere l'effetto che chiedeva.</li>
         <li><strong>Esito:</strong> nessuno shock di flusso riconoscibile rientra abbastanza, e l'open interest non dice quale rientra. Non diventa nemmeno una colonna del tempismo: sul suo fold 2 il segno si inverte.</li>
       </ul>
     </div>

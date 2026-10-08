@@ -1241,6 +1241,17 @@ v2 0,616. `kept` sui semi nulli va da −0,65 a +0,35 (deviazione 0,40 contro un
 0,22-0,28): il +0,62 ± 0,24 di v2 sullo sviluppo è 1,5 deviazioni dei semi e torna a −0,26 sull'hold-out.
 Non si riapre il meta-labeling.
 
+**Strada 1 — il residuo non rientra** (`detect --residual BTC|ew [--period] [--tradable] [--lag 1]`).
+Il movimento comune è il 60-68% della varianza a 15 minuti (R² di ETH su BTC 0,68, SOL 0,60). Sullo
+sviluppo contro BTC il residuo filtrato sta fra −14 e +5 bp (`fee_bp` 49,6); contro il paniere Shiryaev
+filtrato all'allarme sale con il livello (+17,4 / +31,5 / +70,1 a L 0,4 / 0,5 / 0,6, entrambi i fold
+positivi) ma con `kept` −0,01 ± 0,32, e il criterio passa alla lettera una volta, lo zigzag a L 0,6 su 5
+trade (+220 bp, `kept` 0,28 ± 0,12). Sul 2021-2025 (h, p, L congelati, Shiryaev e `kept` stimati sul
+2020) ogni riga filtrata è negativa e più bassa a 0,6 che a 0,4: contro il paniere Shiryaev −8,3 / −12,8
+/ −25,4, `kept` −0,31 ± 0,13; contro BTC −19,3 / −20,6 / −45,5; su ogni coppia tradabile lo stesso. Con
+`--lag 1` il β delle alt sulla barra precedente di BTC è 0,05: il residuo ritardato è il prezzo, e BTC
+non anticipa. Chiusa.
+
 **Strada 2 — le colonne dei futures non sanno di più ai pivot** (`detect --conditional [--period dev|holdout]
 [--power]`). Rank IC di 24 colonne (futures, open interest dietro al movimento a k 4 / 12 / 24, v2 e RSI
 come riferimento) col rendimento a 12 / 24 / 48 barre, sulle barre con |v2| ≥ 0,4 / 0,5 / 0,6 e su quelle

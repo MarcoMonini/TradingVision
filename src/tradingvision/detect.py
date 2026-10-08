@@ -178,6 +178,59 @@ gross, never what it moves the AUC or the false alarms, and these ask that quest
   most of each asset's variance, and the reversal documented at short horizons is in the part it
   leaves out. The hedged trade pays two legs, `fee_bp`.
 
+**The residual does not revert on the history no one chose on** (`--residual MARKET --period
+dev|holdout|2021`, measured 2026-10-07 on the store to 2026-09-26). The RSI at 12 on each asset less
+beta times the market, zigzag 0.2 and Shiryaev 0.5 through the gate read at the alarm and closing,
+bp a trade gross with its trade-level error; `2021` is 2021-01 to 2025-06 in four folds, with
+Shiryaev's hazard and the logistic behind `kept` fitted on 2020 and h, p and L frozen from
+development:
+
+    residual: rsi 12                  L 0.4          L 0.5          L 0.6          kept          fee_bp
+    against BTC, ETH and SOL
+      dev       zigzag 0.2          -4.2 (8.7)   -14.1 (23.2)     -7 (2 trades)   +0.16 (0.12)    49.6
+                shiryaev 0.5        +1.0 (10.1)   +0.4 (12.6)   -3.2 (17.2)     -0.07 (0.29)
+      hold-out  zigzag 0.2         +14.6 (8.9)   +40.8 (22.4)  +41.9 (7 trades) +0.13 (0.12)    43.8
+                shiryaev 0.5       +10.7 (7.8)   +12.8 (11.3)  +54.4 (15.8)     +0.09 (0.33)
+      2021      zigzag 0.2         -15.6 (7.2)   -10.1 (18.6)  -45.5 (34.0)     -0.14 (0.06)    44.4
+                shiryaev 0.5       -19.3 (7.2)   -20.6 (11.8)  -45.5 (21.4)     -0.19 (0.15)
+    against ew, ETH, BTC and SOL
+      dev       zigzag 0.2         +10.5 (7.7)   +29.8 (22.6)   +220 (5 trades) +0.28 (0.12)    34.6
+                shiryaev 0.5       +17.4 (9.7)   +31.5 (19.6)  +70.1 (36.9)     -0.01 (0.32)
+      hold-out  zigzag 0.2          -2.4 (6.1)    +8.0 (17.5)    -38 (6 trades) -0.05 (0.10)    36.7
+                shiryaev 0.5       -13.2 (6.3)    -8.7 (11.6)   +2.3 (16.9)     +0.12 (0.34)
+      2021      zigzag 0.2         -11.1 (4.5)    -9.9 (7.5)   -21.7 (18.7)     -0.11 (0.05)    36.6
+                shiryaev 0.5        -8.3 (4.3)   -12.8 (6.8)   -25.4 (12.6)     -0.31 (0.13)
+    every TRADABLE pair: the 12 alts against BTC, the 13 against ew
+      BTC dev   zigzag 0.2         +13.5 (9.4)   +23.1 (23.4)  +10.2 (37.4)     +0.11 (0.05)    52.2
+                shiryaev 0.5       +12.4 (7.9)   +28.2 (9.2)   +38.3 (15.9)     +0.14 (0.14)
+      BTC 2021  zigzag 0.2          -9.1 (3.4)    -5.0 (8.3)    +8.8 (28.5)     -0.06 (0.02)    44.1
+                shiryaev 0.5       -14.2 (3.3)   -20.7 (5.5)   -34.4 (9.9)      -0.04 (0.07)
+      ew dev    zigzag 0.2          +7.3 (5.2)   +29.8 (12.5)  +80.5 (47.7)     +0.17 (0.05)    39.9
+                shiryaev 0.5        +6.4 (5.4)   +11.1 (10.0)  +25.1 (14.8)     +0.11 (0.18)
+      ew 2021   zigzag 0.2          -7.1 (2.9)    -5.0 (7.6)   -10.9 (25.6)     -0.04 (0.02)    39.4
+                shiryaev 0.5        -4.0 (2.6)    -8.6 (4.6)   -25.6 (9.2)      -0.15 (0.07)
+
+Development against ew is what made the route look open: a gross growing with the level, both
+folds positive, and read literally the card's criterion passes once, the zigzag at L = 0.6, on five
+trades. Against BTC the hold-out showed the same shape. On 2021-2025 neither survives: every gated
+row is negative and lower at L = 0.6 than at 0.4 instead of higher, on the residual as on the price,
+and `kept` is negative, beyond two errors on three of the four rows: the more a turn looks
+confirmed, the less it pays. The extremes keep going, as v2's did in `strategy`'s step 1. The
+residual takes part of that momentum out (the price's RSI makes -144 and -57 at L = 0.6 on the same
+three assets against ew's -22 and -25) and leaves no reversal to pay one leg, let alone two.
+
+The wider universe says it with more trades. On development every TRADABLE pair against ew passes
+the card with the zigzag, +80.5 on 26 trades at L = 0.6 with both folds positive and `kept` 0.17
+(0.05); on 2021 the same row makes -10.9 on 144 trades, `kept` -0.04 (0.02), its folds 1-2
+positive and 3-4 negative from L = 0.5 up. Against BTC on 2021 the zigzag's gross grows with the
+level, -9.1 / -5.0 / +8.8, and never comes near its 44 bp fee; the price's RSI on the same pairs
+makes -105 at 0.6. The ew development pattern was one period's.
+
+**BTC does not lead the alts at 15 minutes** (`--lag 1`). On BTC's bar before, the alts' beta is
+about 0.05 (`fee_bp` 20.9-21.0), so the lagged residual is the price to a few bp and makes the
+price's numbers: zigzag -8.5 / -15.7 / +55.4 (7 trades) at L 0.4 / 0.5 / 0.6 on development and
+-24.0 / -53.2 / -175.7 on 2021, Shiryaev +5.5 / +1.1 / +21.6 and -23.8 / -40.0 / -47.4.
+
 **The futures columns know no more at v2's pivots than anywhere** (`--conditional`, route 2 of
 `false_alarms.html`, `conditional_ic`; added 2026-10-07). The two-stage idea in its right form: a
 first stage is worth something only if it picks the bars where a second model, on columns that are
@@ -229,8 +282,8 @@ the 48 (phase-to-phase sd 0.03-0.07). `forward_ic` sampled the same way; both re
     uv run python -m tradingvision.detect --gate 0.1 0.2 0.3 0.4 0.5
     uv run python -m tradingvision.detect --confirm
     uv run python -m tradingvision.detect --null 0.5 [--seeds 0 1 2]
-    uv run python -m tradingvision.detect --residual BTC [--gate 0.4 0.5 0.6]
-    uv run python -m tradingvision.detect --residual ew
+    uv run python -m tradingvision.detect --residual BTC [--gate 0.4 0.5 0.6] [--period dev|holdout|2021]
+    uv run python -m tradingvision.detect --residual ew [--period 2021] [--tradable] [--lag 1]
     uv run python -m tradingvision.detect --conditional [--period dev|holdout] [--power] [--seeds 0 1 2]
 """
 
@@ -242,9 +295,9 @@ import math
 import numpy as np
 import pandas as pd
 
-from tradingvision import legs, stops, strategy
+from tradingvision import legs, metrics, stops, strategy
 from tradingvision.data import futures
-from tradingvision.data.binance import SYMBOLS
+from tradingvision.data.binance import SYMBOLS, TRADABLE
 from tradingvision.data.binance import load as candles
 from tradingvision.oracle import FEE
 from tradingvision.strategy import fold_of, hold, plain, turn_events
@@ -726,22 +779,31 @@ def gate(
     return kept, on
 
 
-def residual(asset: pd.Series, market: pd.Series, window: int = BETA_WINDOW) -> tuple[pd.Series, pd.Series]:
+def residual(
+    asset: pd.Series, market: pd.Series, window: int = BETA_WINDOW, lag: int = 0
+) -> tuple[pd.Series, pd.Series]:
     """`(spread, beta)`: the asset's price with the market's move taken out, bar by bar.
 
     The spread's 15m log return is the asset's less beta times the market's, beta the slope of the
     first on the second over the `window` bars that closed before the bar: the hedge a bar is paid
     on was set at the close before it. Held long, the spread is one unit of the asset against beta
     units of the market, rebalanced every bar, which a month's beta makes a rounding error.
+
+    `lag` takes the market's return `lag` bars before instead (counted on the asset's bars): with
+    1, what is left is the asset's move past what the market's last bar foretold, the test of
+    whether BTC leads the alts. That spread is not a position anyone can hold, its hedge leg is a
+    bar in the past, so its gross reads whether the part BTC does not foretell reverts.
     """
-    ra, rm = np.log(asset).diff(), np.log(market).reindex(asset.index).diff()
+    ra, rm = np.log(asset).diff(), np.log(market).reindex(asset.index).diff().shift(lag)
     n = window // 2
     beta = (ra.rolling(window, min_periods=n).cov(rm) / rm.rolling(window, min_periods=n).var()).shift()
     e = (ra - beta * rm).fillna(0.0)
     return np.exp(np.log(asset.iloc[0]) + e.cumsum()), beta
 
 
-def spreads(index: pd.MultiIndex, market: str = "BTC", window: int = BETA_WINDOW) -> tuple[pd.Series, pd.Series]:
+def spreads(
+    index: pd.MultiIndex, market: str = "BTC", window: int = BETA_WINDOW, lag: int = 0
+) -> tuple[pd.Series, pd.Series]:
     """`residual` of each asset of `index` against `market`, over the whole store: `(spread, beta)`.
 
     `market` is a symbol of the store, or `ew` for the equal-weighted 15m return of `SYMBOLS` other
@@ -763,44 +825,88 @@ def spreads(index: pd.MultiIndex, market: str = "BTC", window: int = BETA_WINDOW
             m = np.exp(r.mean(axis=1).fillna(0.0).cumsum())
         else:
             m = close_of(market)
-        s, b = residual(a, m, window)
+        s, b = residual(a, m, window, lag)
         parts.append(s.set_axis(pd.MultiIndex.from_arrays([s.index, [sym] * len(s)], names=index.names)))
         betas.append(b.set_axis(pd.MultiIndex.from_arrays([b.index, [sym] * len(b)], names=index.names)))
     return pd.concat(parts), pd.concat(betas).reindex(index)
 
 
+# Before the confirmation period, the year Shiryaev's hazard and the logistic behind `kept` are fitted
+# on: the RSI's own turns of 2020, nothing of the period itself.
+FIT_YEAR = pd.DateOffset(years=1)
+
+
+def history(assets, start: pd.Timestamp, end: pd.Timestamp) -> pd.Series:
+    """The store's 15m closes of `assets` from `start` to before `end`, on the (open_time, symbol) index."""
+    parts = []
+    for sym in assets:
+        c = candles(sym, "15m").close
+        c = c[(c.index >= start) & (c.index < end)]
+        parts.append(c.set_axis(pd.MultiIndex.from_arrays([c.index, [sym] * len(c)], names=["open_time", "symbol"])))
+    return pd.concat(parts)
+
+
+def _folds(held: pd.DataFrame, period: str) -> dict:
+    """bp a trade, its error and count over `period` and in each of its folds (`strategy.fold_in`).
+
+    `se` is the trade-level error `_periods` reads; `bse` the error over weekly blocks of entries
+    (`metrics.blocked`), since the assets' trades overlap in time and move together. A fold with no
+    trade is NaN, which no criterion counts as positive.
+    """
+    when = pd.DatetimeIndex(held.entry)
+    k = strategy.fold_in(when, period)
+    g = pd.Series(held.gross.to_numpy()[k > 0] * 1e4, index=when[k > 0])
+    row = {"bp": g.mean(), "se": g.std() / np.sqrt(len(g)), "n": len(g)}
+    row["bse"] = metrics.blocked(g, pd.Timedelta("7D"))["se"] if len(g) > 1 else np.nan
+    first = 3 if period == "holdout" else 1
+    for f in range(first, first + len(strategy.edges(period)) - 1):
+        x = g[k[k > 0] == f]
+        row |= {f"fold {f}": x.mean(), f"se {f}": x.std() / np.sqrt(len(x)), f"n {f}": len(x)}
+    return row
+
+
 def residual_study(
-    pred: pd.Series,
-    close: pd.Series,
-    cut: pd.Timestamp,
     market: str = "BTC",
     levels=(0.4, 0.5, 0.6),
     h: float = 0.2,
     p: float = 0.5,
+    period: str = "dev",
+    assets=None,
+    lag: int = 0,
 ) -> pd.DataFrame:
-    """The detectors on each asset's price and on its residual against `market`, on the same assets.
+    """The detectors on each asset's price and on its residual against `market`, over one `period`.
 
-    Three series: v2 and an RSI at 12 on the price, and an RSI at 12 on the spread (`spreads`). v2
-    cannot be run on a spread, it reads candles; it is 92.5% an RSI at 12 (§14 of the handoff), so
-    the fair comparison is the RSI on the price against the RSI on the spread, and v2 is the
-    yardstick. Zigzag `h` and Shiryaev `p` (fitted on each series), alone and through `gate` at
-    each level, read at the alarm as the page runs it and at the leg's extreme as the simulation in
-    the module's docstring did, closing on a rejected alarm. A trade on the spread is the hedged
-    trade, and it pays two legs: `fee_bp` is the round trip at `oracle.FEE` times 1 + |beta| at the
-    entries. AUC and `kept` are `null_test`'s, at each detector's alarms. The levels are in each
-    series' own units, and v2's are shrunk towards zero, so a level is not the same selection on v2
-    as on an RSI.
+    Three series on v2's periods: v2 and an RSI at 12 on the price, and an RSI at 12 on the spread
+    (`spreads`). v2 cannot be run on a spread, it reads candles; it is 92.5% an RSI at 12 (§14 of
+    the handoff), so the fair comparison is the RSI on the price against the RSI on the spread, and
+    v2 is the yardstick. On `2021` there is no v2, and the two RSIs run on the store's 15m bars from
+    a year before the period (`FIT_YEAR`) to its end. Zigzag `h` and Shiryaev `p`, alone and
+    through `gate` at each level, read at the alarm as the page runs it and at the leg's extreme as
+    the simulation in the module's docstring did, closing on a rejected alarm. A trade on the spread
+    is the hedged trade, and it pays two legs: `fee_bp` is the round trip at `oracle.FEE` times
+    1 + |beta| at the period's alarms. AUC and `kept` are `null_test`'s, at each detector's alarms.
+
+    What decides something is fitted before or beside the period, never on it: Shiryaev's hazard
+    and the logistic behind `kept` on development for `dev` (in sample, as `null_test`) and
+    `holdout`, on the year before for `2021`; `h`, `p` and the levels are development's. The
+    levels are in each series' own units, and v2's are shrunk towards zero, so a level is not the
+    same selection on v2 as on an RSI. `assets` defaults to `strategy.ASSETS`, less the market.
     """
-    assets = [s for s in strategy.ASSETS if s != market]
-    keep = pred.index.get_level_values(1).isin(assets)
-    pred, close = pred[keep], close[keep]
-    spread, beta = spreads(pred.index, market)
-    on_index = spread.reindex(pred.index)
-    series = {
-        "price: v2": (pred, close, None),
-        "price: rsi 12": (strategy.rsi(pred.index), close, None),
-        "residual: rsi 12": (strategy.rsi(pred.index, close=spread), on_index, 1 + beta.abs()),
+    assets = [s for s in (assets or strategy.ASSETS) if s != market]
+    if period == "2021":
+        start, end = strategy.CONFIRM
+        close, cut, series = history(assets, start - FIT_YEAR, end), start, {}
+    else:
+        pred, close, cut = strategy.load(assets=assets)
+        series = {"price: v2": (pred, close, None)}
+    spread, beta = spreads(close.index, market, lag=lag)
+    series |= {
+        "price: rsi 12": (strategy.rsi(close.index), close, None),
+        "residual: rsi 12": (strategy.rsi(close.index, close=spread), spread.reindex(close.index), 1 + beta.abs()),
     }
+    when = close.index.get_level_values(0)
+    inside = strategy.fold_in(when, period) > 0
+    side = "dev" if period == "dev" else "holdout"  # which side of `cut` the period is on
     rows = []
     for name, (x, c, hedge) in series.items():
         truth, params = turn_events(x, strategy.WINDOW), fit(x, cut)
@@ -809,25 +915,58 @@ def residual_study(
             (f"zigzag {h:g}", alarms(x, zigzag, h)),
             (f"shiryaev {p:g}", alarms(x, shiryaev, params, p)),
         ):
-            fee = 2 * FEE * (1.0 if hedge is None else float(hedge[found != 0].mean())) * 1e4
+            at = (found != 0).to_numpy() & inside
+            fee = 2 * FEE * (1.0 if hedge is None else float(hedge[at].mean())) * 1e4
             row = {"series": name, "detector": label, "fee_bp": fee}
             f = geometry(found, x, c, truth)
-            score, dev = _score(f, cut), (f.when < cut).to_numpy()
+            score = _score(f, cut)
             kept = conservation(f, score, cut)[1]
+            read = strategy.fold_in(pd.DatetimeIndex(f.when), period) > 0
             stats = {
-                "auc_dev": _auc(score[dev], f.true.to_numpy()[dev]),
-                "kept_dev": kept["dev"],
-                "kept_dev_se": kept["dev_se"],
+                "auc": _auc(score[read], f.true.to_numpy()[read]),
+                "kept": kept[side],
+                "kept_se": kept[f"{side}_se"],
             }
-            rows.append(row | {"gate": "none"} | match(found, truth, cut) | stats | book(found, c, cut))
+            m = match(found[inside], truth[inside], when[inside].max() + strategy.BAR)
+            rows.append(row | {"gate": "none"} | m | stats | _folds(plain(hold(found), c)[2], period))
             for where in ("alarm", "extreme"):
                 for level in levels:
                     kept_sig, on = gate(found, x, level, where, True)
                     held = strategy.walked(kept_sig, bars, on=on)[2]
-                    # A level no alarm reaches keeps no trade, and `_periods` cannot date an empty book.
-                    found_any = _periods(held, cut) if len(held) else {"dev_n": 0, "holdout_n": 0}
-                    rows.append(row | {"gate": f"{where}, close {level:g}"} | found_any)
+                    rows.append(row | {"gate": f"{where}, close {level:g}"} | _folds(held, period))
     return pd.DataFrame(rows).set_index(["series", "detector", "gate"])
+
+
+def residual_verdict(t: pd.DataFrame, levels) -> list[str]:
+    """The card's criterion on each detector of `residual_study`'s table, read and not applied.
+
+    At the gate read at the alarm: a level whose gross is above `fee_bp` with every fold positive,
+    a gross that grows with the level, and `kept` beyond two of its errors. The price's RSI is
+    judged the same way, as the control.
+    """
+    folds = [c for c in t.columns if c.startswith("fold ")]
+    out = []
+    for (series, detector), d in t.groupby(level=[0, 1], sort=False):
+        if series == "price: v2":
+            continue
+        d = d.droplevel([0, 1])
+        g = d.loc[[f"alarm, close {L:g}" for L in levels]]
+        pays = [
+            f"{L:g} ({r.n:.0f} trades)"
+            for L, (_, r) in zip(levels, g.iterrows())
+            if r.bp > r.fee_bp and (r[folds] > 0).all()
+        ]
+        grows = bool((np.diff(g.bp.to_numpy()) > 0).all())
+        none = d.loc["none"]
+        kept = none.kept > 2 * none.kept_se
+        ok = bool(pays) and grows and kept
+        out.append(
+            f"{series}, {detector}: over fee_bp {none.fee_bp:.1f} with every fold positive at L ="
+            f" {', '.join(pays) or 'none'}; grows with L: {'yes' if grows else 'no'}"
+            f" ({' / '.join(f'{v:+.1f}' for v in g.bp)}); kept {none.kept:+.2f} +/- {none.kept_se:.2f},"
+            f" {'' if kept else 'not '}two errors above 0 -> {'PASSES' if ok else 'fails'}"
+        )
+    return out
 
 
 def _zscore(v: pd.Series, n: int = 96 * 30) -> pd.Series:
@@ -1330,6 +1469,22 @@ def _selfcheck() -> None:
     jump[3000] += 0.1
     moved = residual(asset, pd.Series(np.exp(np.cumsum(jump)), index=t), 960)[1]
     assert moved.iloc[3000] == beta.iloc[3000] and moved.iloc[3001] != beta.iloc[3001]
+    # `lag=1`: an asset that follows the market a bar late has its beta found on the market's bar
+    # before and that lead taken out. A jump in the market moves the spread of the bar after, at the
+    # beta set before that bar, and the beta only from the bar after that.
+    late = pd.Series(100 * np.exp(np.cumsum(1.5 * np.r_[0.0, rm[:-1]] + rng.normal(0, 0.002, len(t)))), index=t)
+    lagged, lbeta = residual(late, market, 960, lag=1)
+    assert abs(lbeta.iloc[-1] - 1.5) < 0.05, lbeta.iloc[-1]
+    assert abs(np.corrcoef(np.log(lagged).diff()[1001:], rm[1000:-1])[0, 1]) < 0.05
+    jumped, jbeta = residual(late, pd.Series(np.exp(np.cumsum(jump)), index=t), 960, lag=1)
+    assert jbeta.iloc[3001] == lbeta.iloc[3001] and jbeta.iloc[3002] != lbeta.iloc[3002]
+    step = np.log(jumped).diff() - np.log(lagged).diff()
+    assert step.iloc[3000] == 0.0 and np.isclose(step.iloc[3001], -0.1 * lbeta.iloc[3001])
+    # `_folds` numbers 2021's slices 1-4 and leaves a fold with no trade NaN, never positive.
+    entry = pd.DatetimeIndex(["2021-02-01", "2021-03-01", "2023-06-01"], tz="UTC")
+    r = _folds(pd.DataFrame({"entry": entry, "gross": [0.001, 0.003, -0.002]}), "2021")
+    assert r["n"] == 3 and np.isclose(r["fold 1"], 20.0) and r["n 1"] == 2 and np.isclose(r["fold 3"], -20.0)
+    assert np.isnan(r["fold 2"]) and r["n 4"] == 0
     # Route 2. `_delta`'s error of a mean over full clock blocks is `metrics.blocked`'s: one estimator.
     # Imported here: at module level it is in sys.modules before `tests` runs `metrics` as __main__.
     from tradingvision import metrics
@@ -1401,7 +1556,11 @@ def main() -> None:
     ap.add_argument("--residual", metavar="MARKET", help="the detectors on each asset less beta times MARKET, or ew")
     ap.add_argument("--conditional", action="store_true", help="route 2: the futures columns' IC at v2's pivots")
     ap.add_argument("--power", action="store_true", help="with --conditional: the criterion on planted columns")
-    ap.add_argument("--period", choices=strategy.PERIODS, default="dev", help="with --conditional: the folds read")
+    ap.add_argument(
+        "--period", choices=strategy.PERIODS, default="dev", help="with --residual or --conditional: the folds read"
+    )
+    ap.add_argument("--lag", type=int, default=0, help="with --residual: the market's return this many bars before")
+    ap.add_argument("--tradable", action="store_true", help="with --residual: every TRADABLE pair, not ETH/BTC/SOL")
     args = ap.parse_args()
     if args.conditional and args.period == "2021":
         raise SystemExit(
@@ -1484,9 +1643,13 @@ def main() -> None:
         print(t.round(3).to_string())
         return
     if args.residual:
-        t = residual_study(pred, close, cut, args.residual, tuple(args.gate or (0.4, 0.5, 0.6)))
-        print(f"the detectors on the price and on the residual against {args.residual}; bp a trade, no fees\n")
-        print(t.filter(regex="^(?!.*stopped)").round(2).to_string())
+        levels, assets = tuple(args.gate or (0.4, 0.5, 0.6)), TRADABLE if args.tradable else strategy.ASSETS
+        t = residual_study(args.residual, levels, period=args.period, assets=assets, lag=args.lag)
+        lag = f", its return {args.lag} bar before" if args.lag else ""
+        print(f"the detectors on the price and on the residual against {args.residual}{lag}, {args.period} folds")
+        print(f"{' '.join(s for s in assets if s != args.residual)}; bp a trade, no fees\n")
+        print(t.round(2).to_string())
+        print("\n" + "\n".join(residual_verdict(t, levels)))
         return
     if args.confirm:
         p, bars, rows = fit(pred, cut), strategy.ohlc(pred.index), []
