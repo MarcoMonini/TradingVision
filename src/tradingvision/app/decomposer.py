@@ -25,8 +25,12 @@ bell into a spike; the candles beyond it are counted in its caption, never dropp
 is centred on zero. Expect it centred on zero but not normal: crypto returns have a sharper peak and
 heavier tails than a normal of the same deviation. The page draws no normal over it.
 
-The candle chart is the only thing the period reads, and its default, the last 30 days, is there to
-keep the drawing light: the numbers and the histogram read the whole history.
+Under the candles, on the same time axis, the same candles each started from zero: open, high, low
+and close as changes from the candle's own open, in percent. The price level and the path between
+candles go, and what is left is each candle's shape — its body is the change the histogram counts,
+its wicks how far it went either way before closing. The period is read by these two charts alone,
+and its default, the last 30 days, is there to keep the drawing light: the numbers and the histogram
+read the whole history.
 
     uv run streamlit run src/tradingvision/app/decomposer.py
 """
@@ -37,12 +41,13 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+from plotly.subplots import make_subplots
 
 from tradingvision.data import binance
 
 TIMEFRAMES = ("5m", "15m", "1h", "4h", "1d")
 TIMEFRAME = "15m"  # v2's, the timeframe the project studies
-PERIOD = pd.Timedelta(days=30)  # the candle chart's default window
+PERIOD = pd.Timedelta(days=30)  # the candle charts' default window
 BINS = 201  # odd, so one bin is centred on zero
 TAIL = 0.001  # the histogram's axis ends at this quantile on either side, whichever is further out
 SIDES = {"all": "All candles", "up": "Up candles", "down": "Down candles"}
@@ -73,6 +78,12 @@ def change(df: pd.DataFrame) -> pd.Series:
     return (df.close / df.open - 1) * 100
 
 
+def from_zero(df: pd.DataFrame) -> pd.DataFrame:
+    """Each candle on its own open: open, high, low and close as percent changes from the open, so every
+    candle starts at zero rather than where the one before closed. Its close is `change`."""
+    return df[["open", "high", "low", "close"]].div(df.open, axis=0).sub(1).mul(100)
+
+
 def sides(pct: pd.Series) -> pd.DataFrame:
     """Mean and standard deviation of the change over all candles, the up ones and the down ones."""
     groups = {"all": pct, "up": pct[pct > 0], "down": pct[pct < 0]}
@@ -89,11 +100,32 @@ def histogram(pct: pd.Series, bins: int = BINS, tail: float = TAIL) -> tuple[np.
 
 
 def candle_figure(df: pd.DataFrame, uirevision: str) -> go.Figure:
-    fig = go.Figure(go.Candlestick(x=df.index, open=df.open, high=df.high, low=df.low, close=df.close))
+    """The candles, and under them the same candles each from zero (`from_zero`). One figure with a
+    shared time axis rather than two charts, so a zoom on one is a zoom on the other and a candle
+    sits above its own shape."""
+    fig = make_subplots(
+        rows=2,
+        cols=1,
+        shared_xaxes=True,
+        row_heights=[3, 2],
+        vertical_spacing=0.04,
+        subplot_titles=["", "The same candles, each from its own open: % change from the open"],
+    )
+    fig.add_trace(go.Candlestick(x=df.index, open=df.open, high=df.high, low=df.low, close=df.close), row=1, col=1)
+    zero = from_zero(df)
+    fig.add_trace(
+        go.Candlestick(
+            x=zero.index, open=zero.open, high=zero.high, low=zero.low, close=zero.close, yhoverformat="+.3f"
+        ),
+        row=2,
+        col=1,
+    )
+    fig.update_xaxes(rangeslider_visible=False)  # every candlestick axis gets one by default
+    fig.update_yaxes(title_text="%", zeroline=True, zerolinecolor="#888", row=2, col=1)
+    fig.update_annotations(font_size=11, x=0, xanchor="left")
     fig.update_layout(
-        height=520,
+        height=820,
         margin=dict(l=0, r=0, t=10, b=0),
-        xaxis_rangeslider_visible=False,
         showlegend=False,
         # Keeps zoom and pan across reruns until the pair, the timeframe or the period changes.
         uirevision=uirevision,
@@ -143,8 +175,8 @@ def main() -> None:
     pct = change(df)
     st.caption(
         f"{len(df):,} {timeframe} candles of {symbol}USDT on Binance, {df.index[0]:%Y-%m-%d} to "
-        f"{df.index[-1]:%Y-%m-%d}. The numbers and the histogram read all of them; the candle chart reads "
-        "the period picked above it."
+        f"{df.index[-1]:%Y-%m-%d}. The numbers and the histogram read all of them; the candle charts read "
+        "the period picked above them."
     )
 
     stats = sides(pct)
@@ -165,9 +197,10 @@ def main() -> None:
         value=(max(first, last - PERIOD.to_pytimedelta()), last),
         min_value=first,
         max_value=last,
-        help="only this chart reads it, to keep the drawing light: the numbers and the histogram read every candle",
+        help="only the two candle charts read it, to keep the drawing light: the numbers and the histogram read every "
+        "candle",
     )
-    # Mid-pick the widget holds the start alone; the chart runs to the last candle until the end is picked.
+    # Mid-pick the widget holds the start alone; the charts run to the last candle until the end is picked.
     start, end = period if len(period) == 2 else (period[0], last)
     window = df.loc[str(start) : str(end)]
     st.plotly_chart(
@@ -194,6 +227,14 @@ def _selfcheck() -> None:
     # A flat candle is in neither side: two up, two down.
     assert np.isclose(s.loc["up", "mean"], 1.5) and np.isclose(s.loc["down", "mean"], -1.5)
     assert np.isclose(s.loc["up", "std"], np.sqrt(0.5)) and np.isclose(s.loc["down", "std"], np.sqrt(0.5))
+    # From zero: every candle opens at 0, closes at its change, and keeps its wicks in percent.
+    ohlc = df.assign(high=[103.0, 100.5, 102.0, 100.0, 101.0], low=[99.5, 97.0, 100.0, 96.0, 99.0])
+    zero = from_zero(ohlc)
+    assert (zero.open == 0).all() and np.allclose(zero.close, pct)
+    assert np.allclose(zero.high, [3.0, 0.5, 2.0, 0.0, 1.0]) and np.allclose(zero.low, [-0.5, -3.0, 0.0, -4.0, -1.0])
+    assert (zero.low <= zero[["open", "close"]].min(axis=1)).all() and (
+        zero.high >= zero[["open", "close"]].max(axis=1)
+    ).all()
 
     # Normal changes: the mean of all is near zero and the standard deviation is not, and each side's
     # standard deviation is sqrt(1 - 2/pi) of the whole.

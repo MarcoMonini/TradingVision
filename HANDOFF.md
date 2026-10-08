@@ -1407,8 +1407,11 @@ viene chiesto.
 - Media e deviazione standard della variazione open → close, in %, su tutte le candele, sulle sole
   positive e sulle sole negative. La media di tutte è quella vicina a zero; la deviazione standard è
   la taglia di una candela tipica. Le candele con open = close contano solo in "tutte".
-- Il grafico delle candele su un periodo scelto (default gli ultimi 30 giorni): è l'unica cosa che
-  legge il periodo.
+- Il grafico delle candele su un periodo scelto (default gli ultimi 30 giorni) e, sotto, sullo stesso
+  asse dei tempi, le stesse candele ognuna partita da zero: open, high, low e close come variazione %
+  dalla propria open. Toglie il livello del prezzo e il percorso fra le candele, resta la forma di
+  ciascuna (il corpo è la variazione che conta l'istogramma, gli stoppini quanto è andata da ogni parte).
+  Sono le sole due cose che leggono il periodo.
 - L'istogramma della variazione di tutte le candele caricate: 201 classi su un asse simmetrico fino al
   percentile 0,1 o 99,9 più lontano da zero; le candele oltre sono contate in didascalia.
 - Verificato su uno store sintetico (code t a 4 gradi): `AppTest` senza eccezioni su BTC/ETH e 15m/1d,
