@@ -34,10 +34,10 @@ toward zero: the standard deviation of all candles from every candle, each side'
 from its candles, or each side's mean from its candles. An up candle moves down by it, a down candle
 up, a flat one stays, and the whole candle moves, so its shape is kept and its close reads what the
 candle did beyond the statistic. The statistics are the ones the page shows, over the whole history
-and not over the period, and each choice carries its values. The two charts are separate so that the
-control sits on the one it moves; they share a left margin so their time axes line up, but a zoom on
-one does not move the other. The period is read by these two alone, and its default, the last 30
-days, is there to keep the drawing light: the numbers and the histogram read the whole history.
+and not over the period. The two charts are separate so that the control sits on the one it moves;
+they share a left margin so their time axes line up, but a zoom on one does not move the other. The
+period is read by these two alone, and its default, the last 30 days, is there to keep the drawing
+light: the numbers and the histogram read the whole history.
 
     uv run streamlit run src/tradingvision/app/decomposer.py
 """
@@ -57,12 +57,13 @@ PERIOD = pd.Timedelta(days=30)  # the candle charts' default window
 BINS = 201  # odd, so one bin is centred on zero
 TAIL = 0.001  # the histogram's axis ends at this quantile on either side, whichever is further out
 SIDES = {"all": "All candles", "up": "Up candles", "down": "Down candles"}
-# What the lower candle chart can take off each candle, as the control reads it.
+# What the lower candle chart can take off each candle, named as the statistics at the top of the page
+# are, so a choice points at the numbers it subtracts without repeating them.
 OFFSETS = {
-    "none": "nothing",
-    "std": "the standard deviation of all candles",
-    "side std": "its side's standard deviation",
-    "side mean": "its side's mean",
+    "none": "Nothing",
+    "std": "Std dev of all candles",
+    "side std": "Std dev of up / down candles",
+    "side mean": "Mean of up / down candles",
 }
 
 
@@ -235,22 +236,15 @@ def main() -> None:
         "Open, high, low and close as the % change from the candle's own open: every candle starts at zero, its "
         "body is its change, its wicks how far it went either way."
     )
-    # The values on the choices themselves, so a choice says what it takes off before it is made.
-    a, u, d = (stats.loc[k] for k in ("all", "up", "down"))
-    values = {
-        "none": "",
-        "std": f" ({a['std']:.4f}%)",
-        "side std": f" (up {u['std']:.4f}%, down {d['std']:.4f}%)",
-        "side mean": f" (up {u['mean']:+.4f}%, down {d['mean']:+.4f}%)",
-    }
     how = st.radio(
-        "Subtract from each candle, toward zero",
+        "Subtract from each candle",
         list(OFFSETS),
-        format_func=lambda k: OFFSETS[k] + values[k],
+        format_func=OFFSETS.get,
         horizontal=True,
-        help="an up candle moves down by it, a down candle up, a flat one stays. The whole candle moves, so its "
-        "shape is kept and its close reads what it did beyond the statistic. The statistics are the ones at the top "
-        "of the page, over every candle loaded",
+        help="toward zero: an up candle moves down by it, a down candle up, a flat one stays. Up / down: an up candle "
+        "loses the up candles' statistic, a down candle the down candles'. The whole candle moves, so its shape is "
+        "kept and its close reads what it did beyond the statistic. The statistics are the ones at the top of the "
+        "page, over every candle loaded",
     )
     minus = offset(pct, stats, how).loc[window.index] if how != "none" else None
     st.plotly_chart(zero_figure(window, view, minus), use_container_width=True, key="from-zero")
