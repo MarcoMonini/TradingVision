@@ -16,6 +16,8 @@ from __future__ import annotations
 import argparse
 import io
 import re
+import tempfile
+import time
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -62,18 +64,32 @@ LISTING = "https://s3-ap-northeast-1.amazonaws.com/data.binance.vision"
 # Assumes an editable install, which is how this project is set up.
 STORE = Path(__file__).resolve().parents[3] / "data"
 WORKERS = 8
+RETRIES = 5
 
-# Raw dump layout: no header, 12 columns. We keep the 7 that carry information.
+# Raw dump layout: no header, 12 columns. We keep the 9 that carry information.
 COLUMNS = [
     "open_time", "open", "high", "low", "close", "volume",
     "close_time", "quote_volume", "trades", "taker_buy_base", "taker_buy_quote", "ignore",
 ]  # fmt: skip
-KEEP = ["open", "high", "low", "close", "volume", "quote_volume", "trades"]
+# The taker columns are the volume bought by aggressive buyers, in base and in quote: the only
+# order-flow signal the spot dumps carry, and what `flow` decomposes (route 7, HANDOFF §19). Kept
+# from 2026-10-07; a store written before then has the first 7 only, and `update` refuses to extend
+# such a file rather than append rows that have the columns to rows that do not.
+#
+# No cache stamp changes with them. The one stamped cache, `swing.cached`, holds rows built by
+# `features`, `legs` and the label, which read open, high, low, close and volume and nothing else,
+# so its rows are the same whether the file has these columns or not; and the re-download that
+# brings them in ends later than the store before it, which `ends` already puts in that stamp. The
+# re-download's OHLCV was checked equal to the store it replaces on every common bar of the fifteen
+# SYMBOLS, 2026-10-07. Nothing else caches a function of the store.
+TAKER = ["taker_buy_base", "taker_buy_quote"]
+KEEP = ["open", "high", "low", "close", "volume", "quote_volume", "trades", *TAKER]
 
 
 OHLC = {
     "open": "first", "high": "max", "low": "min", "close": "last",
     "volume": "sum", "quote_volume": "sum", "trades": "sum",
+    "taker_buy_base": "sum", "taker_buy_quote": "sum",
 }  # fmt: skip
 
 
@@ -88,7 +104,9 @@ def load(symbol: str, timeframe: str = "5m", *, stored: str = "5m", store: Path 
     if timeframe == stored:
         return df
     rule = re.sub(r"m$", "min", timeframe)  # pandas wants "15min", not "15m"
-    return df.resample(rule).agg(OHLC).dropna(subset=["open"])
+    # Aggregates the columns the file has: a store written before the taker columns were kept still
+    # loads, without them, and a reader that needs them (`flow.bars`) says so instead of meeting NaN.
+    return df.resample(rule).agg({k: v for k, v in OHLC.items() if k in df}).dropna(subset=["open"])
 
 
 def ends(symbols: list[str], interval: str = "5m", store: Path = STORE) -> dict[str, str | None]:
@@ -135,13 +153,25 @@ def parse(content: bytes) -> pd.DataFrame:
     raw = raw.dropna(subset=["open_time"])
     return raw.set_index(_to_utc(raw.open_time))[KEEP].astype(
         {"open": "float64", "high": "float64", "low": "float64", "close": "float64",
-         "volume": "float32", "quote_volume": "float32", "trades": "int32"}
+         "volume": "float32", "quote_volume": "float32", "trades": "int32",
+         "taker_buy_base": "float32", "taker_buy_quote": "float32"}
     )  # fmt: skip
 
 
 def _fetch(url: str) -> pd.DataFrame | None:
-    """One dump file. Returns None when the file is not published (yet)."""
-    r = requests.get(url, timeout=120)
+    """One dump file. Returns None when the file is not published (yet).
+
+    Retried on a dropped or stalled connection: a full download is a few thousand files, and on
+    2026-10-07, at about 50 KB/s a connection, one read timeout among them killed the whole run.
+    """
+    for attempt in range(RETRIES):
+        try:
+            r = requests.get(url, timeout=120)
+            break
+        except (requests.ConnectionError, requests.Timeout):  # a timeout mid-body is a ConnectionError
+            if attempt == RETRIES - 1:
+                raise
+            time.sleep(2**attempt)
     if r.status_code == 404:
         return None
     r.raise_for_status()
@@ -179,6 +209,10 @@ def update(symbol: str, interval: str = "5m", store: Path = STORE) -> pd.DataFra
     """Bring one symbol's Parquet up to date and return the full series."""
     path = store / f"{symbol}USDT-{interval}.parquet"
     old = pd.read_parquet(path) if path.exists() else None
+    if old is not None and set(KEEP) - set(old.columns):
+        # Extending it would leave years of NaN under the taker columns, which a mean over a
+        # period then reads as a number. A new store is a full download (`--store` elsewhere).
+        raise RuntimeError(f"{path} lacks {sorted(set(KEEP) - set(old.columns))}: download into a fresh --store")
     # Re-fetch the month the store ends in: it was almost certainly still partial when written.
     since = old.index[-1].strftime("%Y-%m") if old is not None and len(old) else None
 
@@ -195,6 +229,39 @@ def update(symbol: str, interval: str = "5m", store: Path = STORE) -> pd.DataFra
     return df
 
 
+def _selfcheck() -> None:
+    """A 12-column dump parsed in memory, both time units, the 15m sums, and the refusal to extend
+    a file written before the taker columns. A temporary directory stands in for the store."""
+    row = "{t},100.0,101.0,99.0,100.5,2.0,{c},200.0,9,0.5,50.0,0"
+
+    def dump(*lines: str) -> bytes:
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as z:
+            z.writestr("x.csv", "\n".join(lines))
+        return buf.getvalue()
+
+    t0 = 1735689600000  # 2025-01-01 00:00 UTC, in ms
+    ms = parse(dump(*(row.format(t=t0 + i * 300_000, c=t0 + i * 300_000 + 299_999) for i in range(6))))
+    us = parse(dump(*(row.format(t=(t0 + i * 300_000) * 1000, c=0) for i in range(6))))
+    assert ms.equals(us) and ms.index[0] == pd.Timestamp("2025-01-01", tz="UTC"), (ms.index[0], us.index[0])
+    assert list(ms.columns) == KEEP and (ms.taker_buy_quote == 50.0).all()
+    assert ms.taker_buy_base.dtype == ms.taker_buy_quote.dtype == ms.volume.dtype == "float32"
+    with tempfile.TemporaryDirectory() as tmp:
+        ms.to_parquet(Path(tmp) / "XUSDT-5m.parquet")
+        q = load("X", "15m", store=Path(tmp))
+        assert len(q) == 2 and (q.taker_buy_quote == 150.0).all() and (q.taker_buy_base == 1.5).all(), q
+        assert (q.quote_volume == 600.0).all() and (q.trades == 27).all()
+        # A file from before the columns were kept still loads, without them, and is not extended.
+        ms.drop(columns=TAKER).to_parquet(Path(tmp) / "OLDUSDT-5m.parquet")
+        assert list(load("OLD", "15m", store=Path(tmp)).columns) == KEEP[:7]
+        try:
+            update("OLD", store=Path(tmp))
+        except RuntimeError as e:
+            assert "taker_buy_base" in str(e)
+        else:
+            raise AssertionError("a store without the taker columns was extended")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--symbols", nargs="+", default=SYMBOLS)
@@ -202,6 +269,7 @@ def main() -> None:
     ap.add_argument("--store", type=Path, default=STORE)
     args = ap.parse_args()
 
+    _selfcheck()
     total = 0
     for i, symbol in enumerate(args.symbols, 1):
         df = update(symbol, args.interval, args.store)

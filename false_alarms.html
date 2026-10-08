@@ -810,6 +810,28 @@ details pre { border: 0; padding: 0; }
       <dt>Se no</dt><dd>Il flusso dei taker non aggiunge niente, né grezzo né scomposto: si chiude.</dd>
       <dt>Dati e stato</dt><dd>Le candele spot di Binance portano <code>taker_buy_base</code> e <code>taker_buy_quote</code> dal 2017, ma <code>binance.KEEP</code> le scarta. Tenerle dà 15 asset su otto anni invece di 3 su sedici mesi, circa 25 volte i dati, ma cambia lo store: nuovi stamp della cache e un nuovo download. Da scrivere.</dd>
     </dl></div>
+    <div class="sub-section" id="taker-esito">
+      <h3>Misurato il 7 ottobre <span class="chip bad"><i>✕</i> non passa</span></h3>
+      <p>Lo store ora tiene <code>taker_buy_base</code> e <code>taker_buy_quote</code> (<code>binance.KEEP</code>): riscaricate le 15 coppie, 437 MB, OHLCV identici al vecchio store su ogni barra comune. <code>flow.py</code>: flusso con segno f = (2·taker_buy_quote − quote_volume) / quote_volume a 15 minuti; VAR a 8 ritardi su (f, r) con il flusso prima, stimato per asset sui 365 giorni prima di ogni fold e tenuto fermo; l'impatto permanente si assesta in 7-8 barre, un'innovazione di una deviazione standard sposta il prezzo di 12-24 bp, e la parte informata spiega il 7-12% della varianza dei rendimenti. La quota transitoria di una gamba è 1 − (somma della parte informata) / (movimento della gamba), dall'ultimo pivot di <code>legs.confirmed</code>. Rank IC con il rendimento nel verso del rientro, agli estremi (la prima barra di ogni escursione oltre il 90° percentile di |v2|, o dell'RSI a 12 sul 2021-2025), errori a blocchi con lo stimatore a rapporto.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>IC della quota transitoria, per fold</th><th>12 barre</th><th>24</th><th>48</th></tr></thead>
+        <tbody>
+          <tr><td>v2, sviluppo (errori 0,019-0,025)</td><td>+0,008 / −0,002</td><td>+0,001 / +0,003</td><td>+0,014 / +0,006</td></tr>
+          <tr><td>v2, hold-out</td><td>−0,026 / +0,026</td><td>−0,065 / +0,025</td><td>−0,032 / +0,023</td></tr>
+          <tr class="sep"><td>RSI 12, 2021-25</td><td>+0,039 / +0,025 / +0,015 / +0,006</td><td>+0,046 / +0,017 / +0,016 / +0,013</td><td>+0,035 / +0,019 / +0,019 / +0,015</td></tr>
+          <tr class="hl"><td>RSI 12, 2021-25, media</td><td>+0,021 ± 0,005</td><td>+0,023 ± 0,005</td><td>+0,022 ± 0,006</td></tr>
+          <tr><td>ogni barra, sviluppo</td><td>+0,010 ± 0,005</td><td>+0,012 ± 0,007</td><td>+0,011 ± 0,009</td></tr>
+          <tr><td>ρ<sub>min</sub> (σ 0,46%, 20 bp)</td><td>0,156</td><td>0,111</td><td>0,078</td></tr>
+        </tbody>
+      </table></div>
+      <p class="caption"><code>flow --period dev|holdout|2021</code>, 15 coppie; sulle 13 tradabili lo stesso. Il flusso grezzo lungo la gamba fa da −0,027 a +0,049 per fold. Con la media delle medie di blocco lo sviluppo a 24 barre avrebbe detto +0,028 / −0,032.</p>
+      <ul class="points">
+        <li><strong>Agli estremi di v2 la quota transitoria non dice niente</strong>: al più +0,014 sullo sviluppo, dentro l'errore, e sull'hold-out il segno cambia fra i fold.</li>
+        <li><strong>Sul 2021-2025 dice qualcosa, troppo poco.</strong> Agli estremi dell'RSI l'IC è +0,022 a ogni orizzonte, positivo in ogni fold, circa 4 errori, e non è la taglia della gamba (al netto della taglia resta +0,019). Ma è 0,28 ρ<sub>min</sub>: circa 6 bp per trade contro 20 di andata e ritorno.</li>
+        <li><strong>Potenza</strong> (<code>--power</code>): un IC pari a ρ<sub>min</sub> passa il 24-29% delle volte (il criterio chiede ogni fold oltre la soglia), il doppio sempre, zero mai.</li>
+        <li><strong>Esito:</strong> la strada si chiude sulla taglia, non per mancanza di dati. La quota transitoria può essere al più una colonna debole del tempismo (strada 6).</li>
+      </ul>
+    </div>
   </section>
 
   <section id="stop">

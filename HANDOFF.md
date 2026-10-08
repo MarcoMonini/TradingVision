@@ -1252,13 +1252,6 @@ trade (+220 bp, `kept` 0,28 ± 0,12). Sul 2021-2025 (h, p, L congelati, Shiryaev
 `--lag 1` il β delle alt sulla barra precedente di BTC è 0,05: il residuo ritardato è il prezzo, e BTC
 non anticipa. Chiusa.
 
-**Conferma — il test per scommessa** (`sequential.py`, `--sim`, `--trades`). Riporta la tabella del
-documento con il seme 17 (falsi positivi 1,8% / 2,4% entro 1.000 / 3.000 trade, potenza 76,9% a 15 bp
-entro 1.000). Ogni asset è un processo, gli e-value si mediano alla data finale; media ed e-BH per
-combinare le strade. Sulle due righe del §17 (zigzag 0,2 a L 0,5 e Shiryaev 0,5 a L 0,6, stop 6 ATR, 160
-e 121 trade, lordo +15,3 e +20,0 bp) al netto di OKX il capitale finisce a 0,96 e 0,86 contro 20; al lordo
-servirebbero 896 e 1.913 trade, 8-21 anni al loro ritmo.
-
 **Strada 2 — le colonne dei futures non sanno di più ai pivot** (`detect --conditional [--period dev|holdout]
 [--power]`). Rank IC di 24 colonne (futures, open interest dietro al movimento a k 4 / 12 / 24, v2 e RSI
 come riferimento) col rendimento a 12 / 24 / 48 barre, sulle barre con |v2| ≥ 0,4 / 0,5 / 0,6 e su quelle
@@ -1272,18 +1265,30 @@ tutte le barre nessun rapporto fino a 3 si vede più del 22% delle volte; con 0,
 allarmi il 78 / 55 / 24% a 12 / 24 / 48 barre; falsi positivi 0-0,5%. Il 2021 non c'è (futures dal
 2025-05). Le colonne dei futures vanno su tutte le barre, nel tempismo.
 
-**Strada 8 — gli stop ai pivot non lasciano traccia che paghi** (`stopmap.py`, `--period`, `--window
-12 24`, `--power`). Livelli di `legs.confirmed` (finestra 12 e 24) allo stoppino della gamba, rottura
-alla prima barra da 5 minuti oltre il livello dopo la conferma; placebo a ±0,5σ e ±1σ e numeri tondi
-(griglia tarata sullo sviluppo perché le rotture siano altrettante: 1,3-5,3% del prezzo); nullo su barre
-intere a segni casuali; medie per trade ed errori a blocchi con lo stimatore a rapporto (la media delle
-medie di blocco di `metrics.blocked` dava −2 / −8 bp alla cascata sui percorsi nulli). Criterio su 13
-`TRADABLE`: **0 di 24 righe** sullo sviluppo, sull'hold-out e sul 2021-2025. Sullo sviluppo la cascata
-è entro 3 / 9 bp dai placebo per fold e le rotture fallite proseguono invece di rientrare (da −3 a −19
-bp). L'unica traccia è il primo quarto del 2021-2025 (2021-01 → 2022-02): pivot meno placebo spostato
-+8,0 / +11,1 bp a una barra (finestra 12 / 24), +16,3 a quattro, a 2,8-4,4 errori; poi 1-3 bp. Potenza:
-40 bp si vedono l'86-100% delle volte, 20 il 32-38%, zero passa al più il 3,4%. La mappa delle
-liquidazioni non è stata fatta.
+**Strada 3 — la liquidità non separa gli estremi di v2** (`events --liquidity [--period]`, `--power`).
+Un evento per escursione nel 10% di coda di |v2| (0,519 grezzo, dallo sviluppo), 15 coppie, rendimento
+contro la gamba a 12 / 24 / 48 barre; sei stati in terzili tagliati sullo sviluppo (Amihud, volatilità,
+volume della gamba per ora, profondità entro l'1%, sessione di New York, drawdown del paniere); medie
+per evento, errore a rapporto sui blocchi; spread di Abdi-Ranaldo 0-12 bp. Ogni estremo di v2 a 48
+barre: −14,7 / +23,7 sullo sviluppo, −36,0 / −30,8 sull'hold-out (errori 13-18); il fold decide il segno,
+non lo stato. Criterio: 0 di 18 (v2 e RSI) su sviluppo e hold-out, 0 di 15 sul 2021-2025. Sul 2021-2025
+la volatilità ha il segno di Nagel (terzile agitato +29,7 / +16,1 / +9,2 / +13,6 a 12 barre, calmo −14,2
+/ −8,4 / −0,8 / −0,6), sotto i 20 bp salvo il fold 1, e le gambe di volume pesante rientrano mentre le
+sottili proseguono (Campbell-Grossman-Wang, al contrario dell'orientamento fissato prima). Potenza:
+l'effetto richiesto si vede il 7-18% delle volte, il doppio il 23-78%. `metrics.blocked` come media
+avrebbe detto +21 bp dove gli eventi fanno +0,3: un movimento che prosegue porta più coppie nella coda
+nello stesso blocco.
+
+**Strada 4 — gli shock di flusso non rientrano, e l'open interest non dice quali** (`events --shock
+[--period]`, `--power`). Prima barra con |r|/σ ≥ k₁ (r su 1 o 2 barre) e volume z ≥ k₂, k₁ 2 / 3 / 4, k₂ 1 / 2,
+BTC, ETH, SOL, divisi per segno dell'open interest sullo shock. Span 1, k₁ 2, k₂ 1 a 48 barre contro lo
+shock: fold 1 in calo +15,5, in salita −33,6; fold 2 −10,0 e +26,5 (errori 16-28). La divisione si
+inverte fra i fold di sviluppo in tutte e dodici le configurazioni; 0 di 12 sullo sviluppo e
+sull'hold-out. Il rientro con open interest in calo scende con la taglia dello shock (+17,3 / −15,2 /
+−36,0 bp a 2-3 / 3-4 / oltre 4σ). Sul 2021-2025 (senza open interest) la risposta non divisa a 48 barre
+è +3,7 / −3,0 / −3,8 / −11,8. I quadranti di `--oi` su ogni barra, nel verso del rientro: in calo +4,6 /
++1,1 / −10,9 / +0,7, in salita −16,7 / +19,3 / −6,6 / −17,0. Potenza bassa: 10 bp si vedono il 9-12% delle
+volte, 20 il 18-34%.
 
 **Strada 5 — la base lenta non passa** (`timing --base [--period] [--fee]`, `--power`). `rsi_centered` a
 24 su 4h, long sopra 0,3, flat sotto 0, 13 `TRADABLE` a pesi uguali, commissione OKX. Sharpe per fold
@@ -1313,30 +1318,39 @@ a N 96**: +13,4 / +23,3 sullo sviluppo, +20,2 / +16,3 sull'hold-out, +44,5 / +17
 ± 4 bp per esecuzione, +0,04 log l'anno per coppia. È l'unico numero positivo in ogni fold del piano, e
 decresce nel tempo sul 2021-2025. Da confermare in paper trading con il test per scommessa, scritto prima.
 
-**Strada 3 — la liquidità non separa gli estremi di v2** (`events --liquidity [--period]`, `--power`).
-Un evento per escursione nel 10% di coda di |v2| (0,519 grezzo, dallo sviluppo), 15 coppie, rendimento
-contro la gamba a 12 / 24 / 48 barre; sei stati in terzili tagliati sullo sviluppo (Amihud, volatilità,
-volume della gamba per ora, profondità entro l'1%, sessione di New York, drawdown del paniere); medie
-per evento, errore a rapporto sui blocchi; spread di Abdi-Ranaldo 0-12 bp. Ogni estremo di v2 a 48
-barre: −14,7 / +23,7 sullo sviluppo, −36,0 / −30,8 sull'hold-out (errori 13-18); il fold decide il segno,
-non lo stato. Criterio: 0 di 18 (v2 e RSI) su sviluppo e hold-out, 0 di 15 sul 2021-2025. Sul 2021-2025
-la volatilità ha il segno di Nagel (terzile agitato +29,7 / +16,1 / +9,2 / +13,6 a 12 barre, calmo −14,2
-/ −8,4 / −0,8 / −0,6), sotto i 20 bp salvo il fold 1, e le gambe di volume pesante rientrano mentre le
-sottili proseguono (Campbell-Grossman-Wang, al contrario dell'orientamento fissato prima). Potenza:
-l'effetto richiesto si vede il 7-18% delle volte, il doppio il 23-78%. `metrics.blocked` come media
-avrebbe detto +21 bp dove gli eventi fanno +0,3: un movimento che prosegue porta più coppie nella coda
-nello stesso blocco.
+**Strada 7 — il flusso dei taker scomposto non paga** (`flow [--period] [--store]`, `--power`).
+`binance.KEEP` tiene `taker_buy_base` e `taker_buy_quote` (float32, sommati nel resample); `update`
+rifiuta di estendere un file senza di esse; nessuno stamp cambia (`swing.cached` legge solo OHLCV, e
+`store_ends` vede già la fine nuova). Lo store delle 15 `SYMBOLS` è stato riscaricato (1.238 s, 437 MB,
+OHLCV identici su ogni barra comune, fino al 2026-10-06) e sostituito il 2026-10-08; i file vecchi sono
+in `data/pre-taker/`. Le coppie fuori da `SYMBOLS` (lo `STUDY` di prima) restano senza le colonne, e
+`binance --symbols` le rifiuta finché non si riscaricano. I tensori in cache di `swing` verranno
+ricostruiti al prossimo run (la fine dello store è cambiata). VAR a 8 ritardi su (flusso, rendimento),
+stimato sui 365 giorni prima di ogni fold; quota transitoria della gamba dall'ultimo pivot confermato.
+IC agli estremi di v2 sullo sviluppo al più +0,014 (errori 0,02), hold-out di segno opposto fra i fold;
+agli estremi dell'RSI sul 2021-2025 +0,021 / +0,023 / +0,022 a 12 / 24 / 48 barre (errore 0,005,
+positivo in ogni fold, non è la taglia della gamba), contro un ρ_min di 0,16 / 0,11 / 0,08. Chiusa sulla
+taglia.
 
-**Strada 4 — gli shock di flusso non rientrano, e l'open interest non dice quali** (`events --shock
-[--period]`, `--power`). Prima barra con |r|/σ ≥ k₁ (r su 1 o 2 barre) e volume z ≥ k₂, k₁ 2 / 3 / 4, k₂ 1 / 2,
-BTC, ETH, SOL, divisi per segno dell'open interest sullo shock. Span 1, k₁ 2, k₂ 1 a 48 barre contro lo
-shock: fold 1 in calo +15,5, in salita −33,6; fold 2 −10,0 e +26,5 (errori 16-28). La divisione si
-inverte fra i fold di sviluppo in tutte e dodici le configurazioni; 0 di 12 sullo sviluppo e
-sull'hold-out. Il rientro con open interest in calo scende con la taglia dello shock (+17,3 / −15,2 /
-−36,0 bp a 2-3 / 3-4 / oltre 4σ). Sul 2021-2025 (senza open interest) la risposta non divisa a 48 barre
-è +3,7 / −3,0 / −3,8 / −11,8. I quadranti di `--oi` su ogni barra, nel verso del rientro: in calo +4,6 /
-+1,1 / −10,9 / +0,7, in salita −16,7 / +19,3 / −6,6 / −17,0. Potenza bassa: 10 bp si vedono il 9-12% delle
-volte, 20 il 18-34%.
+**Strada 8 — gli stop ai pivot non lasciano traccia che paghi** (`stopmap.py`, `--period`, `--window
+12 24`, `--power`). Livelli di `legs.confirmed` (finestra 12 e 24) allo stoppino della gamba, rottura
+alla prima barra da 5 minuti oltre il livello dopo la conferma; placebo a ±0,5σ e ±1σ e numeri tondi
+(griglia tarata sullo sviluppo perché le rotture siano altrettante: 1,3-5,3% del prezzo); nullo su barre
+intere a segni casuali; medie per trade ed errori a blocchi con lo stimatore a rapporto (la media delle
+medie di blocco di `metrics.blocked` dava −2 / −8 bp alla cascata sui percorsi nulli). Criterio su 13
+`TRADABLE`: **0 di 24 righe** sullo sviluppo, sull'hold-out e sul 2021-2025. Sullo sviluppo la cascata
+è entro 3 / 9 bp dai placebo per fold e le rotture fallite proseguono invece di rientrare (da −3 a −19
+bp). L'unica traccia è il primo quarto del 2021-2025 (2021-01 → 2022-02): pivot meno placebo spostato
++8,0 / +11,1 bp a una barra (finestra 12 / 24), +16,3 a quattro, a 2,8-4,4 errori; poi 1-3 bp. Potenza:
+40 bp si vedono l'86-100% delle volte, 20 il 32-38%, zero passa al più il 3,4%. La mappa delle
+liquidazioni non è stata fatta.
+
+**Conferma — il test per scommessa** (`sequential.py`, `--sim`, `--trades`). Riporta la tabella del
+documento con il seme 17 (falsi positivi 1,8% / 2,4% entro 1.000 / 3.000 trade, potenza 76,9% a 15 bp
+entro 1.000). Ogni asset è un processo, gli e-value si mediano alla data finale; media ed e-BH per
+combinare le strade. Sulle due righe del §17 (zigzag 0,2 a L 0,5 e Shiryaev 0,5 a L 0,6, stop 6 ATR, 160
+e 121 trade, lordo +15,3 e +20,0 bp) al netto di OKX il capitale finisce a 0,96 e 0,86 contro 20; al lordo
+servirebbero 896 e 1.913 trade, 8-21 anni al loro ritmo.
 
 ### Tolto
 

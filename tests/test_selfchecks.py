@@ -12,7 +12,7 @@ import sys
 
 import pytest
 
-from tradingvision import detect, events, sequential, stopmap, stops, strategy, swingrule, threshold, timing
+from tradingvision import detect, events, flow, sequential, stopmap, stops, strategy, swingrule, threshold, timing
 
 SELF_CHECKED = [
     "tradingvision.data.candles",
@@ -92,3 +92,15 @@ def test_events_selfcheck():
 def test_sequential_selfcheck():
     """`sequential` keeps its checks in a function: its `__main__` simulates for minutes or reads v2's trades."""
     sequential._selfcheck()
+
+
+def test_flow_selfcheck():
+    """`flow` keeps its checks in a function: its `__main__` reads the taker columns of the store."""
+    flow._selfcheck()
+
+
+def test_binance_selfcheck():
+    """`data.binance` keeps its checks in a function: its `__main__` downloads the dumps."""
+    from tradingvision.data import binance
+
+    binance._selfcheck()
