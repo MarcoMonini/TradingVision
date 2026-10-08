@@ -1407,12 +1407,12 @@ viene chiesto.
 - Media e deviazione standard della variazione open → close, in %, su tutte le candele, sulle sole
   positive e sulle sole negative. La media di tutte è quella vicina a zero; la deviazione standard è
   la taglia di una candela tipica. Le candele con open = close contano solo in "tutte".
-- Il grafico delle candele su un periodo scelto (default gli ultimi 30 giorni) e, sotto, sullo stesso
-  asse dei tempi, le stesse candele ognuna partita da zero: open, high, low e close come variazione %
+- Il grafico delle candele su un periodo scelto (default gli ultimi 30 giorni) e, sotto, in un grafico
+  suo allineato al primo (lo zoom però non è collegato), le stesse candele ognuna partita da zero: open, high, low e close come variazione %
   dalla propria open. Toglie il livello del prezzo e il percorso fra le candele, resta la forma di
   ciascuna (il corpo è la variazione che conta l'istogramma, gli stoppini quanto è andata da ogni parte).
-  Sono le sole due cose che leggono il periodo. Sopra il grafico, una scelta sottrae da ogni candela
-  di quello in basso, verso lo zero: la deviazione standard di tutte le candele, la deviazione standard
+  Sono le sole due cose che leggono il periodo. Subito sopra questo secondo grafico, una scelta (con i
+  valori scritti accanto a ogni opzione) sottrae da ogni sua candela, verso lo zero: la deviazione standard di tutte le candele, la deviazione standard
   del suo lato o la media del suo lato (`decomposer.offset`). Una candela positiva scende, una negativa
   sale, una piatta resta; si sposta tutta la candela, quindi la forma resta e la close dice quanto è
   andata oltre la statistica. Le statistiche sono quelle mostrate in alto, su tutta la storia.

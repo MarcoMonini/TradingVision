@@ -25,17 +25,19 @@ bell into a spike; the candles beyond it are counted in its caption, never dropp
 is centred on zero. Expect it centred on zero but not normal: crypto returns have a sharper peak and
 heavier tails than a normal of the same deviation. The page draws no normal over it.
 
-Under the candles, on the same time axis, the same candles each started from zero: open, high, low
-and close as changes from the candle's own open, in percent. The price level and the path between
-candles go, and what is left is each candle's shape — its body is the change the histogram counts,
-its wicks how far it went either way before closing. A control subtracts a statistic from each of
-these candles (`offset`), toward zero: the standard deviation of all candles from every candle, each
-side's standard deviation from its candles, or each side's mean from its candles. An up candle moves
-down by it, a down candle up, a flat one stays, and the whole candle moves, so its shape is kept and
-its close reads what the candle did beyond the statistic. The statistics are the ones the page
-shows, over the whole history and not over the period. The period is read by these two charts alone,
-and its default, the last 30 days, is there to keep the drawing light: the numbers and the histogram
-read the whole history.
+Under the candles, in a chart of its own over the same period, the same candles each started from
+zero: open, high, low and close as changes from the candle's own open, in percent. The price level
+and the path between candles go, and what is left is each candle's shape — its body is the change
+the histogram counts, its wicks how far it went either way before closing. A control right above
+that chart, and moving nothing else, subtracts a statistic from each of its candles (`offset`),
+toward zero: the standard deviation of all candles from every candle, each side's standard deviation
+from its candles, or each side's mean from its candles. An up candle moves down by it, a down candle
+up, a flat one stays, and the whole candle moves, so its shape is kept and its close reads what the
+candle did beyond the statistic. The statistics are the ones the page shows, over the whole history
+and not over the period, and each choice carries its values. The two charts are separate so that the
+control sits on the one it moves; they share a left margin so their time axes line up, but a zoom on
+one does not move the other. The period is read by these two alone, and its default, the last 30
+days, is there to keep the drawing light: the numbers and the histogram read the whole history.
 
     uv run streamlit run src/tradingvision/app/decomposer.py
 """
@@ -46,7 +48,6 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
-from plotly.subplots import make_subplots
 
 from tradingvision.data import binance
 
@@ -125,39 +126,34 @@ def histogram(pct: pd.Series, bins: int = BINS, tail: float = TAIL) -> tuple[np.
     return counts, edges, int(len(pct) - counts.sum())
 
 
-def candle_figure(df: pd.DataFrame, uirevision: str, minus: pd.Series | None = None, title: str = "") -> go.Figure:
-    """The candles, and under them the same candles each from zero (`from_zero`), less `minus` (an
-    `offset`) when given. One figure with a shared time axis rather than two charts, so a zoom on one
-    is a zoom on the other and a candle sits above its own shape."""
-    fig = make_subplots(
-        rows=2,
-        cols=1,
-        shared_xaxes=True,
-        row_heights=[3, 2],
-        vertical_spacing=0.04,
-        subplot_titles=["", title or "The same candles, each from its own open: % change from the open"],
-    )
-    fig.add_trace(go.Candlestick(x=df.index, open=df.open, high=df.high, low=df.low, close=df.close), row=1, col=1)
-    zero = from_zero(df)
-    if minus is not None:
-        zero = zero.sub(minus.reindex(zero.index), axis=0)
-    fig.add_trace(
-        go.Candlestick(
-            x=zero.index, open=zero.open, high=zero.high, low=zero.low, close=zero.close, yhoverformat="+.3f"
-        ),
-        row=2,
-        col=1,
-    )
-    fig.update_xaxes(rangeslider_visible=False)  # every candlestick axis gets one by default
-    fig.update_yaxes(title_text="%", zeroline=True, zerolinecolor="#888", row=2, col=1)
-    fig.update_annotations(font_size=11, x=0, xanchor="left")
+# The candle charts' left margin, fixed and wide enough for either axis's labels: the two are separate
+# figures, and with Plotly sizing each margin to its own labels ("110k" against "-0.5%") their time
+# axes would start at different places and a candle would not sit above its own shape.
+MARGIN = 64
+
+
+def candle_figure(df: pd.DataFrame, uirevision: str, height: int = 520, **candle) -> go.Figure:
+    """A candlestick chart of `df`; `candle` goes to the trace."""
+    fig = go.Figure(go.Candlestick(x=df.index, open=df.open, high=df.high, low=df.low, close=df.close, **candle))
+    fig.update_yaxes(automargin=False)
     fig.update_layout(
-        height=820,
-        margin=dict(l=0, r=0, t=10, b=0),
+        height=height,
+        margin=dict(l=MARGIN, r=0, t=10, b=0),
+        xaxis_rangeslider_visible=False,
         showlegend=False,
         # Keeps zoom and pan across reruns until the pair, the timeframe or the period changes.
         uirevision=uirevision,
     )
+    return fig
+
+
+def zero_figure(df: pd.DataFrame, uirevision: str, minus: pd.Series | None = None) -> go.Figure:
+    """The candles of `df` each from zero (`from_zero`), less `minus` (an `offset`) when given."""
+    zero = from_zero(df)
+    if minus is not None:
+        zero = zero.sub(minus.reindex(zero.index), axis=0)
+    fig = candle_figure(zero, uirevision, height=340, yhoverformat="+.3f")
+    fig.update_yaxes(ticksuffix="%", zeroline=True, zerolinecolor="#888")
     return fig
 
 
@@ -231,32 +227,33 @@ def main() -> None:
     # Mid-pick the widget holds the start alone; the charts run to the last candle until the end is picked.
     start, end = period if len(period) == 2 else (period[0], last)
     window = df.loc[str(start) : str(end)]
+    view = f"{symbol}-{timeframe}-{start}-{end}"
+    st.plotly_chart(candle_figure(window, view), use_container_width=True, key="candles")
+
+    st.markdown("**The same candles, each from its own open**")
+    st.caption(
+        "Open, high, low and close as the % change from the candle's own open: every candle starts at zero, its "
+        "body is its change, its wicks how far it went either way."
+    )
+    # The values on the choices themselves, so a choice says what it takes off before it is made.
+    a, u, d = (stats.loc[k] for k in ("all", "up", "down"))
+    values = {
+        "none": "",
+        "std": f" ({a['std']:.4f}%)",
+        "side std": f" (up {u['std']:.4f}%, down {d['std']:.4f}%)",
+        "side mean": f" (up {u['mean']:+.4f}%, down {d['mean']:+.4f}%)",
+    }
     how = st.radio(
-        "Subtract from each candle of the lower chart",
+        "Subtract from each candle, toward zero",
         list(OFFSETS),
-        format_func=OFFSETS.get,
+        format_func=lambda k: OFFSETS[k] + values[k],
         horizontal=True,
-        help="toward zero: an up candle moves down by it, a down candle up, a flat one stays. The whole candle "
-        "moves, so its close reads what it did beyond the statistic. The statistics are the ones above, over "
-        "every candle loaded",
+        help="an up candle moves down by it, a down candle up, a flat one stays. The whole candle moves, so its "
+        "shape is kept and its close reads what it did beyond the statistic. The statistics are the ones at the top "
+        "of the page, over every candle loaded",
     )
     minus = offset(pct, stats, how).loc[window.index] if how != "none" else None
-    title = (
-        "The same candles, each from its own open: % change from the open"
-        + {
-            "none": "",
-            "std": f", less {stats.loc['all', 'std']:.4f}% toward zero",
-            "side std": f", less {stats.loc['up', 'std']:.4f}% on the up candles and {stats.loc['down', 'std']:.4f}% "
-            "on the down ones, toward zero",
-            "side mean": f", less the up candles' mean {stats.loc['up', 'mean']:+.4f}% and the down candles' "
-            f"{stats.loc['down', 'mean']:+.4f}%",
-        }[how]
-    )
-    st.plotly_chart(
-        candle_figure(window, f"{symbol}-{timeframe}-{start}-{end}", minus, title),
-        use_container_width=True,
-        key="candles",
-    )
+    st.plotly_chart(zero_figure(window, view, minus), use_container_width=True, key="from-zero")
 
     st.subheader("Distribution of the candles' change")
     counts, edges, beyond = histogram(pct)
