@@ -1085,8 +1085,9 @@ in barra laterale) e senza v2, senza eccezioni.
 
 Il documento è `false_alarms.html`: la parte I è la teoria con le simulazioni, la parte II è il piano
 che segue qui, con una scheda per strada (perché, cosa cercare, come si decide, cosa succede dopo).
-**Niente di questa sezione è stato misurato sullo store**: la sessione non raggiungeva
-`data.binance.vision`.
+Misurato sullo store il 2026-10-07/08 (sotto, *Misurato*): **nessuna strada passa il suo criterio**.
+L'unico segno costante è la parte del punteggio veloce nel tempismo della strada 6, da confermare in
+paper trading. L'open interest dietro al movimento del §17 era una fase di campionamento su 48.
 
 ### La domanda e la risposta
 
@@ -1362,7 +1363,10 @@ caso peggiore per un limite. Lo script è nella storia del ramo (commit `6535fbf
 
 ### Verificato
 
-ruff, black e 51 test. Il self-check di `swing` non è girato: il proxy della sessione blocca
+2026-10-08: ruff, black, 63 test; ogni modulo nuovo ha `--period`, `--power` e un self-check registrato.
+Sul ramo integrato ho rilanciato lo sviluppo di ogni strada e il 2021-2025 della strada 1: i
+numeri coincidono con quelli dei worktree. Prima, il
+2026-10-06: ruff, black e 51 test. Il self-check di `swing` non è girato: il proxy della sessione blocca
 `download.pytorch.org`, e torch non si installa. Le tre CLI nuove e `--features` sono girate da capo a
 fondo su uno store sintetico, poi cancellato; i loro numeri non significano niente. Le strade 2-8 e il
 test per scommessa non sono nel codice.

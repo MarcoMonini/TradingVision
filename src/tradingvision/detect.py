@@ -154,8 +154,8 @@ The price's own zigzag at 3-8% retracements is the one row with a positive numbe
 trade, all 16 months; against the same zigzag on 20 sign-randomised paths it is within 0.7-1.6
 null standard deviations and changes sign between folds.
 
-**The false-alarm rate is a free parameter, and three diagnostics say so** (added 2026-10-06, **not
-yet run on the store**). Optional stopping holds for any filter on the past, so where a filter
+**The false-alarm rate is a free parameter, and three diagnostics say so** (added 2026-10-06, run on the store
+2026-10-07). Optional stopping holds for any filter on the past, so where a filter
 raises the share P of true alarms it lowers what a true one makes (W) and raises what a false one
 costs (L) until P W = (1 - P) L again. The quintiles of `--features` above already obey it: 53% true
 with L/W = 68/49 = 1.39 against P/(1-P) = 1.13, 83% with 99/25 = 3.96 against 4.88, on development.

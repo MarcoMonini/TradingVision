@@ -144,7 +144,7 @@ details pre { border: 0; padding: 0; }
 <body>
 <div class="page">
   <header>
-    <div class="eyebrow">TradingVision · ramo claude/lucid-brahmagupta-1bd8dn · 7 ottobre 2026 · teoria, simulazioni e piano di misura · nessuna misura sullo store</div>
+    <div class="eyebrow">TradingVision · ramo claude/lucid-brahmagupta-1bd8dn · 7 ottobre 2026 · teoria, simulazioni e piano di misura · misurato sullo store il 7-8 ottobre</div>
     <h1>Ridurre i falsi allarmi non crea vantaggio. Le strade che restano</h1>
     <p class="lede">La prima parte spiega perché un filtro sugli allarmi dei rivelatori di v2 non può rendere finché legge solo il passato del prezzo, e quanto deve valere un secondo modello per pagare la commissione. La seconda è il piano: le otto strade che restano, in che ordine percorrerle e perché, cosa cercare in ognuna e come decidere se andare avanti.</p>
     <div class="meta">barre da 15m · rendimenti in log · bp = 0,01% · OKX spot taker 0,10% per lato, 20 bp andata e ritorno · HANDOFF §19</div>
@@ -168,7 +168,7 @@ details pre { border: 0; padding: 0; }
       <li><strong>Il secondo modello</strong> vale quanto sa del periodo in cui si tiene il trade. Sulla candela successiva servono il 90% di accuratezza; sul rendimento dell'intero trade basta un IC di 0,18, cioè il 55%. La metrica giusta non è l'AUC né la precisione: è l'IC con il rendimento del periodo tenuto.</li>
       <li><strong>Il vantaggio può venire solo da tre fonti:</strong> un'informazione che il passato del prezzo non contiene (il mercato, il volume, l'open interest, il book, l'ora); un flusso forzato che rende il prezzo non martingala in momenti o livelli riconoscibili (liquidazioni, stop, chi fornisce liquidità); oppure spostare chi paga la commissione.</li>
       <li><strong>Il piano</strong> ha cinque tappe. La fase 0 chiude con i numeri veri la domanda di partenza. La fase 1 cerca informazione nei dati già nello store (strade 1-4). La fase 2 misura una strategia lenta e usa i segnali veloci per scegliere quando eseguirla (strade 5-6). La fase 3 chiede dati o codice nuovi (strade 7-8). Ciò che passa va confermato fuori campione e in paper trading, con un test che si può leggere a ogni trade.</li>
-      <li><strong>Stato.</strong> I diagnostici della fase 0 e la strada 1 sono in <code>detect.py</code>, testati su dati sintetici e <strong>mai eseguiti sullo store</strong>. Le strade 2-8 sono specificate qui e non sono nel codice. I numeri delle simulazioni dicono cosa cercare, non cosa c'è.</li>
+      <li><strong>Stato, 8 ottobre.</strong> Tutte le strade sono nel codice e misurate sullo store, sullo sviluppo, sull'hold-out e sul 2021-2025 dove si può: <strong>nessuna passa il suo criterio</strong> (<a href="#esiti">Cosa fare con i risultati</a>). L'unico numero positivo in ogni fold è la parte del punteggio veloce nel tempismo della strada 6, circa +16 bp per esecuzione fuori dallo sviluppo: un indizio da confermare in paper trading. Strada facendo si è scoperto che l'open interest dietro al movimento del §17 era una fase di campionamento su 48.</li>
     </ul>
   </section>
 
@@ -935,6 +935,29 @@ details pre { border: 0; padding: 0; }
         <tr class="hl"><td>Non passa niente</td><td class="text">Sulle 15 coppie liquide, con l'informazione dello store, il mercato è efficiente fino ai costi</td><td class="text">Chiudere il ramo delle svolte; riprendere il fattore archiviato su <code>SYMBOLS</code> o il carry, dove il vantaggio è documentato</td></tr>
       </tbody>
     </table></div>
+    <div class="sub-section" id="esiti-misurati">
+      <h3>Cosa è uscito, 8 ottobre</h3>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Strada</th><th>Esito</th><th class="text">Il numero che decide</th></tr></thead>
+        <tbody>
+          <tr><td>0 · Filtri sugli allarmi</td><td><span class="chip bad"><i>✕</i> chiuso</span></td><td class="text"><code>kept</code> 0,28 ± 0,20 / −0,15 ± 0,23; AUC dell'RSI vero 0,619 dentro i semi nulli (0,613-0,630)</td></tr>
+          <tr><td>1 · Residuo</td><td><span class="chip bad"><i>✕</i> chiusa</span></td><td class="text">sul 2021-2025 ogni riga filtrata è negativa e scende con il livello; <code>kept</code> sotto zero</td></tr>
+          <tr><td>2 · IC ai pivot</td><td><span class="chip bad"><i>✕</i></span></td><td class="text">0 righe di 288 sullo sviluppo e sull'hold-out; all'allarme nessuna colonna sa di più</td></tr>
+          <tr><td>3 · Liquidità</td><td><span class="chip bad"><i>✕</i></span></td><td class="text">il fold decide il segno, non lo stato; sul 2021-2025 il segno di Nagel nella volatilità, sotto i 20 bp</td></tr>
+          <tr><td>4 · Shock di flusso</td><td><span class="chip bad"><i>✕</i></span></td><td class="text">la divisione per open interest si inverte fra i fold in 12 configurazioni su 12</td></tr>
+          <tr><td>5 · Base lenta</td><td><span class="chip bad"><i>✕</i></span></td><td class="text">la scalatura non batte la regola né l'hold sullo sviluppo; la regola batte l'hold in ogni fold del 2021-2025</td></tr>
+          <tr class="hl"><td>6 · Tempismo</td><td><span class="chip warn"><i>~</i> indizio</span></td><td class="text">criterio non leggibile (passa il 33% delle volte a IC 0); <code>b − lag</code> positivo in 8 fold su 8, +16 ± 4 bp fuori dallo sviluppo</td></tr>
+          <tr><td>7 · Flusso dei taker</td><td><span class="chip bad"><i>✕</i></span></td><td class="text">IC +0,022 sul 2021-2025, in ogni fold, contro un ρ<sub>min</sub> di 0,08-0,16</td></tr>
+          <tr><td>8 · Mappa degli stop</td><td><span class="chip bad"><i>✕</i></span></td><td class="text">0 righe di 24 in ogni periodo; le cascate c'erano nel 2021, poi 1-3 bp</td></tr>
+          <tr><td>Conferma</td><td><span class="chip good"><i>✓</i> pronto</span></td><td class="text">le due righe migliori di v2 finiscono a W 0,96 e 0,86 contro 20</td></tr>
+        </tbody>
+      </table></div>
+      <ul class="points">
+        <li><strong>La riga che vale è l'ultima della tabella sopra: non passa niente.</strong> Sulle 15 coppie liquide, con l'informazione dello store, a 15 minuti il mercato è efficiente fino ai costi. Il ramo delle svolte di v2 si chiude.</li>
+        <li><strong>Con un'eccezione da confermare, non da costruirci sopra.</strong> Il tempismo della strada 6 è l'unico punto della fase 2 con un segno costante: la base a 4h, eseguita quando il punteggio veloce è d'accordo, compra in media 16 bp meglio di quanto farebbe aspettando a caso. Il passo successivo è il paper trading della base con il tempismo, regola, B e α scritti prima, letto con <code>sequential</code>; in parallelo il fattore archiviato su <code>SYMBOLS</code> o il carry, dove il vantaggio è documentato.</li>
+        <li><strong>Molte schede non potevano vedere l'effetto che chiedevano</strong> alle taglie dello sviluppo (strade 3, 4, 5, 6): la loro potenza al criterio va dal 3% al 38%. Un "non passa" lì è un "non abbastanza grande da vedersi in otto mesi", e il 2021-2025 è il periodo che ha deciso.</li>
+      </ul>
+    </div>
   </section>
 
   <section id="codice">
@@ -949,8 +972,8 @@ details pre { border: 0; padding: 0; }
     </table></div>
     <ul class="points">
       <li>v2 non si calcola su uno spread, perché legge le candele. È per il 92,5% un RSI a 12 (HANDOFF §14), quindi il confronto equo è RSI contro RSI, con v2 come riferimento. β usa le 2.880 barre chiuse prima della barra; il self-check verifica che un salto del mercato sposti il β della barra dopo e non quello della barra stessa.</li>
-      <li><strong>Da scrivere, nell'ordine del piano:</strong> l'IC condizionato ai pivot (strada 2); un event study con variabili di stato, per gli estremi (3) e per gli shock (4); il peso 1/σ̂ in <code>swing --baseline</code> (5); il tempismo sulle decisioni della base (6); le colonne taker nello store e il VAR (7); gli attraversamenti dei pivot confermati e dei placebo (8); il test per scommessa sui trade del paper trading.</li>
-      <li>Verificato: ruff, black, 51 test, self-check di <code>detect</code> su una sega, su libri di allarmi costruiti e su una copertura sintetica. Le tre CLI sono girate da capo a fondo su uno store sintetico, poi cancellato: i loro numeri non significano niente.</li>
+      <li><strong>Scritto l'8 ottobre</strong>, un modulo per strada, ognuno con <code>--period dev|holdout|2021</code> (<code>strategy.edges</code>, <code>strategy.fold_in</code>), <code>--power</code> e un self-check registrato in <code>tests/test_selfchecks.py</code>: <code>detect --conditional</code> (2) e <code>--residual … --period --tradable --lag</code> (1), <code>events --liquidity</code> e <code>--shock</code> (3, 4), <code>timing --base</code> e <code>--timing</code> (5, 6), <code>flow</code> e le colonne taker in <code>binance.KEEP</code> (7), <code>stopmap</code> (8), <code>sequential --sim</code> e <code>--trades</code> (conferma). Medie per evento o per trade, errori a blocchi con lo stimatore a rapporto: la media delle medie di blocco di <code>metrics.blocked</code> è distorta sugli eventi a grappoli. Il piano di partenza diceva: l'IC condizionato ai pivot (strada 2); un event study con variabili di stato, per gli estremi (3) e per gli shock (4); il peso 1/σ̂ in <code>swing --baseline</code> (5); il tempismo sulle decisioni della base (6); le colonne taker nello store e il VAR (7); gli attraversamenti dei pivot confermati e dei placebo (8); il test per scommessa sui trade del paper trading.</li>
+      <li>Verificato l'8 ottobre: ruff, black, 63 test. Il 6 ottobre: ruff, black, 51 test, self-check di <code>detect</code> su una sega, su libri di allarmi costruiti e su una copertura sintetica. Le tre CLI sono girate da capo a fondo su uno store sintetico, poi cancellato: i loro numeri non significano niente.</li>
     </ul>
   </section>
 

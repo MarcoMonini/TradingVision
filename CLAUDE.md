@@ -36,8 +36,10 @@ everywhere, the liquidity premium at v2's extremes, the flow shock, a volatility
 the weak fast signals as the timing of that base's trades, the decomposed taker flow, pivots as a map
 of stop orders — each with why, what to look for, the criterion and what follows, then the
 confirmation (2021-2025, paper trading with a test by betting). The Monte Carlo behind each number
-and its code are in an appendix. HANDOFF §19 is the same plan: the phase-0 diagnostics and route 1
-are in `detect` and have not been run on the store; routes 2-8 are not in the code.
+and its code are in an appendix. HANDOFF §19 is the same plan with what came out, measured 2026-10-07/08:
+no route passes its criterion; route 6's timing is the one lead. The modules are `detect`
+(phase 0, routes 1-2), `events` (3-4), `timing` (5-6), `flow` (7), `stopmap` (8), `sequential`
+(the betting test), each with `--period dev|holdout|2021`.
 
 `swing_leg_pipeline.html` (Italian) explains the training pipeline of the `swing_leg_target` models.
 Part I is a lesson for a reader new to the subject, one concept per chapter with charts on real
