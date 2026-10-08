@@ -47,6 +47,14 @@ the candle and at the price it filled at, a take profit with a star; a gap throu
 at the open, so the mark can sit well past the level it was aimed at, and that is the point of
 drawing it at the fill.
 
+Under the volume, on request, the open interest of the pair's USDT perpetual on Binance
+(`data.futures.open_interest`): the level in coins, and its change in each bar coloured by the bar's
+move, so the textbook's four readings are a colour and a side of zero. In coins because the value in
+USD moves with the price. It is context: no model or rule here reads it, and the study found no
+reading of it that held across folds (`HANDOFF.md` §17, §19). The history is Binance's daily dumps,
+served everywhere; the last hours are its REST statistics, which Binance refuses to the United
+States, and the caption says when a source did not answer.
+
 streamlit run src/tradingvision/app/chart.py
 """
 
@@ -62,7 +70,8 @@ import streamlit as st
 from plotly.subplots import make_subplots
 
 from tradingvision import detect, metrics, stops, strategy, threshold
-from tradingvision.data.candles import SYMBOLS, TIMEFRAMES, get_candles
+from tradingvision.data import futures
+from tradingvision.data.candles import BAR, SYMBOLS, TIMEFRAMES, get_candles
 from tradingvision.data.pivots import EXTREMA_WINDOW, find_pivots
 from tradingvision.data.target import SMOOTHING, leg_significance, swing_leg_target
 from tradingvision.features import COLUMNS, FAMILIES, LABELS, features
@@ -179,6 +188,17 @@ MEANS = (1, 2, 4, 8)  # the moving averages `strategy --smooth` measured
 # a margin for days the venue has no bar for.
 BTC_DAYS = 230
 
+# The open interest's change in a bar is coloured by the bar's move, so the textbook's four readings are
+# a colour and a side of zero: green over it, positions opened behind a rise; green under it, shorts
+# closing into it; red over it, positions opened behind a fall; red under it, longs closing into it.
+# The textbook's and not the project's: on every bar no sign of them held across folds (`detect --oi`,
+# `HANDOFF.md` §17 and §19). The page's long and short colours, which stay apart for a deuteranope
+# (ΔE 10.7) and carry the side of zero as a second cue.
+OI_MOVES = {
+    1.0: ("#2ecc71", "price up", ("positions opened behind the rise", "shorts closing into the rise")),
+    -1.0: ("#e74c3c", "price down", ("positions opened behind the fall", "longs closing into the fall")),
+}
+
 # Starting multiples for a barrier switched to a unit, one per unit. Not tuned — only the stop's
 # 6 ATR (`STOP`) was measured — but each is the number the unit makes obvious: three ATR is the textbook stop,
 # and three round trips is the smallest barrier that clears its own cost by a margin worth the
@@ -188,6 +208,16 @@ SIZE = {"atr": 3.0, "fee": 3.0, "pct": 2.0}
 # Downloads only happen on an explicit click, and only for a (symbol, timeframe, days) triplet
 # that is not already cached.
 load_candles = st.cache_data(ttl=300, show_spinner="Downloading candles…")(get_candles)
+
+
+@st.cache_data(ttl=300, show_spinner="Downloading open interest…")
+def load_open_interest(pair: str, close: pd.Series, timeframe: str):
+    """The open interest of `pair`'s USDT perpetual on the bars of `close`, and the Binance hosts that
+    did not answer. Keyed on the fetched series, as the pivots are, so it downloads once per fetch and
+    not on every rerun: Streamlit hashes a Series and refuses a bare index."""
+    bar, index = BAR[timeframe], close.index
+    raw, down = futures.open_interest_rows(pair, index[0], index[-1] + bar)
+    return futures.open_interest(raw, index, bar), down
 
 
 @st.cache_data(show_spinner=False)
@@ -410,6 +440,7 @@ def chart(
     trades=None,
     exits=None,
     panels=None,
+    oi=None,
 ) -> go.Figure:
     # Price, then the label under it on the same x: the target is only readable against the leg it
     # describes. Volume next, it is context rather than subject, and the features under everything.
@@ -421,15 +452,31 @@ def chart(
     # the quantities it decides on. Each is a dict of `title`, `traces`, `hlines` and `range`.
     panels = panels or []
     n = len(panels)
+    # The open interest's two rows, under the volume and with it: the level, then its change in each
+    # bar. Two rows and not two axes on one, because coins and percent share no scale.
+    base = symbol.split("/")[0]
+    oi_titles = (
+        [
+            f"Open interest of the {base}USDT perpetual on Binance, in {base}",
+            "Its change in each bar, %: green when the bar rose, red when it fell",
+        ]
+        if oi is not None
+        else []
+    )
+    m = len(oi_titles)
     fig = make_subplots(
-        rows=3 + n + len(groups),
+        rows=3 + n + m + len(groups),
         cols=1,
         shared_xaxes=True,
         # Weights, normalised by Plotly: with all seven families open a fixed share for the candles
         # would squeeze every feature row into a line.
-        row_heights=[3, 1.5] + [1.4] * n + [1] + [1.5] * len(groups),
+        row_heights=[3, 1.5] + [1.4] * n + [1] + [1.2] * m + [1.5] * len(groups),
         vertical_spacing=0.02,
-        subplot_titles=["", ""] + [panel["title"] for panel in panels] + [""] + [f.title() for f, _ in groups],
+        subplot_titles=["", ""]
+        + [panel["title"] for panel in panels]
+        + [""]
+        + oi_titles
+        + [f.title() for f, _ in groups],
     )
     fig.add_trace(
         go.Candlestick(
@@ -586,7 +633,45 @@ def chart(
     fig.add_trace(
         go.Bar(x=df.index, y=df.volume, name="volume", marker_color="#888", showlegend=False), row=3 + n, col=1
     )
-    for row, (_, cols) in enumerate(groups, start=4 + n):
+    if oi is not None:
+        fig.add_trace(
+            go.Scatter(
+                x=oi.index,
+                y=oi.coins,
+                mode="lines",
+                line=dict(width=1.5, color="#f1c40f"),
+                name="open interest",
+                showlegend=False,
+                connectgaps=False,  # a bar with no row from Binance is a gap, not a flat stretch
+                customdata=oi.usd / 1e6,
+                hovertemplate="%{x}<br>open interest %{y:,.0f} " + base + ", $%{customdata:,.0f}M<extra></extra>",
+            ),
+            row=4 + n,
+            col=1,
+        )
+        # In coins and not in USD: the value in USD moves with the price, and its change would carry
+        # the bar's own return (`futures.open_interest`).
+        change = np.log(oi.coins).diff() * 100
+        move = np.sign(df.close.diff()).reindex(oi.index)
+        for side, (color, word, readings) in OI_MOVES.items():
+            at = change.index[(move == side) & change.notna()]
+            fig.add_trace(
+                go.Bar(
+                    x=at,
+                    y=change[at],
+                    marker=dict(color=color, line=dict(width=0)),
+                    name=word,
+                    showlegend=False,
+                    text=np.where(change[at] > 0, *readings),
+                    textposition="none",
+                    hovertemplate="%{x}<br>" + word + ", open interest %{y:+.2f}%: %{text}<extra></extra>",
+                ),
+                row=5 + n,
+                col=1,
+            )
+        fig.update_yaxes(title_text=base, row=4 + n, col=1)
+        fig.update_yaxes(title_text="%", zeroline=True, zerolinecolor="#555", row=5 + n, col=1)
+    for row, (_, cols) in enumerate(groups, start=4 + n + m):
         for col in cols:
             fig.add_trace(
                 go.Scatter(x=feats.index, y=feats[col], mode="lines", name=LABELS[col], line=dict(width=1)),
@@ -611,7 +696,7 @@ def chart(
     for y in (-1, 1):
         fig.add_hline(y=y, line=dict(width=1, dash="dot", color="#bbb"), row=2, col=1)
     fig.update_layout(
-        height=800 + 150 * len(groups) + 170 * n,
+        height=800 + 150 * len(groups) + 170 * n + 140 * m,
         legend=dict(orientation="h", y=-0.05, font=dict(size=10)),
         showlegend=bool(groups),
         xaxis_rangeslider_visible=False,
@@ -800,6 +885,16 @@ def main() -> None:
         30,
         help="how far back to download from Alpaca. A model needs some bars before its first prediction, so a "
         "short window can come back without one",
+    )
+    # Off by default: it is a second download from a second venue, and a row of context rather than
+    # anything a model or a rule here reads.
+    show_oi = st.sidebar.toggle(
+        "Open interest",
+        value=False,
+        help="the contracts open on the pair's USDT perpetual on Binance, counted in coins, and their change in each "
+        "bar coloured by the bar's move: rising with the price is new positions behind the move, falling is "
+        "positions closing. The history comes from Binance's daily files, the last hours from its API, which "
+        "Binance does not serve to the United States. In the study no reading of it held across folds",
     )
     # The v2 swing model, and the checkbox that selects it. Ticked, it pins the label to the two
     # numbers the checkpoint was trained on — the sliders below show them and cannot move them —
@@ -1181,6 +1276,17 @@ def main() -> None:
             live, sig.droplevel(1), turns, trace, rule, band, posterior, h, dropped, level, level_close
         )
 
+    oi, oi_down = None, []
+    if show_oi:
+        oi, oi_down = load_open_interest(pair, df.close, fetched[1])
+        if oi.coins.isna().all():
+            st.info(
+                f"No open interest drawn: {' and '.join(oi_down)} did not answer from this server."
+                if oi_down
+                else f"No open interest drawn: Binance lists no USDⓈ-M perpetual {pair}USDT."
+            )
+            oi = None
+
     if normalized and len(feats.columns):
         # Fitted on the window on screen, which is what a chart can do and not what the dataset
         # does: there the statistics come from the train period alone.
@@ -1365,10 +1471,22 @@ def main() -> None:
             rule_pos,
             fills if fills is not None else None,
             panels,
+            oi,
         ),
         use_container_width=True,
         key="chart",
     )
+    if oi is not None:
+        drawn = oi.coins.dropna()
+        st.caption(
+            f"**Open interest**: {pair}USDT perpetual on Binance, the last 5-minute reading inside each bar, "
+            f"{drawn.index[0]:%Y-%m-%d %H:%M} to {drawn.index[-1]:%Y-%m-%d %H:%M} UTC"
+            + (f", without {' and '.join(oi_down)}, which did not answer from this server" if oi_down else "")
+            + ". In coins and not in USD, whose change would carry the bar's own return. A bar the price did not "
+            "move in has no bar of change. The colours are the textbook's reading, not a measured one: read on "
+            "every bar, open interest behind the move had an IC of +0.029 / +0.007 / +0.007 / +0.016 with the next "
+            "48 bars across v2's four folds, and no rule on it kept its sign from fold to fold (`HANDOFF.md` §17)."
+        )
     if fills is not None:
         # The rule's own book, from the same ledger as the numbers above: every entry and every exit
         # that happened is one side of turnover, wherever inside a bar a barrier filled it.

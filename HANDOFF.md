@@ -23,6 +23,9 @@ allarmi non può rendere finché un filtro legge solo il prezzo, tre diagnostici
 ancora eseguiti sullo store) e il piano delle otto strade che restano, in ordine, con cosa cercare in
 ognuna: sezione 19 e `false_alarms.html`.
 
+**Aggiornamento 2026-10-08** — stesso ramo: l'open interest sulla pagina, e il dubbio che le colonne
+di OI della ricerca portino dentro il rendimento della barra: sezione 20.
+
 ---
 
 ## 1. Cosa è stato misurato, e su cosa
@@ -1370,3 +1373,24 @@ numeri coincidono con quelli dei worktree. Prima, il
 `download.pytorch.org`, e torch non si installa. Le tre CLI nuove e `--features` sono girate da capo a
 fondo su uno store sintetico, poi cancellato; i loro numeri non significano niente. Le strade 2-8 e il
 test per scommessa non sono nel codice.
+
+## 20. L'open interest sulla pagina (2026-10-08, ramo `claude/lucid-brahmagupta-1bd8dn`)
+
+- Interruttore *Open interest* nella sezione Candles, spento. Due righe sotto i volumi: l'OI del
+  perpetual `{BASE}USDT` di Binance in coin (l'hover dà anche i dollari), e la sua variazione per
+  barra in %, verde se la barra è salita e rosso se è scesa: i quattro quadranti del manuale sono un
+  colore e un lato dello zero. La didascalia ricorda che il §17 non ne ha trovato uno che regga fra
+  i fold.
+- Fonti (`futures.open_interest_rows`): i dump giornalieri `metrics`, ogni 5 minuti (BTCUSDT dal
+  2020-09-01, ETH e SOL dal 2021-12-01, letto sul listing S3), poi l'API `openInterestHist` per le
+  ore non ancora pubblicate; l'API tiene un mese e risponde 451 dagli Stati Uniti. Se un host non
+  risponde la pagina disegna quello che ha e lo dice. Ogni riga va alla barra che la contiene
+  (`futures.open_interest`, `searchsorted` sull'indice delle candele e non `floor`).
+- **Da misurare.** `metrics_features` tiene `sum_open_interest_value`, in dollari: la sua variazione
+  contiene il rendimento della barra. "OI dietro al movimento" (`detect --oi`, `futures_columns`) è
+  quindi sign(Δp)·ΔOI in coin + |Δp|, e la divisione degli shock della strada 4 per segno dell'OI è
+  in parte la direzione dello shock. I numeri del §17 e della strada 4 vanno ripresi con
+  `sum_open_interest`. I dump coprono anche il 2021-2025, che le strade 2 e 4 non avevano.
+- Verificato: ruff, black, 62 test (il self-check di `swing` no: torch non si installa dietro il proxy).
+  La pagina è girata con `AppTest` su candele e OI sintetici, senza eccezioni, e la figura è stata
+  guardata. Nessuna chiamata vera a Binance o ad Alpaca: il proxy della sessione le blocca.
