@@ -239,6 +239,7 @@ def main() -> None:
     how = st.radio(
         "Subtract from each candle",
         list(OFFSETS),
+        index=list(OFFSETS).index("none"),  # the chart opens on the candles as they are, whatever the order above
         format_func=OFFSETS.get,
         horizontal=True,
         help="toward zero: an up candle moves down by it, a down candle up, a flat one stays. Up / down: an up candle "
