@@ -28,7 +28,12 @@ heavier tails than a normal of the same deviation. The page draws no normal over
 Under the candles, on the same time axis, the same candles each started from zero: open, high, low
 and close as changes from the candle's own open, in percent. The price level and the path between
 candles go, and what is left is each candle's shape — its body is the change the histogram counts,
-its wicks how far it went either way before closing. The period is read by these two charts alone,
+its wicks how far it went either way before closing. A control subtracts a statistic from each of
+these candles (`offset`), toward zero: the standard deviation of all candles from every candle, each
+side's standard deviation from its candles, or each side's mean from its candles. An up candle moves
+down by it, a down candle up, a flat one stays, and the whole candle moves, so its shape is kept and
+its close reads what the candle did beyond the statistic. The statistics are the ones the page
+shows, over the whole history and not over the period. The period is read by these two charts alone,
 and its default, the last 30 days, is there to keep the drawing light: the numbers and the histogram
 read the whole history.
 
@@ -51,6 +56,13 @@ PERIOD = pd.Timedelta(days=30)  # the candle charts' default window
 BINS = 201  # odd, so one bin is centred on zero
 TAIL = 0.001  # the histogram's axis ends at this quantile on either side, whichever is further out
 SIDES = {"all": "All candles", "up": "Up candles", "down": "Down candles"}
+# What the lower candle chart can take off each candle, as the control reads it.
+OFFSETS = {
+    "none": "nothing",
+    "std": "the standard deviation of all candles",
+    "side std": "its side's standard deviation",
+    "side mean": "its side's mean",
+}
 
 
 def store() -> Path:
@@ -90,6 +102,20 @@ def sides(pct: pd.Series) -> pd.DataFrame:
     return pd.DataFrame({k: {"mean": v.mean(), "std": v.std()} for k, v in groups.items()}).T
 
 
+def offset(pct: pd.Series, stats: pd.DataFrame, how: str) -> pd.Series:
+    """What `how` takes off each candle, signed so that subtracting it moves the candle toward zero:
+    positive on an up candle, negative on a down one, zero on a flat one. `stats` is `sides`' table;
+    the mean of the down candles is negative already, their standard deviation is not."""
+    side = np.sign(pct)
+    up, down = {
+        "none": (0.0, 0.0),
+        "std": (stats.loc["all", "std"], -stats.loc["all", "std"]),
+        "side std": (stats.loc["up", "std"], -stats.loc["down", "std"]),
+        "side mean": (stats.loc["up", "mean"], stats.loc["down", "mean"]),
+    }[how]
+    return pd.Series(np.select([side > 0, side < 0], [up, down], 0.0), index=pct.index)
+
+
 def histogram(pct: pd.Series, bins: int = BINS, tail: float = TAIL) -> tuple[np.ndarray, np.ndarray, int]:
     """The counts of `pct` in `bins` equal bins over ±R, their edges, and how many candles lie beyond
     ±R. R is the larger of the `tail` and `1 - tail` quantiles in absolute value."""
@@ -99,20 +125,22 @@ def histogram(pct: pd.Series, bins: int = BINS, tail: float = TAIL) -> tuple[np.
     return counts, edges, int(len(pct) - counts.sum())
 
 
-def candle_figure(df: pd.DataFrame, uirevision: str) -> go.Figure:
-    """The candles, and under them the same candles each from zero (`from_zero`). One figure with a
-    shared time axis rather than two charts, so a zoom on one is a zoom on the other and a candle
-    sits above its own shape."""
+def candle_figure(df: pd.DataFrame, uirevision: str, minus: pd.Series | None = None, title: str = "") -> go.Figure:
+    """The candles, and under them the same candles each from zero (`from_zero`), less `minus` (an
+    `offset`) when given. One figure with a shared time axis rather than two charts, so a zoom on one
+    is a zoom on the other and a candle sits above its own shape."""
     fig = make_subplots(
         rows=2,
         cols=1,
         shared_xaxes=True,
         row_heights=[3, 2],
         vertical_spacing=0.04,
-        subplot_titles=["", "The same candles, each from its own open: % change from the open"],
+        subplot_titles=["", title or "The same candles, each from its own open: % change from the open"],
     )
     fig.add_trace(go.Candlestick(x=df.index, open=df.open, high=df.high, low=df.low, close=df.close), row=1, col=1)
     zero = from_zero(df)
+    if minus is not None:
+        zero = zero.sub(minus.reindex(zero.index), axis=0)
     fig.add_trace(
         go.Candlestick(
             x=zero.index, open=zero.open, high=zero.high, low=zero.low, close=zero.close, yhoverformat="+.3f"
@@ -203,8 +231,31 @@ def main() -> None:
     # Mid-pick the widget holds the start alone; the charts run to the last candle until the end is picked.
     start, end = period if len(period) == 2 else (period[0], last)
     window = df.loc[str(start) : str(end)]
+    how = st.radio(
+        "Subtract from each candle of the lower chart",
+        list(OFFSETS),
+        format_func=OFFSETS.get,
+        horizontal=True,
+        help="toward zero: an up candle moves down by it, a down candle up, a flat one stays. The whole candle "
+        "moves, so its close reads what it did beyond the statistic. The statistics are the ones above, over "
+        "every candle loaded",
+    )
+    minus = offset(pct, stats, how).loc[window.index] if how != "none" else None
+    title = (
+        "The same candles, each from its own open: % change from the open"
+        + {
+            "none": "",
+            "std": f", less {stats.loc['all', 'std']:.4f}% toward zero",
+            "side std": f", less {stats.loc['up', 'std']:.4f}% on the up candles and {stats.loc['down', 'std']:.4f}% "
+            "on the down ones, toward zero",
+            "side mean": f", less the up candles' mean {stats.loc['up', 'mean']:+.4f}% and the down candles' "
+            f"{stats.loc['down', 'mean']:+.4f}%",
+        }[how]
+    )
     st.plotly_chart(
-        candle_figure(window, f"{symbol}-{timeframe}-{start}-{end}"), use_container_width=True, key="candles"
+        candle_figure(window, f"{symbol}-{timeframe}-{start}-{end}", minus, title),
+        use_container_width=True,
+        key="candles",
     )
 
     st.subheader("Distribution of the candles' change")
@@ -232,6 +283,12 @@ def _selfcheck() -> None:
     zero = from_zero(ohlc)
     assert (zero.open == 0).all() and np.allclose(zero.close, pct)
     assert np.allclose(zero.high, [3.0, 0.5, 2.0, 0.0, 1.0]) and np.allclose(zero.low, [-0.5, -3.0, 0.0, -4.0, -1.0])
+    # The offsets: toward zero on either side, nothing on a flat candle.
+    s = sides(pct)
+    assert np.allclose(offset(pct, s, "none"), 0.0)
+    assert np.allclose(offset(pct, s, "std"), np.array([1, -1, 1, -1, 0]) * np.sqrt(2.5))
+    assert np.allclose(offset(pct, s, "side std"), np.array([1, -1, 1, -1, 0]) * np.sqrt(0.5))
+    assert np.allclose(pct - offset(pct, s, "side mean"), [-0.5, 0.5, 0.5, -0.5, 0.0]), "beyond its side's mean"
     assert (zero.low <= zero[["open", "close"]].min(axis=1)).all() and (
         zero.high >= zero[["open", "close"]].max(axis=1)
     ).all()

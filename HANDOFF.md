@@ -1411,7 +1411,11 @@ viene chiesto.
   asse dei tempi, le stesse candele ognuna partita da zero: open, high, low e close come variazione %
   dalla propria open. Toglie il livello del prezzo e il percorso fra le candele, resta la forma di
   ciascuna (il corpo è la variazione che conta l'istogramma, gli stoppini quanto è andata da ogni parte).
-  Sono le sole due cose che leggono il periodo.
+  Sono le sole due cose che leggono il periodo. Sopra il grafico, una scelta sottrae da ogni candela
+  di quello in basso, verso lo zero: la deviazione standard di tutte le candele, la deviazione standard
+  del suo lato o la media del suo lato (`decomposer.offset`). Una candela positiva scende, una negativa
+  sale, una piatta resta; si sposta tutta la candela, quindi la forma resta e la close dice quanto è
+  andata oltre la statistica. Le statistiche sono quelle mostrate in alto, su tutta la storia.
 - L'istogramma della variazione di tutte le candele caricate: 201 classi su un asse simmetrico fino al
   percentile 0,1 o 99,9 più lontano da zero; le candele oltre sono contate in didascalia.
 - Verificato su uno store sintetico (code t a 4 gradi): `AppTest` senza eccezioni su BTC/ETH e 15m/1d,
