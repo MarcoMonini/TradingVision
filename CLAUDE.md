@@ -41,6 +41,10 @@ no route passes its criterion; route 6's timing is the one lead. The modules are
 (phase 0, routes 1-2), `events` (3-4), `timing` (5-6), `flow` (7), `stopmap` (8), `sequential`
 (the betting test), each with `--period dev|holdout|2021`.
 
+`zones_study.html` (Italian) is the report of `zones`: every column of `features`, banded by quantiles
+of 2017-2020 and read on 2021-2025 and since, with the table of what holds and what clears the fee. Its
+numbers are the run of 2026-10-09 written into the page: a rerun of `zones` does not update it.
+
 `swing_leg_pipeline.html` (Italian) explains the training pipeline of the `swing_leg_target` models.
 Part I is a lesson for a reader new to the subject, one concept per chapter with charts on real
 candles; Part II walks the pipeline stage by stage with the schema of every frame, tensor and
@@ -80,6 +84,7 @@ uv run python -m tradingvision.stops --pred data/pred-swing-*.parquet --at 0.5 -
 uv run python -m tradingvision.strategy --candidates --at 0.40  # the rule study on v2's predictions, ETH/BTC/SOL
 uv run python -m tradingvision.detect --shiryaev 0.5 0.9 0.99 --split  # recognising v2's turns causally: what it earns
 uv run python -m tradingvision.detect --null 0.5    # does telling true alarms from false read the market? (also --residual BTC)
+uv run python -m tradingvision.zones                # every indicator's bands x N: chosen on 2017-2020, read on 2021-2025 and since
 ```
 
 `swing --save` writes `data/swing.pt`, and v2 is `--save data/swing-v2.pt`, the only checkpoint the
