@@ -39,9 +39,20 @@ history and not over the period. The two charts are one figure on one time axis,
 moves both. The period is read by these two alone, and its default, the last 30 days, is there to keep
 the drawing light: the numbers and the histogram read the whole history.
 
+Beside the histogram, in the same row, one section over every candle loaded, numbers measured on BTC
+15m to 2026-10-06 (319,870 candles): **Memory** (`acf`): the autocorrelation of the change and of its
+size, lags 1 to 10,000 candles (`ACF_LAGS`), against ±2/√n. The change sits at −0.006 at lag 1 (5m
+−0.029, the bid-ask bounce) and near zero after; its size starts at 0.39, is 0.22 a day later and
+still 0.12 at lag 2,000 (21 days), with a bump every day of lags from the volatility's daily cycle. So
+the global standard deviation the buttons subtract is a long-run average over periods whose typical
+candle is several times apart. The ±2/√n band holds for independent candles only; with clustered sizes
+the true band is wider, the reason the project takes its errors on non-overlapping blocks
+(`metrics.blocked`).
+
     uv run streamlit run src/tradingvision/app/decomposer.py
 """
 
+import math
 from pathlib import Path
 
 import numpy as np
@@ -57,6 +68,9 @@ TIMEFRAME = "15m"  # v2's, the timeframe the project studies
 PERIOD = pd.Timedelta(days=30)  # the candle charts' default window
 BINS = 601  # odd, so one bin is centred on zero
 TAIL = 0.001  # the histogram's axis ends at this quantile on either side, whichever is further out
+ACF_LAGS = (
+    10_000  # the autocorrelation's last lag, in candles: 35 days of 5m, 104 of 15m; a quarter of the data at most
+)
 SIDES = {"all": "All candles", "up": "Up candles", "down": "Down candles"}
 # What the lower candle chart can take off each candle, named as the statistics at the top of the page
 # are, so a choice points at the numbers it subtracts without repeating them.
@@ -230,6 +244,45 @@ def histogram_figure(pct: pd.Series, stats: pd.DataFrame, edges: np.ndarray) -> 
     return fig
 
 
+def acf(x: np.ndarray, lags: int) -> np.ndarray:
+    """The autocorrelation of `x` at lags 1 to `lags`: sum of x_t x_(t+k) over sum of x_t², both on
+    the demeaned series, through the FFT so a million candles take a fraction of a second."""
+    x = np.asarray(x, dtype=float) - np.mean(x)
+    f = np.fft.rfft(x, 1 << (2 * len(x) - 1).bit_length())  # padded past 2n: no lag wraps onto another
+    cov = np.fft.irfft(f * np.conj(f))[: lags + 1]
+    return cov[1:] / cov[0]
+
+
+def acf_figure(pct: pd.Series, step: pd.Timedelta) -> go.Figure:
+    """The autocorrelation of the change and of its size, lag by lag, over the band ±2/√n that
+    independent candles would stay inside; `step` is one candle, for the hover."""
+    lags = min(ACF_LAGS, len(pct) // 4)
+    k = np.arange(1, lags + 1)
+    days = k * (step / pd.Timedelta(days=1))
+    fig = go.Figure()
+    for name, colour, x in (("change", "#3498db", pct), ("size of the change", "#e67e22", pct.abs())):
+        fig.add_trace(
+            go.Scatter(
+                x=k,
+                y=acf(x.to_numpy(), lags),
+                name=name,
+                line=dict(color=colour, width=1),
+                customdata=days,
+                hovertemplate=f"{name}<br>lag %{{x:,}} candles, %{{customdata:.2f}} days<br>"
+                "autocorrelation %{y:+.4f}<extra></extra>",
+            )
+        )
+    band = 2 / math.sqrt(len(pct))
+    for y in (band, -band):
+        fig.add_hline(y=y, line=dict(color="#888", dash="dot"))
+    fig.add_hline(y=0, line=dict(color="#888", width=1))
+    fig.update_xaxes(type="log", title="lag, candles")
+    fig.update_yaxes(title="autocorrelation")
+    # The histogram's height and top margin, which holds its buttons: side by side, the two plot areas line up.
+    fig.update_layout(height=460, margin=dict(l=0, r=0, t=40, b=0), legend=dict(x=0.99, xanchor="right", y=0.99))
+    return fig
+
+
 def main() -> None:
     st.set_page_config(page_title="Decomposer", layout="wide", initial_sidebar_state="collapsed")
     st.title("Decomposer")
@@ -291,13 +344,26 @@ def main() -> None:
     minus = {how: offset(pct, stats, how).loc[window.index] for how in OFFSETS}
     st.plotly_chart(candles_figure(window, view, minus), use_container_width=True, key="candles")
 
-    st.subheader("Distribution of the candles' change")
+    left, right = st.columns(2)
+    left.subheader("Distribution of the candles' change")
     counts, edges, beyond = histogram(pct)
-    st.plotly_chart(histogram_figure(pct, stats, edges), use_container_width=True, key="histogram")
-    st.caption(
+    left.plotly_chart(histogram_figure(pct, stats, edges), use_container_width=True, key="histogram")
+    left.caption(
         f"Every candle loaded, in {BINS} bins of {edges[1] - edges[0]:.4f}% over ±{edges[-1]:.3f}%, the 0.1th or "
         f"99.9th percentile, whichever is further from zero. {beyond:,} candles ({beyond / len(pct):.2%}) lie "
         "beyond it and are not drawn. The buttons subtract from each candle what they subtract in the chart above."
+    )
+
+    right.subheader("Memory")
+    step = pd.Timedelta(timeframe.replace("m", "min"))
+    right.plotly_chart(acf_figure(pct, step), use_container_width=True, key="acf")
+    right.caption(
+        "The correlation of each candle with the one k candles later, for the change (its sign) and for its size "
+        "(its absolute value), every candle loaded. Dotted, ±2/√n, where independent candles would stay 95% of the "
+        "time; candles whose size clusters are not independent and the real band is wider, so a change "
+        "autocorrelation just outside it is no evidence. Near zero for the change, positive and slow to decay for "
+        "the size: the sign of the next candle is not in this one, its size is. A bump every day of lags is the "
+        "volatility's daily cycle."
     )
 
 
@@ -345,6 +411,16 @@ def _selfcheck() -> None:
     # All candles flat: a degenerate axis is widened rather than handed to numpy with equal edges.
     counts, edges, beyond = histogram(pd.Series(np.zeros(10)))
     assert counts.sum() == 10 and beyond == 0
+
+    # Autocorrelation: equal to the sum it stands for, near zero on independent draws and φ^k on an AR(1).
+    x = rng.normal(size=5_000)
+    d = x - x.mean()
+    assert np.allclose(acf(x, 3), [(d[:-k] * d[k:]).sum() / (d * d).sum() for k in (1, 2, 3)])
+    assert np.abs(acf(normal.to_numpy(), 50)).max() < 4 / np.sqrt(len(normal))
+    ar = np.zeros(200_000)
+    for t, e in enumerate(rng.normal(size=len(ar) - 1), start=1):
+        ar[t] = 0.5 * ar[t - 1] + e
+    assert np.allclose(acf(ar, 3), [0.5, 0.25, 0.125], atol=0.01)
 
 
 if __name__ == "__main__":

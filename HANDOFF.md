@@ -1419,5 +1419,8 @@ viene chiesto.
 - L'istogramma della variazione di tutte le candele caricate: 601 classi su un asse simmetrico fino al
   percentile 0,1 o 99,9 più lontano da zero; le candele oltre sono contate in didascalia. Gli stessi
   pulsanti sottraggono la stessa statistica da ogni candela, sulle stesse classi.
+- Memoria (`acf`), a fianco dell'istogramma: autocorrelazione della variazione e della sua taglia
+  fino a 10.000 candele. La variazione è −0,006 al ritardo 1 e poi vicina a zero; la taglia parte da
+  0,39, è 0,22 dopo un giorno e 0,12 dopo 21 giorni, con una gobba ogni giorno di ritardo.
 - Verificato su uno store sintetico (code t a 4 gradi): `AppTest` senza eccezioni su BTC/ETH e 15m/1d,
   la pagina servita e fotografata. Lo store vero non è in questa sessione. Self-check registrato.
