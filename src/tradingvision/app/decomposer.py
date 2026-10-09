@@ -77,6 +77,16 @@ reads as the tails' periods, not their sign — large candles crowd into the vol
 1,344 cells measured on the whole history with nothing held out, adjacent N being one test and not
 many, make it a lead.
 
+**The future after an RSI**: the same two heatmaps with the candles banded by Wilder's RSI at their
+close (`rsi_bands`, 14 candles as `features` reads it, 10 points a band), and the same N. On BTC 15m
+the RSI does not read as the textbook does: above 70 is not overbought but the start of a run. From
+80 to 90 (2,041 candles) the excess over every candle's is +0.12% at N 10, +0.56% at 48 and +0.51%
+at 96, at 2.7, 5.5 and 3.8 standard errors; ETH 15m +0.60% at 48, 5.1. Below 30 there is a short
+bounce, 20 to 30 at +0.07% and 3.8 five candles later on BTC, that turns into continuation by half a
+day: ETH 0 to 10 at −2.2% at 48, −4.9. The bands past 10 and 90 hold about a hundred candles each, a
+handful of episodes. The momentum above 70 is the one size worth a fee, 0.20% a round trip at OKX,
+and it is measured on the whole history with nothing held out: a lead.
+
     uv run streamlit run src/tradingvision/app/decomposer.py
 """
 
@@ -88,6 +98,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
+from ta.momentum import RSIIndicator
 
 from tradingvision.data import binance
 
@@ -100,6 +111,7 @@ ACF_LAGS = (
     10_000  # the autocorrelation's last lag, in candles: 35 days of 5m, 104 of 15m; a quarter of the data at most
 )
 SIGMA_STEP, SIGMA_REACH = 0.5, 3.0  # the future's bands: their width and the last closed edge, in σ of all candles
+RSI_WINDOW, RSI_STEP = 14, 10  # Wilder's window, the default of `ta` and of every charting tool; the bands' width
 HORIZON, HORIZON_MAX = 96, 500  # the future's default N max (a day of 15m) and the slider's end: 1.6s per 96 on BTC 15m
 DAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")  # pandas' dayofweek, Monday 0
 SIDES = {"all": "All candles", "up": "Up candles", "down": "Down candles"}
@@ -357,13 +369,21 @@ def bands(pct: pd.Series, sigma: float) -> pd.Series:
 
 
 @st.cache_data(show_spinner="Following every candle N candles ahead…")
-def ahead(pct: pd.Series, close: pd.Series, horizons: int, step: pd.Timedelta) -> pd.DataFrame:
-    """By band of `pct` (`bands`, on its own standard deviation) and N from 1 to `horizons`: the mean, over the
+def rsi_bands(close: pd.Series, window: int) -> pd.Series:
+    """Each candle's band of `RSI_STEP` points of Wilder's RSI over `window` candles, read at its close, `ta`'s as in
+    `features`; NaN until the window fills. Closed on the left, the last band closed on both sides: an RSI of 100,
+    a window with no down candle, falls in it."""
+    edges = np.arange(0, 100, RSI_STEP)
+    labels = [f"{a} to {a + RSI_STEP}" for a in edges]
+    return pd.cut(RSIIndicator(close, window=window).rsi(), [*edges, np.inf], right=False, labels=labels)
+
+
+def ahead(band: pd.Series, close: pd.Series, horizons: int, step: pd.Timedelta) -> pd.DataFrame:
+    """By band (`bands` or `rsi_bands`; a candle in none counts nowhere) and N from 1 to `horizons`: the mean, over the
     band's candles, of the change in percent from the close to the close N candles later, how many candles have
     one, the mean over every candle (`all`), and the standard error of the band's mean over non-overlapping
     blocks of N candles of `step` on the clock (`se`) with the excess over `all` in it (`t`). A candle whose
     future runs past the store's last bar has none and counts nowhere."""
-    band = bands(pct, pct.std())
     rows = []
     for n in range(1, horizons + 1):
         future = (close.shift(-n) / close - 1) * 100
@@ -380,7 +400,7 @@ def ahead(pct: pd.Series, close: pd.Series, horizons: int, step: pd.Timedelta) -
 
 
 def ahead_figure(table: pd.DataFrame, stat: str, step: pd.Timedelta) -> go.Figure:
-    """`ahead`'s `stat`, `mean` or `t`, as a heatmap: bands up the side, the largest up candles on top, N across.
+    """`ahead`'s `stat`, `mean` or `t`, as a heatmap: bands up the side, the highest on top, N across.
     Both on a scale centred on zero; the t's is fixed at ±4, so noise reads pale whatever the largest cell."""
     grid = table[stat].unstack()
     n = grid.columns.to_numpy()
@@ -517,7 +537,7 @@ def main() -> None:
         HORIZON,
         help="each N from 1 to this one is a column; the first run of a pair and N max takes a few seconds",
     )
-    table = ahead(pct, df.close, horizons, step)
+    table = ahead(bands(pct, stats.loc["all", "std"]), df.close, horizons, step)
     left, right = st.columns(2)
     left.markdown("**Mean change from the close to N candles later**")
     left.plotly_chart(ahead_figure(table, "mean", step), use_container_width=True, key="ahead-mean")
@@ -532,6 +552,21 @@ def main() -> None:
         "coloured there is one that did differently. Its standard error is over non-overlapping blocks of N "
         "candles, since neighbouring candles share most of their future; among this many cells a few pass ±3 by "
         "chance, and a run of N in a row past it is one result, not many."
+    )
+
+    st.subheader("The future after an RSI")
+    window = st.number_input("RSI window, candles", 2, 500, RSI_WINDOW, help="Wilder's RSI, as `features` reads it")
+    table = ahead(rsi_bands(df.close, window), df.close, horizons, step)
+    left, right = st.columns(2)
+    left.markdown("**Mean change from the close to N candles later**")
+    left.plotly_chart(ahead_figure(table, "mean", step), use_container_width=True, key="rsi-mean")
+    right.markdown("**Its excess over every candle's, in standard errors**")
+    right.plotly_chart(ahead_figure(table, "t", step), use_container_width=True, key="rsi-t")
+    count = table["count"].xs(1, level="n")
+    st.caption(
+        f"The same as above with the candles banded by their RSI at the close, {RSI_STEP} points a band, and the "
+        f"same N max: from {count.min():,} candles in the thinnest band to {count.max():,} in the fullest. Overbought "
+        "and oversold, 70 and 30, are band edges."
     )
 
 
@@ -606,12 +641,17 @@ def _selfcheck() -> None:
     when = pd.date_range("2024-01-01", periods=40, freq="15min", tz="UTC")
     close = pd.Series(100 * 1.1 ** np.arange(40), index=when)
     pct = pd.Series(rng.normal(size=40), index=when)
-    table = ahead(pct, close, 3, pd.Timedelta("15min"))
+    table = ahead(bands(pct, pct.std()), close, 3, pd.Timedelta("15min"))
     for n in (1, 2, 3):
         at = table.xs(n, level="n")
         assert np.allclose(at["mean"], (1.1**n - 1) * 100) and at["count"].sum() == 40 - n
         assert np.isclose(at["all"].iloc[0], (1.1**n - 1) * 100)
     assert ahead_figure(table, "t", pd.Timedelta("15min")).data[0].z.shape[1] == 3
+    # RSI bands: NaN until the window fills, 100 on a close that only rose, 0 on one that only fell.
+    r = rsi_bands(close, 14)
+    assert r.iloc[:13].isna().all() and (r.iloc[13:] == "90 to 100").all()
+    assert (rsi_bands(close[::-1].set_axis(when), 14).iloc[13:] == "0 to 10").all()
+    assert len(r.cat.categories) == 100 // RSI_STEP
 
 
 if __name__ == "__main__":
