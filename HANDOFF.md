@@ -18,6 +18,14 @@ etichette retrospettive. Tutto il lavoro predittivo e la prima pipeline (`datase
 **Aggiornamento 2026-10-03, più tardi** — ramo `claude/strategy-study`: lo studio delle regole di
 trading sulla predizione v2 (`strategy.py`) e tutte quelle regole sulla pagina chart: sezione 17.
 
+**Aggiornamento 2026-10-06/07** — ramo `claude/lucid-brahmagupta-1bd8dn`: perché ridurre i falsi
+allarmi non può rendere finché un filtro legge solo il prezzo, tre diagnostici in `detect.py` (non
+ancora eseguiti sullo store) e il piano delle otto strade che restano, in ordine, con cosa cercare in
+ognuna: sezione 19 e `false_alarms.html`.
+
+**Aggiornamento 2026-10-08** — stesso ramo: l'open interest sulla pagina, e il dubbio che le colonne
+di OI della ricerca portino dentro il rendimento della barra: sezione 20.
+
 ---
 
 ## 1. Cosa è stato misurato, e su cosa
@@ -947,16 +955,20 @@ del 2026-07-01.
 - **Funding, open interest, posizionamento, flusso dei taker e book non aggiungono niente
   all'allarme** (`--futures`, `data/futures.py`, dump dei futures Binance). Da soli AUC 0,546 /
   0,525, con le sedici di prima 0,639 / 0,624; ogni quintile fra −11 e +6 bp. Contro il rendimento
-  futuro due colonne hanno lo stesso segno nei quattro fold: l'open interest dietro al movimento
-  contro il rendimento a 48 barre (+0,075 / +0,039) e lo squilibrio del book entro il 5% contro
-  quello a 12 (+0,042 / +0,024). Piccole quanto l'IC della v2, e non ancora una strategia.
-- **Open interest dietro al movimento** (`--oi`). Il segno del movimento delle ultime k barre per la
-  variazione dell'open interest ha IC positivo col rendimento a 48 barre in tutti i fold (k = 24:
-  +0,057 / +0,125 / +0,057 / +0,045); il solo momentum no. Dopo un movimento a 24 barre con open
-  interest in salita le 48 barre dopo vanno nella sua direzione (+10 / +16 / +19 / +20 bp), con open
-  interest in calo tornano indietro (−22 / −13 / −2 / −6). Letto fra 64 varianti, hold-out incluso;
-  come regola (segui o contrasta oltre |z|, esci dopo 48 barre) fa da −6,9 a +0,7 bp sullo sviluppo
-  e il fold 2 è negativo in tutte e dodici le varianti.
+  futuro, su ogni barra, ha lo stesso segno nei quattro fold solo lo squilibrio del book (entro il 5%,
+  a 12 barre: +0,028 / +0,039 / +0,020 / +0,056). Piccolo quanto l'IC della v2, e non una strategia.
+  *Corretto il 2026-10-07* (§19, strada 2): l'IC era letto su una barra ogni h, dalla prima, e
+  l'open interest dietro al movimento sembrava stabile (+0,075 / +0,039 a 48 barre); su ogni barra fa
+  +0,020 / −0,012 / +0,008 / +0,007.
+- **Open interest dietro al movimento** (`--oi`). *Corretto il 2026-10-07.* Il segno del movimento
+  delle ultime k barre per la variazione dell'open interest, contro il rendimento a 48 barre su ogni
+  barra: +0,029 / +0,007 / +0,007 / +0,016 a k = 24, negativo nel fold 2 a k = 4 e 12. Divisi per
+  segno: con open interest in salita le 48 barre dopo fanno +16 / −19 / +7 / +17 bp nella direzione del
+  movimento, in calo −5 / −1 / +11 / −1. Nessun segno regge fra i fold. Prima si leggeva una barra
+  ogni 48, dalla prima, e ne usciva "il segno più pulito dello studio" (+0,057 / +0,125 / +0,057 /
+  +0,045; +10 / +16 / +19 / +20 contro −22 / −13 / −2 / −6): una fase su 48, con il fold 2 la seconda
+  più alta. Come regola (segui o contrasta oltre |z|, esci dopo 48 barre; non campionava) fa da −6,9 a
+  +0,7 bp sullo sviluppo e il fold 2 è negativo in tutte e dodici le varianti.
 - **L'open interest come conferma non conferma** (`--confirm`). Lato del segnale per open interest
   dietro al movimento: il lordo del trade non sale con la conferma (rivelatori fra −9 e +7 bp per
   quintile); tenere solo i segnali confermati abbassa lo sviluppo e alza un poco l'hold-out
@@ -1033,7 +1045,7 @@ consumato. Il report dello studio, passo per passo e con i grafici, è `strategy
 3. **Un modello sul rendimento futuro che unisca futures e v2.** Colonne: open interest dietro al
    movimento a 4 / 12 / 24 barre, squilibrio del book entro il 5%, base, funding, flusso dei taker,
    più la predizione v2 come input. Prima una ridge in walk-forward contro il rendimento a 48 barre;
-   una rete solo se l'IC regge sopra 0,1 in ogni fold (oggi le colonne singole stanno fra 0,03 e
+   una rete solo se l'IC regge sopra 0,1 in ogni fold (oggi, su ogni barra, le colonne singole stanno fra 0 e
    0,09). Servono più dei sedici mesi di futures scaricati (`data.futures`), e riaprire un'etichetta
    sul rendimento è una decisione: quelle predittive sono archiviate in `OLD/`.
 4. **Una scala più lunga**: la v2 riaddestrata su gambe di 24-48 barre. Il rumore cresce come
@@ -1072,7 +1084,356 @@ convergeva su zero trade. `OLD/README.md` ha la tabella e l'elenco di cosa è us
 **Verificato.** ruff, black, 52 test. La pagina gira su BTC/USD 15m con v2 (regola, libro, fee 0,10%
 in barra laterale) e senza v2, senza eccezioni.
 
-## 19. Le barre fuori griglia di febbraio 2018 (2026-10-09, ramo `claude/binance-grid`)
+## 19. I falsi allarmi sono un parametro libero, e le strade che restano (2026-10-06/07, ramo `claude/lucid-brahmagupta-1bd8dn`)
+
+Il documento è `false_alarms.html`: la parte I è la teoria con le simulazioni, la parte II è il piano
+che segue qui, con una scheda per strada (perché, cosa cercare, come si decide, cosa succede dopo).
+Misurato sullo store il 2026-10-07/08 (sotto, *Misurato*): **nessuna strada passa il suo criterio**.
+L'unico segno costante è la parte del punteggio veloce nel tempismo della strada 6, da confermare in
+paper trading. L'open interest dietro al movimento del §17 era una fase di campionamento su 48.
+
+### La domanda e la risposta
+
+**Domanda.** Un secondo stadio che riduca i falsi allarmi dei rivelatori del §17 (per esempio un
+modello sul segno della candela successiva, in AND con l'allarme) può rendere la regola
+profittevole?
+
+**Risposta.** No, finché il filtro legge solo il passato del prezzo. Con P la quota di allarmi veri,
+W quanto fa un vero e L quanto perde un falso, il teorema d'arresto opzionale impone
+**P·W = (1−P)·L** per *ogni* filtro causale su un prezzo martingala: dove il filtro alza P, W scende e
+L sale finché il lordo torna a zero. I quintili di `--features` lo rispettano entro il rumore
+(sviluppo: 53% veri con L/W 1,39 contro P/(1−P) 1,13; 83% con 3,96 contro 4,88). Un filtro vale
+quanto sposta il lordo, cioè l'IC con il rendimento del periodo tenuto, non quanto sposta l'AUC o i
+falsi allarmi.
+
+**Le simulazioni** (codice nell'appendice del documento), su un random walk GARCH con code t(4), 6
+serie da 200.000 barre, zigzag 0,3 su un RSI a 12:
+
+- il meta-classificatore arriva ad AUC 0,688 su un prezzo che nessuno può prevedere; la quota di
+  veri va dal 64% al 94% fra i quintili e ogni quintile fa fra −1,3 e +1,6 bp;
+- il modello sulla candela successiva in AND rende (2a−1)·E|r₁|, solo sulla prima barra: servono il
+  90% di accuratezza per 20 bp. Sul rendimento dell'intero trade bastano un IC di 0,15-0,2 (54-55%),
+  con la precisione quasi ferma (0,80 → 0,82);
+- con una componente che torna alla media (AR(1), 30% della varianza) lo stesso filtro sul livello, a
+  0,6, fa +10,3 bp (errore 2,8) contro −0,3 (2,6) del random walk, alla stessa precisione del 96-97%:
+  la precisione non distingue i due mondi, il lordo sì.
+
+### Cosa c'è nel codice
+
+- `conservation(f, score, cut)`: per quintile del punteggio, P, W, L, L/W accanto a P/(1−P), il
+  lordo e il lordo "nominale" (P·W̄ − (1−P)·L̄, con W e L fermi alla media del periodo). `kept` è la
+  pendenza del lordo sul nominale fra i quintili, con l'errore: 0 sotto una martingala, 1 se la
+  precisione vale quello che promette. `--features` ora stampa anche questa tabella.
+- `geometry` e `null_test` (`--null P [--seeds]`): la stessa separazione vero/falso, con Shiryaev P
+  e otto colonne che richiedono solo serie e chiusura, su v2, sull'RSI a 12 del prezzo vero e
+  sull'RSI di prezzi con il segno di ogni rendimento estratto a caso (`strategy.signflip`).
+- `residual`, `spreads`, `residual_study` (`--residual BTC|ew [--gate L ...]`): i rivelatori
+  sull'asset meno beta per il mercato (beta su un mese di barre chiuse prima della barra), contro gli
+  stessi rivelatori sul prezzo, con il gate al livello letto all'allarme e all'estremo. Il trade sullo
+  spread paga due gambe: `fee_bp` = 2·`FEE`·(1 + |beta|). v2 non si calcola su uno spread (legge
+  candele), quindi il confronto equo è RSI sul prezzo contro RSI sul residuo.
+- `_score` è il punteggio logistico che `separate` già calcolava, estratto senza cambiarne i numeri.
+  `BETA_WINDOW` = 96·30 è scelto, non misurato.
+
+### Il piano, in ordine
+
+Un'idea entra nel piano solo se porta un'informazione che il prezzo non contiene, sfrutta un flusso
+forzato (liquidazioni, stop, chi fornisce liquidità) o sposta chi paga la commissione. Ogni criterio
+si applica ai fold di sviluppo; la conferma è fuori (ultimo punto). Le strade sono numerate
+nell'ordine di esecuzione.
+
+**Fase 0 — chiudere il ramo dei filtri** (nel codice, minuti).
+
+0. `detect --features 0.5`, poi `detect --null 0.5 --seeds 0 1 2 3 4`.
+   *Cercare:* `kept` vicino a 0 su sviluppo e hold-out; l'AUC dell'RSI vero dentro la dispersione dei
+   semi a segni casuali. *Se è così:* il filtro sugli allarmi con colonne del prezzo è chiuso. *Se
+   `kept` supera due errori in entrambi i periodi:* le sedici colonne portano informazione, e si
+   riapre il meta-labeling addestrato sul lordo del trade.
+
+**Fase 1 — cercare informazione nei dati già nello store.**
+
+1. **Residuo contro il mercato** (nel codice): `detect --residual BTC --gate 0.4 0.5 0.6` e
+   `--residual ew`. *Perché:* il movimento comune domina RSI e pivot ma non contiene la parte che
+   rientra; nella simulazione il filtro a 0,6 fa +8,5 bp sul residuo contro +6,2 sul prezzo, con metà
+   dell'errore. *Cercare:* nella riga `residual: rsi 12` contro `price: rsi 12`, `dev_bp` sopra
+   `fee_bp` (circa 40 bp su spot), un lordo che cresce con il livello del gate, `kept_dev` oltre due
+   errori, stesso segno nei due fold. Variante: BTC della barra precedente, per l'anticipo sulle alt.
+   *Se passa:* regola coperta sui perpetual, conferma sul 2021-2025 estendendo `residual_study` a
+   tutta la storia. *Se no:* le strade 3 e 4 cercano il rientro in un sottoinsieme, non in media.
+2. **IC ai pivot** (una funzione, sui dati di `detect --futures`). È la proposta di partenza nella
+   forma giusta: il primo stadio serve solo se il secondo è più informato ai pivot. *Cercare:*
+   IC(colonna, rendimento a 12/24/48 | |v2| ≥ L o allarme) diviso IC(… | ogni barra), per fold, con
+   `metrics.blocked`; nullo ≈ 1. *Si decide:* sopra 1 di due errori in ogni fold e IC condizionato
+   sopra ρ_min (a 48 barre 0,09 spot taker, 0,045 perpetual taker). *Se passa:* allarme + punteggio sui
+   futures. *Se no:* le colonne si usano su tutte le barre, nel tempismo (6).
+3. **Premio di liquidità** (event study da scrivere). *Perché:* Nagel (2012), e nelle crypto Bianchi,
+   Babiak, Dickerson (2022) e Farag e altri (2025): il rientro è il compenso di chi fornisce
+   liquidità e cresce quando questa scarseggia; la media agli estremi di v2 che prosegue (passo 1 del
+   §17) può essere una miscela. *Cercare:* agli estremi di v2, rendimento a 12-48 barre contro la
+   gamba per terzile di Amihud relativa, volatilità relativa, volume della gamba per ora, profondità
+   entro l'1%, fine settimana e ore senza borsa americana, drawdown del paniere: il terzile liquido
+   prosegue, l'illiquido rientra, relazione monotona, zero sui segni casuali. *Si decide:* rientro
+   dell'illiquido in ogni fold, sopra l'andata e ritorno maggiorata dello spread di quegli stati.
+   *Se passa:* regola "estremo in stato illiquido", conferma con l'RSI sul 2021-2025.
+4. **Shock di flusso** (stesso event study). *Già misurato* (`--oi`): con open interest in calo le 48
+   barre dopo rientrano di −22,0 / −13,0 / −2,4 / −6,1 bp per fold; in salita proseguono. (Una fase
+   su 48: su ogni barra −4,9 / −1,1 / +10,9 / −0,8 e +16,1 / −19,3 / +6,5 / +16,9, §17.) *Cercare:*
+   la risposta all'impulso dopo |r|/σ > k₁ e volume z > k₂, divisa per segno dell'open interest: il
+   rientro fra 12 e 48 barre in ogni fold e **che cresce con la dimensione dello shock**. *Si decide:*
+   rientro sopra i 10 bp del perpetual taker in ogni fold. *Se l'effetto vive nel grosso:* colonna del
+   tempismo (6), non trigger.
+
+**Fase 2 — una base lenta, e il tempismo.**
+
+5. **Base lenta** (un peso in `swing --baseline`). *Perché:* i vantaggi documentati sono lenti
+   (momentum a 1-4 settimane, Liu e Tsyvinski; la regola a 4h `rsi_centered` > 0,3, +0,116 contro
+   +0,057 dell'hold a 0,25%), e Moreira e Muir alzano lo Sharpe dimensionando come 1/σ̂ senza
+   prevedere la direzione. *Cercare:* prima il netto della regola a 4h alla commissione di OKX per
+   fold, poi lo stesso con w = min(σ*/σ̂, w_max) e una banda di non ribilanciamento: Sharpe,
+   drawdown, turnover. *Si decide:* scalata sopra non scalata e sopra l'hold in ogni fold. Non usa v2.
+6. **Tempismo** (da scrivere). *Perché:* i segnali veloci misurati (open interest, book,
+   esaurimento) non pagano 20 bp da soli, ma possono scegliere *quando* eseguire i trade della base,
+   che pagano la commissione comunque. Simulato con un segnale il cui effetto si ferma a una
+   deviazione standard: a IC 0,05 da solo fa −5,3 bp netti, come tempismo +8,2 ± 1,9 bp per
+   esecuzione in 48 barre e +12,8 ± 3,0 in 96; a IC 0 fa zero. *Cercare:* per ogni decisione della
+   base, esecuzione subito, alla prima barra con d·punteggio ≥ b, a una barra a caso: guadagno contro
+   "subito" per fold, b fra 0,5 e 1, barra a caso entro il rumore (se è negativa, aspettare costa alla
+   base). *Si decide:* guadagno positivo in ogni fold. Qui v2 e i pivot entrano come colonne del
+   punteggio.
+
+**Fase 3 — dati o codice nuovi, prior più basso.**
+
+7. **Flusso dei taker scomposto** (Hasbrouck; Llorente-Michaely-Saar-Wang). Prima tenere
+   `taker_buy_base` e `taker_buy_quote`, che `binance.KEEP` scarta: 15 asset dal 2017 invece di 3 su
+   sedici mesi, al prezzo di nuovi stamp della cache e di un nuovo download. *Cercare:* VAR a 8
+   ritardi su (rendimento, flusso con segno) per asset; agli estremi, IC fra la quota della gamba non
+   spiegata dall'impatto permanente e il rendimento a 12-48 barre, segno stabile in ogni fold. Il
+   flusso grezzo all'allarme non aveva dato niente (AUC 0,53-0,54).
+8. **Pivot come mappa degli stop** (Osler). *Cercare:* dopo la rottura dell'ultimo minimo di
+   `legs.confirmed`, accelerazione nelle 1-4 barre (cascata) e, se il prezzo richiude sopra entro k
+   barre, rientro nelle 12-48 (rottura che fallisce), entrambe **contro livelli placebo** spostati di
+   0,5-1σ; i numeri tondi come secondo placebo. Variante esplorativa: la mappa delle liquidazioni
+   stimata dall'open interest.
+
+**Conferma.** Il 2021-2025 per ciò che non legge v2 (RSI, residuo, stati di liquidità, stop, taker,
+base lenta), il walk-forward di v2 dal 2023 (§17, punto 1) per ciò che lo legge. Poi paper trading
+con un **test per scommessa** (Waudby-Smith e Ramdas): W = Π(1 + λᵢ·xᵢ/B) con λ dai trade precedenti
+e uno stop che limita la perdita a B; si dichiara un vantaggio a W ≥ 1/α, valido in qualunque momento
+si guardi. Simulato su trade con 150 bp di deviazione standard: il t-test guardato dopo ogni trade dà
+il 43% di falsi positivi entro 3.000 trade, il test per scommessa il 2,4%; a 160 trade un vantaggio
+di 15 bp si vede il 37% delle volte.
+
+**Cosa fare con i risultati.** Una strada della fase 1 passa: regola su quella, sui perpetual con il
+funding. Passa solo la fase 2: il capitale va sulla base lenta con il tempismo, e v2 resta una
+colonna. Passa solo la base lenta: il lavoro sulle svolte a 15 minuti si ferma. Non passa niente: con
+l'informazione dello store il mercato è efficiente fino ai costi; si chiude il ramo delle svolte e si
+riprende il fattore archiviato su `SYMBOLS` o il carry.
+
+### Misurato (2026-10-07, store al 2026-09-26)
+
+Tutte le strade sono state eseguite, ciascuna fino in fondo; i criteri si applicano solo nella lettura.
+Ogni modulo nuovo accetta `--period dev|holdout|2021` (`strategy.edges`, `strategy.fold_in`): `dev` sono
+i fold 1-2 di v2, dove si decide; `holdout` i fold 3-4, consumati, solo controllo; `2021` è
+2021-01-01 → 2025-06-01 in quattro fold uguali (`strategy.CONFIRM`), la conferma di ciò che non legge v2.
+
+**Fase 0 — il filtro sugli allarmi è chiuso.** `detect --features 0.5`: 8.244 allarmi, 72% veri, AUC
+0,637 / 0,629 come prima; `kept` **0,28 ± 0,20** sullo sviluppo e **−0,15 ± 0,23** sull'hold-out, entro
+due errori da zero in entrambi. Dal primo al quinto quintile il lordo nominale sale di 33 bp, quello
+misurato di 9 (−5,9 → +3,0); L/W segue P/(1−P) (1,38 / 1,13 … 4,02 / 4,72). `detect --null 0.5 --seeds
+0 1 2 3 4`: AUC dell'RSI vero 0,619 contro 0,613-0,630 dei cinque percorsi a segni casuali (media 0,621);
+v2 0,616. `kept` sui semi nulli va da −0,65 a +0,35 (deviazione 0,40 contro un errore dichiarato di
+0,22-0,28): il +0,62 ± 0,24 di v2 sullo sviluppo è 1,5 deviazioni dei semi e torna a −0,26 sull'hold-out.
+Non si riapre il meta-labeling.
+
+**Strada 1 — il residuo non rientra** (`detect --residual BTC|ew [--period] [--tradable] [--lag 1]`).
+Il movimento comune è il 60-68% della varianza a 15 minuti (R² di ETH su BTC 0,68, SOL 0,60). Sullo
+sviluppo contro BTC il residuo filtrato sta fra −14 e +5 bp (`fee_bp` 49,6); contro il paniere Shiryaev
+filtrato all'allarme sale con il livello (+17,4 / +31,5 / +70,1 a L 0,4 / 0,5 / 0,6, entrambi i fold
+positivi) ma con `kept` −0,01 ± 0,32, e il criterio passa alla lettera una volta, lo zigzag a L 0,6 su 5
+trade (+220 bp, `kept` 0,28 ± 0,12). Sul 2021-2025 (h, p, L congelati, Shiryaev e `kept` stimati sul
+2020) ogni riga filtrata è negativa e più bassa a 0,6 che a 0,4: contro il paniere Shiryaev −8,3 / −12,8
+/ −25,4, `kept` −0,31 ± 0,13; contro BTC −19,3 / −20,6 / −45,5; su ogni coppia tradabile lo stesso. Con
+`--lag 1` il β delle alt sulla barra precedente di BTC è 0,05: il residuo ritardato è il prezzo, e BTC
+non anticipa. Chiusa.
+
+**Strada 2 — le colonne dei futures non sanno di più ai pivot** (`detect --conditional [--period dev|holdout]
+[--power]`). Rank IC di 24 colonne (futures, open interest dietro al movimento a k 4 / 12 / 24, v2 e RSI
+come riferimento) col rendimento a 12 / 24 / 48 barre, sulle barre con |v2| ≥ 0,4 / 0,5 / 0,6 e su quelle
+d'allarme di Shiryaev 0,5, contro tutte le barre; rapporto e differenza con errori delta sui blocchi di
+h barre, e placebo (l'insieme spostato nel tempo nel fold). Criterio passato su **0 di 288** righe sullo
+sviluppo, 0 sull'hold-out, 0 di 864 placebo. All'allarme il rapporto mediano è 0,72-0,89 (placebo
+0,91-1,08). La riga più forte è il book entro il 5% oltre |v2| ≥ 0,6 a 12 barre: IC 0,149 / 0,121 /
+0,182 / 0,220 contro 0,028 / 0,039 / 0,020 / 0,056 su tutte le barre, ma è il lato di v2 (correlazione
+0,42-0,74 con long al minimo e short al massimo) e il rapporto ha errore 1,6-3,2. Potenza: con IC 0,03 su
+tutte le barre nessun rapporto fino a 3 si vede più del 22% delle volte; con 0,06 un rapporto di 2 agli
+allarmi il 78 / 55 / 24% a 12 / 24 / 48 barre; falsi positivi 0-0,5%. Il 2021 non c'è (futures dal
+2025-05). Le colonne dei futures vanno su tutte le barre, nel tempismo.
+
+**Strada 3 — la liquidità non separa gli estremi di v2** (`events --liquidity [--period]`, `--power`).
+Un evento per escursione nel 10% di coda di |v2| (0,519 grezzo, dallo sviluppo), 15 coppie, rendimento
+contro la gamba a 12 / 24 / 48 barre; sei stati in terzili tagliati sullo sviluppo (Amihud, volatilità,
+volume della gamba per ora, profondità entro l'1%, sessione di New York, drawdown del paniere); medie
+per evento, errore a rapporto sui blocchi; spread di Abdi-Ranaldo 0-12 bp. Ogni estremo di v2 a 48
+barre: −14,7 / +23,7 sullo sviluppo, −36,0 / −30,8 sull'hold-out (errori 13-18); il fold decide il segno,
+non lo stato. Criterio: 0 di 18 (v2 e RSI) su sviluppo e hold-out, 0 di 15 sul 2021-2025. Sul 2021-2025
+la volatilità ha il segno di Nagel (terzile agitato +29,7 / +16,1 / +9,2 / +13,6 a 12 barre, calmo −14,2
+/ −8,4 / −0,8 / −0,6), sotto i 20 bp salvo il fold 1, e le gambe di volume pesante rientrano mentre le
+sottili proseguono (Campbell-Grossman-Wang, al contrario dell'orientamento fissato prima). Potenza:
+l'effetto richiesto si vede il 7-18% delle volte, il doppio il 23-78%. `metrics.blocked` come media
+avrebbe detto +21 bp dove gli eventi fanno +0,3: un movimento che prosegue porta più coppie nella coda
+nello stesso blocco.
+
+**Strada 4 — gli shock di flusso non rientrano, e l'open interest non dice quali** (`events --shock
+[--period]`, `--power`). Prima barra con |r|/σ ≥ k₁ (r su 1 o 2 barre) e volume z ≥ k₂, k₁ 2 / 3 / 4, k₂ 1 / 2,
+BTC, ETH, SOL, divisi per segno dell'open interest sullo shock. Span 1, k₁ 2, k₂ 1 a 48 barre contro lo
+shock: fold 1 in calo +15,5, in salita −33,6; fold 2 −10,0 e +26,5 (errori 16-28). La divisione si
+inverte fra i fold di sviluppo in tutte e dodici le configurazioni; 0 di 12 sullo sviluppo e
+sull'hold-out. Il rientro con open interest in calo scende con la taglia dello shock (+17,3 / −15,2 /
+−36,0 bp a 2-3 / 3-4 / oltre 4σ). Sul 2021-2025 (senza open interest) la risposta non divisa a 48 barre
+è +3,7 / −3,0 / −3,8 / −11,8. I quadranti di `--oi` su ogni barra, nel verso del rientro: in calo +4,6 /
++1,1 / −10,9 / +0,7, in salita −16,7 / +19,3 / −6,6 / −17,0. Potenza bassa: 10 bp si vedono il 9-12% delle
+volte, 20 il 18-34%.
+
+**Strada 5 — la base lenta non passa** (`timing --base [--period] [--fee]`, `--power`). `rsi_centered` a
+24 su 4h, long sopra 0,3, flat sotto 0, 13 `TRADABLE` a pesi uguali, commissione OKX. Sharpe per fold
+(errore a blocchi settimanali), regola contro hold: sviluppo +1,06 / −1,14 contro +1,51 / −1,45 (errori
+1,0-1,8); hold-out −3,39 / +1,88 contro −1,56 / +2,14; 2021-2025 +2,97 / −0,10 / +1,41 / +0,98 contro
++1,96 / −0,50 / +1,40 / +0,56. Scalata con w = min(σ*/σ̂, w_max) (σ̂ esponenziale a 30 giorni, σ* la
+mediana dei 365 giorni prima), Sharpe scalata meno non scalata sullo sviluppo +0,05 / −0,44 a w_max 1,
++0,13 / −0,52 a w_max 2: nessuna variante passa. Senza leva il tetto lega quasi sempre. Potenza: le
+differenze vere sono fra −0,05 e +0,07 di Sharpe e il criterio le vede il 3-23% delle volte. **Il
++0,116 non si riproduce**: `swing.baselines` sulle righe del passo 7 (`data/swing-4h-full.parquet`,
+finestra 24, 20 `STUDY`) dà +0,126 a 0,25% (lordo 0,182, hold +0,057), come la tabella del passo 7
+della specifica, e +0,159 a 0,10%. CLAUDE.md, `OLD/README.md`, il commento di `swing.BASELINES` e
+questo file citano +0,116: da allineare.
+
+**Strada 6 — il criterio non decide, il controllo dà un indizio** (`timing --timing [--period]`,
+`--power`). Le entrate e uscite della regola a 4h eseguite sui 15 minuti subito, alla prima barra con
+d·punteggio ≥ b entro N, a una barra a caso, all'ultima, e ai ritardi della regola presi a caso fra le
+altre decisioni dell'asset (`lag`). Punteggio: media delle colonne veloci in z contro il mese, col segno
+dell'IC sullo sviluppo letto su ogni barra (esaurimento a 12 e livello di v2 su 13 `TRADABLE`; open
+interest e book su BTC, ETH, SOL; sul 2021-2025 esaurimento e RSI a 12). b = 1 scelto sullo sviluppo.
+Il criterio passa sullo sviluppo a N 48 e 96 (contro subito +0,6 / +43,0 bp a N 48), ma la potenza dice
+che con 106 / 82 esecuzioni "positivo in ogni fold" capita il 33% delle volte a IC 0: non è prova.
+Sull'hold-out e sul 2021-2025 cade (barra a caso fuori dal rumore nel fold 3, fold 4 negativo).
+**`b − lag`, la parte del punteggio al netto dell'attesa, è positiva in tutti gli otto fold a N 48 e
+a N 96**: +13,4 / +23,3 sullo sviluppo, +20,2 / +16,3 sull'hold-out, +44,5 / +17,4 / +8,4 / +4,1 sul
+2021-2025 (errori 8-20); sull'hold-out e sul 2021-2025, dove né segni né b sono stati scelti, circa +16
+± 4 bp per esecuzione, +0,04 log l'anno per coppia. È l'unico numero positivo in ogni fold del piano, e
+decresce nel tempo sul 2021-2025. Da confermare in paper trading con il test per scommessa, scritto prima.
+
+**Strada 7 — il flusso dei taker scomposto non paga** (`flow [--period] [--store]`, `--power`).
+`binance.KEEP` tiene `taker_buy_base` e `taker_buy_quote` (float32, sommati nel resample); `update`
+rifiuta di estendere un file senza di esse; nessuno stamp cambia (`swing.cached` legge solo OHLCV, e
+`store_ends` vede già la fine nuova). Lo store delle 15 `SYMBOLS` è stato riscaricato (1.238 s, 437 MB,
+OHLCV identici su ogni barra comune, fino al 2026-10-06) e sostituito il 2026-10-08; i file vecchi sono
+in `data/pre-taker/`. Le coppie fuori da `SYMBOLS` (lo `STUDY` di prima) restano senza le colonne, e
+`binance --symbols` le rifiuta finché non si riscaricano. I tensori in cache di `swing` verranno
+ricostruiti al prossimo run (la fine dello store è cambiata). VAR a 8 ritardi su (flusso, rendimento),
+stimato sui 365 giorni prima di ogni fold; quota transitoria della gamba dall'ultimo pivot confermato.
+IC agli estremi di v2 sullo sviluppo al più +0,014 (errori 0,02), hold-out di segno opposto fra i fold;
+agli estremi dell'RSI sul 2021-2025 +0,021 / +0,023 / +0,022 a 12 / 24 / 48 barre (errore 0,005,
+positivo in ogni fold, non è la taglia della gamba), contro un ρ_min di 0,16 / 0,11 / 0,08. Chiusa sulla
+taglia.
+
+**Strada 8 — gli stop ai pivot non lasciano traccia che paghi** (`stopmap.py`, `--period`, `--window
+12 24`, `--power`). Livelli di `legs.confirmed` (finestra 12 e 24) allo stoppino della gamba, rottura
+alla prima barra da 5 minuti oltre il livello dopo la conferma; placebo a ±0,5σ e ±1σ e numeri tondi
+(griglia tarata sullo sviluppo perché le rotture siano altrettante: 1,3-5,3% del prezzo); nullo su barre
+intere a segni casuali; medie per trade ed errori a blocchi con lo stimatore a rapporto (la media delle
+medie di blocco di `metrics.blocked` dava −2 / −8 bp alla cascata sui percorsi nulli). Criterio su 13
+`TRADABLE`: **0 di 24 righe** sullo sviluppo, sull'hold-out e sul 2021-2025. Sullo sviluppo la cascata
+è entro 3 / 9 bp dai placebo per fold e le rotture fallite proseguono invece di rientrare (da −3 a −19
+bp). L'unica traccia è il primo quarto del 2021-2025 (2021-01 → 2022-02): pivot meno placebo spostato
++8,0 / +11,1 bp a una barra (finestra 12 / 24), +16,3 a quattro, a 2,8-4,4 errori; poi 1-3 bp. Potenza:
+40 bp si vedono l'86-100% delle volte, 20 il 32-38%, zero passa al più il 3,4%. La mappa delle
+liquidazioni non è stata fatta.
+
+**Conferma — il test per scommessa** (`sequential.py`, `--sim`, `--trades`). Riporta la tabella del
+documento con il seme 17 (falsi positivi 1,8% / 2,4% entro 1.000 / 3.000 trade, potenza 76,9% a 15 bp
+entro 1.000). Ogni asset è un processo, gli e-value si mediano alla data finale; media ed e-BH per
+combinare le strade. Sulle due righe del §17 (zigzag 0,2 a L 0,5 e Shiryaev 0,5 a L 0,6, stop 6 ATR, 160
+e 121 trade, lordo +15,3 e +20,0 bp) al netto di OKX il capitale finisce a 0,96 e 0,86 contro 20; al lordo
+servirebbero 896 e 1.913 trade, 8-21 anni al loro ritmo.
+
+### Tolto
+
+Gli ordini limite agli estremi (2026-10-07): simulati, il loro vantaggio è solo di costo (2-3 bp di
+commissione maker per lato). Su una martingala con percorso continuo valgono zero, con i salti
+perdono (−11,8 bp, la selezione avversa di un book spazzato), con il ritorno alla media non battono
+l'ingresso a mercato nella zona (+10,4 contro +12,6). Sui dati veri gli estremi di v2 proseguono, il
+caso peggiore per un limite. Lo script è nella storia del ramo (commit `6535fbf`).
+
+### Verificato
+
+2026-10-08: ruff, black, 63 test; ogni modulo nuovo ha `--period`, `--power` e un self-check registrato.
+Sul ramo integrato ho rilanciato lo sviluppo di ogni strada e il 2021-2025 della strada 1: i
+numeri coincidono con quelli dei worktree. Prima, il
+2026-10-06: ruff, black e 51 test. Il self-check di `swing` non è girato: il proxy della sessione blocca
+`download.pytorch.org`, e torch non si installa. Le tre CLI nuove e `--features` sono girate da capo a
+fondo su uno store sintetico, poi cancellato; i loro numeri non significano niente. Le strade 2-8 e il
+test per scommessa non sono nel codice.
+
+## 20. L'open interest sulla pagina (2026-10-08, ramo `claude/lucid-brahmagupta-1bd8dn`)
+
+- Interruttore *Open interest* nella sezione Candles, spento. Due righe sotto i volumi: l'OI del
+  perpetual `{BASE}USDT` di Binance in coin (l'hover dà anche i dollari), e la sua variazione per
+  barra in %, verde se la barra è salita e rosso se è scesa: i quattro quadranti del manuale sono un
+  colore e un lato dello zero. La didascalia ricorda che il §17 non ne ha trovato uno che regga fra
+  i fold.
+- Fonti (`futures.open_interest_rows`): i dump giornalieri `metrics`, ogni 5 minuti (BTCUSDT dal
+  2020-09-01, ETH e SOL dal 2021-12-01, letto sul listing S3), poi l'API `openInterestHist` per le
+  ore non ancora pubblicate; l'API tiene un mese e risponde 451 dagli Stati Uniti. Se un host non
+  risponde la pagina disegna quello che ha e lo dice. Ogni riga va alla barra che la contiene
+  (`futures.open_interest`, `searchsorted` sull'indice delle candele e non `floor`).
+- **Da misurare.** `metrics_features` tiene `sum_open_interest_value`, in dollari: la sua variazione
+  contiene il rendimento della barra. "OI dietro al movimento" (`detect --oi`, `futures_columns`) è
+  quindi sign(Δp)·ΔOI in coin + |Δp|, e la divisione degli shock della strada 4 per segno dell'OI è
+  in parte la direzione dello shock. I numeri del §17 e della strada 4 vanno ripresi con
+  `sum_open_interest`. I dump coprono anche il 2021-2025, che le strade 2 e 4 non avevano.
+- Verificato: ruff, black, 62 test (il self-check di `swing` no: torch non si installa dietro il proxy).
+  La pagina è girata con `AppTest` su candele e OI sintetici, senza eccezioni, e la figura è stata
+  guardata. Nessuna chiamata vera a Binance o ad Alpaca: il proxy della sessione le blocca.
+
+## 21. `decomposer.py`, la pagina delle statistiche descrittive (2026-10-08, stesso ramo)
+
+Una seconda pagina Streamlit, solo locale (`uv run streamlit run src/tradingvision/app/decomposer.py`),
+senza barra laterale. Legge le candele 5m dello store in `data/` e non scarica niente: offre solo le
+coppie che hanno un file. Cresce a richiesta: si aggiunge un grafico o una statistica solo quando
+viene chiesto.
+
+- In alto l'asset (una coppia alla volta) e il timeframe (5m, 15m, 1h, 4h, 1d, aggregati dai 5m con
+  `binance.load`; default 15m).
+- Media e deviazione standard della variazione open → close, in %, su tutte le candele, sulle sole
+  positive e sulle sole negative. La media di tutte è quella vicina a zero; la deviazione standard è
+  la taglia di una candela tipica. Le candele con open = close contano solo in "tutte".
+- Il grafico delle candele su un periodo scelto (default gli ultimi 30 giorni) e, sotto, nella stessa
+  figura con l'asse del tempo condiviso (lo zoom muove entrambi), le stesse candele ognuna partita da
+  zero, solo il corpo: open e close come variazione % dalla propria open, senza stoppini. Sono le
+  sole due cose che leggono il periodo. Subito sopra il secondo grafico, pulsanti dentro la figura
+  (un widget Streamlit non può stare fra le righe di una figura) sottraggono dal corpo di ogni
+  candela, verso lo zero: la deviazione standard di tutte le candele, quella del suo lato o la media
+  del suo lato (`decomposer.offset`, `less`). L'open resta a zero e la close si accorcia: una candela
+  dell'1% meno 0,2% chiude a 0,8%. Una candela più piccola della statistica passa lo zero e tiene il
+  colore del suo lato. Le statistiche sono quelle mostrate in alto, su tutta la storia.
+- L'istogramma della variazione di tutte le candele caricate: 601 classi su un asse simmetrico fino al
+  percentile 0,1 o 99,9 più lontano da zero; le candele oltre sono contate in didascalia. Gli stessi
+  pulsanti sottraggono la stessa statistica da ogni candela, sulle stesse classi.
+- Memoria (`acf`), a fianco dell'istogramma: autocorrelazione della variazione e della sua taglia
+  fino a 10.000 candele. La variazione è −0,006 al ritardo 1 e poi vicina a zero; la taglia parte da
+  0,39, è 0,22 dopo un giorno e 0,12 dopo 21 giorni, con una gobba ogni giorno di ritardo.
+- Ora e giorno (`clock`): media e deviazione standard della variazione per giorno della settimana e
+  ora UTC dell'open, due mappe di calore affiancate. La deviazione standard è il ciclo delle gobbe
+  dell'autocorrelazione: 0,48% alle 14 UTC (apertura USA), sabato e domenica 0,32-0,33% contro
+  0,39-0,41% nei feriali (BTC 15m). Le celle singole estreme sono poche candele di crollo, non un'ora.
+  La media è quasi tutta rumore (12 celle su 168 oltre due errori standard, 8 per caso); fa eccezione
+  sabato 00 UTC, positiva a 3,6 errori standard su BTC 15m, 3,8 su BTC 1h, 4,4 su ETH 15m, oltre il
+  taglio di Bonferroni (circa 3,4). Misurato su tutta la storia senza niente tenuto fuori: una pista,
+  non un risultato.
+- Verificato su uno store sintetico (code t a 4 gradi): `AppTest` senza eccezioni su BTC/ETH e 15m/1d,
+  la pagina servita e fotografata. Lo store vero non è in questa sessione. Self-check registrato.
+
+## 22. Le barre fuori griglia di febbraio 2018 (2026-10-09, ramo `claude/binance-grid`)
 
 **Il difetto.** Il dump **mensile** Binance di 2018-02 ha 241 barre da 5m con l'apertura fuori
 griglia (hh:m3:14.789, hh:m8:14.789), dal 2018-02-09 09:58 al 2018-02-10 05:58: dopo il fermo del

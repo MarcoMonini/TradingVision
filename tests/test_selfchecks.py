@@ -12,7 +12,7 @@ import sys
 
 import pytest
 
-from tradingvision import detect, stops, strategy, swingrule, threshold
+from tradingvision import detect, events, flow, sequential, stopmap, stops, strategy, swingrule, threshold, timing
 
 SELF_CHECKED = [
     "tradingvision.data.candles",
@@ -72,6 +72,38 @@ def test_futures_selfcheck():
     from tradingvision.data import futures
 
     futures._selfcheck()
+
+
+def test_stopmap_selfcheck():
+    """`stopmap` keeps its checks in a function: its `__main__` reads the 5m store of fifteen pairs."""
+    stopmap._selfcheck()
+
+
+def test_timing_selfcheck():
+    """`timing` keeps its checks in a function: its `__main__` reads the 4h and 15m store."""
+    timing._selfcheck()
+
+
+def test_events_selfcheck():
+    """`events` keeps its checks in a function: its `__main__` reads the store, v2 and the futures."""
+    events._selfcheck()
+
+
+def test_sequential_selfcheck():
+    """`sequential` keeps its checks in a function: its `__main__` simulates for minutes or reads v2's trades."""
+    sequential._selfcheck()
+
+
+def test_flow_selfcheck():
+    """`flow` keeps its checks in a function: its `__main__` reads the taker columns of the store."""
+    flow._selfcheck()
+
+
+def test_decomposer_selfcheck():
+    """`app.decomposer` keeps its checks in a function: its `__main__` is the Streamlit page."""
+    from tradingvision.app import decomposer
+
+    decomposer._selfcheck()
 
 
 def test_binance_selfcheck():

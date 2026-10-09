@@ -1,0 +1,1758 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Falsi allarmi e vantaggio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* The same tokens as strategy_study.html, so the two reports read as one notebook. */
+:root {
+  --bg: #f5f7f9;
+  --surface: #ffffff;
+  --fg: #141820;
+  --fg2: #475161;
+  --muted: #7a8393;
+  --rule: #e1e5eb;
+  --axis: #c3c8d0;
+  --accent: #1f5fae;
+  --accent-wash: #e8f0fb;
+  --s1: #2a78d6;
+  --s2: #eb6834;
+  --s3: #1baf7a;
+  --pos: #006300;
+  --neg: #b42828;
+  --good: #0ca30c;
+  --warn: #c98500;
+  --bad: #d03b3b;
+  --chip-good: #e6f4e6;
+  --chip-warn: #fbf1dc;
+  --chip-bad: #fbe7e7;
+  --chip-neutral: #eceef2;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1216; --surface: #171b21; --fg: #eef1f5; --fg2: #b9c0cb; --muted: #8a93a1;
+    --rule: #2a3038; --axis: #3a414b; --accent: #6ea8f0; --accent-wash: #1a2636;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --pos: #4cc04c; --neg: #f07272;
+    --good: #0ca30c; --warn: #e0a42a; --bad: #e66767;
+    --chip-good: #16301a; --chip-warn: #33290f; --chip-bad: #3a1a1a; --chip-neutral: #232830;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1216; --surface: #171b21; --fg: #eef1f5; --fg2: #b9c0cb; --muted: #8a93a1;
+  --rule: #2a3038; --axis: #3a414b; --accent: #6ea8f0; --accent-wash: #1a2636;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --pos: #4cc04c; --neg: #f07272;
+  --good: #0ca30c; --warn: #e0a42a; --bad: #e66767;
+  --chip-good: #16301a; --chip-warn: #33290f; --chip-bad: #3a1a1a; --chip-neutral: #232830;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 16px; line-height: 1.6; }
+.page { max-width: 960px; margin: 0 auto; padding-inline: 16px; padding-block: 40px 80px; display: grid; gap: 56px; }
+header { display: grid; gap: 14px; }
+.eyebrow { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+h1 { font-size: clamp(28px, 4.4vw, 40px); line-height: 1.15; margin: 0; font-weight: 700; text-wrap: balance; letter-spacing: -.01em; }
+h2 { font-size: 24px; line-height: 1.25; margin: 0; font-weight: 600; text-wrap: balance; }
+h3 { font-size: 17px; margin: 0; font-weight: 600; }
+h4 { font-size: 15px; margin: 0; font-weight: 600; color: var(--fg2); }
+p { margin: 0; max-width: 68ch; color: var(--fg); }
+.lede { font-size: 18px; color: var(--fg2); max-width: 64ch; }
+.meta { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+section { display: grid; gap: 18px; min-width: 0; }
+.sub-section { display: grid; gap: 14px; padding-left: 14px; border-left: 3px solid var(--rule); }
+.sechead { display: grid; gap: 4px; border-top: 1px solid var(--rule); padding-top: 22px; }
+.step { font-family: var(--mono); font-size: 12px; color: var(--accent); letter-spacing: .04em; }
+ul.points, ol.points { margin: 0; padding-left: 20px; display: grid; gap: 8px; max-width: 70ch; }
+ul.points li::marker, ol.points li::marker { color: var(--muted); }
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 14px; }
+nav.toc a, a { color: var(--accent); text-decoration: none; }
+nav.toc .meta { flex-basis: 100%; font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; margin-top: 4px; }
+nav.toc a:hover, a:hover, a:focus-visible { text-decoration: underline; }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+code, .code { font-family: var(--mono); font-size: 13.5px; }
+p code, li code, td code, dd code { background: var(--accent-wash); padding: 1px 5px; border-radius: 4px; }
+.formula { font-family: var(--mono); font-size: 15px; background: var(--surface); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 8px; padding: 12px 16px; overflow-x: auto; white-space: nowrap; }
+.callout { background: var(--accent-wash); border-radius: 10px; padding: 14px 18px; display: grid; gap: 8px; }
+.callout p { max-width: 74ch; }
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.tile { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 16px 18px; display: grid; gap: 4px; align-content: start; }
+.tile .label { font-size: 13px; color: var(--fg2); }
+.tile .value { font-size: 32px; font-weight: 600; line-height: 1.1; }
+.tile .note { font-size: 13px; color: var(--muted); }
+.up { color: var(--pos); } .down { color: var(--neg); }
+
+.tablewrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { padding: 8px 12px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--rule); }
+th { font-weight: 600; color: var(--fg2); font-size: 12.5px; background: var(--surface); vertical-align: bottom; }
+td { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 13.5px; }
+th:first-child, td:first-child { text-align: left; font-family: var(--sans); font-size: 14px; }
+td.text, th.text { text-align: left; font-family: var(--sans); white-space: normal; min-width: 200px; font-size: 14px; }
+tr:last-child td { border-bottom: 0; }
+tr.hl td { background: var(--accent-wash); }
+tr.sep td { border-top: 2px solid var(--axis); }
+.caption { font-size: 13px; color: var(--muted); max-width: 80ch; }
+
+.chip { display: inline-flex; align-items: center; gap: 6px; font-family: var(--sans); font-size: 12.5px; font-weight: 600; padding: 2px 9px; border-radius: 999px; white-space: nowrap; color: var(--fg); }
+.chip i { font-style: normal; font-weight: 700; }
+.chip.good { background: var(--chip-good); } .chip.good i { color: var(--good); }
+.chip.warn { background: var(--chip-warn); } .chip.warn i { color: var(--warn); }
+.chip.bad { background: var(--chip-bad); } .chip.bad i { color: var(--bad); }
+.chip.neutral { background: var(--chip-neutral); } .chip.neutral i { color: var(--muted); }
+
+.spec { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 18px 20px; display: grid; gap: 10px; }
+.spec dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; }
+.spec dt { color: var(--fg2); font-size: 14px; }
+.spec dd { margin: 0; min-width: 0; }
+@media (max-width: 560px) { .spec dl { grid-template-columns: 1fr; } .spec dd { margin-bottom: 8px; } }
+
+.chart { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 14px 14px 8px; display: grid; gap: 8px; position: relative; min-width: 0; }
+.chart h3 { font-size: 15px; }
+.chart .sub { font-size: 13px; color: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--fg2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend svg { width: 14px; height: 14px; overflow: visible; }
+.plot { overflow-x: auto; }
+.plot svg { display: block; width: 100%; min-width: 520px; height: auto; }
+.plot svg text { font-family: var(--sans); font-size: 12px; fill: var(--muted); }
+.plot svg text.lab { fill: var(--fg2); font-size: 12.5px; }
+.tip { position: absolute; pointer-events: none; background: var(--surface); color: var(--fg); border: 1px solid var(--rule); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; box-shadow: 0 4px 16px rgba(0,0,0,.12); display: grid; gap: 2px; min-width: 160px; z-index: 2; }
+.tip[hidden] { display: none; }
+.tip .t { color: var(--fg); font-weight: 600; font-size: 12.5px; }
+.tip .r { display: flex; justify-content: space-between; gap: 12px; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.tip .r span:first-child { font-family: var(--sans); color: var(--fg2); }
+pre { margin: 0; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--fg); }
+details { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 10px 16px; }
+details > summary { cursor: pointer; font-weight: 600; color: var(--fg2); }
+details[open] > summary { margin-bottom: 10px; }
+details pre { border: 0; padding: 0; }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.two > * { min-width: 0; }
+.scrollx { overflow-x: auto; }
+.diagram svg { display: block; width: 100%; min-width: 520px; height: auto; }
+.diagram svg text { font-family: var(--sans); font-size: 12.5px; fill: var(--fg2); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <div class="eyebrow">TradingVision · ramo claude/lucid-brahmagupta-1bd8dn · 7 ottobre 2026 · teoria, simulazioni e piano di misura · misurato sullo store il 7-8 ottobre</div>
+    <h1>Ridurre i falsi allarmi non crea vantaggio. Le strade che restano</h1>
+    <p class="lede">La prima parte spiega perché un filtro sugli allarmi dei rivelatori di v2 non può rendere finché legge solo il passato del prezzo, e quanto deve valere un secondo modello per pagare la commissione. La seconda è il piano: le otto strade che restano, in che ordine percorrerle e perché, cosa cercare in ognuna e come decidere se andare avanti.</p>
+    <div class="meta">barre da 15m · rendimenti in log · bp = 0,01% · OKX spot taker 0,10% per lato, 20 bp andata e ritorno · HANDOFF §19</div>
+    <nav class="toc" aria-label="Sezioni">
+      <a href="#verdetto">In breve</a>
+      <span class="meta">Parte I</span><a href="#domanda">La domanda</a><a href="#legge">La legge</a><a href="#radar">Il radar</a><a href="#due-modelli">I due modelli</a><a href="#soglia">L'IC minimo</a><a href="#bersaglio">Dove c'è un bersaglio</a>
+      <span class="meta">Parte II</span><a href="#criterio">Come si sceglie</a><a href="#mappa">L'ordine</a><a href="#fase0">Fase 0</a><a href="#residuo">1 · Residuo</a><a href="#condizionata">2 · IC ai pivot</a><a href="#liquidita">3 · Liquidità</a><a href="#shock">4 · Shock di flusso</a><a href="#base">5 · Base lenta</a><a href="#tempismo">6 · Tempismo</a><a href="#taker">7 · Flusso dei taker</a><a href="#stop">8 · Mappa degli stop</a><a href="#conferma">Conferma</a><a href="#esiti">Cosa fare con i risultati</a>
+      <span class="meta">Riferimenti</span><a href="#codice">Il codice</a><a href="#limiti">Limiti</a><a href="#riproduci">Riprodurre</a><a href="#fonti">Fonti</a>
+    </nav>
+  </header>
+
+  <section id="verdetto">
+    <div class="sechead"><div class="step">IN BREVE</div><h2>La quota di falsi allarmi è un parametro libero. Il vantaggio, se c'è, sta in un'informazione che il prezzo non contiene</h2></div>
+    <div class="tiles">
+      <div class="tile"><div class="label">Meta-classificatore sugli allarmi di un random walk</div><div class="value">AUC 0,69</div><div class="note">più dello 0,63 sui dati veri, e ogni quintile guadagna zero</div></div>
+      <div class="tile"><div class="label">Accuratezza del secondo modello per pagare 20 bp</div><div class="value">90% → 55%</div><div class="note">sulla candela successiva contro sul rendimento dell'intero trade</div></div>
+      <div class="tile"><div class="label">Un segnale con IC 0,05, da solo e come tempismo</div><div class="value"><span class="down">−5</span> → <span class="up">+8</span> bp</div><div class="note">netto per trade contro guadagno per esecuzione di una strategia lenta</div></div>
+    </div>
+    <ul class="points">
+      <li><strong>La legge.</strong> Se il prezzo è una martingala rispetto a ciò che un filtro legge, ogni filtro rispetta <strong>P·W = (1−P)·L</strong>: dove la quota di allarmi veri P sale, i veri valgono meno (W) e i falsi costano di più (L), nella misura esatta che riporta il lordo a zero. I quintili misurati da <code>detect --features</code> la seguono entro il rumore.</li>
+      <li><strong>Il secondo modello</strong> vale quanto sa del periodo in cui si tiene il trade. Sulla candela successiva servono il 90% di accuratezza; sul rendimento dell'intero trade basta un IC di 0,18, cioè il 55%. La metrica giusta non è l'AUC né la precisione: è l'IC con il rendimento del periodo tenuto.</li>
+      <li><strong>Il vantaggio può venire solo da tre fonti:</strong> un'informazione che il passato del prezzo non contiene (il mercato, il volume, l'open interest, il book, l'ora); un flusso forzato che rende il prezzo non martingala in momenti o livelli riconoscibili (liquidazioni, stop, chi fornisce liquidità); oppure spostare chi paga la commissione.</li>
+      <li><strong>Il piano</strong> ha cinque tappe. La fase 0 chiude con i numeri veri la domanda di partenza. La fase 1 cerca informazione nei dati già nello store (strade 1-4). La fase 2 misura una strategia lenta e usa i segnali veloci per scegliere quando eseguirla (strade 5-6). La fase 3 chiede dati o codice nuovi (strade 7-8). Ciò che passa va confermato fuori campione e in paper trading, con un test che si può leggere a ogni trade.</li>
+      <li><strong>Stato, 8 ottobre.</strong> Tutte le strade sono nel codice e misurate sullo store, sullo sviluppo, sull'hold-out e sul 2021-2025 dove si può: <strong>nessuna passa il suo criterio</strong> (<a href="#esiti">Cosa fare con i risultati</a>). L'unico numero positivo in ogni fold è la parte del punteggio veloce nel tempismo della strada 6, circa +16 bp per esecuzione fuori dallo sviluppo: un indizio da confermare in paper trading. Strada facendo si è scoperto che l'open interest dietro al movimento del §17 era una fase di campionamento su 48.</li>
+    </ul>
+  </section>
+
+  <section id="domanda">
+    <div class="sechead"><div class="step">PARTE I · LA DOMANDA</div><h2>Un secondo modello che filtri gli allarmi del primo</h2></div>
+    <p>La proposta di partenza: prendere gli allarmi di svolta rivelati sulla predizione v2 e addestrare, sui soli pivot, un secondo modello che predica il segno della candela successiva. A ogni allarme si presentano quattro scenari, e si opera solo quando i due modelli sono concordi:</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Allarme del primo modello</th><th>Candela successiva prevista</th><th class="text">Decisione</th></tr></thead>
+      <tbody>
+        <tr><td>LONG</td><td>verde</td><td class="text">compra</td></tr>
+        <tr><td>LONG</td><td>rossa</td><td class="text">scarta l'allarme</td></tr>
+        <tr><td>SHORT</td><td>verde</td><td class="text">scarta l'allarme</td></tr>
+        <tr><td>SHORT</td><td>rossa</td><td class="text">vendi</td></tr>
+      </tbody>
+    </table></div>
+    <p>È una fusione AND di due rivelatori. Il timore dichiarato era che un secondo modello poco accurato filtri allarmi buoni e falsi allo stesso modo. Il CFAR, l'algoritmo base dei radar, si era già mostrato inutile: è una soglia, e le soglie sulla predizione sono state provate tutte.</p>
+    <p>Il punto di partenza misurato (<code>detect.py</code>, HANDOFF §17, sviluppo, lordo per trade):</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Rivelatore</th><th>Svolte trovate</th><th>Ritardo medio</th><th>Falsi allarmi per svolta</th><th>Trade da rilevazione giusta</th><th>Trade da falso allarme</th><th>Tutti, sviluppo</th><th>Tutti, hold-out</th></tr></thead>
+      <tbody>
+        <tr><td>Shiryaev 0,5</td><td>79%</td><td>4,7 barre</td><td>0,35</td><td class="up">+30,9 bp</td><td class="down">−79,8 bp</td><td>−1,0</td><td>+0,1</td></tr>
+        <tr><td>Shiryaev 0,9</td><td>65%</td><td>7,1</td><td>0,10</td><td class="up">+21,9</td><td class="down">−89,0</td><td>+6,7</td><td>−13,3</td></tr>
+        <tr><td>zigzag 0,2</td><td>97%</td><td>5,1</td><td>0,31</td><td class="up">+19,8</td><td class="down">−79,5</td><td>−0,3</td><td>−1,5</td></tr>
+      </tbody>
+    </table></div>
+    <p class="caption">Rivelatori sulla predizione v2, ETH/BTC/SOL, svolte giudicate sulle svolte centrate a 12 barre della predizione stessa. Lordo, quindi indipendente dalla commissione.</p>
+    <p>Le rilevazioni giuste guadagnano, i falsi allarmi perdono, e le due parti si annullano. La domanda diventa: esiste un modo di togliere i falsi allarmi senza togliere il guadagno dei veri?</p>
+  </section>
+
+  <section id="legge">
+    <div class="sechead"><div class="step">LA LEGGE</div><h2>La precisione si paga con il rapporto fra vincita e perdita</h2></div>
+    <p>Un rivelatore causale apre il trade a un tempo d'arresto T (l'allarme usa solo dati fino a T) e lo chiude al successivo T′. Se il log del prezzo è una martingala rispetto a tutto ciò che il filtro legge, il teorema d'arresto opzionale dà E[R | dati fino a T] = 0, dove R è il lordo del trade. Allora, per qualunque filtro φ costruito su quei dati:</p>
+    <div class="formula">E[R | φ] = P<sub>φ</sub>·W<sub>φ</sub> − (1 − P<sub>φ</sub>)·L<sub>φ</sub> = 0 &nbsp;⟹&nbsp; L<sub>φ</sub> / W<sub>φ</sub> = P<sub>φ</sub> / (1 − P<sub>φ</sub>)</div>
+    <p>dove P<sub>φ</sub> è la quota di allarmi veri fra quelli tenuti, W<sub>φ</sub> quanto guadagna in media un vero, L<sub>φ</sub> quanto perde in media un falso. Il filtro sceglie P; la martingala sceglie il rapporto L/W che lo compensa. <strong>Ogni filtro sta sulla stessa curva</strong>: più precisione, peggior rapporto.</p>
+    <p>Il motivo concreto è in una frase della docstring di <code>detect.py</code>: <em>ciò che dice che una svolta è avvenuta è quanto è già andata, cioè quanto ne è già stato speso</em>. Un allarme arrivato dopo un ritracciamento profondo è quasi certamente vero, ma il movimento che resta da prendere è piccolo; un falso allarme che sopravvive a un filtro severo è stato aperto dopo un movimento grande contro la gamba, e il ritorno della gamba costa di più.</p>
+
+    <div class="chart" id="c-law">
+      <h3>Rapporto perdita/vincita contro odds della precisione, per quintile del filtro</h3>
+      <div class="sub">Scale logaritmiche. Sulla diagonale il filtro non porta informazione; sotto, il lordo è positivo; sopra, negativo.</div>
+      <div class="legend" aria-hidden="true">
+        <span><svg viewBox="-7 -7 14 14"><circle r="5" fill="var(--s1)"/></svg>simulazione, martingala</span>
+        <span><svg viewBox="-7 -7 14 14"><rect x="-4.5" y="-4.5" width="9" height="9" rx="1.5" fill="var(--s2)"/></svg>simulazione, ritorno alla media</span>
+        <span><svg viewBox="-7 -7 14 14"><path d="M0,-6 L6,0 L0,6 L-6,0 Z" fill="var(--s3)"/></svg>dati veri, v2 (detect.py)</span>
+      </div>
+      <div class="plot"></div>
+    </div>
+
+    <div class="tablewrap"><table>
+      <thead><tr><th>Quintile del meta-classificatore</th><th>P (veri)</th><th>W, vero</th><th>L, falso</th><th>L/W</th><th>P/(1−P)</th><th>Lordo per trade</th></tr></thead>
+      <tbody>
+        <tr><td>1 (meno probabili)</td><td>0,638</td><td>+43,3</td><td>−78,1</td><td>1,81</td><td>1,76</td><td>−0,7</td></tr>
+        <tr><td>2</td><td>0,738</td><td>+33,4</td><td>−96,7</td><td>2,90</td><td>2,82</td><td>−0,7</td></tr>
+        <tr><td>3</td><td>0,814</td><td>+27,8</td><td>−113,3</td><td>4,08</td><td>4,38</td><td>+1,6</td></tr>
+        <tr><td>4</td><td>0,861</td><td>+20,7</td><td>−137,4</td><td>6,64</td><td>6,20</td><td>−1,3</td></tr>
+        <tr class="hl"><td>5 (più probabili)</td><td>0,937</td><td>+11,5</td><td>−166,3</td><td>14,51</td><td>14,98</td><td>+0,3</td></tr>
+      </tbody>
+    </table></div>
+    <p class="caption">Simulazione su un random walk GARCH con code t(4) (6 serie da 200.000 barre, σ 0,4% a barra), zigzag 0,3 su un RSI a 12, svolte giudicate sulle svolte centrate a 12 barre dell'RSI. Logistica su otto colonne note all'allarme, adattata sulla prima metà e letta sulla seconda: AUC 0,688. bp. Il codice è in <a href="#riproduci">Riprodurre</a>.</p>
+    <ul class="points">
+      <li><strong>Su un prezzo che nessuno può prevedere il meta-classificatore separa gli allarmi veri dai falsi meglio che sul mercato vero</strong> (AUC 0,69 contro 0,63) e porta la precisione dal 64% al 94%. Ogni quintile guadagna zero.</li>
+      <li><strong>Sui dati veri la legge regge entro il rumore.</strong> I quintili di <code>detect --features</code>: sviluppo 53% veri con L/W 1,39 contro P/(1−P) 1,13, 83% con 3,96 contro 4,88; hold-out 60% con 1,63 contro 1,50, 86% con 11,3 contro 6,1. Il quintile migliore dello sviluppo sta sotto la diagonale e quello dell'hold-out sopra: è il rumore della stima, non un'informazione stabile.</li>
+      <li><strong>Lo stesso vale per tutto ciò che il progetto ha già provato</strong>: combinare Shiryaev e zigzag, lo stop loss, i futures, il filtro sul livello. Ognuno è un altro punto della stessa curva.</li>
+    </ul>
+    <div class="callout">
+      <p><strong>Perché l'AUC inganna.</strong> La "verità" di un allarme è definita dal percorso futuro del prezzo. Su qualunque percorso, anche puro rumore, una svolta che è già andata più lontano ha più probabilità di essere una svolta: le colonne geometriche (ritracciamento, movimento della gamba, età) separano veri e falsi per costruzione. Un'AUC maggiore di 0,5 dice che il classificatore ha imparato la definizione di svolta; solo la differenza rispetto ai percorsi casuali può dire che ha imparato qualcosa del mercato.</p>
+    </div>
+  </section>
+
+  <section id="radar">
+    <div class="sechead"><div class="step">L'ANALOGIA</div><h2>Dove l'analogia con il radar si rompe</h2></div>
+    <div class="tablewrap"><table>
+      <thead><tr><th class="text">Nel radar</th><th class="text">Nelle svolte del prezzo</th></tr></thead>
+      <tbody>
+        <tr><td class="text">Il bersaglio esiste indipendentemente dal rumore: sotto H₁ c'è un oggetto che produce un'eco.</td><td class="text">La svolta è una proprietà del rumore stesso. Sui prezzi a segni casuali le svolte valgono di più che sul prezzo vero (+216 contro +201 bp col senno di poi, <code>strategy --null</code>).</td></tr>
+        <tr><td class="text">Il costo di un falso allarme e il valore di una rilevazione sono fissati da fuori.</td><td class="text">Sono endogeni: dipendono dalla soglia. Un falso allarme sopravvissuto a un filtro più severo costa di più (−80 → −138 bp con <code>--both</code>).</td></tr>
+        <tr><td class="text">Neyman-Pearson: massimizzare la probabilità di rilevazione a quota di falsi allarmi fissata.</td><td class="text">Rilevazione e falsi allarmi si spostano lungo una curva su cui il guadagno è costante. L'ottimo di Neyman-Pearson non ha significato economico.</td></tr>
+        <tr><td class="text">CFAR: soglia adattata al rumore locale per tenere costante la quota di falsi allarmi.</td><td class="text">Una soglia sulla stessa informazione: un altro punto della stessa curva.</td></tr>
+        <tr><td class="text">L'ipotesi da verificare è "c'è un bersaglio".</td><td class="text">L'ipotesi giusta è "dopo l'allarme c'è una deriva": H₀ E[r futuro | passato] = 0 contro H₁ ≠ 0, con un rapporto segnale/rumore per barra dell'ordine di ρ², cioè 10⁻⁴-10⁻³.</td></tr>
+      </tbody>
+    </table></div>
+    <p>L'analogia torna utile quando il bersaglio esiste davvero: un oggetto che si stacca dal clutter (il residuo contro il mercato, <a href="#residuo">strada 1</a>) o un'onda di forma nota (lo shock di flusso, <a href="#shock">strada 4</a>). Le tecniche radar che restano valide sono quelle che <strong>cambiano l'informazione</strong>, non la soglia: cancellazione del clutter, filtro adattato, fusione di sensori diversi.</p>
+  </section>
+
+  <section id="due-modelli">
+    <div class="sechead"><div class="step">LO SCHEMA A DUE MODELLI</div><h2>Il secondo modello vale quanto sa del periodo in cui si tiene il trade</h2></div>
+    <p>Nella simulazione il secondo modello è un oracolo rumoroso: conosce il segno della candela successiva con accuratezza a, cioè ha un'informazione che nella realtà andrebbe trovata. Si opera solo quando concorda con l'allarme, e si tiene fino all'allarme successivo:</p>
+    <div class="two">
+      <div class="tablewrap"><table>
+        <thead><tr><th>a (candela successiva)</th><th>Precisione</th><th>bp per trade</th><th>di cui 1ª barra</th></tr></thead>
+        <tbody>
+          <tr><td>0,50</td><td>0,796</td><td>+0,3</td><td>−0,0</td></tr>
+          <tr><td>0,55</td><td>0,807</td><td>+3,0</td><td>+2,6</td></tr>
+          <tr><td>0,60</td><td>0,820</td><td>+6,0</td><td>+5,4</td></tr>
+          <tr><td>0,70</td><td>0,844</td><td>+10,1</td><td>+10,6</td></tr>
+          <tr><td>0,80</td><td>0,868</td><td>+15,5</td><td>+16,2</td></tr>
+          <tr class="hl"><td>0,90</td><td>0,891</td><td>+20,8</td><td>+21,3</td></tr>
+        </tbody>
+      </table></div>
+      <div class="tablewrap"><table>
+        <thead><tr><th>ρ (rendimento del trade)</th><th>Accuratezza</th><th>Precisione</th><th>bp per trade</th></tr></thead>
+        <tbody>
+          <tr><td>0,03</td><td>50,6%</td><td>0,798</td><td>+3,2</td></tr>
+          <tr><td>0,05</td><td>51,1%</td><td>0,802</td><td>+5,2</td></tr>
+          <tr><td>0,10</td><td>52,5%</td><td>0,805</td><td>+10,6</td></tr>
+          <tr><td>0,15</td><td>53,9%</td><td>0,812</td><td>+16,5</td></tr>
+          <tr class="hl"><td>0,20</td><td>55,4%</td><td>0,818</td><td>+21,9</td></tr>
+          <tr><td>0,30</td><td>58,0%</td><td>0,831</td><td>+30,4</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+    <p class="caption">Stesso random walk e stessi allarmi della sezione precedente (precisione di partenza 0,797, trade di 13,7 barre in media, |r| medio della prima barra 26,6 bp, deviazione standard del trade 148 bp). A sinistra un oracolo sul segno della barra dopo l'allarme; a destra un punteggio gaussiano con correlazione ρ con il rendimento dell'intero trade. Metà degli allarmi tenuta in entrambi i casi.</p>
+
+    <div class="chart" id="c-two">
+      <h3>bp per trade contro accuratezza del secondo modello</h3>
+      <div class="sub">La linea orizzontale è l'andata e ritorno su OKX spot taker, 20 bp.</div>
+      <div class="legend" aria-hidden="true">
+        <span><svg viewBox="-7 -7 14 14"><rect x="-4.5" y="-4.5" width="9" height="9" rx="1.5" fill="var(--s2)"/></svg>sul segno della candela successiva</span>
+        <span><svg viewBox="-7 -7 14 14"><circle r="5" fill="var(--s1)"/></svg>sul rendimento dell'intero trade</span>
+      </div>
+      <div class="plot"></div>
+    </div>
+
+    <h3>Perché il primo modello non aggiunge niente</h3>
+    <p>Il lordo di un trade concordante si scompone nella prima barra e nel resto:</p>
+    <div class="formula">E[s·R | concordi] = E[s·r₁ | concordi] + E[s·(r₂ + … + r<sub>T′</sub>) | concordi] = (2a − 1)·E|r₁| + 0</div>
+    <p>Il secondo termine è zero per la stessa martingala: il secondo modello non sa nulla oltre la prima barra, il primo non sa nulla del tutto. Il trade dura circa 14 barre e il secondo modello ne conosce una. Per questo la colonna "di cui 1ª barra" coincide con il totale, e per pagare 20 bp servono il 90% di accuratezza sul segno di una barra da 15 minuti, dove il progetto non ha mai misurato niente di lontanamente vicino (la v2 ha IC −0,026 con il rendimento delle 12 barre successive).</p>
+    <p>Con l'orizzonte giusto le cose cambiano: un punteggio con correlazione ρ con il rendimento dell'intero trade vale, per una distribuzione gaussiana, circa <strong>0,8·ρ·σ<sub>h</sub></strong> per trade (0,8 ≈ √(2/π)), dove σ<sub>h</sub> è la deviazione standard del rendimento sul periodo tenuto. Con σ<sub>h</sub> = 148 bp, 20 bp chiedono ρ ≈ 0,18, un'accuratezza del 55%. E <strong>la precisione degli allarmi sale appena, da 0,80 a 0,82</strong>: un filtro che paga può lasciare la quota di falsi allarmi quasi dov'era.</p>
+    <div class="callout">
+      <p><strong>Cosa può ancora fare il primo modello.</strong> Se il mercato fosse una martingala ovunque, il secondo modello renderebbe lo stesso da solo, senza allarmi. Il primo modello serve solo se seleziona momenti in cui il secondo è più informato: un IC del rendimento futuro più alto dopo un allarme che in una barra qualsiasi. È un'ipotesi misurabile, la prevedibilità condizionata all'evento, e nessuno l'ha ancora misurata sul progetto: è la <a href="#condizionata">strada 2</a>.</p>
+    </div>
+  </section>
+
+  <section id="soglia">
+    <div class="sechead"><div class="step">L'IC MINIMO</div><h2>Quanto deve valere un'informazione per pagare il costo</h2></div>
+    <p>Dalla stessa approssimazione, l'IC minimo con il rendimento del periodo tenuto che copre un'andata e ritorno di c bp è:</p>
+    <div class="formula">ρ<sub>min</sub> ≈ c / (0,8 · σ · √h)</div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Andata e ritorno</th><th>h = 16 barre (4 ore)</th><th>h = 48 barre (12 ore)</th><th>h = 192 barre (2 giorni)</th></tr></thead>
+      <tbody>
+        <tr class="hl"><td>20 bp, OKX spot taker 0,10%</td><td>0,16</td><td>0,09</td><td>0,045</td></tr>
+        <tr><td>10 bp, perpetual taker 0,05%</td><td>0,08</td><td>0,045</td><td>0,023</td></tr>
+        <tr><td>4 bp, perpetual maker 0,02%</td><td>0,03</td><td>0,018</td><td>0,009</td></tr>
+      </tbody>
+    </table></div>
+    <p class="caption">σ = 0,4% a barra da 15m, un valore tipico per ETH e SOL, da misurare sullo store. Le fee dei perpetual OKX vengono da fonti secondarie e vanno verificate. Sulle code grasse della simulazione serve circa il 10% in più della formula (0,18 invece di 0,16 a h ≈ 14).</p>
+    <p>Gli IC misurati dal progetto sono piccoli: v2 −0,026 a 12 barre, lo squilibrio del book entro il 5% da +0,020 a +0,056 a 12 barre, l'open interest dietro al movimento da +0,007 a +0,029 a 48 barre, per fold e su ogni barra. A 4 ore e alla commissione spot serve da tre a cinque volte tanto. <strong>L'orizzonte e il costo spostano la soglia più di qualunque filtro.</strong> Il funding dei perpetual non è in questa tabella. σ misurato sullo sviluppo: 0,21% a barra per BTC, 0,34% per ETH, 0,40% per SOL.</p>
+    <p class="caption">Corretto il 7 ottobre. Queste righe citavano l'open interest da +0,045 a +0,125 e il book da +0,006 a +0,059: erano letti su una barra ogni h, dalla prima, cioè su una fase sola, e la fase sposta l'IC dell'open interest di 0,03-0,07 (<a href="#condizionata-esito">strada 2</a>). Su ogni barra l'open interest dietro al movimento non è più "vicino al pareggio" su niente.</p>
+  </section>
+
+  <section id="bersaglio">
+    <div class="sechead"><div class="step">IL CONTROLLO</div><h2>Dove la rilevazione ha un bersaglio, lo stesso filtro paga</h2></div>
+    <p>La stessa catena (zigzag 0,3 su un RSI a 12) gira su un secondo mondo sintetico: il log del prezzo è un random walk più una componente AR(1) con emivita di 24 barre, che porta il 30% della varianza di una barra. Il filtro è quello del progetto: tenere solo gli allarmi la cui gamba ha raggiunto il livello L.</p>
+    <div class="chart" id="c-gate">
+      <h3>bp per trade tenendo gli allarmi la cui gamba ha raggiunto L, ±1 errore standard</h3>
+      <div class="sub">La precisione sale allo stesso modo nei due mondi: 0,81 → 0,96-0,97.</div>
+      <div class="legend" aria-hidden="true">
+        <span><svg viewBox="-7 -7 14 14"><circle r="5" fill="var(--s1)"/></svg>martingala</span>
+        <span><svg viewBox="-7 -7 14 14"><rect x="-4.5" y="-4.5" width="9" height="9" rx="1.5" fill="var(--s2)"/></svg>ritorno alla media (AR(1), 30% della varianza)</span>
+      </div>
+      <div class="plot"></div>
+    </div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Mondo</th><th>L</th><th>Trade</th><th>Precisione</th><th>bp per trade</th><th>Errore</th><th>bp in unità di σ della barra</th></tr></thead>
+      <tbody>
+        <tr><td>martingala</td><td>0</td><td>80.609</td><td>0,81</td><td>+0,2</td><td>0,5</td><td>+0,01</td></tr>
+        <tr><td></td><td>0,6</td><td>6.348</td><td>0,96</td><td>−0,3</td><td>2,6</td><td>−0,00</td></tr>
+        <tr class="sep"><td>ritorno alla media</td><td>0</td><td>82.938</td><td>0,81</td><td>−1,2</td><td>0,5</td><td>−0,04</td></tr>
+        <tr class="hl"><td></td><td>0,6</td><td>4.858</td><td>0,97</td><td>+10,3</td><td>2,8</td><td>+0,27</td></tr>
+        <tr class="sep"><td>fattore comune + parte propria, prezzo</td><td>0</td><td>81.789</td><td>0,81</td><td>−0,4</td><td>0,5</td><td>−0,01</td></tr>
+        <tr><td></td><td>0,6</td><td>5.215</td><td>0,97</td><td>+6,2</td><td>2,9</td><td>+0,13</td></tr>
+        <tr><td>fattore comune + parte propria, residuo</td><td>0</td><td>82.832</td><td>0,82</td><td>−0,2</td><td>0,3</td><td>−0,03</td></tr>
+        <tr class="hl"><td></td><td>0,6</td><td>4.838</td><td>0,97</td><td>+8,5</td><td>1,7</td><td>+0,39</td></tr>
+      </tbody>
+    </table></div>
+    <p class="caption">L = 0 tiene le gambe che hanno passato lo zero, quasi tutte. Le ultime quattro righe: un fattore comune random walk (circa il 70% della varianza), una parte propria AR(1) con emivita 24 (10%) e una parte propria random walk (20%), β per asset fra 0,8 e 1,4. Il residuo è l'asset meno β·fattore, con β stimato sulle 960 barre precedenti. Le righe a L = 0,3-0,5 sono nell'output di <code>run3.py</code> (<a href="#riproduci">Riprodurre</a>).</p>
+    <ul class="points">
+      <li><strong>La precisione non distingue i due mondi; il lordo sì.</strong> La colonna della precisione è la stessa riga per riga: chi guardasse solo i falsi allarmi non vedrebbe nessuna differenza.</li>
+      <li><strong>Lo scarto dalla legge è la firma dell'informazione.</strong> Nel mondo con ritorno alla media il meta-classificatore ordina il lordo (−8,4 bp nel primo quintile, +9,0 nel quinto) e nel quinto L/W vale 7,9 contro P/(1−P) 14,6: il punto quadrato in basso a destra del grafico della legge.</li>
+      <li><strong>Senza filtro anche qui il rivelatore guadagna zero.</strong> Lo zigzag entra dopo il ritracciamento, cioè a rientro già cominciato. Il valore del ritorno alla media sta agli estremi, ed è lì che il filtro sul livello lo prende.</li>
+      <li><strong>Sul residuo il rumore si dimezza</strong> (errore 1,7 contro 2,9 a parità di trade): il fattore comune non contiene niente che torni alla media e copre la parte che lo fa. In unità di σ il residuo rende tre volte il prezzo.</li>
+    </ul>
+    <p>Questo spiega anche l'unica riga positiva in tutti i fold dello studio (§17): lo zigzag 0,2 con il filtro a 0,5, +12,5 / +19,2 bp. È la forma che lascerebbe un debole ritorno alla media agli estremi, ma con errori di 14,7 / 16,6 bp (t 0,85 e 1,16) non è distinguibile dal caso. Le strade <a href="#residuo">1</a> e <a href="#liquidita">3</a> servono a capire quale delle due letture è giusta: la prima toglie il mercato, la seconda cerca gli stati in cui il rientro è pagato.</p>
+  </section>
+
+  <section id="criterio">
+    <div class="sechead"><div class="step">PARTE II · COME SI SCEGLIE UNA STRADA</div><h2>Una domanda per ogni idea: porta un'informazione che il prezzo non contiene, sfrutta un flusso forzato, o sposta il costo?</h2></div>
+    <p>La parte I lascia un criterio semplice. Un'idea che rilegge il solo percorso del prezzo in un altro modo (una soglia, un rivelatore, un classificatore sugli allarmi, uno stop) è un altro punto sulla curva P·W = (1−P)·L, e guadagna zero qualunque sia la sua precisione. Un'idea entra nel piano solo se fa almeno una di tre cose:</p>
+    <ol class="points">
+      <li><strong>Porta un'informazione esterna al prezzo</strong>: il movimento del mercato, il volume, l'open interest, il book, il flusso dei taker, l'ora. Su queste variabili la legge non vale a priori, e il controllo con i prezzi a segni casuali resta pulito: le conserva e cancella la direzione.</li>
+      <li><strong>Sfrutta un flusso forzato</strong>: liquidazioni, stop, chi fornisce liquidità e vuole essere pagato. Rendono il prezzo non martingala in momenti o livelli riconoscibili, ed è lì che una rilevazione ha un bersaglio.</li>
+      <li><strong>Sposta chi paga la commissione</strong>: un segnale che non paga 20 bp da solo può valere qualcosa se decide solo quando eseguire trade che si farebbero comunque.</li>
+    </ol>
+    <p>Le tecniche già provate o considerate, e dove sono finite:</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Tecnica</th><th class="text">Perché</th><th>Dove finisce</th></tr></thead>
+      <tbody>
+        <tr><td>Soglia adattiva (CFAR)</td><td class="text">Stessa informazione, soglia diversa</td><td><span class="chip bad"><i>✕</i>Esclusa</span></td></tr>
+        <tr><td>Combinazione di rivelatori, M-su-N</td><td class="text"><code>--both</code>: falsi allarmi da 0,35 a 0,07 per svolta, lordo invariato</td><td><span class="chip bad"><i>✕</i>Misurata</span></td></tr>
+        <tr><td>Track-before-detect, HMM, Shiryaev</td><td class="text">Rivelano bene (79% delle svolte, 3 barre di ritardo) e guadagnano zero</td><td><span class="chip bad"><i>✕</i>Misurata</span></td></tr>
+        <tr><td>Meta-labeling vero/falso</td><td class="text">AUC 0,69 anche su un random walk: impara la definizione di svolta</td><td><span class="chip bad"><i>✕</i>Così no</span></td></tr>
+        <tr><td>Secondo modello sulla candela successiva</td><td class="text">Sa una barra su quattordici; servirebbe il 90% di accuratezza</td><td><span class="chip bad"><i>✕</i>Esclusa</span></td></tr>
+        <tr><td>Stop loss</td><td class="text"><code>--sl</code>: taglia veri e falsi nella stessa misura</td><td><span class="chip bad"><i>✕</i>Misurato</span></td></tr>
+        <tr><td>Controllo conformal dei falsi allarmi</td><td class="text">Garantisce la quota di falsi allarmi, non il guadagno</td><td><span class="chip bad"><i>✕</i>Solo rischio</span></td></tr>
+        <tr><td>Effetti di calendario</td><td class="text">Su più exchange nessun effetto persistente; notte e fine settimana restano come stato di liquidità</td><td><span class="chip bad"><i>✕</i>Esclusa</span></td></tr>
+        <tr><td>Numeri tondi</td><td class="text">I prezzi di BTC si addensano sui tondi, i rendimenti dopo no (Urquhart)</td><td><span class="chip warn"><i>~</i>Placebo nella 8</span></td></tr>
+        <tr class="sep"><td>Secondo modello sull'orizzonte del trade</td><td class="text">Giusto, se legge colonne non di prezzo e se il pivot lo rende più informato</td><td><span class="chip good"><i>✓</i>Strada 2</span></td></tr>
+        <tr><td>Filtro sul livello (gate)</td><td class="text">Paga solo se agli estremi c'è un rientro: si cerca dove c'è</td><td><span class="chip good"><i>✓</i>Strade 1 e 3</span></td></tr>
+        <tr><td>BTC anticipa le alt</td><td class="text">Informazione da un altro asset</td><td><span class="chip good"><i>✓</i>Variante della 1</span></td></tr>
+        <tr><td>15m nel verso della gamba a 4h</td><td class="text">È il tempismo di una base lenta</td><td><span class="chip good"><i>✓</i>Strade 5 e 6</span></td></tr>
+        <tr><td>Posizione proporzionale al segnale</td><td class="text">L'effetto dell'open interest vive nel grosso, non negli estremi</td><td><span class="chip good"><i>✓</i>Strade 5 e 6</span></td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section id="mappa">
+    <div class="sechead"><div class="step">L'ORDINE</div><h2>Cinque tappe: chiudere, cercare informazione, usare una base lenta, dati nuovi, confermare</h2></div>
+    <div class="chart diagram" id="d-roadmap">
+      <h3>Le strade in ordine di esecuzione</h3>
+      <div class="sub">Le frecce fra le fasi sono l'ordine; le due verso il tempismo sono dipendenze: usa la base lenta e le colonne veloci che la fase 1 conferma.</div>
+      <div class="scrollx"><svg viewBox="0 0 776 270" role="img" aria-label="Schema del piano: fase 0 con due diagnostici, fase 1 con le strade da 1 a 4, fase 2 con la base lenta che alimenta il tempismo, fase 3 con il flusso dei taker e la mappa degli stop, e infine la conferma sul 2021-2025 e in paper trading.">
+        <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 Z" fill="var(--fg2)"/></marker></defs>
+        <g style="font-family: var(--mono); font-size: 11.5px">
+          <text x="8" y="18" style="fill: var(--accent)">FASE 0</text><text x="154" y="18" style="fill: var(--accent)">FASE 1</text><text x="330" y="18" style="fill: var(--accent)">FASE 2</text><text x="506" y="18" style="fill: var(--accent)">FASE 3</text><text x="644" y="18" style="fill: var(--accent)">CONFERMA</text>
+        </g>
+        <g style="font-size: 11.5px">
+          <text x="8" y="34">chiudere i filtri</text><text x="154" y="34">dati già nello store</text><text x="330" y="34">base lenta e tempismo</text><text x="506" y="34">dati nuovi</text><text x="644" y="34">fuori campione</text>
+        </g>
+        <g fill="var(--surface)" stroke="var(--axis)" stroke-width="1.25">
+          <rect x="8" y="52" width="120" height="42" rx="7"/><rect x="8" y="104" width="120" height="42" rx="7"/>
+          <rect x="154" y="52" width="150" height="42" rx="7"/><rect x="154" y="102" width="150" height="42" rx="7"/><rect x="154" y="152" width="150" height="42" rx="7"/><rect x="154" y="202" width="150" height="42" rx="7"/>
+          <rect x="330" y="72" width="150" height="42" rx="7"/><rect x="330" y="172" width="150" height="42" rx="7" stroke="var(--accent)" stroke-width="1.75"/>
+          <rect x="506" y="72" width="120" height="42" rx="7"/><rect x="506" y="132" width="120" height="42" rx="7"/>
+          <rect x="644" y="72" width="126" height="42" rx="7"/><rect x="644" y="132" width="126" height="42" rx="7"/>
+        </g>
+        <g class="boxes">
+          <text x="18" y="70" style="fill: var(--fg)">--features</text><text x="18" y="86" style="font-size: 11.5px">kept vicino a 0?</text>
+          <text x="18" y="122" style="fill: var(--fg)">--null</text><text x="18" y="138" style="font-size: 11.5px">AUC dentro i semi?</text>
+          <text x="164" y="70" style="fill: var(--fg)">1 · Residuo</text><text x="164" y="86" style="font-size: 11.5px">già nel codice</text>
+          <text x="164" y="120" style="fill: var(--fg)">2 · IC ai pivot</text><text x="164" y="136" style="font-size: 11.5px">una funzione</text>
+          <text x="164" y="170" style="fill: var(--fg)">3 · Liquidità</text><text x="164" y="186" style="font-size: 11.5px">event study agli estremi</text>
+          <text x="164" y="220" style="fill: var(--fg)">4 · Shock di flusso</text><text x="164" y="236" style="font-size: 11.5px">lo stesso event study</text>
+          <text x="340" y="90" style="fill: var(--fg)">5 · Base lenta</text><text x="340" y="106" style="font-size: 11.5px">swing --baseline, peso 1/σ</text>
+          <text x="340" y="190" style="fill: var(--fg)">6 · Tempismo</text><text x="340" y="206" style="font-size: 11.5px">colonne della fase 1</text>
+          <text x="516" y="90" style="fill: var(--fg)">7 · Taker</text><text x="516" y="106" style="font-size: 11.5px">cambia lo store</text>
+          <text x="516" y="150" style="fill: var(--fg)">8 · Stop</text><text x="516" y="166" style="font-size: 11.5px">livelli placebo</text>
+          <text x="654" y="90" style="fill: var(--fg)">2021-2025</text><text x="654" y="106" style="font-size: 11.5px">RSI, senza v2</text>
+          <text x="654" y="150" style="fill: var(--fg)">Paper trading</text><text x="654" y="166" style="font-size: 11.5px">test per scommessa</text>
+        </g>
+        <g stroke="var(--fg2)" stroke-width="1.5" fill="none" marker-end="url(#arr)">
+          <line x1="130" y1="99" x2="151" y2="99"/>
+          <path d="M306,148 C318,148 316,193 327,193"/>
+          <line x1="405" y1="116" x2="405" y2="169"/>
+          <line x1="482" y1="120" x2="503" y2="120"/>
+          <line x1="628" y1="120" x2="641" y2="120"/>
+        </g>
+      </svg></div>
+    </div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Strada</th><th class="text">La domanda</th><th>Dati</th><th>Stato</th><th>Prior</th></tr></thead>
+      <tbody>
+        <tr><td>0 · Chiudere i filtri</td><td class="text">I filtri sugli allarmi seguono la legge anche sul mercato vero?</td><td style="font-family: var(--sans)">store</td><td><span class="chip good"><i>✓</i>Nel codice</span></td><td style="font-family: var(--sans)">quasi certo: sì</td></tr>
+        <tr class="sep"><td>1 · Residuo contro il mercato</td><td class="text">La parte propria di ETH e SOL rientra agli estremi?</td><td style="font-family: var(--sans)">store</td><td><span class="chip good"><i>✓</i>Nel codice</span></td><td style="font-family: var(--sans)">media</td></tr>
+        <tr><td>2 · IC ai pivot</td><td class="text">Le colonne dei futures sanno di più ai pivot che altrove?</td><td style="font-family: var(--sans)">futures, 3 asset</td><td><span class="chip warn"><i>~</i>Una funzione</span></td><td style="font-family: var(--sans)">media</td></tr>
+        <tr><td>3 · Premio di liquidità</td><td class="text">Gli estremi rientrano quando la liquidità scarseggia?</td><td style="font-family: var(--sans)">store, 15 asset</td><td><span class="chip warn"><i>~</i>Da scrivere</span></td><td style="font-family: var(--sans)">media</td></tr>
+        <tr><td>4 · Shock di flusso</td><td class="text">Dopo uno shock fatto chiudendo posizioni il prezzo rientra abbastanza?</td><td style="font-family: var(--sans)">futures, 3 asset</td><td><span class="chip warn"><i>~</i>Da scrivere</span></td><td style="font-family: var(--sans)">media-bassa</td></tr>
+        <tr class="sep"><td>5 · Base lenta</td><td class="text">Il trend a 4h con la volatilità controllata batte l'hold alla commissione di OKX?</td><td style="font-family: var(--sans)">store a 4h</td><td><span class="chip warn"><i>~</i>Un peso</span></td><td style="font-family: var(--sans)">media</td></tr>
+        <tr><td>6 · Tempismo</td><td class="text">I segnali veloci migliorano il prezzo dei trade della base lenta?</td><td style="font-family: var(--sans)">store e futures</td><td><span class="chip warn"><i>~</i>Da scrivere</span></td><td style="font-family: var(--sans)">media-alta</td></tr>
+        <tr class="sep"><td>7 · Flusso dei taker</td><td class="text">La parte della gamba non spiegata dal flusso informato rientra?</td><td style="font-family: var(--sans)">store da ampliare</td><td><span class="chip bad"><i>✕</i>Store e codice</span></td><td style="font-family: var(--sans)">bassa</td></tr>
+        <tr><td>8 · Mappa degli stop</td><td class="text">Rompere un minimo confermato muove il prezzo più di un livello qualsiasi?</td><td style="font-family: var(--sans)">store a 5m</td><td><span class="chip warn"><i>~</i>Da scrivere</span></td><td style="font-family: var(--sans)">bassa</td></tr>
+      </tbody>
+    </table></div>
+    <h3>Perché questo ordine</h3>
+    <ul class="points">
+      <li><strong>Prima ciò che costa minuti e chiude una domanda.</strong> La fase 0 è nel codice: non apre niente, ma toglie per sempre la tentazione di un altro filtro sugli allarmi.</li>
+      <li><strong>Poi l'informazione, dal test più economico.</strong> La strada 1 è già nel codice. La 2 è una funzione sui dati che <code>detect --futures</code> già carica, e risponde direttamente alla proposta di partenza. La 3 e la 4 sono lo stesso event study su due tipi di evento (un estremo, uno shock): si scrive una volta.</li>
+      <li><strong>Il tempismo dopo, perché dipende da due cose:</strong> una base lenta che guadagna alla commissione di OKX (la 5 la misura) e colonne veloci con il segno confermato (open interest e book lo hanno già; la fase 1 può aggiungerne). Può partire anche se la fase 1 non trova niente di nuovo.</li>
+      <li><strong>Per ultime le strade con il prior più basso o il costo più alto.</strong> La 7 chiede di cambiare lo store, e il flusso grezzo all'allarme non ha dato niente. La 8 ha prove solo sui cambi, con gli ordini veri di una banca.</li>
+      <li><strong>Ogni strada si decide sullo sviluppo e si conferma fuori.</strong> L'hold-out dei fold 3-4 è consumato (§17): la conferma è il 2021-2025 per ciò che non legge v2, il walk-forward di v2 dal 2023 per ciò che lo legge, e infine il paper trading.</li>
+    </ul>
+    <div class="callout">
+      <p><strong>Come leggere le schede.</strong> Ogni strada ha la stessa scheda. <em>Perché</em> è il meccanismo che può rompere la legge. <em>Cosa cercare</em> è la firma attesa nei numeri, e cosa si vedrebbe se non c'è niente. <em>Si decide</em> è il criterio, fissato prima di guardare. <em>Se passa</em> e <em>se no</em> dicono cosa cambia nel piano.</p>
+    </div>
+  </section>
+
+  <section id="fase0">
+    <div class="sechead"><div class="step">FASE 0</div><h2>Chiudere il ramo dei filtri con i numeri del mercato vero</h2></div>
+    <p>Due diagnostici già in <code>detect.py</code>. Non possono aprire una strada: verificano sul mercato ciò che la parte I dimostra su un random walk.</p>
+    <div class="spec"><dl>
+      <dt>Comandi</dt><dd><code>detect --features 0.5</code>, poi <code>detect --null 0.5 --seeds 0 1 2 3 4</code>.</dd>
+      <dt>Cosa cercare</dt><dd><strong><code>kept</code></strong>, la pendenza del lordo sul lordo nominale P·W̄ − (1−P)·L̄ fra i quintili del meta-classificatore, con il suo errore, su sviluppo e hold-out. Atteso: vicino a 0, come suggeriscono i quintili del §17. Poi <strong>l'AUC dell'RSI vero contro la dispersione dei semi a segni casuali</strong>: se cade dentro, separare veri e falsi è geometria della definizione di svolta.</dd>
+      <dt>Si decide</dt><dd><code>kept</code> entro due errori da 0 in entrambi i periodi e AUC reale dentro i semi: il filtro sugli allarmi con le colonne del prezzo è chiuso.</dd>
+      <dt>Se no</dt><dd><code>kept</code> oltre due errori in entrambi i periodi vuol dire che le sedici colonne portano informazione: si riapre il meta-labeling, addestrato sul lordo del trade e non su vero/falso.</dd>
+      <dt>Costo</dt><dd>Minuti, sullo store.</dd>
+    </dl></div>
+    <div class="sub-section" id="fase0-esito">
+      <h3>Misurato il 7 ottobre <span class="chip bad"><i>✕</i> filtro chiuso</span></h3>
+      <p>Su 8.244 allarmi di Shiryaev 0,5 (72% veri) la logistica sulle sedici colonne separa come prima (AUC 0,637 sullo sviluppo, 0,629 sull'hold-out), e della precisione che promette arriva al lordo <strong><code>kept</code> = 0,28 ± 0,20 sullo sviluppo e −0,15 ± 0,23 sull'hold-out</strong>: entro due errori da zero in entrambi i periodi. Il rapporto L/W segue P/(1−P) quintile per quintile, come vuole la legge.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Quintile, sviluppo</th><th>quota veri</th><th>vero, bp</th><th>falso, bp</th><th>L/W</th><th>P/(1−P)</th><th>lordo nominale</th><th>lordo misurato</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>53%</td><td>+49,0</td><td>−67,8</td><td>1,38</td><td>1,13</td><td>−20,8</td><td>−5,9 ± 5,4</td></tr>
+          <tr><td>2</td><td>69%</td><td>+39,2</td><td>−95,7</td><td>2,44</td><td>2,20</td><td>−3,3</td><td>−2,9 ± 4,9</td></tr>
+          <tr><td>3</td><td>74%</td><td>+24,3</td><td>−72,8</td><td>2,99</td><td>2,79</td><td>+2,1</td><td>−1,3 ± 3,6</td></tr>
+          <tr><td>4</td><td>76%</td><td>+26,3</td><td>−76,2</td><td>2,90</td><td>3,21</td><td>+5,0</td><td>+1,9 ± 4,1</td></tr>
+          <tr><td>5</td><td>83%</td><td>+24,7</td><td>−99,2</td><td>4,02</td><td>4,72</td><td>+12,0</td><td>+3,0 ± 4,1</td></tr>
+        </tbody>
+      </table></div>
+      <p class="caption"><code>detect --features 0.5</code>, quintili tagliati sullo sviluppo, bp per trade senza commissione. Il nominale è P·W̄ − (1−P)·L̄ con W e L fermi alla media del periodo: dal primo al quinto quintile promette 33 bp, ne arrivano 9. Sull'hold-out il quinto quintile ha l'86% di veri e fa −6,6 bp.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Serie e percorso</th><th>allarmi</th><th>quota veri</th><th>AUC sviluppo</th><th>AUC hold-out</th><th><code>kept</code> sviluppo</th><th><code>kept</code> hold-out</th></tr></thead>
+        <tbody>
+          <tr><td>v2, prezzo vero</td><td>8.236</td><td>72%</td><td>0,616</td><td>0,615</td><td>+0,62 ± 0,24</td><td>−0,26 ± 0,28</td></tr>
+          <tr class="hl"><td>RSI 12, prezzo vero</td><td>6.963</td><td>69%</td><td>0,619</td><td>0,602</td><td>+0,30 ± 0,25</td><td>−0,74 ± 0,33</td></tr>
+          <tr class="sep"><td>RSI 12, segni casuali, 5 semi</td><td>6.877-7.082</td><td>70%</td><td>0,613-0,630</td><td>0,605-0,622</td><td>−0,65 … +0,35</td><td>−0,25 … +0,47</td></tr>
+        </tbody>
+      </table></div>
+      <p class="caption"><code>detect --null 0.5 --seeds 0 1 2 3 4</code>. Sui cinque percorsi a segni casuali l'AUC media è 0,621: quella dell'RSI vero, 0,619, ci cade dentro.</p>
+      <ul class="points">
+        <li><strong>Separare gli allarmi veri dai falsi è la geometria della definizione di svolta.</strong> L'RSI di un prezzo che nessuno può prevedere si separa quanto quello vero; il mercato non aggiunge niente all'AUC.</li>
+        <li><strong>L'errore di <code>kept</code> è ottimista.</strong> Sui cinque semi nulli <code>kept</code> va da −0,65 a +0,35, una deviazione standard di 0,40 contro l'errore di 0,22-0,28 che ciascuno dichiara. Il +0,62 di v2 sullo sviluppo è 2,5 errori dichiarati ma 1,5 deviazioni dei semi, e sull'hold-out torna a −0,26: è rumore, non precisione che paga.</li>
+        <li><strong>Esito:</strong> il ramo dei filtri sugli allarmi con colonne del prezzo è chiuso. Non si riapre il meta-labeling.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="residuo">
+    <div class="sechead"><div class="step">FASE 1 · STRADA 1</div><h2>Rilevare sul residuo contro il mercato</h2></div>
+    <p>Il movimento di ETH è β volte quello di BTC più una parte sua. Se ETH scende del 3% mentre BTC scende del 2,7%, è quasi tutto mercato e non c'è niente di suo che possa rientrare. Se scende del 3% con BTC fermo, è uno shock proprio, per esempio un grande venditore, e la letteratura sull'inversione di breve nelle crypto dice che questi movimenti rientrano in parte. È la cancellazione del clutter dei radar (MTI): si toglie ciò che è comune, e il rivelatore guarda solo dove può esserci un bersaglio.</p>
+    <div class="formula">spread<sub>t</sub> = exp(Σ (r<sub>ETH,t</sub> − β<sub>t</sub>·r<sub>BTC,t</sub>)) &nbsp;&nbsp; β<sub>t</sub> dalle 2.880 barre chiuse prima di t</div>
+    <div class="spec"><dl>
+      <dt>Perché</dt><dd>Il movimento comune (stimato al 60-80% della varianza a 15 minuti, da misurare) domina RSI e pivot ma non contiene la parte che rientra. Nella simulazione con il 10% di parte propria che rientra, il filtro a L = 0,6 fa +8,5 bp sul residuo contro +6,2 sul prezzo, con metà dell'errore (<a href="#bersaglio">Dove c'è un bersaglio</a>).</dd>
+      <dt>Cosa cercare</dt><dd>Nell'output di <code>--residual</code>, la riga <code>residual: rsi 12</code> contro <code>price: rsi 12</code>:
+        <ul class="points">
+          <li>il lordo <code>dev_bp</code> sopra <code>fee_bp</code>, che conta le due gambe (circa 40 bp su spot, circa 20 su perpetual taker);</li>
+          <li>un lordo che <strong>cresce con il livello del filtro</strong>: è la firma del rientro agli estremi, e manca su una martingala;</li>
+          <li><code>kept_dev</code> oltre due errori, cioè una precisione che arriva al lordo;</li>
+          <li>lo stesso segno nei due fold di sviluppo.</li>
+        </ul>
+        Il prezzo fa da controllo: se residuo e prezzo rendono uguale, il fattore comune non nascondeva niente.</dd>
+      <dt>Variante</dt><dd>BTC anticipa le alt? Con il rendimento di BTC della barra precedente al posto di quello della barra: se il residuo ritardato rientra, l'anticipo esiste a 15 minuti.</dd>
+      <dt>Si decide</dt><dd>Lordo sopra <code>fee_bp</code> e positivo in entrambi i fold di sviluppo, <code>kept_dev</code> oltre due errori.</dd>
+      <dt>Se passa</dt><dd>Una regola coperta sui perpetual (long ETH, short β BTC), prezzata con il funding. Conferma sul 2021-2025: <code>residual_study</code> oggi gira sulle righe di v2, estenderlo a tutta la storia con l'RSI è un passo piccolo.</dd>
+      <dt>Se no</dt><dd>La parte propria non rientra abbastanza, in media, da pagare due gambe. Le strade 3 e 4 restano: cercano il rientro in un sottoinsieme (stati illiquidi, shock di flusso), non in media.</dd>
+      <dt>Dati e stato</dt><dd>Store; ETH e SOL contro BTC (<code>--residual BTC</code>) o i tre contro il paniere (<code>--residual ew</code>). Nel codice, da eseguire.</dd>
+    </dl></div>
+    <div class="sub-section" id="residuo-esito">
+      <h3>Misurato il 7 ottobre <span class="chip bad"><i>✕</i> non passa</span></h3>
+      <p>Il movimento comune è il 60-68% della varianza a 15 minuti sullo sviluppo (R² di ETH su BTC 0,68, di SOL 0,60; sul paniere 0,65 e 0,67), con σ di 34 bp a barra per ETH e 40 per SOL. Toglierlo costa: la copertura paga due gambe, <code>fee_bp</code> 49,6 bp contro BTC (β medio intorno a 1,5) e 34,6 contro il paniere, sulle barre d'allarme dello sviluppo.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Sviluppo, bp per trade</th><th>senza filtro</th><th>allarme, L 0,4</th><th>L 0,5</th><th>L 0,6</th><th>estremo, L 0,4</th><th>L 0,5</th><th>L 0,6</th><th><code>kept</code></th></tr></thead>
+        <tbody>
+          <tr><td>prezzo, RSI 12, zigzag 0,2</td><td>+1,2</td><td>−4,8</td><td>−20,6</td><td>(4 trade)</td><td>+6,5</td><td>+5,1</td><td>−5,9</td><td>0,09 ± 0,12</td></tr>
+          <tr><td>residuo BTC, zigzag 0,2</td><td>+0,0</td><td>−4,2</td><td>−14,1</td><td>(2)</td><td>+2,0</td><td>−6,2</td><td>−8,5</td><td>0,16 ± 0,12</td></tr>
+          <tr><td>residuo BTC, Shiryaev 0,5</td><td>+0,7</td><td>+1,0</td><td>+0,4</td><td>−3,2</td><td>+4,5</td><td>−5,4</td><td>−4,8</td><td>−0,07 ± 0,29</td></tr>
+          <tr class="sep"><td>prezzo, RSI 12, zigzag 0,2 (3 asset)</td><td>+0,2</td><td>−4,4</td><td>−14,8</td><td>(5)</td><td>+5,2</td><td>+4,2</td><td>−4,0</td><td>0,09 ± 0,10</td></tr>
+          <tr><td>residuo paniere, zigzag 0,2</td><td>+0,6</td><td>+10,5</td><td>+29,8</td><td>(5)</td><td>+3,5</td><td>+7,7</td><td>+5,0</td><td>0,28 ± 0,12</td></tr>
+          <tr class="hl"><td>residuo paniere, Shiryaev 0,5</td><td>+3,1</td><td>+17,4</td><td>+31,5</td><td>+70,1</td><td>+4,2</td><td>+9,7</td><td>+26,5</td><td>−0,01 ± 0,32</td></tr>
+        </tbody>
+      </table></div>
+      <p class="caption"><code>detect --residual BTC --gate 0.4 0.5 0.6</code> (ETH e SOL) e <code>detect --residual ew</code> (ETH, BTC, SOL), lordo senza commissione, filtro che chiude sugli allarmi scartati. Shiryaev 0,5 sul residuo contro il paniere al filtro sull'allarme: 302 / 138 / 69 trade, errori 9,7 / 19,6 / 36,9 bp, fold 1 e 2 +10,6 / +23,6, +10,4 / +52,6, +13,0 / +125,5; sull'hold-out −13,2 / −8,7 / +2,3.</p>
+      <ul class="points">
+        <li><strong>Contro BTC non c'è niente:</strong> il residuo lordo sta fra −14 e +5 bp a ogni filtro, lontano dai 47 bp delle due gambe, e non cresce con il livello.</li>
+        <li><strong>Contro il paniere c'è la firma e non il resto.</strong> Shiryaev sul residuo, filtrato all'allarme, sale con il livello (+17 → +31 → +70 bp) in entrambi i fold di sviluppo, e lo zigzag ha <code>kept</code> 0,28 ± 0,12. Letto alla lettera il criterio passa una volta, lo zigzag a L 0,6: +220 bp su <strong>5 trade</strong> (3 e 2 per fold), <code>kept</code> 0,28 ± 0,12; su ogni coppia tradabile la stessa riga fa +80,5 su 26 trade. Shiryaev a L 0,6 (+70,1 su 69 trade) ha <code>kept</code> −0,01, e l'hold-out torna negativo.</li>
+      </ul>
+      <h4>La conferma sul 2021-2025</h4>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Residuo, RSI 12, allarme, bp per trade</th><th>L 0,4</th><th>L 0,5</th><th>L 0,6</th><th><code>kept</code></th><th><code>fee_bp</code></th></tr></thead>
+        <tbody>
+          <tr><td>contro BTC, zigzag 0,2</td><td>−15,6 ± 7,2</td><td>−10,1 ± 18,6</td><td>−45,5 ± 34,0</td><td>−0,14 ± 0,06</td><td>44,4</td></tr>
+          <tr><td>contro BTC, Shiryaev 0,5</td><td>−19,3 ± 7,2</td><td>−20,6 ± 11,8</td><td>−45,5 ± 21,4</td><td>−0,19 ± 0,15</td><td></td></tr>
+          <tr><td>contro il paniere, zigzag 0,2</td><td>−11,1 ± 4,5</td><td>−9,9 ± 7,5</td><td>−21,7 ± 18,7</td><td>−0,11 ± 0,05</td><td>36,6</td></tr>
+          <tr class="hl"><td>contro il paniere, Shiryaev 0,5</td><td>−8,3 ± 4,3</td><td>−12,8 ± 6,8</td><td>−25,4 ± 12,6</td><td>−0,31 ± 0,13</td><td></td></tr>
+          <tr class="sep"><td>ogni coppia tradabile, paniere, zigzag</td><td>−7,1 ± 2,9</td><td>−5,0 ± 7,6</td><td>−10,9 ± 25,6</td><td>−0,04 ± 0,02</td><td>39,4</td></tr>
+          <tr><td>ogni coppia tradabile, BTC, Shiryaev</td><td>−14,2 ± 3,3</td><td>−20,7 ± 5,5</td><td>−34,4 ± 9,9</td><td>−0,04 ± 0,07</td><td>44,1</td></tr>
+        </tbody>
+      </table></div>
+      <p class="caption"><code>detect --residual BTC|ew --period 2021 [--tradable]</code>: 2021-01 → 2025-06 in quattro fold, h, p e L congelati dallo sviluppo, l'azzardo di Shiryaev e la logistica di <code>kept</code> stimati sul 2020. Sugli stessi tre asset l'RSI del prezzo fa −144 (zigzag) e −57 (Shiryaev) a L 0,6 contro il paniere: gli estremi proseguono.</p>
+      <ul class="points">
+        <li><strong>Sul 2021-2025 non sopravvive niente.</strong> Ogni riga filtrata del residuo è negativa e più bassa a L 0,6 che a 0,4, il contrario della firma; <code>kept</code> è negativo, oltre due errori sotto zero in cinque righe. Il residuo toglie una parte del momentum del prezzo e non lascia un rientro che paghi nemmeno una gamba.</li>
+        <li><strong>BTC non anticipa le alt a 15 minuti</strong> (<code>--lag 1</code>): sulla barra precedente di BTC il β delle alt è circa 0,05, e il residuo ritardato è il prezzo (zigzag −24,0 / −53,2 / −175,7 sul 2021-2025).</li>
+        <li><strong>Esito:</strong> la strada 1 è chiusa. La forma che lo sviluppo mostrava contro il paniere era di un periodo.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="condizionata">
+    <div class="sechead"><div class="step">FASE 1 · STRADA 2</div><h2>I due stadi, nella forma giusta: il secondo modello è più informato ai pivot?</h2></div>
+    <p>È la proposta di partenza, corretta in due punti: il secondo modello predice il rendimento del periodo tenuto, non la candela successiva, e legge colonne che non sono il percorso del prezzo. Il primo modello serve solo se seleziona i momenti in cui il secondo sa di più. Si misura con un rapporto:</p>
+    <div class="formula">guadagno del primo stadio = IC(colonna, rendimento a h | barra al pivot) / IC(colonna, rendimento a h | barra qualsiasi)</div>
+    <div class="spec"><dl>
+      <dt>Perché</dt><dd>Le colonne dei futures hanno IC piccoli su tutte le barre: lo squilibrio del book entro il 5% da +0,020 a +0,056 a 12 barre, stabile; l'open interest dietro al movimento da +0,007 a +0,029 a 48 barre (il piano citava +0,045 / +0,125, una fase di campionamento su 48: vedi l'esito). Dopo una gamba lunga chi ha spinto il prezzo è più riconoscibile; se lì l'IC sale, il pivot è il cancello giusto.</dd>
+      <dt>Cosa cercare</dt><dd>Il rapporto per colonna e per orizzonte (12, 24, 48 barre), per fold, con l'errore a blocchi di <code>metrics.blocked</code>. "Al pivot" vuol dire due insiemi: le barre con |v2| ≥ L (0,4-0,6) e le barre di allarme di Shiryaev 0,5. Se non c'è niente, il rapporto è circa 1. All'allarme le stesse colonne separavano poco i veri dai falsi (AUC 0,55 / 0,53), ma l'AUC è la metrica sbagliata: conta l'IC con il rendimento.</dd>
+      <dt>Si decide</dt><dd>Rapporto sopra 1 di oltre due errori in tutti i fold di sviluppo, e IC condizionato sopra ρ<sub>min</sub> della <a href="#soglia">tabella</a> per l'orizzonte e lo strumento: a 48 barre, 0,09 su spot taker e 0,045 su perpetual taker.</dd>
+      <dt>Se passa</dt><dd>Lo schema a due stadi: l'allarme sceglie il momento, un punteggio sulle colonne dei futures sceglie il verso e la taglia, tenuto per l'orizzonte dell'IC.</dd>
+      <dt>Se no</dt><dd>Con un rapporto vicino a 1 il pivot toglie solo trade: le colonne si usano su tutte le barre, come colonne del punteggio della strada 6.</dd>
+      <dt>Dati e stato</dt><dd><code>data.futures</code> (BTC, ETH, SOL, sedici mesi), già allineato alla griglia a 15 minuti da <code>detect --futures</code>. Da scrivere: una funzione. È il test più economico della fase 1.</dd>
+    </dl></div>
+    <div class="sub-section" id="condizionata-esito">
+      <h3>Misurato il 7 ottobre <span class="chip bad"><i>✕</i> non passa</span></h3>
+      <p><code>detect --conditional</code>: 24 colonne (le 19 dei futures, l'open interest dietro al movimento a k = 4, 12, 24, v2 e l'RSI come riferimento), tre orizzonti, quattro insiemi "al pivot". L'IC è la media del prodotto dei ranghi standardizzati, barra per barra; errori col metodo delta sui blocchi di h barre. Il criterio passa su <strong>0 righe di 288</strong> sullo sviluppo e 0 sull'hold-out, su spot e su perpetual; i placebo (lo stesso insieme spostato nel tempo dentro il fold) su 0 di 864.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Insieme, sviluppo</th><th>barre fold 1 / 2</th><th>rapporto mediano, h 12 / 24 / 48</th><th>placebo</th><th>righe con |z| della differenza &gt; 2</th><th>placebo</th></tr></thead>
+        <tbody>
+          <tr><td>allarme di Shiryaev 0,5</td><td>2.177 / 2.055</td><td>0,72 / 0,84 / 0,89</td><td>1,08 / 0,91 / 0,93</td><td>4 / 4 / 6%</td><td>1 / 4 / 1%</td></tr>
+          <tr><td>|v2| ≥ 0,4</td><td>8.803 / 8.296</td><td>1,29 / 1,48 / 1,54</td><td>0,87 / 0,79 / 0,92</td><td>0 / 4 / 2%</td><td>5 / 6 / 1%</td></tr>
+          <tr><td>|v2| ≥ 0,5</td><td>3.887 / 4.044</td><td>2,13 / 2,24 / 1,48</td><td>1,43 / 1,22 / 0,86</td><td>2 / 4 / 2%</td><td>9 / 7 / 8%</td></tr>
+          <tr><td>|v2| ≥ 0,6</td><td>1.177 / 1.359</td><td>3,65 / 3,70 / 1,68</td><td>0,89 / 0,76 / 0,72</td><td>13 / 17 / 4%</td><td>10 / 8 / 10%</td></tr>
+        </tbody>
+      </table></div>
+      <p class="caption">Il rapporto mediano è sulle colonne; la quota nominale delle righe oltre due errori è il 4,6%. σ sullo sviluppo 0,21% (BTC), 0,34% (ETH), 0,40% (SOL), 0,32% insieme: ρ<sub>min</sub> 0,23 / 0,16 / 0,11 a 12 / 24 / 48 barre su spot, la metà su perpetual.</p>
+      <ul class="points">
+        <li><strong>All'allarme nessuna colonna sa di più</strong>: il rapporto mediano è sotto 1 (0,72-0,89) e sotto i placebo.</li>
+        <li><strong>Agli estremi di v2 i rapporti mediani salgono, ma il rapporto non è leggibile.</strong> Con IC su tutte le barre intorno a 0,03, non distinti da zero, l'errore del rapporto esplode. La riga più forte, lo squilibrio del book entro il 5% oltre |v2| ≥ 0,6 a 12 barre, passa da 0,028 / 0,039 / 0,020 / 0,056 su tutte le barre a 0,149 / 0,121 / 0,182 / 0,220 per fold (differenza da +0,08 a +0,16, 1,6-2,4 errori), sopra lo 0,114 del perpetual in ogni fold, e il rapporto fa 5,3 ± 3,2 e 3,1 ± 1,6. È soprattutto il lato di v2: lì il book correla 0,42-0,74 con "long al minimo, short al massimo", e v2 stessa ha IC −0,18 / −0,15 / −0,17 / −0,15. Contrastare v2 oltre 0,6 per 12 barre fa +13,5 / +10,0 / +9,5 / −3,4 bp lordi a barra, con errori di 6-16.</li>
+        <li><strong>Potenza</strong> (<code>--power</code>, una colonna piantata sugli stessi insiemi, rendimenti e blocchi): con IC 0,03 su tutte le barre, la taglia delle colonne dei futures, nessun rapporto fino a 3 si vede più del 22% delle volte; con 0,06 un rapporto di 2 agli allarmi si vede il 78 / 55 / 24% delle volte a 12 / 24 / 48 barre. Un rapporto di 1 passa lo 0-0,5%. Il test esclude un pivot che porti una colonna da 0,06 a 0,12 a 12-24 barre, non un rapporto di 2 su colonne da 0,03.</li>
+        <li><strong>Esito:</strong> il primo stadio non seleziona momenti più informati. Le colonne dei futures vanno su tutte le barre, come colonne del tempismo (strada 6).</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="liquidita">
+    <div class="sechead"><div class="step">FASE 1 · STRADA 3</div><h2>Il premio di liquidità: il rientro va cercato quando è pagato</h2></div>
+    <p>Chi compra quando gli altri vendono di fretta fornisce liquidità, e il rientro del prezzo è il suo compenso. Nagel (2012) mostra che il rendimento delle strategie di inversione di breve è questo compenso, e che cresce molto quando chi fornisce liquidità si ritira (VIX alto, crisi). Nelle crypto l'inversione è concentrata nelle coppie con poca attività (Bianchi, Babiak e Dickerson, 2022), e il suo rendimento si prevede con la volatilità realizzata, l'avversione al rischio e la liquidità di Tether (Farag, Luo, Yarovaya e Zięba, 2025).</p>
+    <p>Il passo 1 dello studio delle regole ha misurato che agli estremi di v2 il prezzo <em>in media</em> prosegue: nel 10% più basso continua a scendere su 13 asset su 15. Una media così può nascondere due popolazioni: estremi fatti di flusso in momenti illiquidi, che rientrano, ed estremi fatti di informazione in momenti liquidi, che proseguono.</p>
+    <div class="spec"><dl>
+      <dt>Perché</dt><dd>Lo stato della liquidità non è il percorso del prezzo e non dice la direzione. I prezzi a segni casuali conservano ampiezze e volume e cancellano la direzione: se lì il rientro condizionato è zero e sul prezzo vero no, viene dal mercato.</dd>
+      <dt>Le variabili</dt><dd>Tutte note alla chiusura della barra:
+        <ul class="points">
+          <li>illiquidità di Amihud, |r| / volume in dollari sulle ultime 96 barre, divisa per la sua mediana a 30 giorni;</li>
+          <li>volatilità realizzata a un giorno contro la sua mediana a 30 giorni;</li>
+          <li>volume della gamba contro il volume tipico della stessa ora;</li>
+          <li>profondità entro l'1% da <code>bookDepth</code> (BTC, ETH, SOL);</li>
+          <li>fine settimana e ore con la borsa americana chiusa;</li>
+          <li>stress di mercato: drawdown a 1-3 giorni del paniere equipesato di <code>SYMBOLS</code>.</li>
+        </ul></dd>
+      <dt>Cosa cercare</dt><dd>Agli estremi di v2 (il 10% più estremo), il rendimento a 12, 24 e 48 barre preso contro la gamba, per terzile di ogni variabile, per fold e per asset. La firma: <strong>il terzile liquido prosegue, quello illiquido rientra, e la relazione fra i terzili è monotona</strong>. Sui segni casuali tutti i terzili sono a zero. Se tutti i terzili proseguono come la media, la miscela non c'è.</dd>
+      <dt>Si decide</dt><dd>Il terzile illiquido rientra in tutti i fold di sviluppo, la relazione è monotona, e il rientro supera l'andata e ritorno <em>maggiorata dello spread degli stati illiquidi</em>: il costo cresce proprio dove cresce il premio, ed è il motivo per cui il premio esiste.</dd>
+      <dt>Se passa</dt><dd>Una regola "estremo di v2 in stato illiquido", con ingresso all'estremo e non alla conferma, uscita a tempo. Conferma con l'RSI a 12 sul 2021-2025, dove v2 non ha scelto niente.</dd>
+      <dt>Se no</dt><dd>Lo stato non separa gli estremi. Resta la strada 4, che guarda il singolo evento (lo shock) e non lo stato.</dd>
+      <dt>Dati e stato</dt><dd>Store, 15 asset dal 2017 (il volume in dollari c'è); <code>bookDepth</code> solo per 3 asset e sedici mesi. Da scrivere: un event study agli estremi, che serve anche alla strada 4.</dd>
+    </dl></div>
+    <div class="sub-section" id="liquidita-esito">
+      <h3>Misurato il 7 ottobre <span class="chip bad"><i>✕</i> non passa</span></h3>
+      <p><code>events --liquidity</code>: un evento per escursione, alla barra in cui |v2| entra nel suo 10% di coda (|v2| ≥ 0,519 grezzo, tagliato sullo sviluppo; 5% e 15% come controllo), sulle 15 coppie; rendimento contro la gamba a 12, 24, 48 barre, positivo se rientra. Sei stati, ognuno orientato perché il terzile 3 sia l'illiquido: Amihud a 96 barre contro la sua mediana a 30 giorni, volatilità di un giorno contro la sua mediana, volume della gamba contro quello tipico della stessa ora, profondità entro l'1% (BTC, ETH, SOL), sessione di New York, drawdown del paniere da 3 giorni. Terzili tagliati sullo sviluppo e riusati. Medie per evento, errori a blocchi con lo stimatore a rapporto. Spread di Abdi e Ranaldo (2017): 0-12 bp, quasi sempre 0, quindi il costo è la commissione.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Ogni estremo, bp per evento</th><th>fold</th><th>eventi</th><th>12 barre</th><th>24</th><th>48</th></tr></thead>
+        <tbody>
+          <tr><td>v2, sviluppo</td><td>1</td><td>4.384</td><td>+0,3 ± 5,4</td><td>−9,1 ± 9,5</td><td>−14,7 ± 12,6</td></tr>
+          <tr><td></td><td>2</td><td>3.915</td><td>−10,5 ± 11,3</td><td>+4,4 ± 12,5</td><td>+23,7 ± 18,5</td></tr>
+          <tr><td>v2, hold-out</td><td>3</td><td>3.272</td><td>−15,6 ± 7,1</td><td>−24,2 ± 12,6</td><td>−36,0 ± 17,9</td></tr>
+          <tr><td></td><td>4</td><td>2.807</td><td>−0,5 ± 5,9</td><td>−4,4 ± 8,9</td><td>−30,8 ± 16,3</td></tr>
+          <tr class="sep"><td>RSI 12, 2021-25</td><td>1-4</td><td>17.600-19.300</td><td>+3,8 / +4,0 / +4,0 / +4,7</td><td>+0,7 / +5,7 / +4,4 / +0,3</td><td>−9,7 / +7,4 / +5,4 / +1,9</td></tr>
+          <tr><td>segni casuali, sviluppo</td><td>1 / 2</td><td></td><td>−0,5 / −1,9</td><td>+0,1 / −1,9</td><td>+0,6 / −3,5</td></tr>
+        </tbody>
+      </table></div>
+      <p class="caption"><code>events --liquidity --period dev|holdout|2021</code>. Errori del 2021-2025 da 3,4 a 13,1 bp; quelli dei percorsi nulli da 1,2 a 4,0. La media delle medie di blocco di <code>metrics.blocked</code> avrebbe detto +21,2 e +22,2 al posto di +0,3 e −9,1 nel fold 1: un movimento che prosegue porta più coppie nella coda nello stesso blocco, e la media di blocco le pesa meno.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>v2, sviluppo, 48 barre: liquido / medio / illiquido</th><th>fold 1</th><th>fold 2</th></tr></thead>
+        <tbody>
+          <tr><td>Amihud</td><td>−13,6 / −17,2 / −13,3</td><td>+34,1 / +19,1 / +21,3</td></tr>
+          <tr><td>volatilità</td><td>−9,7 / −53,0 / +23,0</td><td>+8,0 / +33,3 / +27,3</td></tr>
+          <tr><td>volume della gamba</td><td>−20,0 / −25,1 / +3,0</td><td>−2,9 / +43,8 / +27,1</td></tr>
+          <tr><td>profondità del book</td><td>−13,7 / −5,3 / −21,9</td><td>+63,9 / +14,6 / +28,1</td></tr>
+          <tr><td>sessione</td><td>+6,5 / −32,2 / +3,1</td><td>+13,7 / +31,7 / +20,5</td></tr>
+          <tr><td>stress del paniere</td><td>−28,8 / −23,1 / +16,2</td><td>+19,8 / +6,5 / +39,4</td></tr>
+        </tbody>
+      </table></div>
+      <p class="caption">Errori da 14,5 a 42,9 bp per cella.</p>
+      <ul class="points">
+        <li><strong>Il fold decide il segno, non lo stato.</strong> Il fold 2 rientra in quasi ogni terzile, il fold 1 prosegue nella maggior parte: nessuno stato separa gli estremi che rientrano da quelli che proseguono. Criterio passato su 0 righe di 18 per v2 e per l'RSI sullo sviluppo e sull'hold-out, 0 di 15 sul 2021-2025.</li>
+        <li><strong>Sul 2021-2025 c'è il segno di Nagel nella volatilità, troppo piccolo.</strong> Con l'RSI a 12 a 12 barre il terzile calmo prosegue (−14,2 / −8,4 / −0,8 / −0,6) e quello agitato rientra (+29,7 / +16,1 / +9,2 / +13,6), in ordine in ogni fold; sulle coppie tradabili supera i 20 bp nel solo fold 1, e sullo sviluppo l'ordine si rompe. Il volume della gamba va al contrario di come era stato orientato prima di guardare: le gambe pesanti rientrano (+29,8 / +17,0 / +7,3 / +13,1), quelle sottili proseguono, il segno di Campbell, Grossman e Wang. È letto sul periodo di conferma, quindi non è una scelta.</li>
+        <li><strong>Potenza</strong> (<code>--power</code>, studi simulati agli errori misurati): l'effetto richiesto (20-28 bp nel terzile illiquido, 0 nel liquido) si vede il 7-18% delle volte, il doppio il 23-78%; senza effetto passa lo 0-1,3%. La scheda poteva vedere solo un effetto grande a 12 barre.</li>
+        <li><strong>Esito:</strong> lo stato della liquidità non separa gli estremi di v2. Resta da guardare il singolo evento (strada 4).</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="shock">
+    <div class="sechead"><div class="step">FASE 1 · STRADA 4</div><h2>Un filtro adattato sullo shock di flusso</h2></div>
+    <p>Il prezzo può scendere del 2% in mezz'ora per due ragioni. <strong>Informazione</strong>: una notizia, tutti rivalutano, il nuovo prezzo è quello giusto e non rientra. <strong>Flusso forzato</strong>: liquidazioni o un venditore obbligato; chi assorbe quel flusso vuole essere pagato, il prezzo va oltre il dovuto e poi rientra in parte. Campbell, Grossman e Wang (1993) lo formalizzano: i movimenti di flusso non informativo, riconoscibili dal volume, tendono a invertire. Un pivot compare in entrambi i casi, anche sul rumore puro; lo shock si riconosce da variabili che non sono il percorso del prezzo. È il filtro adattato dei radar: si cerca la forma d'onda del bersaglio (prezzo × volume × open interest in calo, poi un rientro che decade), non una forma che il rumore produce da solo.</p>
+    <div class="spec"><dl>
+      <dt>Già misurato</dt><dd><code>detect --oi</code>: dopo un movimento a 24 barre fatto con open interest in calo, le 48 barre successive tornano indietro di −22,0 / −13,0 / −2,4 / −6,1 bp per fold; con open interest in salita il movimento prosegue di +10,4 / +16,4 / +18,7 / +19,8. Il segno è stabile, ma il rientro supera 10 bp in due fold su quattro, e come trigger sugli estremi non ha retto: l'effetto vive nel grosso dei movimenti. <strong>Corretto il 7 ottobre:</strong> erano i numeri di una barra ogni 48. Su ogni barra fanno −4,9 / −1,1 / +10,9 / −0,8 e +16,1 / −19,3 / +6,5 / +16,9: nessun segno stabile.</dd>
+      <dt>Cosa cercare</dt><dd>La risposta all'impulso: il rendimento cumulato contro lo shock da 1 a 96 barre dopo gli eventi con |r|/σ &gt; k₁ e volume z &gt; k₂, divisi per il segno della variazione di open interest, per fold. La firma: <strong>la curva con open interest in calo rientra fra 12 e 48 barre in ogni fold, quella in salita prosegue, e il rientro cresce con la dimensione dello shock</strong>. Se non cresce con lo shock, l'effetto non si presta a un trigger.</dd>
+      <dt>Si decide</dt><dd>Rientro positivo fra 12 e 48 barre in tutti i fold di sviluppo, divisione per open interest mantenuta, e un rientro più grande dell'andata e ritorno dello strumento (10 bp su perpetual taker).</dd>
+      <dt>Se passa</dt><dd>Una regola a evento sui perpetual, tenuta per l'orizzonte del rientro.</dd>
+      <dt>Se no</dt><dd>Se l'effetto c'è ma vive nel grosso, l'open interest dietro al movimento diventa una colonna del tempismo (strada 6), dove la commissione non è a suo carico.</dd>
+      <dt>Dati e stato</dt><dd><code>data.futures</code>, 3 asset e sedici mesi: pochi eventi grandi, quindi poca potenza. Da scrivere, con lo stesso event study della strada 3.</dd>
+    </dl></div>
+    <div class="sub-section" id="shock-esito">
+      <h3>Misurato il 7 ottobre <span class="chip bad"><i>✕</i> non passa</span></h3>
+      <p><code>events --shock</code>: la prima barra di una serie con |r|/σ ≥ k₁ (r su 1 o 2 barre, σ la volatilità del giorno prima per √barre) e volume in quote k₂ deviazioni sopra il giorno prima, k₁ 2 / 3 / 4, k₂ 1 / 2; BTC, ETH, SOL; divisi per segno della variazione dell'open interest sulle barre dello shock. Rendimento cumulato contro lo shock da 1 a 96 barre, medie per evento, errori a blocchi con lo stimatore a rapporto.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Span 1, k₁ 2, k₂ 1, bp contro lo shock</th><th>eventi</th><th>4 barre</th><th>12</th><th>24</th><th>48</th><th>96</th></tr></thead>
+        <tbody>
+          <tr><td>fold 1, open interest in calo</td><td>608</td><td>+0,3 ± 4,3</td><td>+12,1 ± 7,6</td><td>+0,4 ± 12,4</td><td>+15,5 ± 17,5</td><td>+2,7 ± 24,3</td></tr>
+          <tr><td>fold 1, in salita</td><td>548</td><td>−6,7</td><td>−10,1 ± 8,2</td><td>−26,0 ± 11,3</td><td>−33,6 ± 16,0</td><td>−39,1 ± 25,6</td></tr>
+          <tr class="sep"><td>fold 2, in calo</td><td>663</td><td>−10,3</td><td>−16,7 ± 10,7</td><td>−26,0 ± 20,4</td><td>−10,0 ± 28,3</td><td>−45,7 ± 34,9</td></tr>
+          <tr><td>fold 2, in salita</td><td>585</td><td>+0,7</td><td>+4,2 ± 11,1</td><td>+24,4 ± 15,2</td><td>+26,5 ± 18,2</td><td>+62,3 ± 25,4</td></tr>
+        </tbody>
+      </table></div>
+      <p class="caption"><code>events --shock --period dev</code>, la configurazione più frequente. Sulle dodici configurazioni la divisione per open interest si inverte fra i due fold di sviluppo in tutte e dodici. Sui percorsi a segni casuali la risposta a 48 barre è +1,6 ± 1,7 e +0,6 ± 2,0.</p>
+      <ul class="points">
+        <li><strong>La divisione per segno dell'open interest cambia verso fra i fold</strong>: nel fold 1 rientrano gli shock fatti chiudendo posizioni, nel fold 2 quelli fatti aprendole. Criterio passato su 0 configurazioni di 12 sullo sviluppo e 0 sull'hold-out.</li>
+        <li><strong>Il rientro non cresce con lo shock, cala</strong>: con open interest in calo, sullo sviluppo a 48 barre, gli shock di 2-3 / 3-4 / oltre 4σ fanno +17,3 / −15,2 / −36,0 bp (span 1, k₂ 1). Gli shock grandi proseguono di più.</li>
+        <li><strong>Il contesto non regge su ogni barra.</strong> I quadranti di <code>detect --oi</code> ricalcolati qui su ogni barra, nel verso del rientro: open interest in calo +4,6 / +1,1 / −10,9 / +0,7, in salita −16,7 / +19,3 / −6,6 / −17,0 (vedi la correzione in <a href="#condizionata-esito">strada 2</a>).</li>
+        <li><strong>2021-2025</strong>, senza open interest (inizia nel 2025-05), la risposta non divisa: +10,2 / −1,5 / +1,5 / −0,3 bp a 12 barre, +3,7 / −3,0 / −3,8 / −11,8 a 48. Nessun rientro.</li>
+        <li><strong>Potenza</strong> (<code>--power</code>): un rientro di 10 bp con open interest in calo si vede il 9-12% delle volte, di 20 il 18-34%, con il 2-4% di falsi positivi; "cresce con lo shock" passa il 16-18% delle volte senza effetto. Con tre asset e sedici mesi la scheda non poteva vedere l'effetto che chiedeva.</li>
+        <li><strong>Esito:</strong> nessuno shock di flusso riconoscibile rientra abbastanza, e l'open interest non dice quale rientra. Non diventa nemmeno una colonna del tempismo: sul suo fold 2 il segno si inverte.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="base">
+    <div class="sechead"><div class="step">FASE 2 · STRADA 5</div><h2>La base lenta: il trend a giorni e settimane, con la volatilità controllata</h2></div>
+    <p>I vantaggi documentati nelle crypto sono lenti: il momentum della serie storica a 1-4 settimane (Liu e Tsyvinski, 2021); la regola a 4h del progetto, che batte l'hold (+0,116 contro +0,057 log l'anno, a 0,25%); il fattore archiviato (+0,238); il carry fra spot e perpetual (Christin e altri, 2022). Moreira e Muir (2017) aggiungono una tecnica che non chiede informazione nuova: dimensionare la posizione in proporzione inversa alla volatilità prevista. La volatilità si prevede, il rendimento atteso non cresce con lei, e lo Sharpe di fattori azionari e carry sale del 25-100%. Questa strada non usa v2: è dove il capitale può guadagnare, e la base su cui lavora il tempismo.</p>
+    <div class="spec"><dl>
+      <dt>Perché</dt><dd>Un vantaggio lento paga la commissione poche volte l'anno. La gestione della volatilità non ha bisogno di prevedere la direzione.</dd>
+      <dt>Cosa cercare</dt><dd>Prima il netto della regola a 4h <code>rsi_centered</code> &gt; 0,3 alla commissione di OKX (il +0,116 è stato misurato a 0,25%) e quanto batte l'hold, per fold. Poi la stessa regola con il peso w<sub>t</sub> = min(σ<sub>obiettivo</sub> / σ̂<sub>t</sub>, w<sub>max</sub>), σ̂ media esponenziale a 30 giorni, ribilanciata solo quando w esce da una banda: Sharpe netto, drawdown massimo, turnover. La firma di Moreira e Muir: lo Sharpe sale perché nei periodi agitati il rendimento medio non cala quanto cala la volatilità.</dd>
+      <dt>Si decide</dt><dd>Sharpe netto della regola scalata sopra quella non scalata e sopra l'hold in tutti i fold, con il turnover in più già pagato.</dd>
+      <dt>Se passa</dt><dd>È la strategia candidata più semplice del progetto, e la base della strada 6.</dd>
+      <dt>Se no</dt><dd>La base resta la regola non scalata, o il fattore da rimisurare su <code>SYMBOLS</code>.</dd>
+      <dt>Dati e stato</dt><dd>Store a 4h. Da scrivere: un peso in <code>swing --baseline</code>.</dd>
+    </dl></div>
+    <div class="sub-section" id="base-esito">
+      <h3>Misurato il 7 ottobre <span class="chip bad"><i>✕</i> non passa</span></h3>
+      <p><code>timing --base</code>: <code>rsi_centered</code> a 24 sulle barre da 4h, long sopra 0,3 e flat sotto 0, sulle 13 coppie di <code>TRADABLE</code> a pesi uguali, alla commissione di OKX. Sharpe dal P&amp;L giornaliero con errore a blocchi settimanali. La versione scalata ha peso w = min(σ*/σ̂, w<sub>max</sub>), σ̂ una media esponenziale a 30 giorni dei rendimenti a 4h, σ* la mediana di σ̂ nei 365 giorni prima del periodo (una scelta, non una misura), ribilanciata quando il peso esce da ±δ.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Periodo, fold</th><th>Sharpe regola</th><th>Sharpe hold</th><th>log l'anno, regola / hold</th><th>drawdown, regola / hold</th><th>scalata − regola, w<sub>max</sub> 1, δ 0,1</th><th>w<sub>max</sub> 2</th></tr></thead>
+        <tbody>
+          <tr><td>sviluppo 1</td><td>+1,06 ± 1,81</td><td>+1,51 ± 1,41</td><td>+0,19 / +0,73</td><td>9% / 20%</td><td>+0,05 ± 0,03</td><td>+0,13 ± 0,14</td></tr>
+          <tr><td>sviluppo 2</td><td>−1,14 ± 1,03</td><td>−1,45 ± 1,45</td><td>−0,20 / −1,35</td><td>8% / 44%</td><td>−0,44 ± 0,21</td><td>−0,52 ± 0,32</td></tr>
+          <tr><td>hold-out 3</td><td>−3,39 ± 1,26</td><td>−1,56 ± 1,33</td><td>−0,48 / −1,21</td><td>15% / 34%</td><td>+0,13</td><td>+0,69</td></tr>
+          <tr><td>hold-out 4</td><td>+1,88 ± 1,54</td><td>+2,14 ± 2,02</td><td>+0,54 / +1,07</td><td>6% / 24%</td><td>+0,12</td><td>+0,33</td></tr>
+          <tr class="sep"><td>2021-25, 1</td><td>+2,97 ± 1,19</td><td>+1,96 ± 0,93</td><td>+1,03 / +1,48</td><td>16% / 62%</td><td>−0,01</td><td>−0,12</td></tr>
+          <tr><td>2021-25, 2</td><td>−0,10 ± 1,06</td><td>−0,50 ± 0,95</td><td>−0,04 / −0,77</td><td>24% / 74%</td><td>+0,14</td><td>+0,47</td></tr>
+          <tr><td>2021-25, 3</td><td>+1,41 ± 0,81</td><td>+1,40 ± 0,95</td><td>+0,31 / +0,65</td><td>13% / 32%</td><td>+0,02</td><td>+0,09</td></tr>
+          <tr><td>2021-25, 4</td><td>+0,98 ± 0,96</td><td>+0,56 ± 0,92</td><td>+0,22 / +0,15</td><td>16% / 56%</td><td>−0,06</td><td>−0,02</td></tr>
+        </tbody>
+      </table></div>
+      <p class="caption"><code>timing --base --period dev|holdout|2021</code>. La regola fa circa 12 andate e ritorno l'anno per coppia ed è investita l'11-24% del tempo. Il controllo, l'hold scalato meno l'hold, sta fra −0,05 e +0,13 a w<sub>max</sub> 1: senza leva il tetto lega quasi sempre (sullo sviluppo l'hold scalato è investito al 99% e 91%).</p>
+      <ul class="points">
+        <li><strong>La regola a 4h non batte l'hold in Sharpe in nessun fold dello sviluppo</strong> e la scalatura la batte nel solo fold 1; nessuna delle quattro varianti passa. Sul 2021-2025 la regola sta sopra l'hold in tutti e quattro i fold già da sola, e la scalatura aggiunge poco o niente.</li>
+        <li><strong>Gli errori dello Sharpe sono di 1-2 su un fold di quattro mesi.</strong> La simulazione di potenza (<code>--power</code>, un portafoglio GARCH sempre investito) dà differenze vere di Sharpe fra −0,05 e +0,07 per qualunque legame fra rendimento atteso e volatilità, e il criterio le riconosce il 3-23% delle volte: alle taglie dello sviluppo la scheda non distingue gli effetti che cerca.</li>
+        <li><strong>Il riferimento del progetto è +0,126, non +0,116.</strong> Ricalcolata con <code>swing.baselines</code> sulle righe del passo 7 (<code>data/swing-4h-full.parquet</code>, finestra 24, 20 coppie di <code>STUDY</code>, dal 2023-01), la regola fa +0,126 log l'anno a 0,25% (lordo 0,182, 11,1 andate e ritorno l'anno, hold +0,057), come la tabella del passo 7 della specifica; a 0,10% +0,159. Il +0,116 citato altrove non si riproduce su queste righe.</li>
+        <li><strong>Esito:</strong> la base resta la regola non scalata, che sul 2021-2025 batte l'hold in ogni fold e sullo sviluppo no. Senza leva la gestione della volatilità ha poco da fare.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="tempismo">
+    <div class="sechead"><div class="step">FASE 2 · STRADA 6</div><h2>Il segnale veloce come tempismo di un trade lento</h2></div>
+    <p>Il progetto ha misurato segnali deboli ma veri: l'open interest dietro al movimento, lo squilibrio del book, le feature di esaurimento (Rank IC +0,0325 ± 0,0100 a 24 barre, cross-sectional, HANDOFF §5). Nessuno paga 20 bp da solo, perché ogni trade aperto per il segnale paga la commissione e un IC di 0,05 rende dell'ordine di 10 bp. Ma una base lenta deve comunque comprare e vendere, e per quei trade la commissione è già messa in conto. Il segnale veloce non apre niente: sceglie solo <em>quando</em>, dentro una finestra, eseguire un trade che si farebbe comunque.</p>
+    <h4>Gli ordini, con un esempio</h4>
+    <ol class="points">
+      <li>La base lenta decide di comprare ETH alla chiusura delle 12:00.</li>
+      <li>Invece di comprare subito, si apre una finestra di 48 barre da 15 minuti (12 ore).</li>
+      <li>A ogni chiusura di barra si legge il punteggio veloce. Si compra a mercato alla prima barra in cui dice "il prezzo sta per salire" oltre una soglia b, o all'ultima barra della finestra se non lo dice mai.</li>
+      <li>All'uscita della base lenta si fa lo stesso nel verso opposto.</li>
+    </ol>
+    <p>La commissione è una per lato, come senza tempismo. Il livello di v2 e i suoi pivot entrano come colonne del punteggio, non come trigger: è il modo in cui v2 può ancora servire. Gârleanu e Pedersen (2013) danno la forma generale (un segnale che decade in fretta pesa poco nel portafoglio obiettivo ma decide il ritmo con cui ci si arriva); Lehalle e Neuman (2019) usano lo squilibrio del book proprio per eseguire ordini grandi.</p>
+    <h4>Quanto vale: la simulazione</h4>
+    <p>Il segnale è un AR(1) con emivita di 24 barre. Il prezzo è un random walk GARCH con code t(4), σ 0,4% a barra, più una deriva proporzionale al segnale scalata per avere un IC ρ con il rendimento delle 24 barre successive. Come ha trovato <code>detect --oi</code>, l'effetto vive nel grosso e non negli estremi: oltre una deviazione standard il segnale non dice niente di più (la deriva legge il segnale tagliato a ±1).</p>
+    <p>Due usi dello stesso segnale:</p>
+    <ul class="points">
+      <li><strong>da solo</strong>: un trade di 24 barre quando |segnale| ≥ b, al netto di 20 bp;</li>
+      <li><strong>come tempismo</strong>: una strategia lenta con direzione casuale, indipendente dal segnale, esegue una decisione ogni 192 barre nella finestra di N barre successiva, con la regola sopra.</li>
+    </ul>
+    <p>La soglia b si sceglie sulla prima metà di ogni percorso e si misura sulla seconda.</p>
+    <div class="chart" id="c-timing">
+      <h3>bp per esecuzione contro l'IC del segnale, ±1 errore standard</h3>
+      <div class="sub">Il segnale da solo è al netto di 20 bp di andata e ritorno; il tempismo non paga commissioni in più.</div>
+      <div class="legend" aria-hidden="true">
+        <span><svg viewBox="-7 -7 14 14"><circle r="5" fill="var(--s1)"/></svg>tempismo, finestra 96 barre</span>
+        <span><svg viewBox="-7 -7 14 14"><rect x="-4.5" y="-4.5" width="9" height="9" rx="1.5" fill="var(--s3)"/></svg>tempismo, finestra 48 barre</span>
+        <span><svg viewBox="-7 -7 14 14"><path d="M0,-6 L6,0 L0,6 L-6,0 Z" fill="var(--s2)"/></svg>da solo, netto di 20 bp</span>
+      </div>
+      <div class="plot"></div>
+    </div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>IC ρ a 24 barre</th><th>Da solo, lordo</th><th>Da solo, netto 20 bp</th><th>Tempismo, N = 16</th><th>N = 48</th><th>N = 96</th><th>Controllo: barra a caso, N = 96</th></tr></thead>
+      <tbody>
+        <tr><td>0 (martingala)</td><td>+0,7</td><td class="down">−19,3 ± 1,3</td><td>−0,2 ± 1,0</td><td>−2,9 ± 2,6</td><td>−1,4 ± 2,3</td><td>−3,0</td></tr>
+        <tr><td>0,02</td><td>+5,5</td><td class="down">−14,5 ± 3,3</td><td>+1,8 ± 1,0</td><td>+3,6 ± 1,4</td><td>+3,2 ± 1,5</td><td>+2,6</td></tr>
+        <tr><td>0,03</td><td>+14,3</td><td class="down">−5,7 ± 6,8</td><td>−0,6 ± 1,4</td><td>+4,6 ± 2,1</td><td>+3,3 ± 3,6</td><td>−3,0</td></tr>
+        <tr class="hl"><td>0,05</td><td>+14,7</td><td class="down">−5,3 ± 1,3</td><td>+3,3 ± 1,2</td><td class="up">+8,2 ± 1,9</td><td class="up">+12,8 ± 3,0</td><td>0,0</td></tr>
+        <tr><td>0,08</td><td>+28,0</td><td>+8,0 ± 2,1</td><td>+3,5 ± 1,3</td><td>+13,5 ± 2,0</td><td>+21,7 ± 3,0</td><td>+2,1</td></tr>
+        <tr><td>0,12</td><td>+42,7</td><td>+22,7 ± 6,9</td><td>+9,2 ± 1,0</td><td>+23,2 ± 1,9</td><td>+36,4 ± 3,0</td><td>+6,0</td></tr>
+      </tbody>
+    </table></div>
+    <p class="caption">bp per trade (da solo) e per esecuzione (tempismo), ± errore standard. 8 percorsi da 400.000 barre per riga; 8.328 esecuzioni lente misurate per cella, da 800 a 22.000 trade da soli. Il controllo esegue a una barra a caso della finestra e ha errori di 2-4 bp. Con un'emivita di 8 barre i numeri sono simili (ρ 0,05: da solo −3,0, tempismo +8,1 e +12,7). Se l'effetto crescesse fino agli estremi, anche da solo pagherebbe da ρ ≈ 0,05 scegliendo solo le code (+10,3 ± 3,4 bp netti), ma per l'open interest il progetto ha misurato il contrario. Script <code>sim_timing.py</code> in <a href="#riproduci">Riprodurre</a>.</p>
+    <ul class="points">
+      <li><strong>Con un IC di 0,05 (quello che si attribuiva all'open interest; su ogni barra è 0,01-0,03, e lo squilibrio del book 0,02-0,06 a 12 barre) il segnale da solo perde 5 bp netti, mentre come tempismo aggiunge +8 bp per esecuzione con una finestra di 12 ore e +13 con 24.</strong> Sulla regola a 4h, con 11 trade l'anno e due esecuzioni per trade, fanno circa +1,8-2,9% l'anno senza commissioni in più: dell'ordine di un quinto del suo netto.</li>
+      <li><strong>La soglia migliore è fra 0,5 e 1 deviazione standard.</strong> Il tempismo usa il grosso della distribuzione del segnale, dove il progetto ha trovato l'effetto. Un trigger per trade da soli deve invece cercare le code, dove l'effetto non c'è.</li>
+      <li><strong>Su una martingala vale zero</strong>, e la barra a caso resta nel rumore: il guadagno viene dal segnale, non dall'attesa.</li>
+    </ul>
+    <div class="spec"><dl>
+      <dt>Perché</dt><dd>La legge vale anche qui: su una martingala ogni momento di esecuzione dà lo stesso prezzo atteso, e la riga ρ = 0 lo mostra. Cambia la soglia: non serve più un IC che paghi la commissione, basta un IC sopra zero.</dd>
+      <dt>Cosa cercare</dt><dd>Per ogni decisione della base lenta, sulle N barre da 15 minuti successive, tre esecuzioni: subito, alla prima barra con d·punteggio ≥ b, a una barra a caso. Il guadagno del tempismo in bp per esecuzione contro "subito", per fold; la soglia b migliore, attesa fra 0,5 e 1 deviazione standard; la barra a caso, che misura quanto costa alla base aspettare (sui dati veri la direzione lenta e il segnale veloce possono essere correlati: un trend compra dopo i rialzi, l'esaurimento dice di aspettare). Ordine di grandezza dalla simulazione: +8 bp per esecuzione con IC 0,05 e finestra di 48 barre.</dd>
+      <dt>Si decide</dt><dd>Tempismo sopra "subito" in tutti i fold di sviluppo, barra a caso entro il rumore, b scelta sullo sviluppo. Il valore è il guadagno per esecuzione per il numero di esecuzioni l'anno, da confrontare con il netto della base.</dd>
+      <dt>Se passa</dt><dd>La base lenta con il tempismo è la strategia da confermare. Se la barra a caso è negativa, la finestra va accorciata.</dd>
+      <dt>Se no</dt><dd>I segnali veloci non servono nemmeno quando non pagano la commissione: si tolgono, e la base lenta resta da sola.</dd>
+      <dt>Dati e stato</dt><dd>Le decisioni della strada 5 (o i ribilanciamenti del fattore) e le colonne veloci a 15 minuti: open interest e book (3 asset), esaurimento e livello di v2 (15 asset), più ciò che la fase 1 conferma. Da scrivere.</dd>
+    </dl></div>
+    <div class="sub-section" id="tempismo-esito">
+      <h3>Misurato il 7 ottobre <span class="chip warn"><i>~</i> criterio non leggibile, un indizio</span></h3>
+      <p><code>timing --timing</code>: le entrate e le uscite della regola a 4h della strada 5, eseguite sulle barre da 15 minuti subito, alla prima barra con d·punteggio ≥ b nelle N successive, o a una barra a caso. Il punteggio è la media delle colonne veloci, ognuna in z contro il suo mese e col segno del suo IC sullo sviluppo, letto su ogni barra: le sei di esaurimento a 12 barre e il livello di v2 su tutte le coppie, l'open interest dietro al movimento e il book entro il 5% su BTC, ETH e SOL; sul 2021-2025 esaurimento e RSI a 12 al posto di v2 e futures. b scelto sullo sviluppo: 1 deviazione, il bordo della griglia. Medie pesate per esecuzione, errori a blocchi di N barre con lo stimatore a rapporto. Oltre alla barra a caso, un secondo controllo: <strong>lag</strong>, gli stessi ritardi della regola presi a caso fra le altre decisioni dell'asset. <code>b − lag</code> è la parte del punteggio, al netto di quanto costa o rende aspettare.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Regola, N 48, b 1, bp per esecuzione</th><th>esecuzioni</th><th>contro subito</th><th>barra a caso</th><th>ultima barra</th><th><code>b − lag</code></th><th><code>b − lag</code>, N 96</th></tr></thead>
+        <tbody>
+          <tr><td>sviluppo 1</td><td>106</td><td>+0,6 ± 26,5</td><td>−11,8</td><td>−14,2</td><td>+13,4 ± 20,4</td><td>+21,6 ± 20,2</td></tr>
+          <tr><td>sviluppo 2</td><td>82</td><td>+43,0 ± 17,5</td><td>+21,7</td><td>+43,0</td><td>+23,3 ± 9,7</td><td>+25,3 ± 9,6</td></tr>
+          <tr><td>hold-out 3</td><td>92</td><td>+60,8 ± 11,0</td><td>+42,9</td><td>+87,8</td><td>+20,2 ± 12,2</td><td>+16,6 ± 11,2</td></tr>
+          <tr><td>hold-out 4</td><td>113</td><td>−1,0 ± 20,9</td><td>−25,1</td><td>−56,2</td><td>+16,3 ± 12,7</td><td>+25,6 ± 14,0</td></tr>
+          <tr class="sep"><td>2021-25, 1</td><td>313</td><td>+35,2 ± 23,4</td><td>−10,9</td><td>−77,1</td><td>+44,5 ± 15,1</td><td>+45,6 ± 13,4</td></tr>
+          <tr><td>2021-25, 2</td><td>287</td><td>+31,9 ± 16,9</td><td>+9,3</td><td>−2,1</td><td>+17,4 ± 8,2</td><td>+23,4 ± 9,4</td></tr>
+          <tr><td>2021-25, 3</td><td>343</td><td>+18,0 ± 28,3</td><td>+6,8</td><td>+22,9</td><td>+8,4 ± 10,5</td><td>+10,1 ± 10,5</td></tr>
+          <tr class="hl"><td>2021-25, 4</td><td>342</td><td>−8,1 ± 20,2</td><td>−14,2</td><td>−33,7</td><td>+4,1 ± 9,8</td><td>+0,7 ± 10,6</td></tr>
+        </tbody>
+      </table></div>
+      <p class="caption"><code>timing --timing --period dev|holdout|2021</code>, le 13 coppie di <code>TRADABLE</code>. A N 16 sullo sviluppo il tempismo fa −7,0 / +5,9 e <code>b − lag</code> −3,7 / +4,0: dodici barre non bastano. L'insieme dei ribilanciamenti della regola scalata dà numeri quasi uguali (<code>b − lag</code> a N 48: +12,7 / +26,3, +19,6 / +15,8, +45,1 / +20,1 / +4,0 / +5,0).</p>
+      <ul class="points">
+        <li><strong>Il criterio della scheda passa sullo sviluppo a N 48 e 96, e non vuol dire niente.</strong> La simulazione di potenza (la costruzione di <code>sim_timing.py</code> alle esecuzioni dello sviluppo, 106 e 82) dà "positivo in ogni fold" il 33% delle volte con un segnale a IC 0, e il 56% a IC 0,05. Con un centinaio di esecuzioni per fold e 15-25 bp di errore, due fold positivi sono una moneta. Sull'hold-out e sul 2021-2025 il criterio cade comunque: la barra a caso esce dal rumore nel fold 3 e il fold 4 è negativo.</li>
+        <li><strong>La parte del punteggio è positiva in tutti e otto i fold, a N 48 e a N 96</strong>, anche se da sola supera due errori in tre fold su otto. Sull'hold-out e sul 2021-2025, dove né i segni né b sono stati scelti, la media pesata è circa <strong>+16 bp per esecuzione, errore 4</strong>. Sui percorsi nulli lo stesso confronto fa +4 bp sullo sviluppo, che è la scelta di b fra tre valori sulle stesse righe; fuori dallo sviluppo quella distorsione non c'è.</li>
+        <li><strong>Quanto vale.</strong> Con circa 24 esecuzioni l'anno per coppia sono +0,04 log l'anno per coppia, senza commissioni in più, contro un netto della base che sul 2021-2025 va da −0,04 a +1,03 per fold. Ma il guadagno che arriva al conto è "contro subito", che contiene anche il costo dell'attesa: nel fold 4 del 2021-2025 aspettare costa più di quanto il punteggio guadagna.</li>
+        <li><strong>Colonne da sole</strong> (sviluppo, N 48, ognuna al suo b): v2 +6,9 / +62,9, divergenza +1,7 / +42,5, RSI a 12 −8,5 / +57,3, stretch −13,6 / +45,4; open interest a 12 e book su 26 e 24 esecuzioni −14,8 / +35,2 e −4,3 / +19,0. Decelerazione e volume climax negative in entrambi i fold.</li>
+        <li><strong>Esito:</strong> il criterio scritto non può decidere a queste taglie. Il controllo <code>b − lag</code> è l'unico numero positivo in ogni fold dell'intero piano, ed è un indizio da confermare, non un risultato: va scritto prima e misurato in paper trading con il test per scommessa (<a href="#conferma">Conferma</a>).</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="taker">
+    <div class="sechead"><div class="step">FASE 3 · STRADA 7</div><h2>Il flusso dei taker, scomposto in informazione e liquidità</h2></div>
+    <p>Ogni scambio ha un aggressore; il volume dei taker in acquisto meno quello in vendita è il flusso con segno. Hasbrouck (1991) separa l'impatto permanente del flusso, che è informazione, da quello transitorio. Llorente, Michaely, Saar e Wang (2002) mostrano che i movimenti fatti da scambi informati proseguono e quelli fatti per bisogno di liquidità rientrano. È la versione econometrica dello shock di flusso della strada 4, su tutti gli asset.</p>
+    <div class="spec"><dl>
+      <dt>Perché</dt><dd>La parte della gamba non spiegata dall'impatto permanente del flusso è, per costruzione, quella candidata a rientrare.</dd>
+      <dt>Già misurato</dt><dd>Il flusso dei taker lungo la gamba, preso grezzo all'allarme: AUC 0,53-0,54, correlazione con il lordo del trade sotto 0,02, su tre asset e sedici mesi di futures. È il motivo del prior basso.</dd>
+      <dt>Cosa cercare</dt><dd>Per asset, sullo sviluppo, un VAR a 8 ritardi su (rendimento, flusso con segno in quota del volume); l'impatto permanente di ogni innovazione del flusso; la quota transitoria della gamba (movimento meno somma degli impatti permanenti). Agli estremi di v2, l'IC fra quota transitoria e rendimento a 12-48 barre: segno stabile in ogni fold, deciso sullo sviluppo e poi fisso.</dd>
+      <dt>Si decide</dt><dd>Segno stabile in tutti i fold di sviluppo, IC sopra ρ<sub>min</sub>, replica sul 2021-2025 con l'RSI.</dd>
+      <dt>Se passa</dt><dd>Una colonna per le strade 2 e 6, o una regola a evento come la 4, su 15 asset.</dd>
+      <dt>Se no</dt><dd>Il flusso dei taker non aggiunge niente, né grezzo né scomposto: si chiude.</dd>
+      <dt>Dati e stato</dt><dd>Le candele spot di Binance portano <code>taker_buy_base</code> e <code>taker_buy_quote</code> dal 2017, ma <code>binance.KEEP</code> le scarta. Tenerle dà 15 asset su otto anni invece di 3 su sedici mesi, circa 25 volte i dati, ma cambia lo store: nuovi stamp della cache e un nuovo download. Da scrivere.</dd>
+    </dl></div>
+    <div class="sub-section" id="taker-esito">
+      <h3>Misurato il 7 ottobre <span class="chip bad"><i>✕</i> non passa</span></h3>
+      <p>Lo store ora tiene <code>taker_buy_base</code> e <code>taker_buy_quote</code> (<code>binance.KEEP</code>): riscaricate le 15 coppie, 437 MB, OHLCV identici al vecchio store su ogni barra comune. <code>flow.py</code>: flusso con segno f = (2·taker_buy_quote − quote_volume) / quote_volume a 15 minuti; VAR a 8 ritardi su (f, r) con il flusso prima, stimato per asset sui 365 giorni prima di ogni fold e tenuto fermo; l'impatto permanente si assesta in 7-8 barre, un'innovazione di una deviazione standard sposta il prezzo di 12-24 bp, e la parte informata spiega il 7-12% della varianza dei rendimenti. La quota transitoria di una gamba è 1 − (somma della parte informata) / (movimento della gamba), dall'ultimo pivot di <code>legs.confirmed</code>. Rank IC con il rendimento nel verso del rientro, agli estremi (la prima barra di ogni escursione oltre il 90° percentile di |v2|, o dell'RSI a 12 sul 2021-2025), errori a blocchi con lo stimatore a rapporto.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>IC della quota transitoria, per fold</th><th>12 barre</th><th>24</th><th>48</th></tr></thead>
+        <tbody>
+          <tr><td>v2, sviluppo (errori 0,019-0,025)</td><td>+0,008 / −0,002</td><td>+0,001 / +0,003</td><td>+0,014 / +0,006</td></tr>
+          <tr><td>v2, hold-out</td><td>−0,026 / +0,026</td><td>−0,065 / +0,025</td><td>−0,032 / +0,023</td></tr>
+          <tr class="sep"><td>RSI 12, 2021-25</td><td>+0,039 / +0,025 / +0,015 / +0,006</td><td>+0,046 / +0,017 / +0,016 / +0,013</td><td>+0,035 / +0,019 / +0,019 / +0,015</td></tr>
+          <tr class="hl"><td>RSI 12, 2021-25, media</td><td>+0,021 ± 0,005</td><td>+0,023 ± 0,005</td><td>+0,022 ± 0,006</td></tr>
+          <tr><td>ogni barra, sviluppo</td><td>+0,010 ± 0,005</td><td>+0,012 ± 0,007</td><td>+0,011 ± 0,009</td></tr>
+          <tr><td>ρ<sub>min</sub> (σ 0,46%, 20 bp)</td><td>0,156</td><td>0,111</td><td>0,078</td></tr>
+        </tbody>
+      </table></div>
+      <p class="caption"><code>flow --period dev|holdout|2021</code>, 15 coppie; sulle 13 tradabili lo stesso. Il flusso grezzo lungo la gamba fa da −0,027 a +0,049 per fold. Con la media delle medie di blocco lo sviluppo a 24 barre avrebbe detto +0,028 / −0,032.</p>
+      <ul class="points">
+        <li><strong>Agli estremi di v2 la quota transitoria non dice niente</strong>: al più +0,014 sullo sviluppo, dentro l'errore, e sull'hold-out il segno cambia fra i fold.</li>
+        <li><strong>Sul 2021-2025 dice qualcosa, troppo poco.</strong> Agli estremi dell'RSI l'IC è +0,022 a ogni orizzonte, positivo in ogni fold, circa 4 errori, e non è la taglia della gamba (al netto della taglia resta +0,019). Ma è 0,28 ρ<sub>min</sub>: circa 6 bp per trade contro 20 di andata e ritorno.</li>
+        <li><strong>Potenza</strong> (<code>--power</code>): un IC pari a ρ<sub>min</sub> passa il 24-29% delle volte (il criterio chiede ogni fold oltre la soglia), il doppio sempre, zero mai.</li>
+        <li><strong>Esito:</strong> la strada si chiude sulla taglia, non per mancanza di dati. La quota transitoria può essere al più una colonna debole del tempismo (strada 6).</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="stop">
+    <div class="sechead"><div class="step">FASE 3 · STRADA 8</div><h2>I pivot come mappa degli ordini stop</h2></div>
+    <p>È l'unica strada che usa i pivot direttamente, ma non come segnali di svolta: come mappa di dove stanno gli ordini. Osler (2003, 2005) lo mostra con gli ordini veri di una banca sul mercato dei cambi: gli stop loss si addensano subito oltre gli estremi recenti e i numeri tondi, e quando il prezzo li raggiunge diventano ordini a mercato nello stesso verso, così il movimento accelera ("cascate"); i take profit si addensano sui tondi e producono inversioni. Nelle crypto lo stesso ruolo lo hanno le liquidazioni delle posizioni a leva.</p>
+    <div class="spec"><dl>
+      <dt>Perché</dt><dd>Sono ancora funzioni del prezzo, ma l'ipotesi è che gli ordini reali a livelli precisi rompano la martingala proprio lì. Il controllo è lo stesso evento ("il prezzo attraversa un livello") su <strong>livelli placebo</strong> spostati di 0,5-1σ dal pivot, dove gli stop non ci sono: sotto una martingala pivot e placebo danno lo stesso zero, e la geometria dell'attraversamento si cancella nella differenza.</dd>
+      <dt>Cosa cercare</dt><dd>Due firme, in momenti diversi. <strong>Cascata</strong>: rotto l'ultimo minimo confermato, la discesa accelera nelle 1-4 barre successive più che dopo un placebo. <strong>Rottura che fallisce</strong>: se il prezzo rompe il minimo e chiude di nuovo sopra entro k barre, nelle 12-48 successive rientra più che dopo un placebo. I numeri tondi (Urquhart: prezzi addensati, rendimenti no) fanno da secondo placebo.</dd>
+      <dt>Si decide</dt><dd>Differenza fra pivot e placebo con lo stesso segno in tutti i fold di sviluppo e più grande della commissione del trade che suggerisce.</dd>
+      <dt>Variante</dt><dd>La mappa delle liquidazioni stimata dall'open interest (BTC, ETH, SOL): un aumento di open interest al prezzo p apre posizioni che con leva ℓ fra 10 e 50 si liquidano a p·(1 ∓ 1/ℓ). Ipotesi: i grumi attirano il prezzo e, consumati, il movimento rientra come nella strada 4. Esplorativa.</dd>
+      <dt>Se passa</dt><dd>Una regola sulla rottura che fallisce, o una colonna per il tempismo.</dd>
+      <dt>Se no</dt><dd>A 15 minuti, sulle coppie liquide, gli stop non lasciano traccia nei prezzi: si chiude.</dd>
+      <dt>Dati e stato</dt><dd>I livelli sono quelli che un lettore in tempo reale conosceva, <code>legs.confirmed</code>, mai <code>find_pivots</code>; il minimo dentro la barra dalle barre a 5 minuti. Store, 15 asset dal 2017. Da scrivere.</dd>
+    </dl></div>
+    <div class="sub-section" id="stop-esito">
+      <h3>Misurato il 7 ottobre <span class="chip bad"><i>✕</i> non passa</span></h3>
+      <p><code>stopmap.py</code>: livelli di <code>legs.confirmed</code> a finestra 12 e 24 sulle chiusure a 15 minuti, al prezzo dello stoppino della gamba (lo stop sta oltre ciò che il grafico mostra); rottura alla prima barra da 5 minuti che lo attraversa dopo la conferma. Placebo: lo stesso livello spostato di ±0,5σ e ±1σ, e una griglia di numeri tondi tarata sullo sviluppo perché le rotture siano altrettante. Nullo: barre intere a segni casuali. Medie per trade, errori a blocchi con lo stimatore a rapporto. Il criterio passa su <strong>0 righe di 24</strong> sullo sviluppo, sull'hold-out e sul 2021-2025.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Pivot − placebo spostato, bp</th><th>sviluppo, fold 1</th><th>fold 2</th><th>2021-25, fold 1</th><th>fold 2</th><th>fold 3</th><th>fold 4</th></tr></thead>
+        <tbody>
+          <tr><td>cascata, finestra 12, 1 barra</td><td>−1,4 ± 1,7</td><td>+0,1 ± 3,0</td><td>+8,0 ± 1,8</td><td>+1,1 ± 1,8</td><td>+0,7 ± 1,3</td><td>+0,1 ± 1,3</td></tr>
+          <tr><td>cascata, finestra 24, 1 barra</td><td>−0,0 ± 2,4</td><td>−0,3 ± 5,1</td><td>+11,1 ± 2,6</td><td>+1,4 ± 2,2</td><td>+2,5 ± 2,7</td><td>+1,7 ± 1,8</td></tr>
+          <tr><td>cascata, finestra 24, 4 barre</td><td>+3,1 ± 4,7</td><td>+1,4 ± 11,5</td><td>+16,3 ± 4,5</td><td>+1,5 ± 3,6</td><td>+3,4 ± 4,0</td><td>+3,3 ± 4,0</td></tr>
+          <tr class="sep"><td>rottura fallita, finestra 12, k 1, 24 barre</td><td>−3,9 ± 8,4</td><td>−1,9 ± 14,6</td><td colspan="4" class="text">segno che cambia fra le fette</td></tr>
+          <tr><td>rottura fallita, finestra 24, k 1, 24 barre</td><td>−1,3 ± 11,7</td><td>−16,9 ± 23,9</td><td colspan="4" class="text">da −17,5 a +7,9 bp al pivot</td></tr>
+        </tbody>
+      </table></div>
+      <p class="caption"><code>stopmap --period dev|holdout|2021</code>, le 13 coppie di <code>TRADABLE</code>, nel verso della firma (la cascata nel verso della rottura, la rottura fallita nel verso del rientro). Sullo sviluppo 3.619 / 3.487 rotture a finestra 12 e 1.819 / 1.792 a 24 per fold. Sui cinque semi nulli la cascata a una barra fa da −0,6 a +0,5 bp.</p>
+      <ul class="points">
+        <li><strong>Nessuna cascata oggi</strong>: sullo sviluppo il pivot sta entro 3 bp dai placebo nel fold 1 ed entro 9 nel fold 2; sull'hold-out le differenze della cascata vanno da −1,0 a +1,2 bp.</li>
+        <li><strong>Le rotture fallite non rientrano</strong>: il "rientro" al pivot è negativo in ogni riga dello sviluppo (da −3 a −19 bp in media sui due fold), cioè il prezzo riprende la rottura, e i placebo fanno quasi lo stesso.</li>
+        <li><strong>L'unica traccia degli stop è nel 2021.</strong> Nella prima fetta (gennaio 2021 – febbraio 2022) un pivot rotto prosegue di 8-11 bp nei 15 minuti dopo più dei placebo, 16 a quattro barre, a 2,8-4,4 errori; dal 2022 la differenza scende a 1-3 bp. A finestra 24 ha lo stesso segno in tutte e quattro le fette, 3-5 bp sull'intero periodo: un quarto dell'andata e ritorno. Le cascate c'erano con la leva del 2021, e oggi quasi non si vedono.</li>
+        <li><strong>Potenza</strong> (<code>--power</code>, bootstrap a blocchi alle taglie misurate): un vantaggio di 40 bp ai pivot si vede l'86-100% delle volte, uno di 20 il 32-38% (metà delle estrazioni cade sotto la soglia e servono entrambi i placebo), nessun effetto passa al più il 3,4%.</li>
+        <li><strong>Esito:</strong> a 15 minuti, sulle coppie liquide, gli stop non lasciano una traccia che paghi 20 bp. La strada si chiude. La variante esplorativa (la mappa delle liquidazioni dall'open interest) non è stata fatta.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="conferma">
+    <div class="sechead"><div class="step">CONFERMA</div><h2>Fuori campione, poi in paper trading con un test che si può leggere a ogni trade</h2></div>
+    <p>Ogni criterio delle schede si applica ai fold di sviluppo. L'hold-out dei fold 3-4 è consumato (§17), quindi la conferma avviene in due passi:</p>
+    <ol class="points">
+      <li><strong>Storia non usata per scegliere.</strong> Il 2021-2025 per tutto ciò che non legge v2: l'RSI a 12 sul prezzo e sul residuo, gli stati di liquidità, la mappa degli stop, il flusso dei taker, la base lenta. Il walk-forward di v2 dal 2023 (HANDOFF §17, punto 1) per ciò che legge v2.</li>
+      <li><strong>Paper trading</strong> (OKX demo), con regola, stop e α scritti prima di accendere, e un test per scommessa letto dopo ogni trade.</li>
+    </ol>
+    <h4>Perché un test per scommessa</h4>
+    <p>Le righe positive del §17 hanno t fra 0,85 e 1,16. Con un trade da 150 bp di deviazione standard, un vantaggio di 15 bp si vede con 160 trade solo il 37% delle volte. E chi guarda un conto di paper trading e si ferma alla prima volta che t supera 1,645 dichiara un vantaggio che non c'è nel 43% dei casi entro 3.000 trade.</p>
+    <p>Il "testing by betting" di Shafer e Vovk, sviluppato per le medie da Waudby-Smith e Ramdas (2024), risolve entrambe le cose:</p>
+    <ul class="points">
+      <li>un capitale virtuale punta su ogni trade una frazione λ<sub>i</sub>, scelta dai soli trade precedenti;</li>
+      <li>uno stop limita la perdita di ogni trade a B;</li>
+      <li>se la strategia non ha vantaggio, il capitale W<sub>n</sub> = Π(1 + λ<sub>i</sub>·x<sub>i</sub>/B) non cresce in media, e la disuguaglianza di Ville dà P(W arriva mai a 1/α) ≤ α, <em>in qualunque momento si guardi e ci si fermi</em>.</li>
+    </ul>
+    <p>Gli e-value di strade diverse si possono mediare o combinare con e-BH: i test multipli si gestiscono senza un hold-out nuovo per ogni idea.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Vantaggio vero per trade</th><th>0 bp</th><th>7,5 bp</th><th>15 bp</th><th>30 bp</th></tr></thead>
+      <tbody>
+        <tr><td>t-test a campione fisso, 160 trade</td><td>4,8%</td><td>17%</td><td>37%</td><td>87%</td></tr>
+        <tr><td>t-test a campione fisso, 1.000 trade</td><td>4,6%</td><td>52%</td><td>96%</td><td>100%</td></tr>
+        <tr class="hl"><td>t-test guardato a ogni trade, entro 3.000</td><td class="down">43%</td><td>97%</td><td>100%</td><td>100%</td></tr>
+        <tr><td>test per scommessa, entro 1.000 trade</td><td>1,8%</td><td>21%</td><td>77%</td><td>100%</td></tr>
+        <tr class="hl"><td>test per scommessa, entro 3.000 trade</td><td class="up">2,4%</td><td>60%</td><td>99,9%</td><td>100%</td></tr>
+        <tr><td>trade mediani per arrivare a 20</td><td>—</td><td>1.487</td><td>587</td><td>154</td></tr>
+      </tbody>
+    </table></div>
+    <p class="caption">Quota di 4.000 ripetizioni in cui il test dichiara un vantaggio, α = 5%. Trade con deviazione standard di 150 bp e code t(4), perdita tagliata a B = 300 bp da uno stop, media esatta indicata in colonna. La colonna 0 bp è il falso positivo. λ è una puntata di Kelly stimata sui trade precedenti, fra 0 e ½. Script <code>sim_sequential.py</code> in <a href="#riproduci">Riprodurre</a>.</p>
+    <ul class="points">
+      <li><strong>Il test per scommessa paga la libertà di guardare con un po' di potenza</strong> (77% contro 96% a 1.000 trade per 15 bp), e tiene il falso positivo sotto il 5% qualunque cosa si faccia.</li>
+      <li><strong>Un vantaggio di 7,5 bp chiede migliaia di trade.</strong> Su un trade ogni pochi giorni per asset, sono anni. Le strade che promettono pochi bp per trade vanno scelte o scartate prima, sullo sviluppo e sul 2021-2025, non in paper trading.</li>
+      <li><strong>Lo stop serve anche al test.</strong> La validità chiede una perdita massima per trade nota. Su strumenti con gap va presa larga.</li>
+    </ul>
+    <h4>Come si usa</h4>
+    <p>Prima di accendere il paper trading si fissano per iscritto la regola, lo stop B, α e un numero massimo di trade. Dopo ogni trade chiuso si aggiorna W. Si dichiara un vantaggio a W ≥ 1/α; si abbandona al numero massimo di trade.</p>
+    <div class="sub-section" id="conferma-esito">
+      <h3>Nel codice dal 7 ottobre <span class="chip good"><i>✓</i> <code>sequential.py</code></span></h3>
+      <p><code>sequential --sim</code> riporta la tabella sopra con lo stesso seme (17): falsi positivi 1,8% entro 1.000 trade e 2,4% entro 3.000, potenza 76,9% a 15 bp entro 1.000, mediane 1.487 / 587 / 154 trade. La puntata è un Kelly stimato sui soli trade precedenti, fra 0 e ½; ogni asset è un processo a sé e gli e-value si mediano alla data finale, perché trade contemporanei su ETH e SOL non fanno un prodotto valido. Ci sono anche la media e l'e-BH per combinare le strade.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th><code>sequential --trades</code>, 16 mesi, commissione OKX</th><th>trade</th><th>lordo</th><th>netto</th><th>dev. std.</th><th>B mediano</th><th>W finale</th><th>trade per arrivare a 20, al lordo</th></tr></thead>
+        <tbody>
+          <tr><td>zigzag 0,2, filtro L 0,5, stop 6 ATR</td><td>160</td><td>+15,3</td><td>−4,7 ± 11,0</td><td>139</td><td>419</td><td>0,96</td><td>896</td></tr>
+          <tr><td>Shiryaev 0,5, filtro L 0,6, stop 6 ATR</td><td>121</td><td>+20,0</td><td>−0,0 ± 15,8</td><td>173</td><td>360</td><td>0,86</td><td>1.913</td></tr>
+        </tbody>
+      </table></div>
+      <p class="caption">Le due righe positive in tutti e quattro i fold del §17, ricostruite trade per trade (+12,5 su 93 e +19,2 su 67; +15,8 su 81 e +28,4 su 40). B è la distanza dello stop all'ingresso più l'andata e ritorno. L'ultima colonna è la mediana simulata alla media lorda, senza commissione, sulla media dei tre asset: a 90-120 trade l'anno sono da 8 a 21 anni.</p>
+      <ul class="points">
+        <li><strong>Al netto della commissione di OKX le due righe migliori di v2 non hanno vantaggio da dichiarare</strong>: il capitale virtuale finisce a 0,96 e 0,86, lontano da 1/α = 20.</li>
+        <li>Il test è pronto per il paper trading, con la regola, lo stop B, α e il numero massimo di trade scritti prima di accendere.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="esiti">
+    <div class="sechead"><div class="step">COSA FARE CON I RISULTATI</div><h2>Ogni esito ha già una conseguenza</h2></div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Se</th><th class="text">Vuol dire</th><th class="text">Allora</th></tr></thead>
+      <tbody>
+        <tr><td>La fase 0 smentisce la legge</td><td class="text">Le colonne del prezzo portano informazione sul lordo, non solo sulla verità dell'allarme</td><td class="text">Meta-labeling addestrato sul lordo del trade, poi le stesse conferme</td></tr>
+        <tr><td>Una strada della fase 1 passa</td><td class="text">C'è un pezzo di mercato che non è una martingala, e si sa dove</td><td class="text">Regola su quella strada, prezzata sui perpetual (taker 0,05%, maker 0,02%, da verificare) con il funding; conferma sul 2021-2025, poi paper trading</td></tr>
+        <tr><td>La fase 1 non trova niente, la fase 2 sì</td><td class="text">A 15 minuti il vantaggio non c'è; la base lenta guadagna e i segnali veloci ne migliorano il prezzo</td><td class="text">Il capitale va sulla base lenta con il tempismo; v2 e i pivot restano colonne del punteggio, non regole</td></tr>
+        <tr><td>Passa solo la base lenta</td><td class="text">I segnali veloci non valgono nemmeno gratis</td><td class="text">Base lenta da sola; il lavoro sulle svolte a 15 minuti si ferma</td></tr>
+        <tr class="hl"><td>Non passa niente</td><td class="text">Sulle 15 coppie liquide, con l'informazione dello store, il mercato è efficiente fino ai costi</td><td class="text">Chiudere il ramo delle svolte; riprendere il fattore archiviato su <code>SYMBOLS</code> o il carry, dove il vantaggio è documentato</td></tr>
+      </tbody>
+    </table></div>
+    <div class="sub-section" id="esiti-misurati">
+      <h3>Cosa è uscito, 8 ottobre</h3>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Strada</th><th>Esito</th><th class="text">Il numero che decide</th></tr></thead>
+        <tbody>
+          <tr><td>0 · Filtri sugli allarmi</td><td><span class="chip bad"><i>✕</i> chiuso</span></td><td class="text"><code>kept</code> 0,28 ± 0,20 / −0,15 ± 0,23; AUC dell'RSI vero 0,619 dentro i semi nulli (0,613-0,630)</td></tr>
+          <tr><td>1 · Residuo</td><td><span class="chip bad"><i>✕</i> chiusa</span></td><td class="text">sul 2021-2025 ogni riga filtrata è negativa e scende con il livello; <code>kept</code> sotto zero</td></tr>
+          <tr><td>2 · IC ai pivot</td><td><span class="chip bad"><i>✕</i></span></td><td class="text">0 righe di 288 sullo sviluppo e sull'hold-out; all'allarme nessuna colonna sa di più</td></tr>
+          <tr><td>3 · Liquidità</td><td><span class="chip bad"><i>✕</i></span></td><td class="text">il fold decide il segno, non lo stato; sul 2021-2025 il segno di Nagel nella volatilità, sotto i 20 bp</td></tr>
+          <tr><td>4 · Shock di flusso</td><td><span class="chip bad"><i>✕</i></span></td><td class="text">la divisione per open interest si inverte fra i fold in 12 configurazioni su 12</td></tr>
+          <tr><td>5 · Base lenta</td><td><span class="chip bad"><i>✕</i></span></td><td class="text">la scalatura non batte la regola né l'hold sullo sviluppo; la regola batte l'hold in ogni fold del 2021-2025</td></tr>
+          <tr class="hl"><td>6 · Tempismo</td><td><span class="chip warn"><i>~</i> indizio</span></td><td class="text">criterio non leggibile (passa il 33% delle volte a IC 0); <code>b − lag</code> positivo in 8 fold su 8, +16 ± 4 bp fuori dallo sviluppo</td></tr>
+          <tr><td>7 · Flusso dei taker</td><td><span class="chip bad"><i>✕</i></span></td><td class="text">IC +0,022 sul 2021-2025, in ogni fold, contro un ρ<sub>min</sub> di 0,08-0,16</td></tr>
+          <tr><td>8 · Mappa degli stop</td><td><span class="chip bad"><i>✕</i></span></td><td class="text">0 righe di 24 in ogni periodo; le cascate c'erano nel 2021, poi 1-3 bp</td></tr>
+          <tr><td>Conferma</td><td><span class="chip good"><i>✓</i> pronto</span></td><td class="text">le due righe migliori di v2 finiscono a W 0,96 e 0,86 contro 20</td></tr>
+        </tbody>
+      </table></div>
+      <ul class="points">
+        <li><strong>La riga che vale è l'ultima della tabella sopra: non passa niente.</strong> Sulle 15 coppie liquide, con l'informazione dello store, a 15 minuti il mercato è efficiente fino ai costi. Il ramo delle svolte di v2 si chiude.</li>
+        <li><strong>Con un'eccezione da confermare, non da costruirci sopra.</strong> Il tempismo della strada 6 è l'unico punto della fase 2 con un segno costante: la base a 4h, eseguita quando il punteggio veloce è d'accordo, compra in media 16 bp meglio di quanto farebbe aspettando a caso. Il passo successivo è il paper trading della base con il tempismo, regola, B e α scritti prima, letto con <code>sequential</code>; in parallelo il fattore archiviato su <code>SYMBOLS</code> o il carry, dove il vantaggio è documentato.</li>
+        <li><strong>Molte schede non potevano vedere l'effetto che chiedevano</strong> alle taglie dello sviluppo (strade 3, 4, 5, 6): la loro potenza al criterio va dal 3% al 38%. Un "non passa" lì è un "non abbastanza grande da vedersi in otto mesi", e il 2021-2025 è il periodo che ha deciso.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="codice">
+    <div class="sechead"><div class="step">IL CODICE</div><h2>Cosa c'è in <code>detect.py</code>, e cosa va scritto</h2></div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Comando o funzione</th><th class="text">Cosa calcola</th><th class="text">Come si legge</th></tr></thead>
+      <tbody>
+        <tr><td><code>detect --features 0.5</code></td><td class="text"><code>conservation</code>: per quintile del meta-classificatore P, W, L, L/W accanto a P/(1−P), il lordo e il lordo nominale P·W̄ − (1−P)·L̄.</td><td class="text"><code>kept</code> è la pendenza del lordo sul nominale, con errore: 0 sotto una martingala, 1 se la precisione vale quanto promette.</td></tr>
+        <tr><td><code>detect --null 0.5 [--seeds …]</code></td><td class="text">La separazione vero/falso con Shiryaev 0,5 e le otto colonne di <code>geometry</code>, su v2, sull'RSI a 12 del prezzo e sull'RSI di prezzi a segni casuali.</td><td class="text">Conta la differenza fra l'AUC dell'RSI vero e la dispersione dei semi.</td></tr>
+        <tr><td><code>detect --residual BTC</code>, <code>--residual ew</code></td><td class="text">Zigzag 0,2 e Shiryaev 0,5 su ETH e SOL meno β·BTC, o sui tre meno il paniere, contro gli stessi rivelatori su v2 e sull'RSI del prezzo; filtro sul livello all'allarme e all'estremo.</td><td class="text"><code>price: rsi 12</code> contro <code>residual: rsi 12</code>: <code>dev_bp</code> contro <code>fee_bp</code>, <code>kept_dev</code> contro il suo errore, il segno per fold.</td></tr>
+      </tbody>
+    </table></div>
+    <ul class="points">
+      <li>v2 non si calcola su uno spread, perché legge le candele. È per il 92,5% un RSI a 12 (HANDOFF §14), quindi il confronto equo è RSI contro RSI, con v2 come riferimento. β usa le 2.880 barre chiuse prima della barra; il self-check verifica che un salto del mercato sposti il β della barra dopo e non quello della barra stessa.</li>
+      <li><strong>Scritto l'8 ottobre</strong>, un modulo per strada, ognuno con <code>--period dev|holdout|2021</code> (<code>strategy.edges</code>, <code>strategy.fold_in</code>), <code>--power</code> e un self-check registrato in <code>tests/test_selfchecks.py</code>: <code>detect --conditional</code> (2) e <code>--residual … --period --tradable --lag</code> (1), <code>events --liquidity</code> e <code>--shock</code> (3, 4), <code>timing --base</code> e <code>--timing</code> (5, 6), <code>flow</code> e le colonne taker in <code>binance.KEEP</code> (7), <code>stopmap</code> (8), <code>sequential --sim</code> e <code>--trades</code> (conferma). Medie per evento o per trade, errori a blocchi con lo stimatore a rapporto: la media delle medie di blocco di <code>metrics.blocked</code> è distorta sugli eventi a grappoli. Il piano di partenza diceva: l'IC condizionato ai pivot (strada 2); un event study con variabili di stato, per gli estremi (3) e per gli shock (4); il peso 1/σ̂ in <code>swing --baseline</code> (5); il tempismo sulle decisioni della base (6); le colonne taker nello store e il VAR (7); gli attraversamenti dei pivot confermati e dei placebo (8); il test per scommessa sui trade del paper trading.</li>
+      <li>Verificato l'8 ottobre: ruff, black, 63 test. Il 6 ottobre: ruff, black, 51 test, self-check di <code>detect</code> su una sega, su libri di allarmi costruiti e su una copertura sintetica. Le tre CLI sono girate da capo a fondo su uno store sintetico, poi cancellato: i loro numeri non significano niente.</li>
+    </ul>
+  </section>
+
+  <section id="limiti">
+    <div class="sechead"><div class="step">LIMITI</div><h2>Cosa questo documento non può dire</h2></div>
+    <ul class="points">
+      <li><strong>Le simulazioni sono mondi sintetici.</strong> Dimostrano la legge e i meccanismi; la quota di varianza che torna alla media (30%, 10%), l'emivita (24 barre) e la forma del segnale veloce sono ipotesi, non stime. Quanto ce n'è nel mercato è ciò che le strade misurano.</li>
+      <li><strong>Il tempismo è simulato con una base lenta indipendente dal segnale veloce</strong> e con un segnale gaussiano AR(1) il cui effetto si ferma a una deviazione standard. Se base e segnale sono correlati, aspettare costa alla base: la barra a caso lo misura sui dati veri.</li>
+      <li><strong>Le strade 3, 4, 7 e 8 hanno letteratura a supporto in altri mercati o ad altre frequenze</strong> (l'inversione nelle crypto è misurata soprattutto su barre giornaliere e su coppie poco liquide; le cascate di stop sui cambi). A 15 minuti, sulle 15 coppie liquide, nessuna è misurata.</li>
+      <li><strong>σ = 0,4% a barra e le fee dei perpetual OKX</strong> (0,05% taker, 0,02% maker per lato) non sono misurati qui; le fee vengono da fonti secondarie. Funding e prestito dei trade coperti e short non sono nel conto.</li>
+      <li><strong>La formula 0,8·ρ·σ<sub>h</sub> è gaussiana</strong>: sulle code grasse la simulazione chiede circa il 10% di IC in più.</li>
+      <li><strong>Test multipli.</strong> Il progetto ha provato decine di varianti e questo piano ne aggiunge altre: ogni criterio va letto con una correzione, ed è il motivo del test per scommessa in fondo.</li>
+    </ul>
+  </section>
+
+  <section id="riproduci">
+    <div class="sechead"><div class="step">RIPRODURRE</div><h2>I comandi e il codice delle simulazioni</h2></div>
+    <pre>uv run python -m tradingvision.detect --features 0.5           # con la tabella di conservazione e kept
+uv run python -m tradingvision.detect --null 0.5 --seeds 0 1 2 3 4
+uv run python -m tradingvision.detect --residual BTC --gate 0.4 0.5 0.6
+uv run python -m tradingvision.detect --residual ew</pre>
+    <p>Le simulazioni non sono un modulo del progetto: sono sei script numpy/pandas, riportati qui sotto così come hanno prodotto i numeri del documento. Si eseguono da una cartella che contenga <code>sim.py</code>: <code>python sim.py rw h=0.3</code> (legge, quintili, modello sulla candela successiva), <code>python run2.py</code> (tabella dei mondi), <code>python run3.py</code> (filtro sul livello), <code>python run4.py</code> (modello sul rendimento del trade), <code>python sim_timing.py 24</code> e <code>python sim_timing.py 8</code> (tempismo, emivita 24 e 8; usa scipy), <code>python sim_sequential.py</code> (test sequenziale). I semi sono fissi (7, 13 per il tempismo, 17 per il test sequenziale), e l'ordine delle chiamate dentro ogni script decide i numeri.</p>
+    <details>
+      <summary><code>sim.py</code>: i due mondi, il rivelatore, il meta-classificatore, il filtro AND</summary>
+<pre>&quot;&quot;&quot;Monte Carlo for the false-alarm question, on worlds whose truth is known.
+
+S1  martingale world (GARCH + t(4) returns): zigzag on an RSI(12) of the price, alarms judged
+    against the RSI&#x27;s own centred turns at 12 bars, as detect.py does on v2. Meta-classifier on
+    alarm-time features; the user&#x27;s AND filter with a next-bar sign model of accuracy a.
+S2  same pipeline on a world with a mean-reverting component, and the clutter-cancellation
+    variant: common random-walk factor + idiosyncratic OU, detector on raw price vs on residual.
+&quot;&quot;&quot;
+
+from __future__ import annotations
+
+import sys
+
+import numpy as np
+import pandas as pd
+
+W = 12
+rng = np.random.default_rng(7)
+
+
+def garch_returns(n, sigma=0.004, a=0.08, b=0.90, df=4):
+    w = sigma**2 * (1 - a - b)
+    eps = rng.standard_t(df, n) / np.sqrt(df / (df - 2))
+    r = np.empty(n)
+    s2 = sigma**2
+    for t in range(n):
+        r[t] = np.sqrt(s2) * eps[t]
+        s2 = w + a * r[t] ** 2 + b * s2
+    return r
+
+
+def rsi(logp, n=W):
+    d = np.diff(logp, prepend=logp[0])
+    up, dn = np.clip(d, 0, None), np.clip(-d, 0, None)
+    au = pd.Series(up).ewm(alpha=1 / n, adjust=False).mean().to_numpy()
+    ad = pd.Series(dn).ewm(alpha=1 / n, adjust=False).mean().to_numpy()
+    return np.where(au + ad &gt; 0, (au - ad) / (au + ad + 1e-18), 0.0)  # = RSI/50 - 1
+
+
+def centred_turns(v, w=W):
+    &quot;&quot;&quot;+1 at lows, -1 at highs: centred-window extrema, same-kind runs merged to the most extreme.&quot;&quot;&quot;
+    s = pd.Series(v)
+    mx = s.rolling(2 * w + 1, center=True).max().to_numpy()
+    mn = s.rolling(2 * w + 1, center=True).min().to_numpy()
+    cand = [(t, -1) for t in np.flatnonzero(v == mx)] + [(t, 1) for t in np.flatnonzero(v == mn)]
+    cand.sort()
+    out = []
+    for t, k in cand:
+        if out and out[-1][1] == k:
+            if (k == -1 and v[t] &gt; v[out[-1][0]]) or (k == 1 and v[t] &lt; v[out[-1][0]]):
+                out[-1] = (t, k)
+        else:
+            out.append((t, k))
+    e = np.zeros(len(v))
+    for t, k in out:
+        e[t] = k
+    return e
+
+
+def zigzag(v, h):
+    out = np.zeros(len(v))
+    side, hi, lo = 0, v[0], v[0]
+    for t in range(len(v)):
+        hi, lo = max(hi, v[t]), min(lo, v[t])
+        if side &gt;= 0 and hi - v[t] &gt;= h:
+            out[t], side, lo = -1, -1, v[t]
+        elif side &lt;= 0 and v[t] - lo &gt;= h:
+            out[t], side, hi = 1, 1, v[t]
+    return out
+
+
+def alarm_table(v, logp, h, truth):
+    &quot;&quot;&quot;One row per alarm: truth, gross to next alarm, gross of the first bar, alarm-time features.&quot;&quot;&quot;
+    a = zigzag(v, h)
+    at = np.flatnonzero(a != 0)
+    tt = np.flatnonzero(truth != 0)
+    r = np.diff(logp, append=logp[-1])  # r[t] = logp[t+1]-logp[t]: the bar after the alarm
+    sig = pd.Series(np.diff(logp, prepend=logp[0])).rolling(4 * W).std().to_numpy()
+    rows = []
+    for k in range(1, len(at) - 1):
+        i, kind = at[k], a[at[k]]
+        side, start, end = -kind, at[k - 1], at[k + 1]
+        j = np.searchsorted(tt, i, side=&quot;right&quot;) - 1
+        legv, legp = side * v[start : i + 1], side * logp[start : i + 1]
+        rows.append(
+            {
+                &quot;t&quot;: i,
+                &quot;kind&quot;: kind,
+                &quot;true&quot;: int(j &gt;= 0 and truth[tt[j]] == kind),
+                &quot;gross&quot;: kind * (logp[end] - logp[i]),
+                &quot;first&quot;: kind * r[i],
+                &quot;bars&quot;: end - i,
+                &quot;level&quot;: side * v[i - 1],
+                &quot;extreme&quot;: legv.max(),
+                &quot;retrace&quot;: legv.max() - side * v[i],
+                &quot;move&quot;: side * (v[i] - v[i - 1]),
+                &quot;age&quot;: i - start,
+                &quot;leg_move&quot;: (legp[-1] - legp[0]) / (sig[i] * np.sqrt(max(i - start, 1))),
+                &quot;price_retrace&quot;: (legp.max() - legp[-1]) / sig[i],
+                &quot;vol&quot;: sig[i],
+            }
+        )
+    return pd.DataFrame(rows).dropna()
+
+
+def logit(X, y, iters=30):
+    b = np.zeros(X.shape[1])
+    for _ in range(iters):
+        p = 1 / (1 + np.exp(-X @ b))
+        b += np.linalg.solve((X * (p * (1 - p))[:, None]).T @ X + 1e-6 * np.eye(len(b)), X.T @ (y - p))
+    return b
+
+
+def auc(score, y):
+    r = pd.Series(score).rank().to_numpy()
+    n1 = y.sum()
+    return (r[y == 1].sum() - n1 * (n1 + 1) / 2) / (n1 * (len(y) - n1))
+
+
+FEATS = [&quot;level&quot;, &quot;extreme&quot;, &quot;retrace&quot;, &quot;move&quot;, &quot;age&quot;, &quot;leg_move&quot;, &quot;price_retrace&quot;, &quot;vol&quot;]
+
+
+def meta(f, cols=FEATS):
+    &quot;&quot;&quot;Logistic on true/false fitted on the first half; AUC and quintiles on the second half.&quot;&quot;&quot;
+    dev = (f.index &lt; len(f) // 2)
+    z = ((f[cols] - f[cols][dev].mean()) / f[cols][dev].std()).clip(-5, 5).to_numpy()
+    X = np.column_stack([np.ones(len(z)), z])
+    y = f[&quot;true&quot;].to_numpy().astype(float)
+    s = X @ logit(X[dev], y[dev])
+    q = np.searchsorted(np.quantile(s[dev], [0.2, 0.4, 0.6, 0.8]), s) + 1
+    g = f.assign(q=q)[~dev]
+    by = g.groupby(&quot;q&quot;).agg(n=(&quot;true&quot;, &quot;size&quot;), P=(&quot;true&quot;, &quot;mean&quot;), all_bp=(&quot;gross&quot;, &quot;mean&quot;))
+    by[&quot;W_bp&quot;] = g[g[&quot;true&quot;] == 1].groupby(&quot;q&quot;).gross.mean()
+    by[&quot;L_bp&quot;] = -g[g[&quot;true&quot;] == 0].groupby(&quot;q&quot;).gross.mean()
+    by[[&quot;all_bp&quot;, &quot;W_bp&quot;, &quot;L_bp&quot;]] *= 1e4
+    by[&quot;L/W&quot;] = by.L_bp / by.W_bp
+    by[&quot;P/(1-P)&quot;] = by.P / (1 - by.P)
+    # the money objective: regression of gross on the same features, first half -&gt; second half
+    beta = np.linalg.lstsq(X[dev], f.gross.to_numpy()[dev], rcond=None)[0]
+    pr = X @ beta
+    qq = np.searchsorted(np.quantile(pr[dev], [0.2, 0.4, 0.6, 0.8]), pr) + 1
+    reg = f.assign(q=qq)[~dev].groupby(&quot;q&quot;).gross.mean() * 1e4
+    by[&quot;reg_q_bp&quot;] = reg
+    return auc(s[~dev], y[~dev]), by
+
+
+def and_filter(f, a, fee_bp=20):
+    &quot;&quot;&quot;User&#x27;s scheme: a next-bar sign model of accuracy a; keep an alarm only if it agrees.
+
+    The model is a noisy oracle of sign(first bar): information it would have to find in reality.
+    Kept alarms hold to the next alarm (flat if that one is dropped: the gross still runs to it).
+    &quot;&quot;&quot;
+    true_sign = np.sign(f[&quot;first&quot;].to_numpy())
+    right = rng.random(len(f)) &lt; a
+    says = np.where(right, true_sign, -true_sign)  # +1: the bar goes the alarm&#x27;s way
+    keep = says &gt; 0
+    k = f[keep]
+    return {
+        &quot;a&quot;: a,
+        &quot;kept&quot;: keep.mean(),
+        &quot;precision&quot;: k[&quot;true&quot;].mean(),
+        &quot;bp_trade&quot;: k.gross.mean() * 1e4,
+        &quot;bp_first_bar&quot;: k[&quot;first&quot;].mean() * 1e4,
+        &quot;bp_rest&quot;: (k.gross - k[&quot;first&quot;]).mean() * 1e4,
+        &quot;net_bp&quot;: k.gross.mean() * 1e4 - fee_bp,
+    }
+
+
+def world(kind, n=200_000, assets=6, **kw):
+    out = []
+    for _ in range(assets):
+        if kind == &quot;rw&quot;:
+            logp = np.cumsum(garch_returns(n))
+        elif kind == &quot;mr&quot;:  # random walk + AR(1) component: half-life hl bars, share of variance at 1 bar
+            hl, share = kw.get(&quot;hl&quot;, 24), kw.get(&quot;share&quot;, 0.3)
+            phi = 0.5 ** (1 / hl)
+            r = garch_returns(n)
+            e_rw, e_ar = np.sqrt(1 - share) * r, np.sqrt(share) * garch_returns(n)
+            u = np.zeros(n)
+            for t in range(1, n):
+                u[t] = phi * u[t - 1] + e_ar[t]
+            logp = np.cumsum(e_rw) + u
+        out.append(logp)
+    return out
+
+
+def run(kind, h=0.3, **kw):
+    tabs = []
+    for logp in world(kind, **kw):
+        v = rsi(logp)
+        tabs.append(alarm_table(v, logp, h, centred_turns(v)))
+    return pd.concat(tabs, ignore_index=True)
+
+
+if __name__ == &quot;__main__&quot;:
+    pd.set_option(&quot;display.width&quot;, 200, &quot;display.precision&quot;, 3)
+    which = sys.argv[1] if len(sys.argv) &gt; 1 else &quot;rw&quot;
+    kw = {k: float(v) for k, v in (x.split(&quot;=&quot;) for x in sys.argv[2:])}
+    h = kw.pop(&quot;h&quot;, 0.3)
+    f = run(which, h=h, **kw)
+    turns_per_alarm = None
+    print(f&quot;== world {which} {kw} h={h}: {len(f)} alarms, precision {f[&#x27;true&#x27;].mean():.3f}&quot;)
+    print(
+        f&quot;true alarms {f[f[&#x27;true&#x27;]==1].gross.mean()*1e4:+.1f} bp, false {f[f[&#x27;true&#x27;]==0].gross.mean()*1e4:+.1f} bp,&quot;
+        f&quot; all {f.gross.mean()*1e4:+.2f} +/- {f.gross.std()/np.sqrt(len(f))*1e4:.2f} bp, bars {f.bars.mean():.1f}&quot;
+    )
+    A, by = meta(f)
+    print(f&quot;meta-classifier AUC (out of sample) {A:.3f}&quot;)
+    print(by)
+    print(pd.DataFrame([and_filter(f, a) for a in (0.5, 0.52, 0.55, 0.6, 0.7, 0.8, 0.9)]).set_index(&quot;a&quot;))
+    print(&quot;E|first bar| bp:&quot;, f[&quot;first&quot;].abs().mean() * 1e4)
+
+
+def mti(n=200_000, assets=6, h=0.3, hl=24, share_mkt=0.7, share_ou=0.1, est=True):
+    &quot;&quot;&quot;Clutter cancellation: common random-walk factor + idiosyncratic OU + idiosyncratic RW.
+
+    Detector on each asset&#x27;s raw price vs on its residual against the market (beta known or
+    estimated causally on a rolling window). Trades on the raw asset vs on the hedged spread.
+    &quot;&quot;&quot;
+    m = np.cumsum(garch_returns(n))
+    phi = 0.5 ** (1 / hl)
+    raw, res = [], []
+    for _ in range(assets):
+        beta = rng.uniform(0.8, 1.4)
+        e = np.sqrt(share_ou) * garch_returns(n)
+        u = np.zeros(n)
+        for t in range(1, n):
+            u[t] = phi * u[t - 1] + e[t]
+        idio = np.cumsum(np.sqrt(1 - share_mkt - share_ou) * garch_returns(n))
+        logp = beta * np.sqrt(share_mkt) * m + idio + u
+        if est:  # rolling OLS beta on the last 960 bars of returns, known at t
+            ra, rm = pd.Series(np.diff(logp, prepend=0)), pd.Series(np.diff(m, prepend=0))
+            b = (ra.rolling(960).cov(rm) / rm.rolling(960).var()).shift(1).bfill().to_numpy()
+            spread = np.cumsum(np.diff(logp, prepend=0) - b * np.diff(m, prepend=0))
+        else:
+            spread = logp - beta * np.sqrt(share_mkt) * m
+        v1, v2 = rsi(logp), rsi(spread)
+        raw.append(alarm_table(v1, logp, h, centred_turns(v1)))
+        res.append(alarm_table(v2, spread, h, centred_turns(v2)))
+    return pd.concat(raw, ignore_index=True), pd.concat(res, ignore_index=True)
+
+
+def summary(name, f):
+    A, by = meta(f)
+    return {
+        &quot;series&quot;: name,
+        &quot;alarms&quot;: len(f),
+        &quot;precision&quot;: f[&quot;true&quot;].mean(),
+        &quot;true_bp&quot;: f[f[&quot;true&quot;] == 1].gross.mean() * 1e4,
+        &quot;false_bp&quot;: f[f[&quot;true&quot;] == 0].gross.mean() * 1e4,
+        &quot;all_bp&quot;: f.gross.mean() * 1e4,
+        &quot;se&quot;: f.gross.std() / np.sqrt(len(f)) * 1e4,
+        &quot;meta_auc&quot;: A,
+        &quot;q1_bp&quot;: by.all_bp.iloc[0],
+        &quot;q5_bp&quot;: by.all_bp.iloc[-1],
+        &quot;q5_P&quot;: by.P.iloc[-1],
+        &quot;reg_q1&quot;: by.reg_q_bp.iloc[0],
+        &quot;reg_q5&quot;: by.reg_q_bp.iloc[-1],
+    }</pre>
+    </details>
+    <details>
+      <summary><code>run2.py</code>: la tabella dei mondi e il residuo</summary>
+<pre>import sys
+import numpy as np, pandas as pd
+import sim
+pd.set_option(&quot;display.width&quot;, 220, &quot;display.precision&quot;, 3)
+rows = []
+f = sim.run(&quot;rw&quot;, h=0.3); rows.append(sim.summary(&quot;martingala&quot;, f))
+for hl, share in ((24, 0.1), (24, 0.3), (96, 0.3)):
+    f = sim.run(&quot;mr&quot;, h=0.3, hl=hl, share=share)
+    rows.append(sim.summary(f&quot;RW + AR(hl={hl}, quota={share})&quot;, f))
+    if (hl, share) == (24, 0.3):
+        A, by = sim.meta(f); print(f&quot;mr hl=24 share=0.3 meta AUC {A:.3f}&quot;); print(by)
+raw, res = sim.mti()
+rows.append(sim.summary(&quot;MTI: prezzo grezzo&quot;, raw))
+rows.append(sim.summary(&quot;MTI: residuo vs mercato&quot;, res))
+print(pd.DataFrame(rows).set_index(&quot;series&quot;).to_string())</pre>
+    </details>
+    <details>
+      <summary><code>run3.py</code>: il filtro sul livello nei quattro mondi</summary>
+<pre>import numpy as np, pandas as pd
+import sim
+pd.set_option(&quot;display.width&quot;, 220, &quot;display.precision&quot;, 2)
+tabs = {&quot;martingala&quot;: sim.run(&quot;rw&quot;, h=0.3), &quot;RW+AR(hl24,q0.3)&quot;: sim.run(&quot;mr&quot;, h=0.3, hl=24, share=0.3)}
+tabs[&quot;MTI grezzo&quot;], tabs[&quot;MTI residuo&quot;] = sim.mti()
+rows = []
+for name, f in tabs.items():
+    for L in (0.0, 0.3, 0.4, 0.5, 0.6):
+        k = f[f.extreme &gt;= L]
+        g = k.gross * 1e4
+        rows.append({&quot;serie&quot;: name, &quot;L&quot;: L, &quot;trade&quot;: len(k), &quot;precision&quot;: k[&quot;true&quot;].mean(), &quot;bp&quot;: g.mean(), &quot;se&quot;: g.std() / np.sqrt(len(k)),
+                     &quot;bp/sigma_bar&quot;: (k.gross / k.vol).mean()})
+print(pd.DataFrame(rows).set_index([&quot;serie&quot;, &quot;L&quot;]).to_string())</pre>
+    </details>
+    <details>
+      <summary><code>run4.py</code>: il secondo modello sul rendimento del trade</summary>
+<pre>import numpy as np, pandas as pd
+import sim
+f = sim.run(&quot;rw&quot;, h=0.3)
+g = f.gross.to_numpy()
+print(&quot;E|R_hold| bp&quot;, np.abs(g).mean()*1e4, &quot;sd&quot;, g.std()*1e4, &quot;E|r_1| bp&quot;, f[&quot;first&quot;].abs().mean()*1e4)
+rng = np.random.default_rng(1)
+# second model on the HOLDING-PERIOD return: Gaussian score with correlation rho to R_hold/sd
+z = (g - g.mean()) / g.std()
+for rho in (0.03, 0.05, 0.1, 0.15, 0.2, 0.3):
+    s = rho * z + np.sqrt(1 - rho**2) * rng.standard_normal(len(z))
+    keep = s &gt; 0
+    print(f&quot;rho {rho:.2f}  acc {np.mean(np.sign(s)==np.sign(g)):.3f}  kept {keep.mean():.2f}  precision {f[&#x27;true&#x27;][keep].mean():.3f}  bp/trade {g[keep].mean()*1e4:+.1f}  (0.8*rho*sd {0.798*rho*g.std()*1e4:.1f})&quot;)</pre>
+    </details>
+    <details>
+      <summary><code>sim_timing.py</code>: il segnale veloce da solo e come tempismo di un trade lento</summary>
+<pre>&quot;&quot;&quot;A weak fast signal as the timing of a slow trade, against the same signal traded on its own.
+
+World: log price = cumsum(k * f(m[t-1]) + eps[t]), eps GARCH t(4) at sigma 0.4% a bar, m an AR(1)
+signal with half-life HL bars, known at the close of bar t. &quot;linear&quot;: f(m) = m. &quot;bulk&quot;: f(m) =
+clip(m, -1, 1), rescaled to unit variance, so a signal beyond one sd says nothing more than one sd:
+the shape `detect --oi` found (&quot;the effect lives in the bulk, not in the extremes&quot;). k is set so
+that corr(m[t], r[t+1..t+H]) is about rho at H = 24; the measured value is printed. rho = 0 is a
+martingale.
+
+Standalone: whenever |m| &gt;= b (in sd of m), trade sign(m) for H bars, one trade at a time; gross and
+net of 20 bp (OKX spot taker) and 10 bp (perpetual taker) round trip.
+
+Timing: a slow strategy must trade direction d (random, independent of m: its own edge is not
+measured here) once every G bars. &quot;now&quot; executes at the decision bar t0; &quot;signal&quot; executes at the
+first bar of [t0, t0 + N) where d * m &gt;= b, else at the last; &quot;random&quot; at a uniform bar of the
+window. The fee is the same for all three, so the gain is d * (log p[t0] - log p[tau]), in bp, free.
+b is chosen on the first half of every path and reported on the second.
+&quot;&quot;&quot;
+
+from __future__ import annotations
+
+import sys
+
+import numpy as np
+import pandas as pd
+from scipy.signal import lfilter
+
+rng = np.random.default_rng(13)
+SIGMA, H, HL, G = 0.004, 24, 24, 192
+N_BARS, PATHS = 400_000, 8
+BS = (0.0, 0.5, 1.0, 1.5, 2.0, 2.5)
+BS_ALONE = (0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0)
+
+
+def garch_t(n, sigma=SIGMA, a=0.08, b=0.90, df=4):
+    w = sigma**2 * (1 - a - b)
+    eps = rng.standard_t(df, n) / np.sqrt(df / (df - 2))
+    r, s2 = np.empty(n), sigma**2
+    for t in range(n):
+        r[t] = np.sqrt(s2) * eps[t]
+        s2 = w + a * r[t] ** 2 + b * s2
+    return r
+
+
+def scale(rho, phi):
+    &quot;&quot;&quot;k such that corr(m_t, sum_{j=1..H} r_{t+j}) = rho with var(m) = 1.&quot;&quot;&quot;
+    j = np.arange(H)
+    S = (phi**j).sum()
+    V = (phi ** np.abs(j[:, None] - j[None, :])).sum()
+    return rho * SIGMA * np.sqrt(H) / np.sqrt(S**2 - rho**2 * V)
+
+
+BULK_SD = np.clip(np.random.default_rng(0).standard_normal(1_000_000), -1, 1).std()
+
+
+def path(rho, world, hl=HL):
+    phi = 0.5 ** (1 / hl)
+    m = lfilter([np.sqrt(1 - phi**2)], [1, -phi], rng.standard_normal(N_BARS))
+    r = garch_t(N_BARS)
+    if world == &quot;linear&quot;:
+        r[1:] += scale(rho, phi) * m[:-1]
+    else:  # corr(m, clip(m)) &lt; 1: ask the clipped driver for rho / corr so that m keeps about rho
+        z = np.clip(m, -1, 1) / BULK_SD
+        r[1:] += scale(min(rho / np.corrcoef(m, z)[0, 1], 0.99), phi) * z[:-1]
+    return m, np.cumsum(r)
+
+
+def standalone(m, p, b, lo, hi):
+    out, t = [], lo
+    while t &lt; hi - H:
+        if abs(m[t]) &gt;= b:
+            out.append(np.sign(m[t]) * (p[t + H] - p[t]))
+            t += H
+        else:
+            t += 1
+    return np.array(out)
+
+
+def timing(m, p, n, b, lo, hi, d):
+    t0 = np.arange(lo + G, hi - n - 1, G)
+    dd = d[: len(t0)]
+    tau = np.full(len(t0), -1)
+    for i, t in enumerate(t0):
+        hit = np.flatnonzero(dd[i] * m[t : t + n] &gt;= b)
+        tau[i] = t + (hit[0] if len(hit) else n - 1)
+    rnd = t0 + rng.integers(0, n, len(t0))
+    return dd * (p[t0] - p[tau]), dd * (p[t0] - p[rnd])
+
+
+def run(rho, world, hl=HL):
+    worlds = [path(rho, world, hl) for _ in range(PATHS)]
+    half = N_BARS // 2
+    d = rng.choice([-1, 1], N_BARS // G + 1)
+    ic = np.mean([np.corrcoef(m[:-H], p[H:] - p[:-H])[0, 1] for m, p in worlds])
+    row = {&quot;world&quot;: world, &quot;rho&quot;: rho, &quot;ic_measured&quot;: ic}
+
+    def pooled(f, b, lo, hi):
+        return np.concatenate([f(m, p, b, lo, hi) for m, p in worlds])
+
+    # standalone: b chosen on the first half by net at 20 bp
+    best = max(BS_ALONE, key=lambda b: pooled(standalone, b, 0, half).mean() * 1e4 - 20)
+    g = pooled(standalone, best, half, N_BARS) * 1e4
+    row |= {&quot;alone_b&quot;: best, &quot;alone_n&quot;: len(g), &quot;alone_gross&quot;: g.mean(), &quot;alone_se&quot;: g.std() / np.sqrt(len(g)),
+            &quot;alone_net20&quot;: g.mean() - 20, &quot;alone_net10&quot;: g.mean() - 10}
+    for n in (16, 48, 96):
+        def gain(b, lo, hi):
+            return np.concatenate([timing(m, p, n, b, lo, hi, d)[0] for m, p in worlds]) * 1e4
+        b = max(BS, key=lambda b: gain(b, 0, half).mean())
+        x = gain(b, half, N_BARS)
+        rnd = np.concatenate([timing(m, p, n, b, half, N_BARS, d)[1] for m, p in worlds]) * 1e4
+        row |= {f&quot;N{n}_b&quot;: b, f&quot;N{n}_bp&quot;: x.mean(), f&quot;N{n}_se&quot;: x.std() / np.sqrt(len(x)), f&quot;N{n}_rand&quot;: rnd.mean()}
+    row[&quot;trades&quot;] = len(x)
+    return row
+
+
+if __name__ == &quot;__main__&quot;:
+    pd.set_option(&quot;display.width&quot;, 250, &quot;display.precision&quot;, 2, &quot;display.max_columns&quot;, 40)
+    hl = float(sys.argv[1]) if len(sys.argv) &gt; 1 else HL
+    for world in (&quot;linear&quot;, &quot;bulk&quot;):
+        rows = [run(rho, world, hl) for rho in (0.0, 0.02, 0.03, 0.05, 0.08, 0.12)]
+        print(f&quot;== {world}, half-life {hl} bars&quot;)
+        print(pd.DataFrame(rows).set_index(&quot;rho&quot;).drop(columns=&quot;world&quot;).T)
+</pre>
+    </details>
+    <details>
+      <summary><code>sim_sequential.py</code>: t-test, t-test guardato a ogni trade e test per scommessa</summary>
+<pre>&quot;&quot;&quot;How many trades it takes to see an edge, and a test that can be read after every trade.
+
+Trades: net return x = max(c + sigma * e, -B), e a t(4) scaled to unit variance, sigma 150 bp (the sd
+of a detector trade in false_alarms.html), B = 2 sigma a stop that bounds the loss; c is set so that
+E[x] = mu exactly. H0: E[x] &lt;= 0.
+
+Fixed-n: the one-sided t-test at alpha 5%, at n = 160 (the trades behind the one positive row of
+HANDOFF §17) and n = 1000.
+Peeking: the same t-test read after every trade, stopping at the first t &gt; 1.645: what a researcher
+watching a paper-trading account does.
+E-process (testing by betting): W_n = prod(1 + lambda_i * x_i / B), lambda_i in [0, 1/2] chosen from
+trades before i (a plug-in Kelly bet). Because x &gt;= -B, under H0 every factor has mean &lt;= 1 and W is
+a nonnegative supermartingale: P(W ever reaches 1/alpha) &lt;= alpha (Ville), whenever one looks.
+&quot;&quot;&quot;
+
+from __future__ import annotations
+
+import numpy as np
+import pandas as pd
+
+rng = np.random.default_rng(17)
+SIGMA, B, NMAX, REPS, ALPHA = 150.0, 300.0, 3000, 4000, 0.05
+
+
+def draws(mu, shape):
+    e = rng.standard_t(4, shape) / np.sqrt(2)
+    big = rng.standard_t(4, 2_000_000) / np.sqrt(2)
+    lo, hi = mu - 100, mu + 100  # bisection on the location so that the clipped mean is mu
+    for _ in range(60):
+        c = (lo + hi) / 2
+        lo, hi = (c, hi) if np.maximum(c + SIGMA * big, -B).mean() &lt; mu else (lo, c)
+    return np.maximum(c + SIGMA * e, -B)
+
+
+def eprocess(x):
+    n = np.arange(1, x.shape[1] + 1)
+    s1 = np.cumsum(x, axis=1)
+    s2 = np.cumsum(x**2, axis=1)
+    # running mean and second moment of the trades *before* i, shrunk toward 0 and sigma^2 by 20 pseudo-trades
+    m = np.concatenate([np.zeros((len(x), 1)), s1[:, :-1]], axis=1) / (n + 20)
+    v = (np.concatenate([np.zeros((len(x), 1)), s2[:, :-1]], axis=1) + 20 * SIGMA**2) / (n + 20)
+    lam = np.clip(m * B / v, 0, 0.5)
+    return np.cumsum(np.log1p(lam * x / B), axis=1)
+
+
+def tstat(x):
+    n = np.arange(1, x.shape[1] + 1)
+    m = np.cumsum(x, axis=1) / n
+    v = (np.cumsum(x**2, axis=1) - n * m**2) / np.maximum(n - 1, 1)
+    with np.errstate(divide=&quot;ignore&quot;, invalid=&quot;ignore&quot;):
+        return m / np.sqrt(v / n)
+
+
+rows = []
+for mu in (0.0, 7.5, 15.0, 30.0):
+    x = draws(mu, (REPS, NMAX))
+    logw, t = eprocess(x), tstat(x)
+    hit = logw &gt;= np.log(1 / ALPHA)
+    first = np.where(hit.any(axis=1), hit.argmax(axis=1) + 1, np.nan)
+    peek = (t[:, 9:] &gt; 1.645).any(axis=1)  # from the 10th trade on
+    rows.append({
+        &quot;mu_bp&quot;: mu, &quot;mu/sigma&quot;: mu / SIGMA, &quot;mean_x&quot;: x.mean(),
+        &quot;t-test n=160&quot;: (t[:, 159] &gt; 1.645).mean(),
+        &quot;t-test n=1000&quot;: (t[:, 999] &gt; 1.645).mean(),
+        &quot;t-test n=3000&quot;: (t[:, -1] &gt; 1.645).mean(),
+        &quot;t peeking, any n&lt;=3000&quot;: peek.mean(),
+        &quot;e-process by 1000&quot;: hit[:, :1000].any(axis=1).mean(),
+        &quot;e-process by 3000&quot;: hit.any(axis=1).mean(),
+        &quot;e median trades&quot;: np.nanmedian(first),
+    })
+pd.set_option(&quot;display.width&quot;, 200, &quot;display.precision&quot;, 3)
+print(pd.DataFrame(rows).set_index(&quot;mu_bp&quot;).T)
+</pre>
+    </details>
+  </section>
+
+  <section id="fonti">
+    <div class="sechead"><div class="step">FONTI</div><h2>Letteratura</h2></div>
+    <ul class="points">
+      <li>Campbell, Grossman, Wang (1993), <a href="https://dash.harvard.edu/bitstream/1/3128710/2/campbell_trading.pdf">Trading Volume and Serial Correlation in Stock Returns</a>: i movimenti con volume alto, di flusso non informativo, tendono a invertire.</li>
+      <li>Riksbank WP 413, <a href="https://www.riksbank.se/globalassets/media/rapporter/working-papers/2022/no.-413-trading-volume-and-liquidity-provision-in-cryptocurreny-markets.pdf">Trading volume and liquidity provision in cryptocurrency markets</a>; <a href="https://fairfield.elsevierpure.com/en/publications/cryptocurrency-return-reversals/">Cryptocurrency return reversals</a>; <a href="https://arxiv.org/pdf/2608.21888">Short-horizon mean reversion in cryptocurrency markets</a>.</li>
+      <li><a href="https://t2r2.star.titech.ac.jp/rrws/file/CTT100941776/ATD100000413/">Trasmissione ritardata da BTC alle altcoin</a> (Tokyo Tech).</li>
+      <li>Meta-labeling: <a href="https://en.wikipedia.org/wiki/Meta-Labeling">panoramica</a>, <a href="https://hudsonthames.org/?p=3043">Hudson &amp; Thames</a>; Joubert, Meta-Labeling: Calibration and Position Sizing, Journal of Financial Data Science.</li>
+      <li>Shiryaev, Zhitlukhin, <a href="https://arxiv.org/abs/1212.03709">arresto ottimo di un moto browniano con disordine</a>.</li>
+      <li><a href="https://arxiv.org/pdf/2512.12844">Selective Conformal Risk Control</a>.</li>
+      <li><a href="https://arxiv.org/pdf/2109.10662v1">Pairs trading sulle crypto</a>, sensibilità ai costi.</li>
+      <li>Nagel (2012), <a href="https://www.nber.org/papers/w17653">Evaporating Liquidity</a>: l'inversione di breve è il compenso di chi fornisce liquidità, e cresce con il VIX. Bianchi, Babiak, Dickerson (2022), lo stesso nelle crypto (il WP della Riksbank sopra); Farag, Luo, Yarovaya, Zięba (2025), <a href="https://eprints.soton.ac.uk/501151">Returns from liquidity provision in cryptocurrency markets</a>.</li>
+      <li>Gârleanu, Pedersen (2013), <a href="https://www.nber.org/papers/w15205">Dynamic Trading with Predictable Returns and Transaction Costs</a>; Lehalle, Neuman, <a href="https://arxiv.org/abs/1704.00847">Incorporating Signals into Optimal Trading</a>.</li>
+      <li>Hasbrouck (1991), <a href="https://ideas.repec.org/a/bla/jfinan/v46y1991i1p179-207.html">Measuring the Information Content of Stock Trades</a>; Llorente, Michaely, Saar, Wang (2002), <a href="https://www.nber.org/papers/w8312">Dynamic Volume-Return Relation of Individual Stocks</a>.</li>
+      <li>Osler (2005), <a href="https://www.newyorkfed.org/medialibrary/media/research/staff_reports/sr150.pdf">Stop-loss orders and price cascades in currency markets</a>; Osler (2003), <a href="https://scholarworks.brandeis.edu/esploro/outputs/report/Currency-Orders-and-Exchange-Rate-Dynamics-Explaining/9924036873301921">Currency Orders and Exchange Rate Dynamics</a>; Urquhart (2017), <a href="https://ideas.repec.org/a/eee/ecolet/v159y2017icp145-148.html">Price clustering in Bitcoin</a>.</li>
+      <li>Liu, Tsyvinski (2021), <a href="https://www.nber.org/papers/w24877">Risks and Returns of Cryptocurrency</a>; Moreira, Muir (2017), <a href="https://www.nber.org/papers/w22208">Volatility-Managed Portfolios</a>; Christin, Routledge, Soska, Zetlin-Jones (2022), <a href="https://www.andrew.cmu.edu/user/azj/files/CarryTrade.v1.0.pdf">The Crypto Carry Trade</a>.</li>
+      <li>Waudby-Smith, Ramdas, <a href="https://arxiv.org/abs/2010.09686">Estimating means of bounded random variables by betting</a>; Ramdas, <a href="https://stat.cmu.edu/~aramdas/icml25/ramdas1.pdf">tutorial sul testing by betting</a>.</li>
+      <li>Effetti di calendario su BTC, <a href="https://research-repository.uwa.edu.au/en/publications/bitcoin-time-of-day-day-of-week-and-month-of-year-effects-in-retu/">ora, giorno e mese su sette exchange</a>: variabili nel tempo, nessuno persistente.</li>
+      <li>Fee OKX: <a href="https://www.finder.com/cryptocurrency/exchanges/okx-exchange-review">Finder</a>, da verificare sul sito di OKX.</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+(function () {
+  const NS = "http://www.w3.org/2000/svg";
+  const num = (v, d = 1) => (v < 0 ? "−" : "") + Math.abs(v).toFixed(d).replace(".", ",");
+  const sgn = (v, d = 1) => (v > 0 ? "+" : "") + num(v, d);
+  function el(tag, attrs, parent) {
+    const e = document.createElementNS(NS, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function ticks(lo, hi, n) {
+    const span = hi - lo, raw = span / n, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+    const step = [1, 2, 2.5, 5, 10].map(s => s * mag).find(s => span / s <= n) || 10 * mag;
+    const out = [];
+    for (let v = Math.floor(lo / step) * step; v <= Math.ceil(hi / step) * step + 1e-9; v += step) out.push(+v.toFixed(6));
+    return out;
+  }
+  function tooltip(box) {
+    const t = document.createElement("div");
+    t.className = "tip"; t.hidden = true; box.appendChild(t);
+    return {
+      show(html, x, y) {
+        t.innerHTML = html; t.hidden = false;
+        const bw = box.clientWidth, tw = t.offsetWidth;
+        t.style.left = Math.min(Math.max(8, x + 14), bw - tw - 8) + "px";
+        t.style.top = Math.max(8, y - t.offsetHeight - 10) + "px";
+      },
+      hide() { t.hidden = true; }
+    };
+  }
+  const line = (name, value) => `<div class="r"><span>${name}</span><span>${value}</span></div>`;
+  // Shape is the second channel next to colour: circle, square, diamond.
+  function mark(svg, shape, x, y, color, r = 5) {
+    const ring = { stroke: "var(--surface)", "stroke-width": 2 };
+    if (shape === "square") return el("rect", { x: x - r, y: y - r, width: 2 * r, height: 2 * r, rx: 1.5, fill: color, ...ring }, svg);
+    if (shape === "diamond") return el("path", { d: `M${x},${y - r - 1.5} L${x + r + 1.5},${y} L${x},${y + r + 1.5} L${x - r - 1.5},${y} Z`, fill: color, ...ring }, svg);
+    return el("circle", { cx: x, cy: y, r, fill: color, ...ring }, svg);
+  }
+  // Every point gets a hit area larger than its mark and its own tooltip.
+  function hover(box, svg, W, points) {
+    const tip = tooltip(box);
+    points.forEach(p => {
+      const hit = el("circle", { cx: p.x, cy: p.y, r: 13, fill: "transparent" }, svg);
+      hit.addEventListener("pointerenter", evt => {
+        const b = box.getBoundingClientRect();
+        tip.show(p.html, evt.clientX - b.left, evt.clientY - b.top);
+      });
+      hit.addEventListener("pointerleave", () => tip.hide());
+    });
+  }
+  function frame(box, W, H, aria) {
+    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": aria });
+    box.querySelector(".plot").appendChild(svg);
+    return svg;
+  }
+
+  // 1. The law: L/W against P/(1-P), log-log, the diagonal is the martingale.
+  (function () {
+    const box = document.getElementById("c-law");
+    const W = 720, H = 390, m = { l: 56, r: 24, t: 26, b: 50 };
+    const lo = Math.log(0.8), hi = Math.log(20);
+    const X = v => m.l + (W - m.l - m.r) * (Math.log(v) - lo) / (hi - lo);
+    const Y = v => m.t + (H - m.t - m.b) * (1 - (Math.log(v) - lo) / (hi - lo));
+    const svg = frame(box, W, H, "Diagramma a dispersione in scala logaritmica del rapporto perdita su vincita contro le odds della precisione: i punti della simulazione martingala stanno sulla diagonale, quelli del mondo con ritorno alla media se ne staccano nel quintile migliore.");
+    [1, 2, 4, 8, 16].forEach(v => {
+      el("line", { x1: X(v), x2: X(v), y1: m.t, y2: H - m.b, stroke: "var(--rule)", "stroke-width": 1 }, svg);
+      el("line", { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), stroke: "var(--rule)", "stroke-width": 1 }, svg);
+      el("text", { x: X(v), y: H - m.b + 18, "text-anchor": "middle" }, svg).textContent = v;
+      el("text", { x: m.l - 8, y: Y(v) + 4, "text-anchor": "end" }, svg).textContent = v;
+    });
+    el("text", { x: m.l + (W - m.l - m.r) / 2, y: H - 8, "text-anchor": "middle" }, svg).textContent = "P / (1 − P), odds della precisione";
+    el("text", { x: 12, y: 14 }, svg).textContent = "L / W";
+    el("line", { x1: X(0.8), y1: Y(0.8), x2: X(20), y2: Y(20), stroke: "var(--axis)", "stroke-width": 2 }, svg);
+    el("text", { x: X(11), y: Y(16.5), class: "lab", "text-anchor": "end" }, svg).textContent = "martingala: L/W = P/(1−P)";
+    el("text", { x: X(1.05), y: Y(10) }, svg).textContent = "sopra: il filtro perde";
+    el("text", { x: X(18), y: Y(1.1), "text-anchor": "end" }, svg).textContent = "sotto: il filtro guadagna";
+    const sims = [
+      { name: "simulazione, martingala", color: "var(--s1)", shape: "circle", pts: [
+        ["quintile 1", 0.638, 43.25, 78.10, -0.66], ["quintile 2", 0.738, 33.38, 96.74, -0.72], ["quintile 3", 0.814, 27.79, 113.25, 1.59],
+        ["quintile 4", 0.861, 20.69, 137.38, -1.26], ["quintile 5", 0.937, 11.46, 166.26, 0.34]] },
+      { name: "simulazione, ritorno alla media", color: "var(--s2)", shape: "square", pts: [
+        ["quintile 1", 0.634, 34.59, 82.98, -8.45], ["quintile 2", 0.743, 30.56, 99.98, -3.02], ["quintile 3", 0.810, 24.71, 119.80, -2.75],
+        ["quintile 4", 0.873, 19.77, 134.75, 0.22], ["quintile 5", 0.936, 20.95, 164.99, 9.05]] },
+      { name: "dati veri, v2", color: "var(--s3)", shape: "diamond", pts: [
+        ["--features, quintile 1, sviluppo", 0.53, 49, 68, null], ["--features, quintile 5, sviluppo", 0.83, 25, 99, null],
+        ["--features, quintile 1, hold-out", 0.60, 40, 65, null], ["--features, quintile 5, hold-out", 0.86, 9, 102, null],
+        ["Shiryaev 0,5, sviluppo", 0.691, 30.9, 79.8, null], ["Shiryaev 0,9, sviluppo", 0.864, 21.9, 89.0, null], ["zigzag 0,2, sviluppo", 0.759, 19.8, 79.5, null]] },
+    ];
+    const hits = [];
+    sims.forEach(s => s.pts.forEach(([lab, P, Wn, L, bp]) => {
+      const x = X(P / (1 - P)), y = Y(L / Wn);
+      mark(svg, s.shape, x, y, s.color);
+      const implied = P * Wn - (1 - P) * L;
+      hits.push({ x, y, html: `<div class="t">${s.name}</div><div class="r"><span>${lab}</span><span></span></div>` +
+        line("P", num(P, 3)) + line("W, vero", sgn(Wn) + " bp") + line("L, falso", "−" + num(L) + " bp") +
+        line("L/W", num(L / Wn, 2)) + line("P/(1−P)", num(P / (1 - P), 2)) +
+        line(bp === null ? "P·W − (1−P)·L" : "lordo per trade", sgn(bp === null ? implied : bp) + " bp") });
+    }));
+    hover(box, svg, W, hits);
+  })();
+
+  // 2. The second model: bp a trade against its accuracy, two horizons, the 20 bp line.
+  (function () {
+    const box = document.getElementById("c-two");
+    const W = 720, H = 330, m = { l: 52, r: 24, t: 26, b: 50 };
+    const X = v => m.l + (W - m.l - m.r) * (v - 50) / (92 - 50);
+    const Y = v => m.t + (H - m.t - m.b) * (1 - (v - 0) / (35 - 0));
+    const svg = frame(box, W, H, "Grafico del guadagno per trade contro l'accuratezza del secondo modello: sul rendimento del trade si supera 20 bp poco oltre il 55%, sulla candela successiva serve il 90%.");
+    [0, 5, 10, 15, 20, 25, 30, 35].forEach(v => {
+      el("line", { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), stroke: v === 0 ? "var(--axis)" : "var(--rule)", "stroke-width": 1 }, svg);
+      el("text", { x: m.l - 8, y: Y(v) + 4, "text-anchor": "end" }, svg).textContent = v;
+    });
+    [50, 55, 60, 65, 70, 75, 80, 85, 90].forEach(v => {
+      el("text", { x: X(v), y: H - m.b + 18, "text-anchor": "middle" }, svg).textContent = v + "%";
+    });
+    el("text", { x: m.l + (W - m.l - m.r) / 2, y: H - 8, "text-anchor": "middle" }, svg).textContent = "accuratezza del secondo modello sul segno che predice";
+    el("text", { x: 12, y: 14 }, svg).textContent = "bp";
+    el("line", { x1: m.l, x2: W - m.r, y1: Y(20), y2: Y(20), stroke: "var(--fg2)", "stroke-width": 1.25, "stroke-dasharray": "5 4" }, svg);
+    el("text", { x: X(62), y: Y(20) - 6, class: "lab" }, svg).textContent = "andata e ritorno, 20 bp";
+    const series = [
+      { name: "sul segno della candela successiva", color: "var(--s2)", shape: "square", pts: [
+        [50, 0.29, "a 0,50", 0.796], [52, 0.96, "a 0,52", 0.800], [55, 2.99, "a 0,55", 0.807], [60, 6.01, "a 0,60", 0.820],
+        [70, 10.09, "a 0,70", 0.844], [80, 15.46, "a 0,80", 0.868], [90, 20.80, "a 0,90", 0.891]] },
+      { name: "sul rendimento dell'intero trade", color: "var(--s1)", shape: "circle", pts: [
+        [50.6, 3.2, "ρ 0,03", 0.798], [51.1, 5.2, "ρ 0,05", 0.802], [52.5, 10.6, "ρ 0,10", 0.805], [53.9, 16.5, "ρ 0,15", 0.812],
+        [55.4, 21.9, "ρ 0,20", 0.818], [58.0, 30.4, "ρ 0,30", 0.831]] },
+    ];
+    const hits = [];
+    series.forEach(s => {
+      el("path", { d: s.pts.map(([a, bp], i) => `${i ? "L" : "M"}${X(a)},${Y(bp)}`).join(""), fill: "none", stroke: s.color, "stroke-width": 2, "stroke-linejoin": "round" }, svg);
+      s.pts.forEach(([a, bp, lab, prec]) => {
+        mark(svg, s.shape, X(a), Y(bp), s.color);
+        hits.push({ x: X(a), y: Y(bp), html: `<div class="t">${s.name}</div>` + line(lab, "") + line("accuratezza", num(a) + "%") +
+          line("precisione degli allarmi", num(prec, 3)) + line("lordo per trade", sgn(bp) + " bp") });
+      });
+    });
+    el("text", { x: X(58.0) + 10, y: Y(30.4) + 4, class: "lab" }, svg).textContent = "orizzonte del trade";
+    el("text", { x: X(70), y: Y(10.09) + 28, class: "lab", "text-anchor": "middle" }, svg).textContent = "candela successiva";
+    hover(box, svg, W, hits);
+  })();
+
+  // 3. The gate in two worlds, with ±1 se whiskers; the two series sit 6px apart.
+  (function () {
+    const box = document.getElementById("c-gate");
+    const W = 720, H = 330, m = { l: 52, r: 190, t: 26, b: 50 };
+    const Ls = [0, 0.3, 0.4, 0.5, 0.6];
+    const yt = ticks(-4, 14, 6), y0 = yt[0], y1 = yt[yt.length - 1];
+    const X = i => m.l + (W - m.l - m.r) * i / (Ls.length - 1);
+    const Y = v => m.t + (H - m.t - m.b) * (1 - (v - y0) / (y1 - y0));
+    const svg = frame(box, W, H, "Grafico del lordo per trade contro il livello del filtro: nel random walk resta a zero a ogni livello, con ritorno alla media sale fino a più 10 bp a 0,6.");
+    yt.forEach(v => {
+      el("line", { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), stroke: v === 0 ? "var(--axis)" : "var(--rule)", "stroke-width": 1 }, svg);
+      el("text", { x: m.l - 8, y: Y(v) + 4, "text-anchor": "end" }, svg).textContent = num(v, 0);
+    });
+    Ls.forEach((L, i) => { el("text", { x: X(i), y: H - m.b + 18, "text-anchor": "middle" }, svg).textContent = L === 0 ? "0" : num(L); });
+    el("text", { x: m.l + (W - m.l - m.r) / 2, y: H - 8, "text-anchor": "middle" }, svg).textContent = "livello L raggiunto dalla gamba";
+    el("text", { x: 12, y: 14 }, svg).textContent = "bp";
+    const series = [
+      { name: "martingala", short: "martingala", color: "var(--s1)", shape: "circle", dx: -3,
+        bp: [0.18, 0.50, 1.02, 1.35, -0.25], se: [0.53, 0.78, 1.02, 1.53, 2.60], n: [80609, 44567, 28751, 15417, 6348], p: [0.81, 0.88, 0.91, 0.94, 0.96] },
+      { name: "ritorno alla media", short: "ritorno alla media", color: "var(--s2)", shape: "square", dx: 3,
+        bp: [-1.23, 3.56, 6.82, 7.49, 10.34], se: [0.49, 0.73, 0.99, 1.52, 2.77], n: [82938, 44416, 27232, 13399, 4858], p: [0.81, 0.89, 0.92, 0.95, 0.97] },
+    ];
+    const hits = [];
+    series.forEach(s => {
+      el("path", { d: s.bp.map((v, i) => `${i ? "L" : "M"}${X(i) + s.dx},${Y(v)}`).join(""), fill: "none", stroke: s.color, "stroke-width": 2, "stroke-linejoin": "round" }, svg);
+      s.bp.forEach((v, i) => {
+        const x = X(i) + s.dx;
+        el("line", { x1: x, x2: x, y1: Y(v + s.se[i]), y2: Y(v - s.se[i]), stroke: "var(--fg2)", "stroke-width": 1.25 }, svg);
+        mark(svg, s.shape, x, Y(v), s.color);
+        hits.push({ x, y: Y(v), html: `<div class="t">${s.name}</div>` + line("livello", i ? num(Ls[i]) : "0") +
+          line("trade", s.n[i].toLocaleString("it-IT")) + line("precisione", num(s.p[i], 2)) + line("lordo per trade", sgn(v) + " ± " + num(s.se[i]) + " bp") });
+      });
+      const last = s.bp.length - 1;
+      el("text", { x: X(last) + 14, y: Y(s.bp[last]) + 4, class: "lab" }, svg).textContent = `${s.short} ${sgn(s.bp[last])}`;
+    });
+    hover(box, svg, W, hits);
+  })();
+
+  // 4. Timing: bp per execution against the signal's IC, alone net of 20 bp vs as the timing of a slow trade.
+  (function () {
+    const box = document.getElementById("c-timing");
+    const W = 720, H = 340, m = { l: 52, r: 170, t: 26, b: 50 };
+    const rho = [0, 0.02, 0.03, 0.05, 0.08, 0.12];
+    const yt = ticks(-25, 45, 7), y0 = yt[0], y1 = yt[yt.length - 1];
+    const X = v => m.l + (W - m.l - m.r) * v / 0.12;
+    const Y = v => m.t + (H - m.t - m.b) * (1 - (v - y0) / (y1 - y0));
+    const svg = frame(box, W, H, "Grafico dei bp per esecuzione contro l'IC del segnale: da solo il segnale resta sotto zero fino a 0,05 al netto di 20 bp; come tempismo di un trade lento è positivo da 0,02 e arriva a più 13 bp a 0,05 con una finestra di 96 barre.");
+    yt.forEach(v => {
+      el("line", { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), stroke: v === 0 ? "var(--axis)" : "var(--rule)", "stroke-width": v === 0 ? 1.5 : 1 }, svg);
+      el("text", { x: m.l - 8, y: Y(v) + 4, "text-anchor": "end" }, svg).textContent = num(v, 0);
+    });
+    rho.forEach(v => { el("text", { x: X(v), y: H - m.b + 18, "text-anchor": "middle" }, svg).textContent = v ? num(v, 2) : "0"; });
+    el("text", { x: m.l + (W - m.l - m.r) / 2, y: H - 8, "text-anchor": "middle" }, svg).textContent = "IC del segnale con il rendimento a 24 barre";
+    el("text", { x: 12, y: 14 }, svg).textContent = "bp";
+    const series = [
+      { name: "tempismo, finestra 96 barre", short: "tempismo, 96", color: "var(--s1)", shape: "circle", dx: -4, ly: 4,
+        bp: [-1.42, 3.20, 3.32, 12.77, 21.70, 36.35], se: [2.32, 1.53, 3.56, 3.04, 2.97, 3.02] },
+      { name: "tempismo, finestra 48 barre", short: "tempismo, 48", color: "var(--s3)", shape: "square", dx: 0, ly: -6,
+        bp: [-2.92, 3.64, 4.57, 8.19, 13.49, 23.17], se: [2.64, 1.38, 2.10, 1.94, 1.97, 1.92] },
+      { name: "da solo, netto di 20 bp", short: "da solo, netto", color: "var(--s2)", shape: "diamond", dx: 4, ly: 16,
+        bp: [-19.30, -14.47, -5.70, -5.29, 7.95, 22.68], se: [1.34, 3.26, 6.77, 1.31, 2.08, 6.88] },
+    ];
+    const hits = [];
+    series.forEach(s => {
+      el("path", { d: s.bp.map((v, i) => `${i ? "L" : "M"}${X(rho[i]) + s.dx},${Y(v)}`).join(""), fill: "none", stroke: s.color, "stroke-width": 2, "stroke-linejoin": "round" }, svg);
+      s.bp.forEach((v, i) => {
+        const x = X(rho[i]) + s.dx;
+        el("line", { x1: x, x2: x, y1: Y(v + s.se[i]), y2: Y(v - s.se[i]), stroke: "var(--fg2)", "stroke-width": 1.25 }, svg);
+        mark(svg, s.shape, x, Y(v), s.color);
+        hits.push({ x, y: Y(v), html: `<div class="t">${s.name}</div>` + line("IC", rho[i] ? num(rho[i], 2) : "0") +
+          line("bp per esecuzione", sgn(v) + " ± " + num(s.se[i]) + " bp") });
+      });
+      const last = s.bp.length - 1;
+      el("text", { x: X(rho[last]) + 14, y: Y(s.bp[last]) + s.ly, class: "lab" }, svg).textContent = `${s.short} ${sgn(s.bp[last])}`;
+    });
+    hover(box, svg, W, hits);
+  })();
+})();
+</script>
+</body>
+</html>

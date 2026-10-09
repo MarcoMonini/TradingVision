@@ -28,6 +28,19 @@ measurements, and commit subjects are written that way ("Four branches lose to o
 (`strategy`, `detect`, HANDOFF §17), step by step with its tables and charts, ending on what is
 still open. A copy of a page that was published while the study ran; edit it here now.
 
+`false_alarms.html` (Italian) is in two parts. Part I is why cutting the detectors' false alarms
+cannot pay while a filter reads only the price's past (P·W = (1−P)·L under optional stopping), and
+what a second model has to be worth. Part II is the plan: the eight routes left, numbered in the
+order they run — the residual against the market, the futures columns' IC at the pivots against
+everywhere, the liquidity premium at v2's extremes, the flow shock, a volatility-managed slow base,
+the weak fast signals as the timing of that base's trades, the decomposed taker flow, pivots as a map
+of stop orders — each with why, what to look for, the criterion and what follows, then the
+confirmation (2021-2025, paper trading with a test by betting). The Monte Carlo behind each number
+and its code are in an appendix. HANDOFF §19 is the same plan with what came out, measured 2026-10-07/08:
+no route passes its criterion; route 6's timing is the one lead. The modules are `detect`
+(phase 0, routes 1-2), `events` (3-4), `timing` (5-6), `flow` (7), `stopmap` (8), `sequential`
+(the betting test), each with `--period dev|holdout|2021`.
+
 `swing_leg_pipeline.html` (Italian) explains the training pipeline of the `swing_leg_target` models.
 Part I is a lesson for a reader new to the subject, one concept per chapter with charts on real
 candles; Part II walks the pipeline stage by stage with the schema of every frame, tensor and
@@ -46,7 +59,10 @@ uv run ruff check . && uv run black --check .    # what CI runs, line-length 120
 ```
 
 The Streamlit page: `preview_start` with the `chart` config in `.claude/launch.json`, or
-`uv run streamlit run src/tradingvision/app/chart.py`.
+`uv run streamlit run src/tradingvision/app/chart.py`. A second page, local only and not deployed:
+`uv run streamlit run src/tradingvision/app/decomposer.py`, descriptive statistics of one pair's candles
+read from the store, which it never downloads. It grows by request: add a chart or a number to it only
+when asked.
 
 Pipeline modules, each a `python -m` entry point, in the order they depend on each other:
 
@@ -63,6 +79,7 @@ uv run python -m tradingvision.threshold --pred data/pred-swing-*.parquet --at 0
 uv run python -m tradingvision.stops --pred data/pred-swing-*.parquet --at 0.5 --grid  # the same rule with exits
 uv run python -m tradingvision.strategy --candidates --at 0.40  # the rule study on v2's predictions, ETH/BTC/SOL
 uv run python -m tradingvision.detect --shiryaev 0.5 0.9 0.99 --split  # recognising v2's turns causally: what it earns
+uv run python -m tradingvision.detect --null 0.5    # does telling true alarms from false read the market? (also --residual BTC)
 ```
 
 `swing --save` writes `data/swing.pt`, and v2 is `--save data/swing-v2.pt`, the only checkpoint the

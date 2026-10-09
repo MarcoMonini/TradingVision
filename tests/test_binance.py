@@ -5,7 +5,7 @@ import zipfile
 
 import pandas as pd
 
-from tradingvision.data.binance import parse
+from tradingvision.data.binance import TAKER, parse
 
 ROW = "{t},4261.48,4280.56,4200.00,4270.00,2.189,{c},9333.62,9,0.489,2089.10,0"
 HEADER = "open_time,open,high,low,close,volume,close_time,quote_volume,trades,a,b,ignore"
@@ -32,7 +32,7 @@ def test_header_row_is_dropped():
 
 def test_columns_and_dtypes():
     df = parse(zipped(ROW.format(t=1502942400000, c=1502942699999)))
-    assert list(df.columns) == ["open", "high", "low", "close", "volume", "quote_volume", "trades"]
+    assert list(df.columns) == ["open", "high", "low", "close", "volume", "quote_volume", "trades", *TAKER]
     assert df.close.dtype == "float64" and df.trades.dtype == "int32"
 
 
