@@ -61,6 +61,22 @@ cluster. The one that stands out is Saturday 00:00 UTC, positive at 3.6 standard
 3.8 on BTC 1h and 4.4 on ETH 15m: past a Bonferroni cut of about 3.4 for 168 cells, measured on the
 whole history with nothing held out, so a lead and not a finding.
 
+**The future of a candle** (`ahead`): the candles grouped by their change in standard deviations of
+all candles, bands of 0.5σ from −3σ to +3σ and one open band past each end (`SIGMA_STEP`,
+`SIGMA_REACH`; a flat candle falls in 0 to +0.5σ), and for each band and each N from 1 to N max the
+mean cumulative change from the candle's close to the close N candles later — what a buyer at the
+close holds after N candles. The candle's own body is not in it: it is known when the future starts.
+Two heatmaps, band against N: the mean, and its excess over the mean of every candle at the same N
+in standard errors. The excess, because the drift grows with N and would colour every band alike;
+standard errors over non-overlapping blocks of N candles on the clock (`metrics.blocked`'s rule),
+because adjacent candles share N − 1 of the candles their futures are made of and in a band of large
+candles they arrive together. On BTC 15m to 2026-10-06, N to 96 (a day): one candle later the small
+up candles, 0 to +1σ, give back a little, −3.3 and −3.1 standard errors; a day later both tails sit
+above the drift, below −3σ +1.36% against +0.15% at 9.5, above +3σ +0.78% at 4.9. Both sides rising
+reads as the tails' periods, not their sign — large candles crowd into the volatile bull runs — and
+1,344 cells measured on the whole history with nothing held out, adjacent N being one test and not
+many, make it a lead.
+
     uv run streamlit run src/tradingvision/app/decomposer.py
 """
 
@@ -83,6 +99,8 @@ TAIL = 0.001  # the histogram's axis ends at this quantile on either side, which
 ACF_LAGS = (
     10_000  # the autocorrelation's last lag, in candles: 35 days of 5m, 104 of 15m; a quarter of the data at most
 )
+SIGMA_STEP, SIGMA_REACH = 0.5, 3.0  # the future's bands: their width and the last closed edge, in σ of all candles
+HORIZON, HORIZON_MAX = 96, 500  # the future's default N max (a day of 15m) and the slider's end: 1.6s per 96 on BTC 15m
 DAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")  # pandas' dayofweek, Monday 0
 SIDES = {"all": "All candles", "up": "Up candles", "down": "Down candles"}
 # What the lower candle chart can take off each candle, named as the statistics at the top of the page
@@ -326,6 +344,73 @@ def acf_figure(pct: pd.Series, step: pd.Timedelta) -> go.Figure:
     return fig
 
 
+def bands(pct: pd.Series, sigma: float) -> pd.Series:
+    """Each candle's band of `SIGMA_STEP` standard deviations `sigma`, closed on the left, from −`SIGMA_REACH`
+    to +`SIGMA_REACH` and one open band past each end; a flat candle falls in the one starting at zero."""
+    edges = np.arange(-SIGMA_REACH, SIGMA_REACH + SIGMA_STEP / 2, SIGMA_STEP)
+    labels = (
+        [f"< {edges[0]:+.1f}σ"]
+        + [f"{a:+.1f}σ to {b:+.1f}σ" for a, b in zip(edges[:-1], edges[1:])]
+        + [f"≥ {edges[-1]:+.1f}σ"]
+    )
+    return pd.cut(pct / sigma, [-np.inf, *edges, np.inf], right=False, labels=labels)
+
+
+@st.cache_data(show_spinner="Following every candle N candles ahead…")
+def ahead(pct: pd.Series, close: pd.Series, horizons: int, step: pd.Timedelta) -> pd.DataFrame:
+    """By band of `pct` (`bands`, on its own standard deviation) and N from 1 to `horizons`: the mean, over the
+    band's candles, of the change in percent from the close to the close N candles later, how many candles have
+    one, the mean over every candle (`all`), and the standard error of the band's mean over non-overlapping
+    blocks of N candles of `step` on the clock (`se`) with the excess over `all` in it (`t`). A candle whose
+    future runs past the store's last bar has none and counts nowhere."""
+    band = bands(pct, pct.std())
+    rows = []
+    for n in range(1, horizons + 1):
+        future = (close.shift(-n) / close - 1) * 100
+        by = future.groupby(band, observed=True)
+        blocks = future.groupby([band, close.index.floor(n * step)], observed=True).mean()
+        block = blocks.groupby(level=0, observed=True)
+        rows.append(
+            pd.DataFrame({"mean": by.mean(), "count": by.count(), "se": block.std() / np.sqrt(block.count())})
+            .assign(all=future.mean(), n=n)
+            .set_index("n", append=True)
+        )
+    table = pd.concat(rows)
+    return table.assign(t=(table["mean"] - table["all"]) / table["se"])
+
+
+def ahead_figure(table: pd.DataFrame, stat: str, step: pd.Timedelta) -> go.Figure:
+    """`ahead`'s `stat`, `mean` or `t`, as a heatmap: bands up the side, the largest up candles on top, N across.
+    Both on a scale centred on zero; the t's is fixed at ±4, so noise reads pale whatever the largest cell."""
+    grid = table[stat].unstack()
+    n = grid.columns.to_numpy()
+    hours = n * (step / pd.Timedelta(hours=1))
+    custom = np.dstack(
+        [table[c].unstack().to_numpy() for c in ("mean", "se", "all", "t", "count")]
+        + [np.broadcast_to(hours, grid.shape)]
+    )
+    t = stat == "t"
+    fig = go.Figure(
+        go.Heatmap(
+            x=n,
+            y=grid.index.astype(str),
+            z=grid.to_numpy(),
+            customdata=custom,
+            colorscale="RdBu",
+            zmid=0,
+            zmin=-4 if t else None,
+            zmax=4 if t else None,
+            colorbar=dict(ticksuffix="" if t else "%"),
+            hovertemplate="%{y}, N %{x} candles (%{customdata[5]:.2f}h)<br>"
+            "mean %{customdata[0]:+.4f}% ± %{customdata[1]:.4f}<br>"
+            "every candle %{customdata[2]:+.4f}%, excess %{customdata[3]:+.2f} se<br>"
+            "%{customdata[4]:,} candles<extra></extra>",
+        )
+    )
+    fig.update_layout(height=460, margin=dict(l=0, r=0, t=10, b=0), xaxis_title="N, candles after the close")
+    return fig
+
+
 def main() -> None:
     st.set_page_config(page_title="Decomposer", layout="wide", initial_sidebar_state="collapsed")
     st.title("Decomposer")
@@ -424,6 +509,31 @@ def main() -> None:
         "beyond by chance. The standard deviation is the cycle the autocorrelation's bumps come from."
     )
 
+    st.subheader("The future of a candle")
+    horizons = st.slider(
+        "N max, candles",
+        1,
+        HORIZON_MAX,
+        HORIZON,
+        help="each N from 1 to this one is a column; the first run of a pair and N max takes a few seconds",
+    )
+    table = ahead(pct, df.close, horizons, step)
+    left, right = st.columns(2)
+    left.markdown("**Mean change from the close to N candles later**")
+    left.plotly_chart(ahead_figure(table, "mean", step), use_container_width=True, key="ahead-mean")
+    right.markdown("**Its excess over every candle's, in standard errors**")
+    right.plotly_chart(ahead_figure(table, "t", step), use_container_width=True, key="ahead-t")
+    count = table["count"].xs(1, level="n")
+    st.caption(
+        "Every candle loaded, banded by its change in standard deviations of all candles "
+        f"({stats.loc['all', 'std']:.4f}%), "
+        f"from {count.min():,} candles in the thinnest band to {count.max():,} in the fullest. The mean grows with N "
+        "because the drift does; the right chart takes off the mean of every candle at the same N, so a band "
+        "coloured there is one that did differently. Its standard error is over non-overlapping blocks of N "
+        "candles, since neighbouring candles share most of their future; among this many cells a few pass ±3 by "
+        "chance, and a run of N in a row past it is one result, not many."
+    )
+
 
 def _selfcheck() -> None:
     """The arithmetic on hand-made candles, and the property the docstring quotes."""
@@ -484,6 +594,24 @@ def _selfcheck() -> None:
     for t, e in enumerate(rng.normal(size=len(ar) - 1), start=1):
         ar[t] = 0.5 * ar[t - 1] + e
     assert np.allclose(acf(ar, 3), [0.5, 0.25, 0.125], atol=0.01)
+
+    # Bands: closed on the left, open past ±3σ, a flat candle in the one starting at zero.
+    b = bands(pd.Series([-9.0, -3.0, -0.1, 0.0, 0.49, 0.5, 3.0]), 1.0)
+    assert list(b) == ["< -3.0σ", "-3.0σ to -2.5σ", "-0.5σ to +0.0σ", "+0.0σ to +0.5σ", "+0.0σ to +0.5σ"] + [
+        "+0.5σ to +1.0σ",
+        "≥ +3.0σ",
+    ]
+    assert len(b.cat.categories) == 2 * SIGMA_REACH / SIGMA_STEP + 2
+    # Ahead: a close rising 10% a candle is 1.1^N − 1 ahead from every candle that has a future, and none past the end.
+    when = pd.date_range("2024-01-01", periods=40, freq="15min", tz="UTC")
+    close = pd.Series(100 * 1.1 ** np.arange(40), index=when)
+    pct = pd.Series(rng.normal(size=40), index=when)
+    table = ahead(pct, close, 3, pd.Timedelta("15min"))
+    for n in (1, 2, 3):
+        at = table.xs(n, level="n")
+        assert np.allclose(at["mean"], (1.1**n - 1) * 100) and at["count"].sum() == 40 - n
+        assert np.isclose(at["all"].iloc[0], (1.1**n - 1) * 100)
+    assert ahead_figure(table, "t", pd.Timedelta("15min")).data[0].z.shape[1] == 3
 
 
 if __name__ == "__main__":
