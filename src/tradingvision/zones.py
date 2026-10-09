@@ -49,14 +49,14 @@ four things seen through many columns, not 43 findings.
    errors of 0.4 to 1.8: the volatile periods are the bull runs, and the crash rebounds of family 1.
 3. *The close's place in its bar or window, one candle ahead* — the bottom 1-10% of the close in the
    bar or the 6-candle window rises +0.004 to +0.013% the next candle on confirm, at 3 to 8 standard
-   errors on tens of thousands of trades: real, a fiftieth of the fee, and a sixth of what it was in
-   2017-2020. The microstructure an exchange's spread lives on.
+   errors on tens of thousands of trades: real, a twentieth of the fee or less, and about a quarter of
+   what it was in 2017-2020. The microstructure an exchange's spread lives on.
 4. *A slower bounce under the fee* — 15m close at the bottom 1% of its 48-candle window, N 6: +0.14% and
    +0.16% a trade (± 0.03, ± 0.05, 1,277 and 865 trades), the most precise of all and under 0.20%.
 
 What does not hold: momentum. The RSI's and the TSI's top 5-1% at N 48-192, the decomposer's lead
 (+0.56% at RSI 80-90 on BTC 15m over the whole history), are 4.3 to 6.4 standard errors on 2017-2020
-and 0.5 to 2.2 on 2021-2025, positive and under the bar on both assets. The N = 1 reversals of large
+and 0.5 to 3.1 on 2021-2025: positive, and under 2 on at least one of the two assets. The N = 1 reversals of large
 bodies and closes at the high are gone after 2020.
 
 BTC and ETH are not two independent confirmations: their crashes are the same days. A zone of family 1

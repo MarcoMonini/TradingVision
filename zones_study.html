@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zone degli indicatori</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column of a lab notebook, as the project's other reports; tables and charts scroll inside it. */
+:root {
+  --bg: #f5f7f9; --surface: #ffffff; --fg: #141820; --fg2: #475161; --muted: #7a8393;
+  --rule: #e1e5eb; --axis: #c3c8d0; --accent: #1f5fae; --accent-wash: #e8f0fb;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --pos: #006300; --neg: #b42828;
+  --good: #0ca30c; --warn: #c98500; --bad: #d03b3b;
+  --chip-good: #e6f4e6; --chip-warn: #fbf1dc; --chip-bad: #fbe7e7; --chip-neutral: #eceef2;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1216; --surface: #171b21; --fg: #eef1f5; --fg2: #b9c0cb; --muted: #8a93a1;
+    --rule: #2a3038; --axis: #3a414b; --accent: #6ea8f0; --accent-wash: #1a2636;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --pos: #4cc04c; --neg: #f07272;
+    --good: #0ca30c; --warn: #e0a42a; --bad: #e66767;
+    --chip-good: #16301a; --chip-warn: #33290f; --chip-bad: #3a1a1a; --chip-neutral: #232830;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1216; --surface: #171b21; --fg: #eef1f5; --fg2: #b9c0cb; --muted: #8a93a1;
+  --rule: #2a3038; --axis: #3a414b; --accent: #6ea8f0; --accent-wash: #1a2636;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --pos: #4cc04c; --neg: #f07272;
+  --good: #0ca30c; --warn: #e0a42a; --bad: #e66767;
+  --chip-good: #16301a; --chip-warn: #33290f; --chip-bad: #3a1a1a; --chip-neutral: #232830;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 16px; line-height: 1.6; margin: 0; }
+.page { max-width: 1000px; margin: 0 auto; padding-inline: 20px; padding-block: 40px 80px; display: grid; gap: 56px; }
+header { display: grid; gap: 14px; }
+.eyebrow { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+h1 { font-size: clamp(28px, 4.4vw, 40px); line-height: 1.15; margin: 0; font-weight: 700; text-wrap: balance; letter-spacing: -.01em; }
+h2 { font-size: 24px; line-height: 1.25; margin: 0; font-weight: 600; text-wrap: balance; }
+h3 { font-size: 17px; margin: 0; font-weight: 600; }
+p { margin: 0; max-width: 68ch; }
+.lede { font-size: 18px; color: var(--fg2); max-width: 66ch; }
+.meta { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+section { display: grid; gap: 18px; min-width: 0; }
+.sechead { display: grid; gap: 4px; border-top: 1px solid var(--rule); padding-top: 22px; }
+.step { font-family: var(--mono); font-size: 12px; color: var(--accent); letter-spacing: .04em; }
+ul.points { margin: 0; padding-left: 20px; display: grid; gap: 8px; max-width: 72ch; }
+ul.points li::marker { color: var(--muted); }
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 14px; }
+nav.toc a { color: var(--accent); text-decoration: none; }
+nav.toc a:hover, nav.toc a:focus-visible { text-decoration: underline; }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+code { font-family: var(--mono); font-size: 13.5px; }
+p code, li code, td code, dd code { background: var(--accent-wash); padding: 1px 5px; border-radius: 4px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.tile { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 16px 18px; display: grid; gap: 4px; align-content: start; }
+.tile .label { font-size: 13px; color: var(--fg2); }
+.tile .value { font-size: 34px; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.tile .note { font-size: 13px; color: var(--muted); }
+.tablewrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { padding: 8px 12px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--rule); }
+th { font-weight: 600; color: var(--fg2); font-size: 12.5px; background: var(--surface); vertical-align: bottom; }
+td { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 13.5px; }
+th:first-child, td:first-child { text-align: left; font-family: var(--sans); font-size: 14px; }
+td.name { text-align: left; font-family: var(--sans); font-size: 14px; }
+td.name small { display: block; color: var(--muted); font-size: 12.5px; }
+tr:last-child td { border-bottom: 0; }
+tr.fam td { background: var(--accent-wash); font-family: var(--sans); font-weight: 600; font-size: 13.5px; color: var(--fg); text-align: left; }
+td .se { color: var(--muted); }
+td .k { color: var(--muted); font-size: 12px; }
+.caption { font-size: 13px; color: var(--muted); max-width: 84ch; }
+.chip { display: inline-flex; align-items: center; gap: 6px; font-family: var(--sans); font-size: 12.5px; font-weight: 600; padding: 2px 9px; border-radius: 999px; white-space: nowrap; color: var(--fg); }
+.chip i { font-style: normal; font-weight: 700; }
+.chip.good { background: var(--chip-good); } .chip.good i { color: var(--good); }
+.chip.warn { background: var(--chip-warn); } .chip.warn i { color: var(--warn); }
+.chip.bad { background: var(--chip-bad); } .chip.bad i { color: var(--bad); }
+.chip.neutral { background: var(--chip-neutral); } .chip.neutral i { color: var(--muted); }
+.spec { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 18px 20px; display: grid; gap: 10px; }
+.spec dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 8px 18px; }
+.spec dt { color: var(--fg2); font-size: 14px; }
+.spec dd { margin: 0; min-width: 0; }
+@media (max-width: 560px) { .spec dl { grid-template-columns: 1fr; gap: 2px; } .spec dd { margin-bottom: 8px; } }
+.timeline-wrap { overflow-x: auto; }
+.timeline { display: grid; grid-template-columns: 3.4fr 4.4fr 1.3fr; gap: 3px; min-width: 520px; }
+.timeline .seg { padding: 8px 10px; border-radius: 6px; font-size: 13px; font-weight: 600; line-height: 1.35; }
+.timeline .seg span { display: block; font-weight: 400; color: var(--fg2); font-size: 12px; }
+.timeline .disc { background: var(--accent-wash); }
+.timeline .conf { background: var(--chip-good); }
+.timeline .rec { background: var(--chip-warn); }
+.chart { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 14px 14px 8px; display: grid; gap: 8px; position: relative; min-width: 0; }
+.chart h3 { font-size: 15px; }
+.chart .sub { font-size: 13px; color: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--fg2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend b { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+.legend b.dot { width: 9px; height: 9px; border-radius: 50%; }
+.plot { overflow-x: auto; }
+.plot svg { display: block; width: 100%; min-width: 520px; height: auto; }
+.plot svg text { font-family: var(--sans); font-size: 12px; fill: var(--muted); }
+.plot svg text.lab { fill: var(--fg2); font-size: 12.5px; }
+.tip { position: absolute; pointer-events: none; background: var(--surface); color: var(--fg); border: 1px solid var(--rule); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; box-shadow: 0 4px 16px rgba(0,0,0,.12); display: grid; gap: 2px; min-width: 150px; z-index: 2; }
+.tip[hidden] { display: none; }
+.tip .t { color: var(--muted); font-size: 12px; }
+.tip .r { display: flex; justify-content: space-between; gap: 12px; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.tip .r span:first-child { font-family: var(--sans); display: inline-flex; align-items: center; gap: 6px; }
+.tip .r b { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+.two > * { min-width: 0; }
+.fams { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+.fam-card { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 16px 18px; display: grid; gap: 8px; align-content: start; }
+.fam-card p { font-size: 14.5px; color: var(--fg2); }
+pre { margin: 0; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.55; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<main class="page">
+<header>
+  <div class="eyebrow">TradingVision · studio · modulo <code>zones</code></div>
+  <h1>Zone degli indicatori</h1>
+  <p class="lede">Dove un indicatore, in una certa fascia, dice qualcosa sul prezzo delle N candele dopo: tutte le colonne di <code>features</code>, a cinque finestre, su BTC ed ETH, 5m e 15m. Le zone si scelgono sul 2017–2020 e si leggono, senza toccarle, sul 2021–2025 e sui mesi dopo.</p>
+  <p class="meta">Misurato il 2026-10-09 sullo store fino al 2026-10-06 · <code>uv run python -m tradingvision.zones</code></p>
+  <nav class="toc" aria-label="Sezioni">
+    <a href="#esito">Esito</a><a href="#metodo">Metodo</a><a href="#tenuta">Cosa tiene</a><a href="#tabella">Tabella</a><a href="#rimbalzo">Il rimbalzo</a><a href="#momentum">Il momentum</a><a href="#cautele">Cautele</a><a href="#prossimi">Prossimi passi</a>
+  </nav>
+</header>
+
+<section id="esito">
+  <div class="sechead"><span class="step">Esito</span><h2>Su 115 zone scelte, 43 tengono, e sono quattro fenomeni</h2></div>
+  <div class="tiles" id="tiles"></div>
+  <p>Molte delle 43 zone sono lo stesso evento visto da indicatori diversi: un crollo porta insieme in fondo la distanza da VWAP, quella da EMA, la pendenza dell'EMA e il rendimento. I fenomeni distinti sono quattro, e solo il primo supera le commissioni in modo stabile.</p>
+  <div class="fams">
+    <div class="fam-card"><span class="chip good"><i>1</i> sopra la fee</span><h3>Prezzo molto sotto la sua media</h3><p>L'1% più basso della distanza da VWAP, EMA, KAMA, PSAR o dal massimo recente. Rimbalza su tutte le colonne, su entrambi i timeframe, in tutti e tre i periodi. Sul 15m circa +0,5% lordo a trade in un'ora e mezza.</p></div>
+    <div class="fam-card"><span class="chip warn"><i>2</i> rumoroso</span><h3>Barre enormi</h3><p>L'1% più alto del range, delle wick, della volatilità. Il giorno dopo il prezzo sale, ma su pochi trade e con errori grandi quanto le medie: sono i periodi volatili dei rialzi e i rimbalzi dei crolli.</p></div>
+    <div class="fam-card"><span class="chip bad"><i>3</i> 1/20 della fee</span><h3>Close sul minimo, una candela dopo</h3><p>Statisticamente solidissimo, su decine di migliaia di trade, ma vale da +0,004% a +0,013%. È la microstruttura su cui vive lo spread, ed è circa un quarto di quello che era nel 2017–2020.</p></div>
+    <div class="fam-card"><span class="chip bad"><i>4</i> sotto la fee</span><h3>Rimbalzo lento e piccolo</h3><p>Il close all'1% più basso della finestra di 48 candele sul 15m: +0,14% e +0,16% a trade, il più preciso di tutti, e sotto lo 0,20%.</p></div>
+  </div>
+</section>
+
+<section id="metodo">
+  <div class="sechead"><span class="step">Metodo</span><h2>Scegliere su certi anni, leggere su altri</h2></div>
+  <p>Guardata su tutta la storia, ogni heatmap del decomposer ha un angolo colorato, e con decine di migliaia di celle qualcuno lo è per caso. Per questo la scelta e la lettura stanno su periodi diversi, e i criteri sono scritti prima di guardare il secondo.</p>
+  <div class="timeline-wrap"><div class="timeline">
+    <div class="seg disc">Scoperta<span>2017-08 → 2020-12 · qui si scelgono zone e bordi</span></div>
+    <div class="seg conf">Conferma<span>2021-01 → 2025-06 · letta una volta, con tutto fermo</span></div>
+    <div class="seg rec">Recente<span>2025-06 → oggi</span></div>
+  </div></div>
+  <div class="spec"><dl>
+    <dt>Indicatori</dt><dd>Le 29 colonne di <code>features</code>. Le 7 che non leggono una finestra (rendimento, body, range, wick, close nella barra, PSAR) una volta sola.</dd>
+    <dt>Parametri</dt><dd>La finestra <code>N</code> di <code>features</code>: 6, 12, 24, 48, 96 candele. È la finestra di ogni media, RSI, ATR, VWAP della colonna; la finestra corta è un quarto.</dd>
+    <dt>Fasce</dt><dd>Quantili dell'indicatore misurati sulla scoperta: 1%, 5%, 10%, 25%, 50%, 75%, 90%, 95%, 99%. Gli stessi bordi sugli altri periodi. Le code all'1% servono a trovare zone strette come "RSI 80–90", che i decili annacquano.</dd>
+    <dt>Orizzonti</dt><dd>N = 1, 3, 6, 12, 24, 48, 96, 192 candele dopo la chiusura.</dd>
+    <dt>Misura</dt><dd>Rendimento cumulato dal close al close N candele dopo, meno quello di tutte le candele dello stesso periodo allo stesso N. Errore standard su blocchi di N candele che non si sovrappongono.</dd>
+    <dt>Criterio</dt><dd>Una zona passa la scoperta oltre 4 errori standard su BTC e su ETH con lo stesso segno (circa Bonferroni su 17.700 celle per asset). Di finestre e N vicini si tiene la cella migliore. Tiene se sulla conferma ha lo stesso segno su entrambi oltre 2 errori standard.</dd>
+    <dt>Trade</dt><dd>Un trade per episodio: entrata al close della prima candela nella fascia, uscita N candele dopo, nessuna nuova entrata prima. Lordo, contro lo 0,20% di commissioni OKX andata e ritorno.</dd>
+  </dl></div>
+</section>
+
+<section id="tenuta">
+  <div class="sechead"><span class="step">Cosa tiene</span><h2>Quasi tutto si restringe, una parte resta sopra la soglia</h2></div>
+  <p>Ogni punto è una delle 115 zone. In orizzontale quanto era forte sulla scoperta, in verticale quanto lo è sulla conferma, nella stessa direzione; per entrambe le misure conta l'asset più debole. Se nulla cambiasse, i punti starebbero sulla diagonale: stanno tutti sotto, e quelli sopra la linea dei 2 errori standard tengono.</p>
+  <div class="chart" id="c-scatter">
+    <h3>Errori standard sulla scoperta e sulla conferma</h3>
+    <div class="legend"><span><b class="dot" style="background:var(--s1)"></b>Tiene, N &gt; 1</span><span><b class="dot" style="background:var(--s3)"></b>Tiene, N = 1</span><span><b class="dot" style="background:var(--muted)"></b>Non tiene</span></div>
+    <div class="plot"></div>
+  </div>
+  <p class="caption">Nessuna delle 115 zone è più forte sulla conferma che sulla scoperta: è quanto della scoperta era caso, più quanto il mercato è cambiato. Le zone a N = 1 erano le più forti nel 2017–2020 e cadono di più: ne tengono 8 su 45, e conservano in mediana il 5% dei loro errori standard; le altre 35 su 70, con il 42%.</p>
+</section>
+
+<section id="tabella">
+  <div class="sechead"><span class="step">Tabella</span><h2>Le zone più rilevanti, a trade</h2></div>
+  <p>Media lorda per trade in percento, ± errore standard; sotto, il numero di trade e la quota in guadagno. Per ogni famiglia le zone più forti; di colonne quasi uguali ne resta una. Qui la direzione è sempre al rialzo: le quattro zone al ribasso che tengono sono a una o tre candele e valgono meno dello 0,01%.</p>
+  <div class="tablewrap"><table id="t-zones"></table></div>
+  <p class="caption">"Recente" è dal 2025-06, con il numero di trade tra parentesi: le soglie all'1% del 2017–2020 scattano lì poche volte, e i suoi errori sono grandi quanto le medie. Sulla fee, letto sulla conferma: <span class="chip good"><i>●</i> sopra</span> media meno 0,20% oltre un errore standard su entrambi gli asset; <span class="chip warn"><i>●</i> al limite</span> media sopra 0,20% su entrambi ma entro un errore; <span class="chip bad"><i>●</i> sotto</span> media sotto 0,20% su almeno uno.</p>
+</section>
+
+<section id="rimbalzo">
+  <div class="sechead"><span class="step">Famiglia 1</span><h2>Il rimbalzo dopo un prezzo lontano dalla sua media</h2></div>
+  <p>Ogni zona della famiglia, sulla conferma, con il suo errore. La linea tratteggiata è lo 0,20% di commissioni: le zone del 15m con N piccolo stanno sopra su entrambi gli asset, quelle del 5m intorno.</p>
+  <div class="chart" id="c-trades">
+    <h3>Media lorda a trade sulla conferma, 2021–2025</h3>
+    <div class="legend"><span><b class="dot" style="background:var(--s1)"></b>BTC</span><span><b class="dot" style="background:var(--s2)"></b>ETH</span><span><b style="background:var(--muted)"></b>commissioni 0,20%</span></div>
+    <div class="plot"></div>
+  </div>
+  <p>Come si sviluppa nel tempo la zona migliore, distanza da VWAP a finestra 12 sul 15m, nell'1% più basso: lo scarto sulla media di tutte le candele per N, nei tre periodi. La forma è la stessa in tutti e tre; nel recente la curva è alta ma su poche candele.</p>
+  <div class="two">
+    <div class="chart" id="c-vwap-btc"><h3>BTC · distanza da VWAP (12) 0–1%</h3><div class="sub">scarto sulla media, %</div><div class="legend" data-periods></div><div class="plot"></div></div>
+    <div class="chart" id="c-vwap-eth"><h3>ETH · distanza da VWAP (12) 0–1%</h3><div class="sub">scarto sulla media, %</div><div class="legend" data-periods></div><div class="plot"></div></div>
+  </div>
+  <p>Perché il recente scatta così poco: i bordi sono quantili del 2017–2020, e da allora la candela tipica si è più che dimezzata. La stessa distanza dalla VWAP che nel 2018 era l'1% più basso oggi è un evento raro.</p>
+  <div class="tablewrap"><table id="t-vol"></table></div>
+</section>
+
+<section id="momentum">
+  <div class="sechead"><span class="step">Cosa non tiene</span><h2>L'RSI alto non è più momentum</h2></div>
+  <p>Nel decomposer, su tutta la storia, l'RSI 80–90 su BTC 15m seguiva con +0,56% in mezza giornata. Con le zone scelte sul 2017–2020 il fenomeno era forte allora, fino a 6,4 errori standard, e si spegne dopo: sulla conferma resta positivo ma sotto 2 su almeno uno dei due asset, e nel recente cambia segno su ETH.</p>
+  <div class="two">
+    <div class="chart" id="c-rsi-btc"><h3>BTC · RSI (24) 95–99%</h3><div class="sub">scarto sulla media, %</div><div class="legend" data-periods></div><div class="plot"></div></div>
+    <div class="chart" id="c-rsi-eth"><h3>ETH · RSI (24) 95–99%</h3><div class="sub">scarto sulla media, %</div><div class="legend" data-periods></div><div class="plot"></div></div>
+  </div>
+  <div class="tablewrap"><table id="t-fails"></table></div>
+  <p class="caption">Scarto sulla media in percento e, sotto, errori standard. Anche i ritracciamenti a una candela delle candele grandi e dei close sul massimo, tra i più forti del 2017–2020, sono spariti dopo.</p>
+</section>
+
+<section id="cautele">
+  <div class="sechead"><span class="step">Cautele</span><h2>Cosa questi numeri non dicono</h2></div>
+  <ul class="points">
+    <li>BTC ed ETH non sono due conferme indipendenti: i loro crolli cadono negli stessi giorni.</li>
+    <li>Il trade compra al close di una candela di crollo, cioè quando spread e slippage sono peggiori. Lo 0,10% a lato è il minimo, non il costo atteso.</li>
+    <li>La conferma 2021–2025 è stata letta una volta, con criteri scritti prima. Da qui in poi non è più un periodo su cui scegliere.</li>
+    <li>Sul periodo recente la famiglia 1 scatta poco perché le soglie sono in unità del 2017–2020; i suoi numeri non confermano né smentiscono.</li>
+  </ul>
+</section>
+
+<section id="prossimi">
+  <div class="sechead"><span class="step">Prossimi passi</span><h2>Dalla zona alla regola</h2></div>
+  <ul class="points">
+    <li>Fasce in unità della volatilità del periodo invece che in quantili fissi del 2017–2020, così la famiglia 1 torna a scattare oggi.</li>
+    <li>Scrivere la regola prima di prezzarla: compra il close dislocato, tieni N, con N e finestra scelti qui sul 15m.</li>
+    <li>Prezzarla sul periodo recente e poi in paper trading, con il test per scommessa di <code>sequential</code>.</li>
+  </ul>
+  <pre>uv run python -m tradingvision.zones                       # tutto: tabella delle zone e trade per episodio
+uv run python -m tradingvision.zones --symbols BTC ETH SOL  # altre coppie; SOL ha la scoperta da 2020-08 solo</pre>
+</section>
+</main>
+
+<script>
+const DATA = {"scatter":[{"tf":"5m","col":"close_position_in_bar","w":0,"q":"1%-5%","n":1,"x":13.28,"y":-2.39,"holds":false,"dir":"su"},{"tf":"5m","col":"close_position_in_window","w":6,"q":"1%-5%","n":1,"x":12.13,"y":5.38,"holds":true,"dir":"su"},{"tf":"5m","col":"distance_from_window_low_pct","w":6,"q":"1%-5%","n":1,"x":11.26,"y":3.32,"holds":true,"dir":"su"},{"tf":"5m","col":"distance_from_kama_pct","w":12,"q":"0%-1%","n":24,"x":11.0,"y":5.93,"holds":true,"dir":"su"},{"tf":"5m","col":"log_return","w":0,"q":"0%-1%","n":24,"x":10.93,"y":7.44,"holds":true,"dir":"su"},{"tf":"5m","col":"distance_from_vwap_pct","w":24,"q":"0%-1%","n":24,"x":10.89,"y":4.17,"holds":true,"dir":"su"},{"tf":"5m","col":"distance_from_ema_pct","w":6,"q":"0%-1%","n":24,"x":10.83,"y":5.77,"holds":true,"dir":"su"},{"tf":"5m","col":"candle_body_pct","w":0,"q":"0%-1%","n":24,"x":10.82,"y":7.39,"holds":true,"dir":"su"},{"tf":"5m","col":"bar_range_pct","w":0,"q":"99%-100%","n":96,"x":10.69,"y":6.53,"holds":true,"dir":"su"},{"tf":"5m","col":"distance_from_window_high_pct","w":6,"q":"0%-1%","n":96,"x":9.99,"y":6.36,"holds":true,"dir":"su"},{"tf":"5m","col":"upper_wick_pct","w":0,"q":"99%-100%","n":96,"x":9.85,"y":4.64,"holds":true,"dir":"su"},{"tf":"5m","col":"close_position_in_bar","w":0,"q":"99%-100%","n":1,"x":9.65,"y":-2.64,"holds":false,"dir":"gi\u00f9"},{"tf":"5m","col":"close_position_in_window","w":6,"q":"95%-99%","n":1,"x":9.63,"y":1.17,"holds":false,"dir":"gi\u00f9"},{"tf":"5m","col":"ema_slope","w":6,"q":"0%-1%","n":24,"x":9.59,"y":4.24,"holds":true,"dir":"su"},{"tf":"5m","col":"close_position_in_bar","w":0,"q":"90%-95%","n":1,"x":9.58,"y":0.47,"holds":false,"dir":"gi\u00f9"},{"tf":"15m","col":"distance_from_kama_pct","w":6,"q":"0%-1%","n":24,"x":9.19,"y":5.44,"holds":true,"dir":"su"},{"tf":"5m","col":"close_position_in_bar","w":0,"q":"5%-10%","n":1,"x":9.15,"y":2.66,"holds":true,"dir":"su"},{"tf":"15m","col":"bar_range_pct","w":0,"q":"99%-100%","n":96,"x":9.01,"y":7.38,"holds":true,"dir":"su"},{"tf":"5m","col":"cum_log_return_window","w":6,"q":"0%-1%","n":96,"x":8.73,"y":5.26,"holds":true,"dir":"su"},{"tf":"15m","col":"distance_from_vwap_pct","w":12,"q":"0%-1%","n":6,"x":8.64,"y":4.62,"holds":true,"dir":"su"},{"tf":"5m","col":"distance_from_psar_pct","w":0,"q":"0%-1%","n":48,"x":8.59,"y":6.33,"holds":true,"dir":"su"},{"tf":"5m","col":"distance_from_window_high_pct","w":6,"q":"95%-99%","n":1,"x":8.45,"y":0.3,"holds":false,"dir":"gi\u00f9"},{"tf":"15m","col":"distance_from_window_high_pct","w":6,"q":"0%-1%","n":24,"x":7.65,"y":4.74,"holds":true,"dir":"su"},{"tf":"15m","col":"distance_from_ema_pct","w":12,"q":"0%-1%","n":6,"x":7.61,"y":4.9,"holds":true,"dir":"su"},{"tf":"5m","col":"distance_from_psar_pct","w":0,"q":"25%-50%","n":1,"x":7.6,"y":-0.06,"holds":false,"dir":"gi\u00f9"},{"tf":"15m","col":"ema_slope","w":12,"q":"0%-1%","n":6,"x":7.57,"y":4.63,"holds":true,"dir":"su"},{"tf":"15m","col":"cum_log_return_window","w":6,"q":"0%-1%","n":6,"x":7.34,"y":3.59,"holds":true,"dir":"su"},{"tf":"15m","col":"upper_wick_pct","w":0,"q":"99%-100%","n":96,"x":7.33,"y":6.92,"holds":true,"dir":"su"},{"tf":"5m","col":"window_range_pct","w":6,"q":"99%-100%","n":96,"x":6.95,"y":3.67,"holds":true,"dir":"su"},{"tf":"15m","col":"close_position_in_bar","w":0,"q":"1%-5%","n":1,"x":6.92,"y":2.64,"holds":true,"dir":"su"},{"tf":"5m","col":"distance_from_window_high_pct","w":6,"q":"99%-100%","n":1,"x":6.89,"y":-1.78,"holds":false,"dir":"gi\u00f9"},{"tf":"5m","col":"close_position_in_window","w":6,"q":"99%-100%","n":1,"x":6.8,"y":-1.79,"holds":false,"dir":"gi\u00f9"},{"tf":"15m","col":"candle_body_pct","w":0,"q":"0%-1%","n":24,"x":6.7,"y":5.82,"holds":true,"dir":"su"},{"tf":"15m","col":"log_return","w":0,"q":"0%-1%","n":24,"x":6.68,"y":5.74,"holds":true,"dir":"su"},{"tf":"15m","col":"distance_from_psar_pct","w":0,"q":"0%-1%","n":96,"x":6.6,"y":4.49,"holds":true,"dir":"su"},{"tf":"5m","col":"close_position_in_window","w":12,"q":"0%-1%","n":1,"x":6.51,"y":2.13,"holds":false,"dir":"su"},{"tf":"5m","col":"candle_body_pct","w":0,"q":"95%-99%","n":1,"x":6.24,"y":-0.33,"holds":false,"dir":"gi\u00f9"},{"tf":"5m","col":"realized_volatility","w":6,"q":"99%-100%","n":96,"x":6.18,"y":2.9,"holds":true,"dir":"su"},{"tf":"15m","col":"age_of_window_low","w":48,"q":"1%-5%","n":6,"x":6.17,"y":2.63,"holds":true,"dir":"su"},{"tf":"5m","col":"distance_from_kama_pct","w":24,"q":"95%-99%","n":24,"x":6.11,"y":-0.39,"holds":false,"dir":"gi\u00f9"},{"tf":"5m","col":"distance_from_window_low_pct","w":12,"q":"0%-1%","n":1,"x":6.1,"y":1.64,"holds":false,"dir":"su"},{"tf":"5m","col":"age_of_window_low","w":48,"q":"1%-5%","n":24,"x":6.07,"y":1.22,"holds":false,"dir":"su"},{"tf":"5m","col":"upper_wick_pct","w":0,"q":"10%-25%","n":1,"x":5.98,"y":0.72,"holds":false,"dir":"gi\u00f9"},{"tf":"5m","col":"log_return","w":0,"q":"95%-99%","n":1,"x":5.96,"y":-0.57,"holds":false,"dir":"gi\u00f9"},{"tf":"5m","col":"distance_from_kama_pct","w":12,"q":"10%-25%","n":1,"x":5.65,"y":-1.37,"holds":false,"dir":"su"},{"tf":"5m","col":"lower_wick_pct","w":0,"q":"10%-25%","n":1,"x":5.56,"y":0.29,"holds":false,"dir":"su"},{"tf":"5m","col":"close_position_in_window","w":6,"q":"5%-10%","n":1,"x":5.52,"y":1.21,"holds":false,"dir":"su"},{"tf":"5m","col":"rsi_centered","w":24,"q":"75%-90%","n":1,"x":5.49,"y":-0.05,"holds":false,"dir":"gi\u00f9"},{"tf":"5m","col":"age_of_window_high","w":24,"q":"10%-25%","n":12,"x":5.47,"y":-1.7,"holds":false,"dir":"gi\u00f9"},{"tf":"5m","col":"rsi_centered","w":12,"q":"1%-5%","n":24,"x":5.46,"y":-0.37,"holds":false,"dir":"su"},{"tf":"5m","col":"distance_from_window_high_pct","w":48,"q":"75%-90%","n":1,"x":5.46,"y":-0.31,"holds":false,"dir":"gi\u00f9"},{"tf":"15m","col":"age_of_window_low","w":24,"q":"5%-10%","n":6,"x":5.39,"y":1.94,"holds":false,"dir":"su"},{"tf":"15m","col":"window_range_pct","w":6,"q":"99%-100%","n":96,"x":5.37,"y":3.76,"holds":true,"dir":"su"},{"tf":"5m","col":"upper_wick_pct","w":0,"q":"95%-99%","n":1,"x":5.34,"y":0.16,"holds":false,"dir":"su"},{"tf":"5m","col":"age_of_window_low","w":24,"q":"5%-10%","n":24,"x":5.27,"y":0.7,"holds":false,"dir":"su"},{"tf":"5m","col":"rsi_centered","w":48,"q":"95%-99%","n":192,"x":5.18,"y":1.3,"holds":false,"dir":"su"},{"tf":"15m","col":"age_of_window_low","w":96,"q":"50%-75%","n":24,"x":5.16,"y":1.45,"holds":false,"dir":"su"},{"tf":"5m","col":"candle_body_pct","w":0,"q":"1%-5%","n":1,"x":5.12,"y":0.9,"holds":false,"dir":"su"},{"tf":"5m","col":"distance_from_window_high_pct","w":6,"q":"90%-95%","n":1,"x":5.09,"y":4.08,"holds":true,"dir":"gi\u00f9"},{"tf":"5m","col":"lower_wick_pct","w":0,"q":"99%-100%","n":48,"x":5.04,"y":3.79,"holds":true,"dir":"su"},{"tf":"5m","col":"distance_from_window_low_pct","w":6,"q":"75%-90%","n":1,"x":4.97,"y":0.75,"holds":false,"dir":"gi\u00f9"},{"tf":"5m","col":"signed_volume","w":24,"q":"75%-90%","n":1,"x":4.95,"y":1.32,"holds":false,"dir":"gi\u00f9"},{"tf":"15m","col":"close_position_in_window","w":48,"q":"0%-1%","n":6,"x":4.89,"y":2.5,"holds":true,"dir":"su"},{"tf":"15m","col":"distance_from_kama_pct","w":12,"q":"95%-99%","n":12,"x":4.88,"y":0.39,"holds":false,"dir":"gi\u00f9"},{"tf":"5m","col":"distance_from_kama_pct","w":6,"q":"90%-95%","n":1,"x":4.88,"y":-0.06,"holds":false,"dir":"gi\u00f9"},{"tf":"15m","col":"age_of_window_high","w":48,"q":"99%-100%","n":48,"x":4.86,"y":0.37,"holds":false,"dir":"gi\u00f9"},{"tf":"15m","col":"rsi_centered","w":24,"q":"95%-99%","n":48,"x":4.85,"y":1.77,"holds":false,"dir":"su"},{"tf":"15m","col":"age_of_window_low","w":12,"q":"10%-25%","n":6,"x":4.84,"y":1.2,"holds":false,"dir":"su"},{"tf":"15m","col":"realized_volatility","w":6,"q":"99%-100%","n":96,"x":4.8,"y":2.64,"holds":true,"dir":"su"},{"tf":"5m","col":"distance_from_kama_pct","w":24,"q":"1%-5%","n":24,"x":4.79,"y":3.41,"holds":true,"dir":"su"},{"tf":"15m","col":"lower_wick_pct","w":0,"q":"99%-100%","n":24,"x":4.74,"y":0.78,"holds":false,"dir":"su"},{"tf":"15m","col":"close_position_in_bar","w":0,"q":"99%-100%","n":1,"x":4.73,"y":1.13,"holds":false,"dir":"gi\u00f9"},{"tf":"15m","col":"age_of_window_low","w":48,"q":"99%-100%","n":48,"x":4.72,"y":1.2,"holds":false,"dir":"su"},{"tf":"5m","col":"average_true_range_pct","w":6,"q":"99%-100%","n":96,"x":4.68,"y":2.47,"holds":true,"dir":"su"},{"tf":"5m","col":"distance_from_window_high_pct","w":6,"q":"5%-10%","n":1,"x":4.65,"y":0.4,"holds":false,"dir":"su"},{"tf":"15m","col":"signed_volume","w":96,"q":"1%-5%","n":6,"x":4.65,"y":1.96,"holds":false,"dir":"su"},{"tf":"15m","col":"average_true_range_pct","w":6,"q":"99%-100%","n":96,"x":4.63,"y":2.99,"holds":true,"dir":"su"},{"tf":"5m","col":"signed_volume","w":6,"q":"25%-50%","n":3,"x":4.62,"y":-0.56,"holds":false,"dir":"su"},{"tf":"5m","col":"tsi_momentum","w":24,"q":"1%-5%","n":24,"x":4.62,"y":0.71,"holds":false,"dir":"su"},{"tf":"5m","col":"tsi_momentum","w":96,"q":"95%-99%","n":192,"x":4.6,"y":0.47,"holds":false,"dir":"su"},{"tf":"5m","col":"distance_from_window_low_pct","w":6,"q":"5%-10%","n":1,"x":4.6,"y":1.8,"holds":false,"dir":"su"},{"tf":"5m","col":"tsi_momentum","w":12,"q":"90%-95%","n":12,"x":4.57,"y":-0.6,"holds":false,"dir":"gi\u00f9"},{"tf":"5m","col":"signed_volume","w":96,"q":"1%-5%","n":24,"x":4.53,"y":2.76,"holds":true,"dir":"su"},{"tf":"15m","col":"age_of_window_high","w":6,"q":"10%-25%","n":6,"x":4.5,"y":-1.0,"holds":false,"dir":"gi\u00f9"},{"tf":"15m","col":"age_of_window_high","w":96,"q":"50%-75%","n":24,"x":4.49,"y":0.72,"holds":false,"dir":"gi\u00f9"},{"tf":"5m","col":"close_position_in_window","w":6,"q":"90%-95%","n":1,"x":4.46,"y":3.25,"holds":true,"dir":"gi\u00f9"},{"tf":"5m","col":"log_return","w":0,"q":"99%-100%","n":1,"x":4.45,"y":1.57,"holds":false,"dir":"gi\u00f9"},{"tf":"15m","col":"log_return","w":0,"q":"75%-90%","n":3,"x":4.44,"y":1.21,"holds":false,"dir":"gi\u00f9"},{"tf":"5m","col":"rsi_centered","w":6,"q":"0%-1%","n":1,"x":4.44,"y":2.17,"holds":true,"dir":"su"},{"tf":"15m","col":"upper_wick_pct","w":0,"q":"5%-10%","n":1,"x":4.37,"y":3.09,"holds":true,"dir":"gi\u00f9"},{"tf":"15m","col":"close_position_in_window","w":6,"q":"1%-5%","n":12,"x":4.36,"y":-0.26,"holds":false,"dir":"su"},{"tf":"5m","col":"distance_from_ema_pct","w":12,"q":"95%-99%","n":24,"x":4.33,"y":-1.42,"holds":false,"dir":"gi\u00f9"},{"tf":"5m","col":"age_of_window_low","w":24,"q":"10%-25%","n":24,"x":4.29,"y":-0.8,"holds":false,"dir":"su"},{"tf":"15m","col":"tsi_momentum","w":12,"q":"1%-5%","n":6,"x":4.28,"y":0.12,"holds":false,"dir":"su"},{"tf":"15m","col":"distance_from_kama_pct","w":6,"q":"1%-5%","n":12,"x":4.28,"y":2.12,"holds":true,"dir":"su"},{"tf":"15m","col":"tsi_momentum","w":24,"q":"95%-99%","n":48,"x":4.27,"y":0.78,"holds":false,"dir":"su"},{"tf":"15m","col":"log_volume_vs_median","w":96,"q":"95%-99%","n":6,"x":4.26,"y":0.9,"holds":false,"dir":"su"},{"tf":"5m","col":"close_position_in_bar","w":0,"q":"95%-99%","n":1,"x":4.23,"y":-0.53,"holds":false,"dir":"gi\u00f9"},{"tf":"5m","col":"distance_from_ema_pct","w":96,"q":"75%-90%","n":1,"x":4.21,"y":-1.33,"holds":false,"dir":"gi\u00f9"},{"tf":"5m","col":"distance_from_window_high_pct","w":24,"q":"50%-75%","n":1,"x":4.21,"y":-0.13,"holds":false,"dir":"gi\u00f9"},{"tf":"5m","col":"distance_from_kama_pct","w":96,"q":"75%-90%","n":1,"x":4.18,"y":-0.02,"holds":false,"dir":"gi\u00f9"},{"tf":"5m","col":"rsi_centered","w":12,"q":"25%-50%","n":1,"x":4.17,"y":-1.7,"holds":false,"dir":"su"},{"tf":"5m","col":"signed_volume","w":6,"q":"50%-75%","n":3,"x":4.12,"y":2.1,"holds":true,"dir":"gi\u00f9"},{"tf":"5m","col":"distance_from_vwap_pct","w":96,"q":"99%-100%","n":12,"x":4.12,"y":1.69,"holds":false,"dir":"gi\u00f9"},{"tf":"5m","col":"distance_from_ema_pct","w":24,"q":"90%-95%","n":1,"x":4.11,"y":-0.82,"holds":false,"dir":"gi\u00f9"},{"tf":"15m","col":"close_position_in_window","w":48,"q":"95%-99%","n":6,"x":4.11,"y":-1.75,"holds":false,"dir":"gi\u00f9"},{"tf":"5m","col":"age_of_window_low","w":12,"q":"75%-90%","n":12,"x":4.09,"y":-0.16,"holds":false,"dir":"gi\u00f9"},{"tf":"5m","col":"distance_from_window_high_pct","w":12,"q":"10%-25%","n":1,"x":4.08,"y":-1.4,"holds":false,"dir":"su"},{"tf":"15m","col":"close_position_in_window","w":96,"q":"75%-90%","n":12,"x":4.07,"y":0.8,"holds":false,"dir":"su"},{"tf":"5m","col":"distance_from_ema_pct","w":12,"q":"5%-10%","n":1,"x":4.06,"y":-0.96,"holds":false,"dir":"su"},{"tf":"5m","col":"candle_body_pct","w":0,"q":"99%-100%","n":1,"x":4.04,"y":1.31,"holds":false,"dir":"gi\u00f9"},{"tf":"5m","col":"distance_from_vwap_pct","w":24,"q":"95%-99%","n":24,"x":4.03,"y":-2.12,"holds":false,"dir":"gi\u00f9"},{"tf":"15m","col":"age_of_window_low","w":96,"q":"25%-50%","n":6,"x":4.03,"y":0.16,"holds":false,"dir":"gi\u00f9"},{"tf":"5m","col":"lower_wick_pct","w":0,"q":"95%-99%","n":1,"x":4.02,"y":-0.47,"holds":false,"dir":"gi\u00f9"},{"tf":"5m","col":"rsi_centered","w":6,"q":"90%-95%","n":12,"x":4.01,"y":-0.61,"holds":false,"dir":"gi\u00f9"}],"curves":{"vwap":{"BTC":{"discovery":{"v":[0.196,0.572,1.02,1.182,1.673,1.756,2.639,3.137],"se":[0.057,0.092,0.116,0.152,0.193,0.283,0.38,0.509],"count":[1179,1179,1179,1179,1179,1179,1179,1179]},"confirm":{"v":[0.209,0.526,0.802,0.937,1.212,1.253,2.146,1.956],"se":[0.065,0.095,0.128,0.184,0.219,0.319,0.434,0.533],"count":[524,524,524,524,524,524,524,524]},"recent":{"v":[0.997,1.708,2.111,1.662,2.143,2.533,5.519,4.929],"se":[0.317,0.769,0.952,1.024,1.403,1.309,2.134,2.723],"count":[9,9,9,9,9,9,9,9]}},"ETH":{"discovery":{"v":[0.172,0.598,1.222,1.412,1.714,1.898,3.165,4.118],"se":[0.066,0.106,0.141,0.172,0.219,0.323,0.425,0.534],"count":[1179,1179,1179,1179,1179,1179,1179,1179]},"confirm":{"v":[0.2,0.517,0.65,1.149,1.3,1.548,2.6,2.213],"se":[0.069,0.103,0.141,0.197,0.243,0.36,0.484,0.658],"count":[728,728,728,728,728,728,728,728]},"recent":{"v":[0.263,0.969,0.771,1.239,1.231,1.843,2.036,2.441],"se":[0.242,0.301,0.425,0.529,0.843,0.761,0.959,1.025],"count":[46,46,46,46,46,46,46,46]}}},"rsi":{"BTC":{"discovery":{"v":[0.007,0.018,0.032,0.115,0.229,0.52,0.575,0.721],"se":[0.008,0.018,0.031,0.045,0.066,0.102,0.159,0.26],"count":[4713,4713,4713,4713,4713,4713,4711,4694]},"confirm":{"v":[0.015,0.025,0.043,0.045,0.084,0.127,0.026,0.293],"se":[0.005,0.013,0.021,0.033,0.048,0.072,0.107,0.17],"count":[6139,6139,6139,6139,6139,6138,6138,6138]},"recent":{"v":[-0.0,0.018,0.041,0.058,0.081,0.135,0.139,0.259],"se":[0.006,0.015,0.025,0.039,0.057,0.083,0.126,0.198],"count":[1672,1672,1672,1672,1672,1672,1672,1672]}},"ETH":{"discovery":{"v":[0.008,0.015,0.035,0.097,0.214,0.581,0.413,1.011],"se":[0.01,0.022,0.034,0.05,0.074,0.12,0.199,0.323],"count":[4713,4713,4713,4713,4713,4713,4713,4711]},"confirm":{"v":[0.003,0.006,0.026,0.042,0.08,0.164,0.07,0.435],"se":[0.006,0.013,0.022,0.035,0.054,0.083,0.132,0.227],"count":[6735,6735,6735,6735,6735,6735,6735,6735]},"recent":{"v":[-0.014,-0.028,-0.052,-0.083,-0.064,-0.09,-0.083,-0.07],"se":[0.009,0.02,0.035,0.053,0.084,0.133,0.193,0.298],"count":[1868,1868,1868,1868,1868,1868,1868,1868]}}}},"rows":[{"fam":"1","tf":"15m","col":"distance_from_vwap_pct","w":12,"q":"0%-1%","n":6,"BTC discovery":{"m":0.433,"se":0.14,"k":451,"win":0.601},"BTC confirm":{"m":0.56,"se":0.148,"k":227,"win":0.604},"BTC recent":{"m":2.401,"se":0.913,"k":8,"win":0.875},"ETH discovery":{"m":0.539,"se":0.172,"k":460,"win":0.624},"ETH confirm":{"m":0.507,"se":0.171,"k":307,"win":0.612},"ETH recent":{"m":0.573,"se":0.453,"k":28,"win":0.536}},{"fam":"1","tf":"15m","col":"ema_slope","w":12,"q":"0%-1%","n":6,"BTC discovery":{"m":0.692,"se":0.173,"k":334,"win":0.608},"BTC confirm":{"m":0.528,"se":0.216,"k":164,"win":0.61},"BTC recent":{"m":1.442,"se":0.726,"k":11,"win":0.545},"ETH discovery":{"m":0.787,"se":0.211,"k":317,"win":0.621},"ETH confirm":{"m":0.706,"se":0.227,"k":205,"win":0.639},"ETH recent":{"m":0.739,"se":0.496,"k":22,"win":0.455}},{"fam":"1","tf":"15m","col":"cum_log_return_window","w":6,"q":"0%-1%","n":6,"BTC discovery":{"m":0.614,"se":0.148,"k":397,"win":0.61},"BTC confirm":{"m":0.594,"se":0.189,"k":178,"win":0.618},"BTC recent":{"m":1.114,"se":0.607,"k":13,"win":0.692},"ETH discovery":{"m":0.57,"se":0.174,"k":399,"win":0.599},"ETH confirm":{"m":0.473,"se":0.194,"k":249,"win":0.586},"ETH recent":{"m":0.559,"se":0.384,"k":31,"win":0.516}},{"fam":"1","tf":"15m","col":"distance_from_ema_pct","w":12,"q":"0%-1%","n":6,"BTC discovery":{"m":0.353,"se":0.147,"k":432,"win":0.583},"BTC confirm":{"m":0.508,"se":0.168,"k":214,"win":0.603},"BTC recent":{"m":0.594,"se":0.569,"k":14,"win":0.5},"ETH discovery":{"m":0.524,"se":0.184,"k":420,"win":0.595},"ETH confirm":{"m":0.429,"se":0.173,"k":296,"win":0.588},"ETH recent":{"m":0.406,"se":0.449,"k":29,"win":0.448}},{"fam":"1","tf":"15m","col":"distance_from_window_high_pct","w":6,"q":"0%-1%","n":24,"BTC discovery":{"m":0.954,"se":0.251,"k":269,"win":0.617},"BTC confirm":{"m":1.141,"se":0.358,"k":118,"win":0.644},"BTC recent":{"m":2.12,"se":1.725,"k":6,"win":0.667},"ETH discovery":{"m":0.805,"se":0.288,"k":269,"win":0.561},"ETH confirm":{"m":0.938,"se":0.381,"k":156,"win":0.609},"ETH recent":{"m":0.567,"se":0.888,"k":17,"win":0.529}},{"fam":"1","tf":"15m","col":"distance_from_kama_pct","w":6,"q":"0%-1%","n":24,"BTC discovery":{"m":0.45,"se":0.224,"k":345,"win":0.539},"BTC confirm":{"m":0.705,"se":0.236,"k":189,"win":0.614},"BTC recent":{"m":0.767,"se":1.363,"k":9,"win":0.667},"ETH discovery":{"m":0.603,"se":0.243,"k":365,"win":0.608},"ETH confirm":{"m":0.679,"se":0.262,"k":267,"win":0.577},"ETH recent":{"m":0.265,"se":0.583,"k":31,"win":0.484}},{"fam":"1","tf":"5m","col":"distance_from_vwap_pct","w":24,"q":"0%-1%","n":24,"BTC discovery":{"m":0.255,"se":0.117,"k":631,"win":0.574},"BTC confirm":{"m":0.307,"se":0.127,"k":338,"win":0.577},"BTC recent":{"m":0.861,"se":0.513,"k":16,"win":0.562},"ETH discovery":{"m":0.353,"se":0.132,"k":646,"win":0.584},"ETH confirm":{"m":0.353,"se":0.146,"k":435,"win":0.572},"ETH recent":{"m":0.35,"se":0.354,"k":47,"win":0.596}},{"fam":"1","tf":"5m","col":"distance_from_kama_pct","w":12,"q":"0%-1%","n":24,"BTC discovery":{"m":0.208,"se":0.104,"k":798,"win":0.579},"BTC confirm":{"m":0.246,"se":0.12,"k":442,"win":0.559},"BTC recent":{"m":0.078,"se":0.331,"k":23,"win":0.435},"ETH discovery":{"m":0.334,"se":0.115,"k":829,"win":0.59},"ETH confirm":{"m":0.24,"se":0.119,"k":609,"win":0.568},"ETH recent":{"m":0.035,"se":0.274,"k":62,"win":0.532}},{"fam":"1","tf":"5m","col":"distance_from_psar_pct","w":0,"q":"0%-1%","n":48,"BTC discovery":{"m":0.316,"se":0.159,"k":544,"win":0.546},"BTC confirm":{"m":0.592,"se":0.172,"k":279,"win":0.609},"BTC recent":{"m":-0.471,"se":0.78,"k":7,"win":0.286},"ETH discovery":{"m":0.382,"se":0.169,"k":570,"win":0.586},"ETH confirm":{"m":0.352,"se":0.208,"k":349,"win":0.567},"ETH recent":{"m":-0.401,"se":0.405,"k":39,"win":0.487}},{"fam":"2","tf":"15m","col":"bar_range_pct","w":0,"q":"99%-100%","n":96,"BTC discovery":{"m":0.123,"se":0.39,"k":234,"win":0.474},"BTC confirm":{"m":0.639,"se":0.391,"k":132,"win":0.568},"BTC recent":{"m":2.373,"se":1.7,"k":10,"win":0.7},"ETH discovery":{"m":0.786,"se":0.499,"k":235,"win":0.579},"ETH confirm":{"m":0.885,"se":0.498,"k":165,"win":0.558},"ETH recent":{"m":0.397,"se":0.809,"k":32,"win":0.531}},{"fam":"2","tf":"15m","col":"upper_wick_pct","w":0,"q":"99%-100%","n":96,"BTC discovery":{"m":0.285,"se":0.38,"k":264,"win":0.508},"BTC confirm":{"m":0.566,"se":0.345,"k":161,"win":0.565},"BTC recent":{"m":0.474,"se":0.675,"k":13,"win":0.615},"ETH discovery":{"m":0.534,"se":0.448,"k":274,"win":0.526},"ETH confirm":{"m":1.042,"se":0.589,"k":155,"win":0.548},"ETH recent":{"m":1.547,"se":0.736,"k":26,"win":0.615}},{"fam":"2","tf":"5m","col":"bar_range_pct","w":0,"q":"99%-100%","n":96,"BTC discovery":{"m":0.357,"se":0.148,"k":634,"win":0.55},"BTC confirm":{"m":0.194,"se":0.163,"k":362,"win":0.528},"BTC recent":{"m":0.305,"se":0.346,"k":28,"win":0.464},"ETH discovery":{"m":0.231,"se":0.171,"k":644,"win":0.568},"ETH confirm":{"m":0.231,"se":0.223,"k":408,"win":0.52},"ETH recent":{"m":0.162,"se":0.356,"k":70,"win":0.514}},{"fam":"3","tf":"5m","col":"close_position_in_window","w":6,"q":"1%-5%","n":1,"BTC discovery":{"m":0.045,"se":0.003,"k":14883,"win":0.598},"BTC confirm":{"m":0.011,"se":0.002,"k":23726,"win":0.549},"BTC recent":{"m":0.002,"se":0.001,"k":9937,"win":0.525},"ETH discovery":{"m":0.038,"se":0.004,"k":14582,"win":0.549},"ETH confirm":{"m":0.01,"se":0.002,"k":20301,"win":0.549},"ETH recent":{"m":0.008,"se":0.003,"k":6156,"win":0.552}},{"fam":"3","tf":"15m","col":"close_position_in_bar","w":0,"q":"1%-5%","n":1,"BTC discovery":{"m":0.066,"se":0.008,"k":5375,"win":0.599},"BTC confirm":{"m":0.012,"se":0.004,"k":8341,"win":0.555},"BTC recent":{"m":-0.004,"se":0.003,"k":3714,"win":0.52},"ETH discovery":{"m":0.062,"se":0.009,"k":5326,"win":0.557},"ETH confirm":{"m":0.013,"se":0.005,"k":7261,"win":0.551},"ETH recent":{"m":-0.0,"se":0.007,"k":2136,"win":0.539}},{"fam":"4","tf":"15m","col":"close_position_in_window","w":48,"q":"0%-1%","n":6,"BTC discovery":{"m":0.226,"se":0.083,"k":760,"win":0.634},"BTC confirm":{"m":0.14,"se":0.031,"k":1277,"win":0.601},"BTC recent":{"m":0.0,"se":0.029,"k":614,"win":0.539},"ETH discovery":{"m":0.182,"se":0.094,"k":742,"win":0.596},"ETH confirm":{"m":0.161,"se":0.054,"k":865,"win":0.605},"ETH recent":{"m":-0.102,"se":0.067,"k":302,"win":0.54}},{"fam":"4","tf":"15m","col":"distance_from_kama_pct","w":6,"q":"1%-5%","n":12,"BTC discovery":{"m":0.204,"se":0.061,"k":1515,"win":0.574},"BTC confirm":{"m":0.094,"se":0.05,"k":1430,"win":0.559},"BTC recent":{"m":0.108,"se":0.093,"k":189,"win":0.556},"ETH discovery":{"m":0.147,"se":0.068,"k":1574,"win":0.565},"ETH confirm":{"m":0.11,"se":0.062,"k":1542,"win":0.572},"ETH recent":{"m":-0.003,"se":0.101,"k":288,"win":0.538}}],"fails":[{"tf":"15m","col":"rsi_centered","w":24,"q":"95%-99%","n":48,"discovery BTC %":0.52,"discovery BTC t":5.122,"discovery ETH %":0.581,"discovery ETH t":4.847,"confirm BTC %":0.127,"confirm BTC t":1.768,"confirm ETH %":0.164,"confirm ETH t":1.97,"recent BTC %":0.135,"recent BTC t":1.631,"recent ETH %":-0.09,"recent ETH t":-0.678},{"tf":"15m","col":"tsi_momentum","w":24,"q":"95%-99%","n":48,"discovery BTC %":0.453,"discovery BTC t":4.272,"discovery ETH %":0.5,"discovery ETH t":4.27,"confirm BTC %":0.055,"confirm BTC t":0.778,"confirm ETH %":0.155,"confirm ETH t":1.824,"recent BTC %":0.108,"recent BTC t":1.316,"recent ETH %":-0.125,"recent ETH t":-0.879},{"tf":"5m","col":"rsi_centered","w":48,"q":"95%-99%","n":192,"discovery BTC %":0.617,"discovery BTC t":6.416,"discovery ETH %":0.607,"discovery ETH t":5.183,"confirm BTC %":0.083,"confirm BTC t":1.298,"confirm ETH %":0.272,"confirm ETH t":3.13,"recent BTC %":0.038,"recent BTC t":0.455,"recent ETH %":-0.085,"recent ETH t":-0.652},{"tf":"5m","col":"tsi_momentum","w":96,"q":"95%-99%","n":192,"discovery BTC %":0.701,"discovery BTC t":4.984,"discovery ETH %":0.787,"discovery ETH t":4.602,"confirm BTC %":0.044,"confirm BTC t":0.47,"confirm ETH %":0.252,"confirm ETH t":2.234,"recent BTC %":0.114,"recent BTC t":1.02,"recent ETH %":-0.107,"recent ETH t":-0.546}],"vol":{"BTC":[0.49,0.345,0.224],"ETH":[0.665,0.439,0.33]},"counts":{"cells":35498,"pass":115,"hold":43,"pays":29,"hold_n1":8}};
+(function () {
+  const NS = "http://www.w3.org/2000/svg";
+  const it = (v, d = 2) => (v < 0 ? "−" : "") + Math.abs(v).toFixed(d).replace(".", ",");
+  const sg = (v, d = 2) => (v > 0 ? "+" : "") + it(v, d);
+  const int = v => v.toLocaleString("it-IT");
+  const tk = v => it(v, [0, 1, 2].find(d => Math.abs(v * 10 ** d - Math.round(v * 10 ** d)) < 1e-6) ?? 2);
+  const NAMES = {
+    distance_from_vwap_pct: "Distanza da VWAP", ema_slope: "Pendenza EMA", cum_log_return_window: "Rendimento sulla finestra",
+    distance_from_ema_pct: "Distanza da EMA", distance_from_window_high_pct: "Distanza dal massimo",
+    distance_from_window_low_pct: "Distanza dal minimo", distance_from_kama_pct: "Distanza da KAMA",
+    distance_from_psar_pct: "Distanza da PSAR", bar_range_pct: "Range della barra", upper_wick_pct: "Wick superiore",
+    lower_wick_pct: "Wick inferiore", close_position_in_window: "Close nella finestra", close_position_in_bar: "Close nella barra",
+    rsi_centered: "RSI", tsi_momentum: "TSI", log_return: "Rendimento della candela", candle_body_pct: "Body della candela",
+    window_range_pct: "Range della finestra", average_true_range_pct: "ATR", realized_volatility: "Volatilità realizzata",
+    volatility_expansion: "Espansione di volatilità", age_of_window_high: "Età del massimo", age_of_window_low: "Età del minimo",
+    log_volume_vs_median: "Volume sulla mediana", log_dollar_volume: "Volume in dollari", signed_volume: "Volume con segno",
+    volume_trend: "Trend del volume", on_balance_volume_zscore: "OBV (z-score)", adx_trend_strength: "ADX"
+  };
+  const name = (c, w) => (NAMES[c] || c) + (w ? ` (${w})` : "");
+  const q = s => s.replace(/%-/, "–");
+  const FEE = 0.20;
+
+  function el(tag, attrs, parent) {
+    const e = document.createElementNS(NS, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function ticks(lo, hi, n) {
+    const span = hi - lo || 1, raw = span / n, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+    const step = [1, 2, 2.5, 5, 10].map(s => s * mag).find(s => span / s <= n) || 10 * mag;
+    const out = [];
+    for (let v = Math.floor(lo / step) * step; v <= Math.ceil(hi / step) * step + 1e-9; v += step) out.push(+v.toFixed(6));
+    return out;
+  }
+  function tooltip(box) {
+    const t = document.createElement("div");
+    t.className = "tip"; t.hidden = true; box.appendChild(t);
+    return {
+      show(html, x, y) {
+        t.innerHTML = html; t.hidden = false;
+        const bw = box.clientWidth, tw = t.offsetWidth;
+        t.style.left = Math.min(Math.max(8, x + 14), bw - tw - 8) + "px";
+        t.style.top = Math.max(8, y - t.offsetHeight - 10) + "px";
+      },
+      hide() { t.hidden = true; }
+    };
+  }
+  const row = (color, label, value) => `<div class="r"><span>${color ? `<b style="background:${color}"></b>` : ""}${label}</span><span>${value}</span></div>`;
+  const local = (box, evt) => { const b = box.getBoundingClientRect(); return [evt.clientX - b.left, evt.clientY - b.top]; };
+
+  // Tiles
+  const C = DATA.counts;
+  document.getElementById("tiles").innerHTML = [
+    ["Celle misurate", int(C.cells), "colonna × finestra × fascia × N × timeframe × asset"],
+    ["Passano la scoperta", int(C.pass), "oltre 4 errori standard su BTC ed ETH"],
+    ["Tengono sulla conferma", int(C.hold), `di cui ${C.hold_n1} a una candela`],
+    ["Fenomeni distinti", "4", "uno solo sopra le commissioni"]
+  ].map(([l, v, n]) => `<div class="tile"><span class="label">${l}</span><span class="value">${v}</span><span class="note">${n}</span></div>`).join("");
+
+  // Scatter: discovery against confirm
+  (function () {
+    const box = document.getElementById("c-scatter"), plot = box.querySelector(".plot");
+    const W = 720, H = 380, m = { l: 52, r: 20, t: 16, b: 46 };
+    const pts = DATA.scatter;
+    const xt = ticks(0, Math.max(...pts.map(p => p.x)), 8), yt = ticks(Math.min(0, ...pts.map(p => p.y)), Math.max(...pts.map(p => p.y)), 6);
+    const X = v => m.l + (W - m.l - m.r) * (v - xt[0]) / (xt.at(-1) - xt[0]);
+    const Y = v => m.t + (H - m.t - m.b) * (1 - (v - yt[0]) / (yt.at(-1) - yt[0]));
+    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Errori standard di ogni zona sulla scoperta contro la conferma" });
+    yt.forEach(v => {
+      el("line", { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), stroke: v === 0 ? "var(--axis)" : "var(--rule)" }, svg);
+      el("text", { x: m.l - 8, y: Y(v) + 4, "text-anchor": "end" }, svg).textContent = tk(v);
+    });
+    xt.forEach(v => el("text", { x: X(v), y: H - m.b + 18, "text-anchor": "middle" }, svg).textContent = tk(v));
+    el("text", { x: m.l + (W - m.l - m.r) / 2, y: H - 8, "text-anchor": "middle" }, svg).textContent = "errori standard sulla scoperta, 2017–2020 (asset più debole)";
+    el("text", { x: m.l + 6, y: m.t + 10 }, svg).textContent = "sulla conferma, 2021–2025";
+    const top = Math.min(xt.at(-1), yt.at(-1));
+    el("line", { x1: X(Math.max(xt[0], yt[0])), y1: Y(Math.max(xt[0], yt[0])), x2: X(top), y2: Y(top), stroke: "var(--axis)", "stroke-dasharray": "4 4" }, svg);
+    el("text", { x: X(top) - 4, y: Y(top) + 14, "text-anchor": "end" }, svg).textContent = "nessun cambiamento";
+    el("line", { x1: m.l, x2: W - m.r, y1: Y(2), y2: Y(2), stroke: "var(--good)", "stroke-dasharray": "2 3" }, svg);
+    el("text", { x: W - m.r - 4, y: Y(2) - 6, "text-anchor": "end", class: "lab" }, svg).textContent = "soglia: 2";
+    const tip = tooltip(box);
+    pts.slice().sort((a, b) => a.holds - b.holds).forEach(p => {
+      const color = !p.holds ? "var(--muted)" : p.n === 1 ? "var(--s3)" : "var(--s1)";
+      const c = el("circle", { cx: X(p.x), cy: Y(p.y), r: 5, fill: color, "fill-opacity": p.holds ? 0.9 : 0.45, stroke: "var(--surface)", "stroke-width": 1 }, svg);
+      c.addEventListener("pointermove", evt => tip.show(
+        `<div class="t">${p.tf} · ${name(p.col, p.w)} · ${q(p.q)} · N ${p.n}</div>` +
+        row(null, "scoperta", it(p.x, 1)) + row(null, "conferma", it(p.y, 1)) + row(null, "direzione", p.dir), ...local(box, evt)));
+      c.addEventListener("pointerleave", () => tip.hide());
+    });
+    plot.appendChild(svg);
+  })();
+
+  // Summary table
+  (function () {
+    const FAM = { "1": "1 · Prezzo molto sotto la sua media → rimbalzo", "2": "2 · Barre enormi → rialzo nel giorno dopo", "3": "3 · Close sul minimo → la candela dopo", "4": "4 · Rimbalzo lento, solido ma piccolo" };
+    const cell = (c, d = 2) => c.k ? `${sg(c.m, d)} <span class="se">± ${it(c.se, d)}</span><br><span class="k">${int(c.k)} · ${Math.round(c.win * 100)}%</span>` : "—";
+    const rec = c => c.k ? `${sg(c.m, 2)} <span class="k">(${c.k})</span>` : "—";
+    function verdict(r) {
+      const a = r["BTC confirm"], b = r["ETH confirm"];
+      if (a.m - FEE >= a.se && b.m - FEE >= b.se) return '<span class="chip good"><i>●</i> sopra</span>';
+      if (a.m >= FEE && b.m >= FEE) return '<span class="chip warn"><i>●</i> al limite</span>';
+      return '<span class="chip bad"><i>●</i> sotto</span>';
+    }
+    let html = "<thead><tr><th>TF · indicatore (finestra)</th><th>Zona</th><th>N</th><th>Conferma BTC</th><th>Conferma ETH</th><th>Recente BTC</th><th>Recente ETH</th><th>Sulla fee</th></tr></thead><tbody>";
+    let fam = null;
+    DATA.rows.forEach(r => {
+      if (r.fam !== fam) { fam = r.fam; html += `<tr class="fam"><td colspan="8">${FAM[fam]}</td></tr>`; }
+      const d = r.fam === "3" ? 3 : 2;
+      html += `<tr><td class="name">${name(r.col, r.w)}<small>${r.tf}</small></td><td>${q(r.q)}</td><td>${r.n}</td>` +
+        `<td>${cell(r["BTC confirm"], d)}</td><td>${cell(r["ETH confirm"], d)}</td><td>${rec(r["BTC recent"])}</td><td>${rec(r["ETH recent"])}</td><td>${verdict(r)}</td></tr>`;
+    });
+    document.getElementById("t-zones").innerHTML = html + "</tbody>";
+  })();
+
+  // Family 1 per-trade dot-and-whisker
+  (function () {
+    const box = document.getElementById("c-trades"), plot = box.querySelector(".plot");
+    const rows = DATA.rows.filter(r => r.fam === "1");
+    const W = 720, rh = 34, m = { l: 250, r: 24, t: 24, b: 40 }, H = m.t + m.b + rh * rows.length;
+    const all = rows.flatMap(r => ["BTC", "ETH"].flatMap(s => [r[s + " confirm"].m + r[s + " confirm"].se, r[s + " confirm"].m - r[s + " confirm"].se]));
+    const xt = ticks(Math.min(0, ...all), Math.max(...all), 7);
+    const X = v => m.l + (W - m.l - m.r) * (v - xt[0]) / (xt.at(-1) - xt[0]);
+    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Media lorda a trade sulla conferma per le zone della famiglia 1" });
+    xt.forEach(v => {
+      el("line", { x1: X(v), x2: X(v), y1: m.t, y2: H - m.b, stroke: v === 0 ? "var(--axis)" : "var(--rule)" }, svg);
+      el("text", { x: X(v), y: H - m.b + 18, "text-anchor": "middle" }, svg).textContent = tk(v);
+    });
+    el("text", { x: m.l + (W - m.l - m.r) / 2, y: H - 6, "text-anchor": "middle" }, svg).textContent = "% a trade, lordo";
+    el("line", { x1: X(FEE), x2: X(FEE), y1: m.t - 10, y2: H - m.b, stroke: "var(--muted)", "stroke-dasharray": "5 4", "stroke-width": 1.5 }, svg);
+    el("text", { x: X(FEE) + 4, y: m.t - 12 }, svg).textContent = "0,20%";
+    const tip = tooltip(box);
+    rows.forEach((r, i) => {
+      const yc = m.t + rh * i + rh / 2;
+      el("text", { x: m.l - 12, y: yc + 4, "text-anchor": "end", class: "lab" }, svg).textContent = `${r.tf} · ${name(r.col, r.w)} · N ${r.n}`;
+      [["BTC", "var(--s1)", -6], ["ETH", "var(--s2)", 6]].forEach(([s, color, dy]) => {
+        const c = r[s + " confirm"], y = yc + dy;
+        el("line", { x1: X(c.m - c.se), x2: X(c.m + c.se), y1: y, y2: y, stroke: color, "stroke-width": 2 }, svg);
+        el("circle", { cx: X(c.m), cy: y, r: 4.5, fill: color, stroke: "var(--surface)", "stroke-width": 1.5 }, svg);
+      });
+      const hit = el("rect", { x: 0, y: yc - rh / 2, width: W, height: rh, fill: "transparent" }, svg);
+      hit.addEventListener("pointermove", evt => tip.show(`<div class="t">${r.tf} · ${name(r.col, r.w)} · ${q(r.q)} · N ${r.n}</div>` +
+        ["BTC", "ETH"].map((s, k) => { const c = r[s + " confirm"]; return row(k ? "var(--s2)" : "var(--s1)", s, `${sg(c.m)} ± ${it(c.se)} · ${c.k}`); }).join(""), ...local(box, evt)));
+      hit.addEventListener("pointerleave", () => tip.hide());
+    });
+    plot.appendChild(svg);
+  })();
+
+  // Excess by N, three periods
+  const HZ = [1, 3, 6, 12, 24, 48, 96, 192];
+  const PER = [["discovery", "Scoperta 2017–2020", "var(--s1)"], ["confirm", "Conferma 2021–2025", "var(--s3)"], ["recent", "Recente 2025–", "var(--s2)"]];
+  document.querySelectorAll("[data-periods]").forEach(l => l.innerHTML = PER.map(([, n, c]) => `<span><b style="background:${c}"></b>${n}</span>`).join(""));
+  function curve(id, data) {
+    const box = document.getElementById(id), plot = box.querySelector(".plot");
+    const W = 520, H = 280, m = { l: 48, r: 16, t: 14, b: 42 };
+    const all = PER.flatMap(([p]) => data[p].v);
+    const yt = ticks(Math.min(0, ...all), Math.max(0, ...all), 5);
+    const X = i => m.l + (W - m.l - m.r) * i / (HZ.length - 1);
+    const Y = v => m.t + (H - m.t - m.b) * (1 - (v - yt[0]) / (yt.at(-1) - yt[0]));
+    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": box.querySelector("h3").textContent + ": scarto per N nei tre periodi" });
+    svg.style.minWidth = "420px";
+    yt.forEach(v => {
+      el("line", { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), stroke: v === 0 ? "var(--axis)" : "var(--rule)" }, svg);
+      el("text", { x: m.l - 8, y: Y(v) + 4, "text-anchor": "end" }, svg).textContent = tk(v);
+    });
+    HZ.forEach((n, i) => el("text", { x: X(i), y: H - m.b + 18, "text-anchor": "middle" }, svg).textContent = n);
+    el("text", { x: m.l + (W - m.l - m.r) / 2, y: H - 6, "text-anchor": "middle" }, svg).textContent = "N, candele dopo il close";
+    PER.forEach(([p, , color]) => {
+      el("path", { d: data[p].v.map((v, i) => `${i ? "L" : "M"}${X(i)},${Y(v)}`).join(""), fill: "none", stroke: color, "stroke-width": 2, "stroke-linejoin": "round" }, svg);
+      data[p].v.forEach((v, i) => el("circle", { cx: X(i), cy: Y(v), r: 3.5, fill: color, stroke: "var(--surface)", "stroke-width": 1.5 }, svg));
+    });
+    const cross = el("line", { y1: m.t, y2: H - m.b, stroke: "var(--axis)", visibility: "hidden" }, svg);
+    const hit = el("rect", { x: m.l - 10, y: m.t, width: W - m.l - m.r + 20, height: H - m.t - m.b, fill: "transparent" }, svg);
+    plot.appendChild(svg);
+    const tip = tooltip(box);
+    hit.addEventListener("pointermove", evt => {
+      const r = svg.getBoundingClientRect(), sx = (evt.clientX - r.left) * W / r.width;
+      const i = Math.max(0, Math.min(HZ.length - 1, Math.round((sx - m.l) / ((W - m.l - m.r) / (HZ.length - 1)))));
+      cross.setAttribute("x1", X(i)); cross.setAttribute("x2", X(i)); cross.setAttribute("visibility", "visible");
+      tip.show(`<div class="t">N = ${HZ[i]} candele</div>` + PER.map(([p, n, c]) => row(c, n.split(" ")[0], `${sg(data[p].v[i])} ± ${it(data[p].se[i])} · ${int(data[p].count[i])}`)).join(""), ...local(box, evt));
+    });
+    hit.addEventListener("pointerleave", () => { tip.hide(); cross.setAttribute("visibility", "hidden"); });
+  }
+  curve("c-vwap-btc", DATA.curves.vwap.BTC); curve("c-vwap-eth", DATA.curves.vwap.ETH);
+  curve("c-rsi-btc", DATA.curves.rsi.BTC); curve("c-rsi-eth", DATA.curves.rsi.ETH);
+
+  // Volatility by period
+  document.getElementById("t-vol").innerHTML = "<thead><tr><th>Deviazione standard di una candela 15m</th><th>Scoperta 2017–2020</th><th>Conferma 2021–2025</th><th>Recente 2025–</th></tr></thead><tbody>" +
+    ["BTC", "ETH"].map(s => `<tr><td>${s}</td>${DATA.vol[s].map(v => `<td>${it(v, 2)}%</td>`).join("")}</tr>`).join("") + "</tbody>";
+
+  // What does not hold
+  document.getElementById("t-fails").innerHTML = "<thead><tr><th>TF · indicatore (finestra)</th><th>Zona</th><th>N</th><th>Scoperta BTC</th><th>Scoperta ETH</th><th>Conferma BTC</th><th>Conferma ETH</th><th>Recente BTC</th><th>Recente ETH</th></tr></thead><tbody>" +
+    DATA.fails.map(f => `<tr><td class="name">${name(f.col, f.w)}<small>${f.tf}</small></td><td>${q(f.q)}</td><td>${f.n}</td>` +
+      ["discovery", "confirm", "recent"].flatMap(p => ["BTC", "ETH"].map(s => `<td>${sg(f[`${p} ${s} %`])}<br><span class="k">${it(f[`${p} ${s} t`], 1)}</span></td>`)).join("") + "</tr>").join("") + "</tbody>";
+})();
+</script>
+</body>
+</html>

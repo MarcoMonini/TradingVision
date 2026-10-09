@@ -41,6 +41,10 @@ no route passes its criterion; route 6's timing is the one lead. The modules are
 (phase 0, routes 1-2), `events` (3-4), `timing` (5-6), `flow` (7), `stopmap` (8), `sequential`
 (the betting test), each with `--period dev|holdout|2021`.
 
+`zones_study.html` (Italian) is the report of `zones`: every column of `features`, banded by quantiles
+of 2017-2020 and read on 2021-2025 and since, with the table of what holds and what clears the fee. Its
+numbers are the run of 2026-10-09 written into the page: a rerun of `zones` does not update it.
+
 `swing_leg_pipeline.html` (Italian) explains the training pipeline of the `swing_leg_target` models.
 Part I is a lesson for a reader new to the subject, one concept per chapter with charts on real
 candles; Part II walks the pipeline stage by stage with the schema of every frame, tensor and
