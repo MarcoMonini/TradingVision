@@ -87,6 +87,21 @@ day: ETH 0 to 10 at −2.2% at 48, −4.9. The bands past 10 and 90 hold about a
 handful of episodes. The momentum above 70 is the one size worth a fee, 0.20% a round trip at OKX,
 and it is measured on the whole history with nothing held out: a lead.
 
+**The future after an indicator**: the same again for any of the 29 columns of `features`, with
+their window as an input (`EXTREMA_WINDOW` by default), banded in deciles (`quantile_bands`) because
+no two share a scale; a decile dilutes a tail, so RSI's top decile reads weaker here than its 80 to
+90 band above. The extreme deciles on BTC and ETH 15m, N 10 / 48 / 96, fall in three families. A
+price far below its own average bounces within a few hours: the bottom decile of the distance from
+VWAP, KAMA, EMA or PSAR, of the log return, of the close's place in the window, +0.06 to +0.11% at N
+10 at 4 to 6.6 standard errors — below the 0.20% fee, the candle bodies' reversal again. Large bars
+come before rises at every N: the top decile of the bar's range is +0.32% at 96 on BTC (5.5) and
++0.58% on ETH (8.3), the upper wick +0.33% and +0.50% (6.0, 7.4), the volatility windows the same
+on ETH; the volatile periods are the bull runs, as for both tails of the bodies. And momentum over
+half a day: the RSI and the TSI's top decile +0.19 to +0.24% at 48 (4.4 to 5.3), their bottom
+decile −0.11 to −0.23% (−2.4 to −4.0). The exception is the PSAR, whose bottom decile — a price
+furthest under it — keeps rising, +0.16% and +0.25% at 48 (3.8, 5.0). 58 deciles at 96 N each on the
+whole history: a map of where to look, not a result.
+
     uv run streamlit run src/tradingvision/app/decomposer.py
 """
 
@@ -100,7 +115,9 @@ import streamlit as st
 from plotly.subplots import make_subplots
 from ta.momentum import RSIIndicator
 
+from tradingvision import features
 from tradingvision.data import binance
+from tradingvision.data.pivots import EXTREMA_WINDOW
 
 TIMEFRAMES = ("5m", "15m", "1h", "4h", "1d")
 TIMEFRAME = "15m"  # v2's, the timeframe the project studies
@@ -112,6 +129,7 @@ ACF_LAGS = (
 )
 SIGMA_STEP, SIGMA_REACH = 0.5, 3.0  # the future's bands: their width and the last closed edge, in σ of all candles
 RSI_WINDOW, RSI_STEP = 14, 10  # Wilder's window, the default of `ta` and of every charting tool; the bands' width
+QUANTILES = 10  # an indicator's bands: deciles, as many candles in each, since no two indicators share a scale
 HORIZON, HORIZON_MAX = 96, 500  # the future's default N max (a day of 15m) and the slider's end: 1.6s per 96 on BTC 15m
 DAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")  # pandas' dayofweek, Monday 0
 SIDES = {"all": "All candles", "up": "Up candles", "down": "Down candles"}
@@ -139,10 +157,10 @@ def pairs(where: Path) -> list[str]:
 
 @st.cache_data(show_spinner="Reading the store…")
 def candles(symbol: str, timeframe: str, mtime: float) -> pd.DataFrame:
-    """One pair's OHLC at `timeframe`. `mtime` is the file's and is unused in the body: it is in the
+    """One pair's OHLC and volume at `timeframe`. `mtime` is the file's and is unused in the body: it is in the
     cache key so that updating the store re-reads it. Not `_mtime` — Streamlit leaves a parameter
     whose name starts with an underscore out of the key."""
-    return binance.load(symbol, timeframe, store=store())[["open", "high", "low", "close"]]
+    return binance.load(symbol, timeframe, store=store())[["open", "high", "low", "close", "volume"]]
 
 
 def change(df: pd.DataFrame) -> pd.Series:
@@ -378,6 +396,19 @@ def rsi_bands(close: pd.Series, window: int) -> pd.Series:
     return pd.cut(RSIIndicator(close, window=window).rsi(), [*edges, np.inf], right=False, labels=labels)
 
 
+def quantile_bands(x: pd.Series, q: int = QUANTILES) -> pd.Series:
+    """Each candle's `q`-quantile of `x`, named by its edges; NaN where `x` is. An indicator with ties at an edge,
+    the age of a window's extreme or a close at the bar's high, has fewer bands: a value is never split."""
+    band = pd.qcut(x, q, duplicates="drop")
+    return band.cat.rename_categories([f"{i.left:.4g} to {i.right:.4g}" for i in band.cat.categories])
+
+
+@st.cache_data(show_spinner="Computing the indicators…")
+def indicators(symbol: str, timeframe: str, mtime: float, window: int) -> pd.DataFrame:
+    """`features`' columns on one pair's candles, with `window` as their N; `mtime` as in `candles`."""
+    return features.features(candles(symbol, timeframe, mtime), window)
+
+
 def ahead(band: pd.Series, close: pd.Series, horizons: int, step: pd.Timedelta) -> pd.DataFrame:
     """By band (`bands` or `rsi_bands`; a candle in none counts nowhere) and N from 1 to `horizons`: the mean, over the
     band's candles, of the change in percent from the close to the close N candles later, how many candles have
@@ -448,7 +479,8 @@ def main() -> None:
         index=TIMEFRAMES.index(TIMEFRAME),
         help="the store holds 5m candles; the longer ones are aggregated from them",
     )
-    df = candles(symbol, timeframe, (where / f"{symbol}USDT-5m.parquet").stat().st_mtime)
+    mtime = (where / f"{symbol}USDT-5m.parquet").stat().st_mtime
+    df = candles(symbol, timeframe, mtime)
     pct = change(df)
     st.caption(
         f"{len(df):,} {timeframe} candles of {symbol}USDT on Binance, {df.index[0]:%Y-%m-%d} to "
@@ -569,6 +601,27 @@ def main() -> None:
         "and oversold, 70 and 30, are band edges."
     )
 
+    st.subheader("The future after an indicator")
+    left, right = st.columns(2)
+    column = left.selectbox(
+        "Indicator", features.COLUMNS, format_func=features.LABELS.get, help="the candidate columns of `features`"
+    )
+    n = right.number_input(
+        "Indicator window, candles", 2, 500, EXTREMA_WINDOW, help="`features`' N: every window of every column"
+    )
+    table = ahead(quantile_bands(indicators(symbol, timeframe, mtime, n)[column]), df.close, horizons, step)
+    left, right = st.columns(2)
+    left.markdown("**Mean change from the close to N candles later**")
+    left.plotly_chart(ahead_figure(table, "mean", step), use_container_width=True, key="indicator-mean")
+    right.markdown("**Its excess over every candle's, in standard errors**")
+    right.plotly_chart(ahead_figure(table, "t", step), use_container_width=True, key="indicator-t")
+    st.caption(
+        f"The same again with the candles banded by the indicator at their close, in {QUANTILES} quantiles: as many "
+        "candles in each band, named by its edges in the indicator's own units. An indicator with ties at an edge "
+        "has fewer bands. A decile is wide and dilutes a tail: RSI's top decile reads weaker than its 80 to 90 band "
+        "above."
+    )
+
 
 def _selfcheck() -> None:
     """The arithmetic on hand-made candles, and the property the docstring quotes."""
@@ -652,6 +705,11 @@ def _selfcheck() -> None:
     assert r.iloc[:13].isna().all() and (r.iloc[13:] == "90 to 100").all()
     assert (rsi_bands(close[::-1].set_axis(when), 14).iloc[13:] == "0 to 10").all()
     assert len(r.cat.categories) == 100 // RSI_STEP
+    # Quantile bands: as many in each, NaN kept, and ties never split across an edge.
+    q = quantile_bands(pd.Series([np.nan, *range(100)]))
+    assert q.isna().iloc[0] and (q.value_counts() == 10).all() and len(q.cat.categories) == QUANTILES
+    q = quantile_bands(pd.Series([0.0] * 50 + list(range(1, 51))))
+    assert q.iloc[:50].nunique() == 1 and len(q.cat.categories) < QUANTILES
 
 
 if __name__ == "__main__":
