@@ -1422,5 +1422,13 @@ viene chiesto.
 - Memoria (`acf`), a fianco dell'istogramma: autocorrelazione della variazione e della sua taglia
   fino a 10.000 candele. La variazione è −0,006 al ritardo 1 e poi vicina a zero; la taglia parte da
   0,39, è 0,22 dopo un giorno e 0,12 dopo 21 giorni, con una gobba ogni giorno di ritardo.
+- Ora e giorno (`clock`): media e deviazione standard della variazione per giorno della settimana e
+  ora UTC dell'open, due mappe di calore affiancate. La deviazione standard è il ciclo delle gobbe
+  dell'autocorrelazione: 0,48% alle 14 UTC (apertura USA), sabato e domenica 0,32-0,33% contro
+  0,39-0,41% nei feriali (BTC 15m). Le celle singole estreme sono poche candele di crollo, non un'ora.
+  La media è quasi tutta rumore (12 celle su 168 oltre due errori standard, 8 per caso); fa eccezione
+  sabato 00 UTC, positiva a 3,6 errori standard su BTC 15m, 3,8 su BTC 1h, 4,4 su ETH 15m, oltre il
+  taglio di Bonferroni (circa 3,4). Misurato su tutta la storia senza niente tenuto fuori: una pista,
+  non un risultato.
 - Verificato su uno store sintetico (code t a 4 gradi): `AppTest` senza eccezioni su BTC/ETH e 15m/1d,
   la pagina servita e fotografata. Lo store vero non è in questa sessione. Self-check registrato.
