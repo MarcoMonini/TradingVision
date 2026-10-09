@@ -72,3 +72,10 @@ def test_futures_selfcheck():
     from tradingvision.data import futures
 
     futures._selfcheck()
+
+
+def test_binance_selfcheck():
+    """`data.binance` keeps its checks in a function: its `__main__` downloads the dumps."""
+    from tradingvision.data import binance
+
+    binance._selfcheck()
