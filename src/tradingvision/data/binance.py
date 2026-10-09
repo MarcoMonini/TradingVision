@@ -9,6 +9,29 @@ no API key, no rate limit, USDT pairs from 2017. Alpaca stays the live/execution
 
 Re-running only fetches what is missing: the store keeps one Parquet per (symbol, interval) and
 the last partial month is always re-fetched, so an interrupted run heals itself.
+
+**Every bar opens on the interval's grid, and the store refuses one that does not.** The monthly
+dumps of February 2018 break this. Binance halted on 2018-02-08 at 00:28:14.789 and reopened on
+the 9th around 10:00; its kline engine resumed counting five minutes from the instant it stopped,
+so from 09:58:14.789 to 05:58:14.789 on the 10th every bar opens at hh:m3:14.789 or hh:m8:14.789
+(the offset is per pair, to the millisecond: 14.789 BTC, 14.800 ETH, 15.787 BNB, 16.812 LTC).
+That is 241 rows in each of the four USDT pairs listed then — BTC, ETH, BNB, LTC — and in no other
+month or pair of SYMBOLS or STUDY, checked on 2026-10-09. `parse` reads the stamps as they are.
+
+The rows are real trades on the wrong grid, so neither obvious repair holds. *Snapping* each stamp
+down to the grid relabels a bar that closes at 10:18:14 as the one that closes at 10:15: the bars
+`load` aggregates from them carry 3m14s of the next bar, and only 2 of the 240 floored bars have
+the close of the true on-grid bar. *Dropping* loses twenty hours. The **daily** dumps of the 9th
+and the 10th hold the same stretch re-binned on the grid by Binance itself — the same 31,061.592
+BTC and 395,086 trades over it as the monthly rows — so `update` replaces the off-grid rows with
+the daily files of their days, and drops only what a daily file cannot replace. Before this, every
+higher timeframe was on its grid anyway (the resample buckets by stamp: no duplicate, no extra row),
+but each bucket in those twenty hours held [b + 3m14s, b + tf + 3m14s), a close past the bar's own.
+
+Nothing measured moved: `swing` reads from 2021 (`SINCE`), so no cached tensor holds these rows and
+`swing.BUILD` stays. A cache built with `--since` before 2018-02-10 does hold them, and its stamp
+cannot tell — the store's last bar did not move — so delete it. `oracle` reads the whole history by
+default and saw 80 of 320,000 15m bars per pair a few minutes late.
 """
 
 from __future__ import annotations
@@ -84,11 +107,25 @@ def load(symbol: str, timeframe: str = "5m", *, stored: str = "5m", store: Path 
     are dropped rather than forward filled: a synthetic bar would be an invented price, and the
     pivot search would treat it as a real level.
     """
-    df = pd.read_parquet(store / f"{symbol}USDT-{stored}.parquet")
+    path = store / f"{symbol}USDT-{stored}.parquet"
+    df = pd.read_parquet(path)
+    if (off := _off(df.index, stored)).any():
+        raise SystemExit(
+            f"{path} has {off.sum()} bars off the {stored} grid, from {df.index[off][0]} — run "
+            f"`python -m tradingvision.data.binance --symbols {symbol}` to replace them (see the module docstring)"
+        )
     if timeframe == stored:
         return df
-    rule = re.sub(r"m$", "min", timeframe)  # pandas wants "15min", not "15m"
-    return df.resample(rule).agg(OHLC).dropna(subset=["open"])
+    return df.resample(_rule(timeframe)).agg(OHLC).dropna(subset=["open"])
+
+
+def _rule(interval: str) -> str:
+    return re.sub(r"m$", "min", interval)  # pandas wants "15min", not "15m"
+
+
+def _off(index: pd.DatetimeIndex, interval: str):
+    """The rows whose open time is not on the interval's grid."""
+    return index != index.floor(_rule(interval))
 
 
 def ends(symbols: list[str], interval: str = "5m", store: Path = STORE) -> dict[str, str | None]:
@@ -189,13 +226,43 @@ def update(symbol: str, interval: str = "5m", store: Path = STORE) -> pd.DataFra
         raise RuntimeError(f"no data for {symbol}USDT {interval}")
 
     df = pd.concat(([old] if old is not None else []) + parts)
+    # Off-grid rows give way to the daily dumps of their days, which Binance publishes on the grid.
+    # Checked on the whole series, `old` included, so re-running heals a store written before this.
+    off = _off(df.index, interval)
+    days = sorted(set(df.index[off].strftime("%Y-%m-%d")))
+    pair = f"{symbol}USDT"
+    with ThreadPoolExecutor(WORKERS) as pool:
+        daily = pool.map(_fetch, [f"{BASE}/daily/klines/{pair}/{interval}/{pair}-{interval}-{d}.zip" for d in days])
+        df = pd.concat([df[~off], *[p for p in daily if p is not None]])
     df = df[~df.index.duplicated(keep="last")].sort_index()
+    df = df[~_off(df.index, interval)]  # what no daily file replaced
     store.mkdir(parents=True, exist_ok=True)
     df.to_parquet(path)
     return df
 
 
+def _selfcheck() -> None:
+    """The grid test on the stamps February 2018 shipped, and `load` refusing a store that has one."""
+    import tempfile
+
+    t = pd.DatetimeIndex(["2018-02-09 09:55", "2018-02-09 09:58:14.789", "2018-02-09 10:00"], tz="UTC")
+    assert list(_off(t, "5m")) == [False, True, False]
+    assert list(_off(t, "15m")) == [True, True, False]
+    bars = pd.DataFrame({c: 1.0 for c in OHLC}, index=t)
+    with tempfile.TemporaryDirectory() as d:
+        bars.to_parquet(Path(d) / "XUSDT-5m.parquet")
+        try:
+            load("X", store=Path(d))
+        except SystemExit as e:
+            assert "1 bars off the 5m grid, from 2018-02-09 09:58:14.789" in str(e)
+        else:
+            raise AssertionError("an off-grid store was read")
+        bars.drop(t[1]).to_parquet(Path(d) / "XUSDT-5m.parquet")
+        assert len(load("X", "15m", store=Path(d))) == 2
+
+
 def main() -> None:
+    _selfcheck()
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--symbols", nargs="+", default=SYMBOLS)
     ap.add_argument("--interval", default="5m")

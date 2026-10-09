@@ -1071,3 +1071,32 @@ convergeva su zero trade. `OLD/README.md` ha la tabella e l'elenco di cosa è us
 
 **Verificato.** ruff, black, 52 test. La pagina gira su BTC/USD 15m con v2 (regola, libro, fee 0,10%
 in barra laterale) e senza v2, senza eccezioni.
+
+## 19. Le barre fuori griglia di febbraio 2018 (2026-10-09, ramo `claude/binance-grid`)
+
+**Il difetto.** Il dump **mensile** Binance di 2018-02 ha 241 barre da 5m con l'apertura fuori
+griglia (hh:m3:14.789, hh:m8:14.789), dal 2018-02-09 09:58 al 2018-02-10 05:58: dopo il fermo del
+2018-02-08 00:28:14.789 il motore delle kline ha ripreso a contare dall'istante dello stop. Solo le
+quattro coppie USDT quotate allora: BTC, ETH, BNB, LTC; nessun'altra di `SYMBOLS` o `STUDY`, nessun
+altro mese. `parse` legge i timestamp come sono: il difetto è nel dump, non nel parser.
+
+**Cosa facevano a valle.** `load` aggregava su griglia giusta (nessun duplicato, nessuna riga in
+più), ma ogni barra da 15m/1h/4h/1d di quelle venti ore conteneva [b + 3m14s, b + tf + 3m14s): una
+chiusura 3m14s oltre la propria. `features`, `legs`, `swing` sono posizionali e non leggono la
+griglia. `swing` parte dal 2021 (`SINCE`): nessun tensore in cache contiene quelle righe, quindi
+`BUILD` resta 2 e niente va ricostruito. Una cache con `--since` prima del 2018-02-10 le
+contiene, e lo stamp non lo vede (l'ultima barra dello store non cambia): va cancellata a mano.
+`oracle` legge tutta la storia: 80 barre da 15m su ~320.000 per coppia, irrilevante.
+
+**La correzione.** Né arrotondare (2 chiusure su 240 coincidono con quelle vere, e resta il
+look-ahead) né scartare (venti ore perse): i dump **giornalieri** del 9 e del 10 hanno lo stesso
+tratto sulla griglia, con gli stessi volumi e trade (BTC 31.061,592 e 395.086). `update` sostituisce
+le righe fuori griglia con i giornalieri dei loro giorni e scarta solo ciò che non viene sostituito;
+`load` rifiuta uno store fuori griglia. Lo store va curato una volta:
+
+```bash
+uv run python -m tradingvision.data.binance --symbols BTC ETH BNB LTC
+```
+
+Verificato su una copia dello store: dopo, zero barre fuori griglia, volumi e trade del tratto
+identici, ogni altra barra uguale bit per bit, 15m/1h/4h/1d su griglia e senza duplicati.
